@@ -116,6 +116,28 @@ def active_grant(conn, file_id: int, admin_id: int) -> dict | None:
         (file_id, admin_id)).fetchone()
 
 
+def file_for_grants(conn, who: dict, file_id: int) -> dict:
+    """Файл глазами того, кому можно показать историю доступов к нему (FR-K9).
+
+    Одно правило на оба входа — чат (`GET /files/{id}/access`) и экран
+    (`GET /webapp/files/{id}/access`): владелец — всегда; тот, кому файл виден
+    (общий или открытый ему грантом); админ. Чужой закрытый файл отвечает 404,
+    а не 403: иначе перебором `file_id` отличают существующие файлы от
+    несуществующих (OWASP API1:2023, «authorization check on the record in every
+    function that takes a client-supplied id»). 403 остаётся для файла, который
+    человек видит, но не свой и не админский.
+    """
+    from . import files_store
+
+    row, as_admin = files_store.file_for_viewer(conn, file_id, who)
+    if row is None:
+        raise AccessError("file_not_found", "Файл не найден.", 404)
+    if int(row["participant_id"] or 0) != int(who.get("id") or 0) and not as_admin:
+        if "admin" not in roles_of(who):
+            raise AccessError("access_forbidden", "Нет доступа к этому файлу.", 403)
+    return row
+
+
 def grants_of(conn, file_id: int) -> list[dict]:
     rows = conn.execute(
         "select g.admin_id, p.display_name as admin_name, g.reason, g.expires_at,"

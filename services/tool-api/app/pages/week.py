@@ -68,7 +68,8 @@ _BODY_WEEK = (
     'style="flex:1">Сохранить шаблон недели</button>'
     "</div>"
     + '<div class="ui-list">'
-    + '<a class="ui-row" id="to-summary" href="/webapp/week/summary">'
+    + '<a class="ui-row" id="to-summary" href="/webapp/week/summary" '
+    'data-svoi-cap="schedule.read.all">'
     '<span class="ui-row__main">'
     '<span class="ui-row__title">Сводка занятости</span>'
     '<span class="ui-row__meta">кто свободен на этой неделе</span></span>'

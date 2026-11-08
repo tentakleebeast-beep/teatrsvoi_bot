@@ -10,22 +10,32 @@
    • эмодзи не используются: иконка — слово или типографский знак. */
 
 :root {
-  /* Поверхности и текст */
+  /* Поверхности и текст.
+     Поверхности берутся из темы Telegram, а цвета текста закреплены здесь:
+     тема даёт готовую палитру, но не гарантию контраста. Проверка 142 §2:
+     hint #707579 на карточке #f4f4f5 — 4.24 при пороге 4.5, активная вкладка
+     на акценте — 3.72. Поэтому текстовые токены — значения, проверенные на
+     4.5 в обеих схемах; тон и насыщенность прежние, сдвинута только светлота.
+     Акцент разделён на «фон действия» (--ui-accent) и «акцент как текст»
+     (--ui-accent-ink): у них противоположное направление движения светлоты,
+     одним значением 4.5 не достигается ни там, ни там. */
   --ui-bg: var(--bg, var(--tg-theme-bg-color, #ffffff));
   --ui-surface: var(--card, var(--tg-theme-secondary-bg-color, #f5f6f8));
   --ui-surface-2: var(--bg, var(--tg-theme-bg-color, #ffffff));
   --ui-fg: var(--fg, var(--tg-theme-text-color, #16181d));
-  --ui-muted: var(--hint, var(--tg-theme-hint-color, #6b7280));
+  --ui-muted: #616569;            /* 5.35 на карточке, 4.65 на мягком фоне */
   --ui-line: var(--line, rgba(0, 0, 0, .10));
-  --ui-accent: var(--accent, var(--tg-theme-button-color, #2f6fed));
-  --ui-on-accent: var(--tg-theme-button-text-color, #ffffff);
+  --ui-accent: #2f6fed;           /* фон главного действия; текст на нём — --ui-on-accent */
+  --ui-accent-ink: #1459e3;       /* акцент как текст: ссылка, активная вкладка, «сегодня» */
+  --ui-on-accent: #ffffff;
 
   /* Смысловые */
-  --ui-ok: #1f8f4e;
+  --ui-ok: #19733f;               /* 5.36 на карточке, 4.66 на «свободен» */
   --ui-ok-soft: rgba(31, 143, 78, .12);
-  --ui-warn: #a86600;
+  --ui-warn: #915800;             /* 5.31 на карточке, 4.58 на «не уверен» */
   --ui-warn-soft: rgba(168, 102, 0, .12);
-  --ui-danger: #b8382b;
+  --ui-danger: #b2362a;           /* текст ошибки: 5.53 на карточке, 4.64 на мягком */
+  --ui-danger-strong: #b2362a;    /* фон бейджа и красной кнопки: белый текст — 5.92 */
   --ui-danger-soft: rgba(184, 56, 43, .12);
 
   /* Ритм и геометрия */
@@ -49,13 +59,44 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    /* Запасные значения, если Telegram не прислал тему */
-    --ui-ok: #3fb96f;
-    --ui-warn: #d39023;
-    --ui-danger: #e06a5c;
+    /* Тёмная схема: светлота движется в обратную сторону — текст светлеет,
+       фон действия темнеет, иначе белый текст на акценте не читается. */
+    --ui-muted: #a4adb7;            /* 6.05 на карточке, 4.73 на «не уверен» */
+    --ui-accent: #3d73ae;           /* фон действия: белый текст — 4.93 */
+    --ui-accent-ink: #8cb0d6;       /* акцент как текст: 7.21 на фоне, 4.76 на мягком */
+    --ui-ok: #4ac179;               /* 6.02 на карточке, 4.59 на «свободен» */
+    --ui-warn: #de9d35;             /* 5.88 на карточке, 4.60 на «не уверен» */
+    --ui-danger: #e78e83;           /* 5.63 на карточке, 4.62 на мягком */
+    --ui-danger-strong: #b8382b;    /* фон бейджа: белый текст — 5.77 */
     --ui-ok-soft: rgba(63, 185, 111, .16);
     --ui-warn-soft: rgba(211, 144, 35, .16);
     --ui-danger-soft: rgba(224, 106, 92, .16);
+  }
+}
+
+/* Тёмные значения переключаются по тому же сигналу, что и поверхности.
+   Оболочка (`webapp-shell.js`) ставит `color-scheme` на корень от темы Telegram
+   (`isDark(bg_color)`), а системная схема в WebView может быть другой: светлая
+   тема при тёмной ОС — обычная настройка Telegram Desktop/Web. `light-dark()`
+   резолвится по используемому `color-scheme`, то есть по теме, а медиазапрос
+   выше — по ОС, и в расхождении он уводил текст не в ту сторону: `--ui-muted`
+   давал 2.07 на карточке #f4f4f5, `--ui-accent-ink` — 2.26 (t_089e70a5, раунд 2).
+   Блок `@media` оставлен фолбэком для движков без `light-dark()`: там тема и
+   системная схема не различаются, но и поверхности исторически от темы.
+   Порядок важен: этот блок идёт после `@media` и при равной специфичности
+   побеждает, поэтому значения здесь — источник истины. */
+@supports (color: light-dark(#000, #fff)) {
+  :root {
+    --ui-muted: light-dark(#616569, #a4adb7);
+    --ui-accent: light-dark(#2f6fed, #3d73ae);
+    --ui-accent-ink: light-dark(#1459e3, #8cb0d6);
+    --ui-ok: light-dark(#19733f, #4ac179);
+    --ui-ok-soft: light-dark(rgba(31, 143, 78, .12), rgba(63, 185, 111, .16));
+    --ui-warn: light-dark(#915800, #de9d35);
+    --ui-warn-soft: light-dark(rgba(168, 102, 0, .12), rgba(211, 144, 35, .16));
+    --ui-danger: light-dark(#b2362a, #e78e83);
+    --ui-danger-strong: light-dark(#b2362a, #b8382b);
+    --ui-danger-soft: light-dark(rgba(184, 56, 43, .12), rgba(224, 106, 92, .16));
   }
 }
 
@@ -88,7 +129,7 @@ body.ui-page {
 .ui-appbar__back {
   display: inline-flex; align-items: center; justify-content: center;
   width: var(--ui-tap); height: var(--ui-tap);
-  border: 0; background: none; color: var(--ui-accent);
+  border: 0; background: none; color: var(--ui-accent-ink);
   font: inherit; font-size: 22px; line-height: 1; text-decoration: none;
 }
 .ui-appbar__title {
@@ -98,7 +139,7 @@ body.ui-page {
 }
 .ui-appbar__action {
   min-height: var(--ui-tap); padding: 0 var(--ui-s3);
-  border: 0; background: none; color: var(--ui-accent);
+  border: 0; background: none; color: var(--ui-accent-ink);
   font: inherit; font-size: 15px; text-decoration: none;
   display: inline-flex; align-items: center;
 }
@@ -129,7 +170,7 @@ body.ui-page {
   border: 0; background: none; color: var(--ui-muted);
   font: inherit; font-size: 13px; text-decoration: none; text-align: center;
 }
-.ui-tabbar__item--active { color: var(--ui-accent); font-weight: 600; }
+.ui-tabbar__item--active { color: var(--ui-accent-ink); font-weight: 600; }
 
 .ui-section { display: flex; flex-direction: column; gap: var(--ui-s2); }
 .ui-section__head {
@@ -205,7 +246,7 @@ body.ui-page {
 }
 .ui-day__today {
   flex: none; font-size: var(--ui-text-sm); font-weight: 600;
-  color: var(--ui-accent); white-space: nowrap;
+  color: var(--ui-accent-ink); white-space: nowrap;
 }
 .ui-row.ui-day[data-state="busy"] { background: var(--ui-warn-soft); }
 .ui-row.ui-day[data-state="busy"]::before { background: var(--ui-warn); }
@@ -216,7 +257,7 @@ body.ui-page {
 .ui-row.ui-day[data-state="uncertain"]::before { background: var(--ui-warn); }
 .ui-row.ui-day[data-state="uncertain"] .ui-day__state { color: var(--ui-warn); }
 .ui-row.ui-day[data-state="mixed"]::before { background: var(--ui-accent); }
-.ui-row.ui-day[data-state="mixed"] .ui-day__state { color: var(--ui-accent); }
+.ui-row.ui-day[data-state="mixed"] .ui-day__state { color: var(--ui-accent-ink); }
 .ui-row.ui-day[data-state="empty"]::before { background: var(--ui-line); }
 /* Сегодняшний день: рамка поверх фона и слово «сегодня» рядом с датой. */
 .ui-row.ui-row--today { box-shadow: inset 0 0 0 2px var(--ui-accent); }
@@ -249,8 +290,8 @@ body.ui-page {
 }
 .ui-btn:active { opacity: .85; }
 .ui-btn--primary { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
-.ui-btn--ghost { background: none; border-color: transparent; color: var(--ui-accent); }
-.ui-btn--danger { background: var(--ui-danger); border-color: var(--ui-danger); color: #fff; }
+.ui-btn--ghost { background: none; border-color: transparent; color: var(--ui-accent-ink); }
+.ui-btn--danger { background: var(--ui-danger-strong); border-color: var(--ui-danger-strong); color: #fff; }
 .ui-btn--block { width: 100%; }
 .ui-btn--sm { min-height: var(--ui-tap); padding: 0 var(--ui-s3); font-size: 15px; }
 /* Навигационные кнопки (‹ ›, − +) — квадрат 44×44: узкий глиф не должен уменьшать цель. */
@@ -378,13 +419,13 @@ body.ui-page {
   font: inherit; font-size: var(--ui-text); text-align: left;
 }
 .ui-radio-row--on { border-color: var(--ui-accent); background: rgba(47, 111, 237, .08); }
-.ui-radio-row__mark { margin-left: auto; font-size: 15px; font-weight: 600; color: var(--ui-accent); }
+.ui-radio-row__mark { margin-left: auto; font-size: 15px; font-weight: 600; color: var(--ui-accent-ink); }
 
 /* ---------- состояния ---------- */
 
 .ui-badge {
   display: inline-block; min-width: 22px; padding: 0 7px;
-  border-radius: 999px; background: var(--ui-danger); color: #fff;
+  border-radius: 999px; background: var(--ui-danger-strong); color: #fff;
   font-size: var(--ui-text-sm); line-height: 22px; text-align: center;
   font-variant-numeric: tabular-nums;
 }

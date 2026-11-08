@@ -150,6 +150,30 @@ def test_поиск_окон_отличает_право_от_сети():
     assert "Люди не загрузились" in html and "Потяните экран вниз" in html
 
 
+def test_форма_обращения_только_по_праву_из_данных():
+    """Форма отправки отдаётся скрытой, состояние «нет права» сказано словами.
+
+    У мастера нет `feedback.send`, у admin/org/troupe есть (db/init/031,
+    docs/development/141 §3). Право приходит полем `can_send` из
+    `/webapp/feedback/mine`, а не выводится на странице из роли — карта
+    t_4f0c64d6, принципы 91: 9 (пусто — не тупик) и Б3 (роль словами).
+    """
+    page = misc.FEEDBACK_PAGE
+    assert 'id="feedback-form" hidden' in page, "форма отдаётся видимой — до ответа данных"
+    assert 'id="feedback-denied" hidden' in page
+    assert "Обращения принимает организатор" in page
+
+    form = page.split('id="feedback-form"', 1)[1].split('id="feedback-denied"', 1)[0]
+    assert "Комментарий" in form and "Отправить" in form, "поле и кнопка не в скрытой форме"
+
+    script = page.split('id="feedback-form"', 1)[1]
+    assert "/webapp/feedback/mine" in script, "право не спрашивается у сервера"
+    assert 'typeof body.can_send === "boolean"' in script, "право не берётся из ответа данных"
+    # Роль на странице не решает: списка ролей в скрипте нет.
+    for role in ("admin", "org", "troupe", "master"):
+        assert f'"{role}"' not in script, f"страница решает о правах сама: {role}"
+
+
 def test_рассылка_отличает_право_от_сети():
     """403 на счётчик адресатов — «доступно администратору», а не «повторите позже».
 

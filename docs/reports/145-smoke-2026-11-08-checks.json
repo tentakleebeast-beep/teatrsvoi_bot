@@ -1,0 +1,28 @@
+{
+  "marker": "SMOKE-20261108-01",
+  "source": "прогон 2026-11-08, стенд svoi_smoke; вывод команд снят в /Users/viktormamlutov/svoi-smoke/run-2026-11-08/",
+  "checks": [
+    {
+      "id": "К5",
+      "title": "prepare при остатках прошлого прогона: код 1, найденные объекты перечислены, существующие данные не удалены",
+      "command": "scripts/smoke_data.py prepare --marker SMOKE-20261108-02 (остаток вставлен заранее: note.title = 'SMOKE-20261107-99 остаток прошлого прогона')",
+      "expected": "код 1, остаток перечислен по имени, строка остаётся в базе",
+      "actual": "код 1: «стенд не готов: остатки прошлых прогонов (1), ничего не удалено: note.title: SMOKE-20261107-99 остаток прошлого прогона»; select count(*) по остатку → 1 (строка на месте); cleanup --marker SMOKE-20261107-99 → удалено note 1, остатков по маркеру 0",
+      "evidence": "svoi-smoke/run-2026-11-08/k5-prepare.log, k5-cleanup.log",
+      "result": "пройдено",
+      "cause": "",
+      "defect": ""
+    },
+    {
+      "id": "К7",
+      "title": "Два прогона в один день (SMOKE-20261108-01 и -02): без дублей, после уборки счётчики и итоги месяца совпадают с исходными",
+      "command": "scripts/smoke_data.py prepare --marker SMOKE-20261108-02 --skip-health; pytest tests/smoke (маркер -02); scripts/smoke_data.py check --marker -02 и -01",
+      "expected": "оба прогона проходят, дублей нет, после уборки счётчики по маркерам 0 и итоги месяца совпадают со снимком prepare",
+      "actual": "прогон -02: 1 failed, 11 passed — tests/smoke/test_cm07_files.py, шаг «6. удаление файла (DELETE /files/{id})»: удаление 405 (method_not_allowed), повторное чтение 200; уборка: остатков по маркеру 0, check -02 — код 0, leftovers 0, month_total_restored true, check -01 — код 0 (первый прогон не задет); итоги 8 таблиц после уборки и после восстановления дампа совпадают: participant 24, budget_month_total 0, budget_tx 98, note 1, file_object 0, event_plan 0, availability_hour 11319, feedback 36",
+      "evidence": "svoi-smoke/run-2026-11-08/k7-prepare-02.log, marker-02/pytest.log, k7-totals-after-cleanup.txt, k7-totals-after-restore.txt",
+      "result": "провал",
+      "cause": "",
+      "defect": "FR-M8/FR-K5/FR-L8 (удаление файла: DELETE /files/{id} → 405, файл продолжает отдаваться) — P0 документа 86, в силе по V-045, карта t_d4350819; критерий «оба прогона не падают» не выполнен; дублей и расхождения итогов нет"
+    }
+  ]
+}

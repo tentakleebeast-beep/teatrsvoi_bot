@@ -21,7 +21,7 @@ from __future__ import annotations
 from datetime import date
 from html import escape
 
-from app.webapp import sections_for
+from app.webapp import screen_flags, sections_for
 from services.shared import format as shared_format
 
 # Форматы сумм и дат — одни на оба сервиса (services/shared/format.py, R-6).
@@ -90,13 +90,24 @@ def nav_payload(caps: list[str] | tuple[str, ...] | set[str] | None) -> dict:
                   организатор, вместо кнопки, упирающейся в 403
                   (карта t_01784cc4, отчёт 142 §3 строка 10).
 
+    `caps`      — возможности человека списком: по нему оболочка прячет элементы,
+                  помеченные `data-svoi-cap` (кнопка, строка, ссылка). Решение
+                  снова серверное: страница — публичная константа и прав не знает.
+    `screens`   — `{адрес: можно}` для всех экранов (`app/webapp.py:SCREEN_CAPS`):
+                  оболочка уводит с чужого экрана на «Главную», если человек открыл
+                  его прямым адресом. Так правило «не показываем вход туда, куда
+                  действие недоступно» держится для всех 30 экранов, а не только
+                  для плиток хаба (правило владельца 08.11.2026).
+
     Решение принимает сервер: страницы — публичные константы, поэтому страница
     лишь прячет строку по этому признаку и ничего не решает сама.
     """
     return {"ok": True,
             "staff": is_staff(caps),
             "summary": has(caps, "schedule.read.all"),
-            "reconcile": has(caps, "budget.import")}
+            "reconcile": has(caps, "budget.import"),
+            "caps": sorted(set(caps or ())),
+            "screens": screen_flags(caps)}
 
 
 def tab_label(key: str, caps: list[str] | tuple[str, ...] | set[str] | None) -> str:

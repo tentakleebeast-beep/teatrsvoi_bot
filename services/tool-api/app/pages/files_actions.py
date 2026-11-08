@@ -16,6 +16,31 @@
 
 from __future__ import annotations
 
+# --- общее для экранов файлов -----------------------------------------------
+
+# Единственное своё правило: подсказка под полосой места не должна отрываться
+# от неё лишним отступом раздела.
+STYLE = """<style>
+  .files-hint { margin: 0; }
+  .files-actions { margin-top: var(--ui-s2); }
+</style>
+"""
+
+# «Папка» без `?id=`: пусто — не тупик (docs/development/91 §1 п.9, карта t_75149a6c).
+# Вход в папку один — из «Файлов», поэтому пустое состояние называет источник и даёт
+# кнопку-ссылку. Редирект не выбран: адрес `/webapp/folder` остаётся открывающимся
+# (141 §2.4 — старые адреса не удаляются), а закладка не уводит в другой раздел молча.
+EMPTY_FOLDER = """<div id="no-folder" hidden>
+  <div class="ui-empty">
+    <div class="ui-empty__title">Папка не выбрана</div>
+    <div class="ui-empty__text">Папки открываются из «Файлов» — выберите нужную в списке «Мои файлы».</div>
+    <div class="ui-actions files-actions">
+      <a class="ui-btn ui-btn--block" href="/webapp/files">Открыть «Файлы»</a>
+    </div>
+  </div>
+</div>
+"""
+
 # --- разметка ---------------------------------------------------------------
 
 BODY = """
@@ -32,7 +57,7 @@ BODY = """
     <span class="ui-field__hint">Вложенную папку задайте путём через «/».</span>
   </div>
   <div class="ui-actions files-actions">
-    <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="folder-create">Создать папку</button>
+    <button class="ui-btn ui-btn--block" type="button" id="folder-create">Создать папку</button>
   </div>
   <p class="ui-small ui-muted" id="folder-status"></p>
 </section>
@@ -52,7 +77,7 @@ BODY = """
            placeholder="Сверка сметы за октябрь">
   </div>
   <div class="ui-actions files-actions">
-    <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="access-grant">Открыть доступ</button>
+    <button class="ui-btn ui-btn--block" type="button" id="access-grant">Открыть доступ</button>
     <button class="ui-btn ui-btn--block" type="button" id="access-revoke">Отозвать доступ</button>
   </div>
   <p class="ui-small ui-muted" id="access-status"></p>
@@ -314,6 +339,41 @@ SCRIPT = r"""
       if (res.status !== 200) { return; }
       renderTags(res.body.data || []);
     });
+  }
+
+  // --- удаление файла: кнопка в списке и подтверждение в листе (V-045) --------
+
+  function askDeleteFile(file) {
+    var body = el("div", "files-confirm");
+    body.appendChild(el("p", "ui-text",
+      file.name + " исчезнет из списка, из папок и из архива. Вернуть кнопкой нельзя."));
+    sheet("Удалить файл?", body, [
+      { label: "Отмена" },
+      { label: "Удалить", primary: true, onTap: function () { deleteFile(file); } }
+    ]);
+  }
+
+  function deleteFile(file) {
+    api("/webapp/files/" + file.id, { method: "DELETE" })
+      .then(function (res) {
+        if (res.status !== 200) { toast(problem(res)); return; }
+        closeSheet();
+        status("Файл удалён: " + file.name, false);
+        refresh();
+      });
+  }
+
+  function deleteFileButton(file, holder) {
+    var remove = el("button", "ui-btn ui-btn--sm", "Удалить");
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Удалить файл");
+    remove.addEventListener("click", function (event) {
+      // Строка файла в папке открывает папку по нажатию — удаление кликом не должно
+      // уводить на другой экран.
+      event.stopPropagation();
+      askDeleteFile(file);
+    });
+    holder.appendChild(remove);
   }
 
   $("folder-create").addEventListener("click", createFolder);

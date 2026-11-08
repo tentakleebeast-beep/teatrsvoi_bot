@@ -2,6 +2,16 @@
 
 Модуль — только своя разметка и скрипт: общее ядро (токен, запросы, строки,
 листы) и каркас лежат в `admin_core.py`. Границы и права — как в `docs/development/73`.
+
+Право раздела — `participants.manage`: то же, что проверяет сервер у `/webapp/admin/archive`
+и `/webapp/admin/unarchive` (`db/init/008`). Право приходит данными — действием
+`manage_rights` ответа `/webapp/admin/overview`, которое считает сервер; а сам блок
+`archive` сервер отдаёт только с этим правом.
+Без права (org и master — панель у них есть, `participants.manage` нет) экран не
+рисует ни списка, ни поиска, а печатает ту же плашку, что видит troupe при 403, —
+один словарь состояний с экранами 21–23 (`ERRORS.admin_panel_forbidden`).
+До правки блок архива приходил по `participants.view` и экран показывал ушедших
+людей обеим ролям (отчёт 142 §3 строка 26, принципы 91: 8, 9, Б3; карта t_c6a13266).
 """
 
 from __future__ import annotations
@@ -12,6 +22,7 @@ _SCRIPT_ARCHIVE = r"""
   var archived = [];
   var shown = 20;
   var query = "";
+  var canRestore = false;
 
   function restore(person) {
     api("/webapp/admin/unarchive", { participant_id: person.id, reason: "webapp" })
@@ -58,6 +69,9 @@ _SCRIPT_ARCHIVE = r"""
   function renderArchive() {
     var list = $("archive-list");
     clear(list);
+    /* Без права списка нет вовсе: причину уже сказал статус общим словарём
+       ядра. Пустое «Архив пуст» здесь читалось бы как «возвращать нечего». */
+    if (!canRestore) { toggle($("archive-more"), false); return; }
     var needle = query.trim().toLowerCase();
     var visible = archived.filter(function (person) {
       return !needle || String(person.display_name || "").toLowerCase().indexOf(needle) >= 0;
@@ -78,13 +92,34 @@ _SCRIPT_ARCHIVE = r"""
     more.textContent = "Показать ещё " + rest;
   }
 
+  /* Право `participants.manage` приходит данными: действие `manage_rights` ответа
+     панели — та же возможность, что проверяет сервер у возврата из архива. Роль
+     на экране не решает: у troupe панель закрыта вовсе (403), у org и master
+     панель есть, а права на людей нет. Поиск и счётчик — часть списка, поэтому
+     гаснут вместе с ним: поле ввода над пустотой зовёт фильтровать то, чего нет
+     (принцип 8, docs/development/91). */
+  function applyRights(can) {
+    canRestore = can === true;
+    toggle($("archive-search-field"), canRestore);
+    toggle($("archive-count"), canRestore);
+    archived = canRestore ? ((BLOCKS.archive && BLOCKS.archive.data) || []) : [];
+    renderArchive();
+    status(canRestore ? "" : ERRORS.admin_panel_forbidden, !canRestore);
+  }
+
   function refresh() {
     return auth().then(function (denied) {
-      if (denied) { status(denied, true); return null; }
+      if (denied) { applyRights(false); status(denied, true); return null; }
       return loadOverview().then(function (data) {
-        if (!data) return null;
-        archived = (BLOCKS.archive && BLOCKS.archive.data) || [];
-        renderArchive();
+        /* 403 панели (troupe) и сетевая ошибка: права никто не подтвердил, списка
+           быть не должно. Причину `loadOverview` уже напечатал в статусе. */
+        if (!data) {
+          toggle($("archive-search-field"), false);
+          toggle($("archive-count"), false);
+          clear($("archive-list"));
+          return null;
+        }
+        applyRights(Boolean(ACTIONS.manage_rights));
         return data;
       });
     });
@@ -100,12 +135,12 @@ _SCRIPT_ARCHIVE = r"""
 """
 
 _BODY_ARCHIVE = """
-<div class="ui-field">
+<div class="ui-field" id="archive-search-field" hidden>
   <label class="ui-field__label" for="archive-search">Кого найти</label>
   <input class="ui-input" id="archive-search" type="search" inputmode="search"
          autocomplete="off" placeholder="Имя или фамилия">
 </div>
-<div class="ui-small ui-muted" id="archive-count"></div>
+<div class="ui-small ui-muted" id="archive-count" hidden></div>
 <div class="ui-list" id="archive-list"></div>
 <button class="ui-btn ui-btn--block" id="archive-more" type="button" hidden>Показать ещё</button>
 <div class="ui-small ui-muted" id="status" role="status"></div>

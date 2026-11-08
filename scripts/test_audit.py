@@ -12,6 +12,12 @@
   ... --file tests/unit/test_intro.py       # один файл, по каждому тесту
   ... --json                                # машинный вывод
   ... --strict                              # код 1, если есть тесты без обоснования
+  ... --matrix --json                       # матрица «требование → тесты» (Э3, docs/development/143)
+
+`--matrix` — вход слоя А смоука: JSON вида `{"FR-A2": [{"file": "tests/…", "test": "имя"}]}`
+ровно по тем ID, что стоят в таблицах `docs/development/19`; требование без теста получает
+пустой список. Парсер ID и AST те же, что в обычном прогоне: второй parser требований
+в проекте не появляется (`scripts/smoke_report.py` берёт строки отсюда же).
 """
 
 from __future__ import annotations
@@ -25,6 +31,15 @@ from pathlib import Path
 
 PROJECT = Path(__file__).resolve().parents[1]
 TESTS = PROJECT / "tests"
+# Источник требований — документ 19. Он не переписывается этой картой: строки читаются
+# как есть, в том числе приоритеты и статусы (docs/development/143 §3).
+REQUIREMENTS_DOC = PROJECT / "docs" / "development" / "19-functional-requirements.md"
+FR_ROW_RE = re.compile(r"^\|\s*(FR-[A-ZА-Я]?\d+)\s*\|(.*)$")
+STATUSES = ("готово", "частично", "не начато", "отменено", "убрано")
+# В документе встречается «выполнено» вместо «готово» и уточнения в скобках
+# («готово (systemd …)», «частично (dry-run)») — сводим к закрытому набору статусов.
+STATUS_ALIASES = {"выполнено": "готово"}
+PRIORITIES = ("P0", "P1", "P2")
 
 # ID требования, дефекта, обращения (№15), вопроса, шага, урока, препятствия, намерения
 ID_RE = re.compile(r"№\s?\d+|FR-[A-ZА-Я]?\d+|UC-\d+|S-\d+|C-\d+|B-\d+|V-\d+|Ш-\d+|L-\d+|O-\d+|INT-\d+")
@@ -100,6 +115,73 @@ def audit(root: Path | None = None) -> dict:
     }
 
 
+def _cells(line: str) -> list[str]:
+    """Ячейки строки markdown-таблицы без пустых краёв."""
+    parts = [cell.strip() for cell in line.strip().strip("|").split("|")]
+    return parts
+
+
+def _priority(cell: str) -> str:
+    """Приоритет из ячейки: P0/P1/P2, иначе «не задан» (не додумываем, V-044)."""
+    return cell if cell in PRIORITIES else "не задан"
+
+
+def _status(cell: str) -> str:
+    """Статус из ячейки, сведённый к закрытому набору документа 19."""
+    text = cell.split("(")[0].strip().lower()
+    text = STATUS_ALIASES.get(text, text)
+    return text if text in STATUSES else ""
+
+
+def requirement_rows(path: Path | None = None) -> list[dict]:
+    """Строки требований из документа 19: id, текст, приоритет, статус, подтверждение.
+
+    Читаются только строки таблиц, начинающиеся с `| FR-…`. Строки дополнений 27.10
+    короче (нет колонки приоритета) — у них `priority = "не задан"`, колонка статуса
+    берётся по номеру ячейки, а не по угадыванию текста.
+    """
+    doc = Path(path) if path is not None else REQUIREMENTS_DOC
+    rows: list[dict] = []
+    seen: set[str] = set()
+    for number, line in enumerate(doc.read_text(encoding="utf-8").splitlines(), start=1):
+        match = FR_ROW_RE.match(line)
+        if not match:
+            continue
+        cells = _cells(line)
+        req_id = cells[0]
+        if req_id in seen:                  # повтор ID — ошибка источника, не матрицы
+            continue
+        seen.add(req_id)
+        body = [cell for cell in cells[1:] if cell]
+        title = body[0] if body else ""
+        if len(body) >= 4:                  # полная таблица: ID | текст | P | статус | подтверждение
+            priority, status, confirm = _priority(body[1]), _status(body[2]), body[3]
+        elif len(body) == 3:                # дополнения: ID | текст | статус
+            priority, status, confirm = "не задан", _status(body[1]), body[2]
+        else:
+            priority, status, confirm = "не задан", "", ""
+        rows.append({"id": req_id, "text": title, "priority": priority,
+                     "status": status, "confirm": confirm, "line": number})
+    return rows
+
+
+def matrix(root: Path | None = None, doc: Path | None = None) -> dict[str, list[dict]]:
+    """Матрица слоя А: `FR-… → [{file, test}]` по факту ID в тестах, а не по документам.
+
+    Требование без теста получает пустой список — это и есть честная точка отсчёта
+    (docs/development/143 §4), а не повод выдумать доказательство.
+    """
+    mapping: dict[str, list[dict]] = {row["id"]: [] for row in requirement_rows(doc)}
+    for item in audit(root)["files"]:
+        for test in item["tests"]:
+            for req_id in test["ids"]:
+                if req_id in mapping and req_id.startswith("FR-"):
+                    entry = {"file": item["file"], "test": test["name"]}
+                    if entry not in mapping[req_id]:
+                        mapping[req_id].append(entry)
+    return mapping
+
+
 def table(report: dict) -> str:
     """Текстовая таблица: файл, всего, обосновано, без обоснования."""
     lines = [f"{'файл':54} {'всего':>6} {'своих':>6} {'файлом':>7} {'нет':>5}"]
@@ -119,7 +201,14 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--file", default=None, help="разобрать один файл по тестам")
     parser.add_argument("--json", action="store_true")
     parser.add_argument("--strict", action="store_true", help="код 1 при тестах без обоснования")
+    parser.add_argument("--matrix", action="store_true",
+                        help="матрица «требование → тесты» из docs/development/19 (JSON)")
     args = parser.parse_args(argv)
+
+    if args.matrix:
+        # Всегда JSON и всегда код 0: это вход отчёта смоука, а не проверка.
+        print(json.dumps(matrix(), ensure_ascii=False, indent=2))
+        return 0
 
     if args.file:
         path = (PROJECT / args.file) if not Path(args.file).is_absolute() else Path(args.file)

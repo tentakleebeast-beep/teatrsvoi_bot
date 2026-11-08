@@ -130,7 +130,89 @@ async def on_file(message: Message) -> None:
               f"Свободно: {result.get('quota_left_mb')} МБ"]
     if result.get("warning"):
         lines.append(str(result["warning"]))
-    await message.answer("\n".join(lines))
+    # FR-K5: после сохранения у человека есть кнопка «Удалить» — только его файл,
+    # только кнопкой и только с подтверждением (FR-L8).
+    await message.answer("\n".join(lines),
+                         reply_markup=keyboards.kb([[("Удалить файл", f"fdel:{result.get('id')}")]]))
+
+
+def _delete_kb(file_id: int):
+    """Кнопки подтверждения удаления: «Удалить» и «Отмена» рядом."""
+    return keyboards.kb([[("Удалить", f"fdel-ok:{file_id}"), ("Отмена", "fdel-no")]])
+
+
+async def _delete_card(chat_id: int, file_id: int) -> tuple[str, object | None]:
+    """Текст подтверждения и кнопки. Без кнопок — файла нет (чужой неотличим, FR-K8)."""
+    meta = await core.api(f"/files/{file_id}", None, chat_id, method="GET")
+    if not meta.get("ok"):
+        return "Файл не найден.", None
+    name = str(meta.get("name") or "файл")
+    return (f"Удалить файл «{name}»?\n"
+            "Он исчезнет из списка, из папок и из архива. Вернуть кнопкой нельзя.", _delete_kb(file_id))
+
+
+@router.message(Command("rm", "удалить"))
+async def cmd_rm(message: Message) -> None:
+    """Удалить свой файл: номер из `/files` и подтверждение кнопкой (FR-K5, FR-L8)."""
+    if await _admin_only(message):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2 or not parts[1].isdigit():
+        await message.answer("Напишите: /rm 12 — номер файла из /files")
+        return
+    text, markup = await _delete_card(message.chat.id, int(parts[1]))
+    await message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("fdel:"))
+async def file_delete_ask(cb: CallbackQuery) -> None:
+    """Кнопка «Удалить файл» под ответом загрузки: сначала спрашиваем подтверждение."""
+    if cb.message is None:
+        await cb.answer(texts.MESSAGE_UNAVAILABLE, show_alert=True)
+        return
+    chat_id = cb.message.chat.id
+    if not core.has(await core.caps_of(chat_id), "admin.panel"):
+        await cb.answer(texts.FILES_ADMIN_ONLY, show_alert=True)
+        return
+    try:
+        file_id = int((cb.data or "").split(":", 1)[1])
+    except (IndexError, ValueError):
+        await cb.answer("Не понял, какой файл", show_alert=True)
+        return
+    await cb.answer()
+    text, markup = await _delete_card(chat_id, file_id)
+    await cb.message.answer(text, reply_markup=markup)
+
+
+@router.callback_query(F.data.startswith("fdel-ok:"))
+async def file_delete_confirm(cb: CallbackQuery) -> None:
+    """Подтверждённое удаление: тот же маршрут `DELETE /files/{id}`, что у экрана (V-045)."""
+    if cb.message is None:
+        await cb.answer(texts.MESSAGE_UNAVAILABLE, show_alert=True)
+        return
+    chat_id = cb.message.chat.id
+    if not core.has(await core.caps_of(chat_id), "admin.panel"):
+        await cb.answer(texts.FILES_ADMIN_ONLY, show_alert=True)
+        return
+    file_id = int((cb.data or "").split(":", 1)[1])
+    result = await core.api(f"/files/{file_id}", {}, chat_id, method="DELETE")
+    await cb.answer()
+    await cb.message.edit_reply_markup(reply_markup=None)
+    if result.get("ok"):
+        await cb.message.answer("Файл удалён: " + str(result.get("name") or file_id))
+        return
+    await cb.message.answer(errors.error_text(result) or "Файл не найден.")
+
+
+@router.callback_query(F.data.startswith("fdel-no"))
+async def file_delete_cancel(cb: CallbackQuery) -> None:
+    """Отмена: файл остаётся, кнопки с карточки снимаются."""
+    if cb.message is None:
+        await cb.answer(texts.MESSAGE_UNAVAILABLE, show_alert=True)
+        return
+    await cb.answer()
+    await cb.message.edit_reply_markup(reply_markup=None)
+    await cb.message.answer("Удаление отменено.")
 
 
 class ApiRefused(Exception):

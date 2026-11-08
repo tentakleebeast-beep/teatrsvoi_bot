@@ -268,8 +268,9 @@ SECTIONS: tuple[WebappSection, ...] = (
     WebappSection("notifications", ("admin.panel",), "Уведомления",
                   "/webapp/admin/t/notifications", "тихие часы по умолчанию",
                   page="NOTIFICATION_DEFAULTS_PAGE"),
-    # Личный раздел на «Ещё»: пока открыт администратору (92 §9.1).
-    WebappSection("files", ("admin.panel",), "Файлы студии",
+    # Личный раздел на «Ещё»: решение V-039 (в) — файлы видят admin, org и master.
+    # Право — `files.access`; у troupe его сняла миграция 062, и он читает отказ словами.
+    WebappSection("files", ("files.access",), "Файлы студии",
                   "/webapp/files", "записи, фонограммы, тексты", group=PERSONAL),
     # Заметки — личное у всех: право `notes.write` есть у каждой действующей роли,
     # поэтому строка видна и актёру, а не только администратору (FR-F7).
@@ -294,3 +295,57 @@ def sections_for(caps: list[str] | tuple[str, ...] | set[str] | None, *,
 def page_sections() -> tuple[WebappSection, ...]:
     """Разделы со своим экраном: маршрут и страница берутся из записи реестра."""
     return tuple(section for section in SECTIONS if section.page)
+
+
+#: Права на каждый экран Mini App — все 30 HTML-страниц, не только разделы хаба.
+#:
+#: Правило владельца (08.11.2026): если действие человеку недоступно, вход в него
+#: не показываем — ни плитку в хабе, ни строку, ни кнопку, ни прямой адрес. Реестр
+#: `SECTIONS` отвечает за хабы, а этот словарь — за сами экраны: по нему оболочка
+#: (`/webapp/nav`) решает, пускать ли на страницу, и маршрут отдаёт `302` на
+#: домашний экран вместо страницы, которую человеку всё равно нельзя наполнить.
+#:
+#: Пустой кортеж — экран открыт всем: так у «Главной», анкеты и уведомлений нет
+#: своего права, они показывают только то, что человеку и так положено.
+#: Записи разделов хаба обязаны совпадать с `SECTIONS` — это проверяет
+#: `tests/unit/test_webapp_screen_rights.py`, чтобы два списка не разъехались.
+SCREEN_CAPS: dict[str, tuple[str, ...]] = {
+    "/webapp/home": (),
+    "/webapp/more": (),
+    "/webapp": (),
+    "/webapp/week": ("schedule.availability.self",),
+    "/webapp/week/summary": ("schedule.read.all",),
+    "/webapp/week/month": ("schedule.read.all",),
+    "/webapp/money": ("budget.read.self", "budget.read"),
+    "/webapp/tx": ("budget.write",),
+    "/webapp/dues": ("budget.read.self",),
+    "/webapp/notifications": (),
+    "/webapp/feedback": (),
+    "/webapp/slots": ("schedule.slots",),
+    "/webapp/ui": (),
+    "/webapp/folder": ("files.access",),
+    "/webapp/person": ("participants.view",),
+}
+
+#: Экраны разделов хаба добавляются из реестра: адрес и право описаны один раз.
+SCREEN_CAPS.update({section.url: section.caps for section in SECTIONS})
+
+
+def screen_visible(url: str, caps: list[str] | tuple[str, ...] | set[str] | None) -> bool:
+    """Открыт ли экран человеку. Незнакомый адрес считаем открытым.
+
+    Незнакомый адрес — это не раздел (например, страница-справочник или новый
+    экран, который ещё не внесли в словарь). Отказ по незнанию запирал бы людей
+    на экране, который им положен, поэтому по умолчанию пускаем: права на данные
+    всё равно проверяются в эндпоинтах.
+    """
+    need = SCREEN_CAPS.get(url)
+    if not need:
+        return True
+    current = set(caps or ())
+    return "*" in current or any(code in current for code in need)
+
+
+def screen_flags(caps: list[str] | tuple[str, ...] | set[str] | None) -> dict[str, bool]:
+    """Все экраны с приговором: `{адрес: можно}`. Ответ для `/webapp/nav`."""
+    return {url: screen_visible(url, caps) for url in SCREEN_CAPS}

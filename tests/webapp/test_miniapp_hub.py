@@ -112,6 +112,29 @@ def test_общие_настройки_уведомлений_переключа
     assert "Сохранено" in toast.inner_text(), toast.inner_text()
 
 
+def test_общие_настройки_без_права_admin_panel_не_показывают_форму(app_page):
+    """Роль без `admin.panel` видит сообщение и ссылку, а не «Сохранить» (142 §3 строка 30).
+
+    До 08.11.2026 экран рисовал над «Не хватает прав на это действие» переключатели
+    и кнопку «Сохранить»: он предлагал сохранить то, что сохранить нельзя
+    (принципы 91: 9, 12, Б3; FR-G17, docs/development/73; карта t_5b401a86).
+    """
+    page = app_page("/webapp/admin/t/notifications", headers={"x-svoi-role": "org"})
+    page.wait_for_timeout(800)
+
+    assert page.locator("#denied").is_visible(), "нет сообщения об отсутствии права"
+    assert not page.locator("#defaults-form").is_visible(), "форма общих значений у роли без права"
+    assert page.locator(".ui-switch-row:visible").count() == 0, "переключатели у роли без права"
+    assert not page.locator("#save").is_visible(), "кнопка «Сохранить» у роли без права"
+
+    text = page.inner_text("#denied")
+    assert "администратор" in text, f"не сказано, у кого право: {text}"
+    assert page.locator('#denied a[href="/webapp/notifications"]').count() == 1, \
+        "нет ссылки на свои настройки"
+    assert "Не хватает прав" not in page.inner_text("body"), \
+        "общее «не хватает прав» вместо объяснения"
+
+
 def test_рассылка_показывает_охват_и_требует_подтверждения(device_page):
     page = device_page("/webapp/broadcast", "iPhone 14")
     page.wait_for_timeout(800)

@@ -115,6 +115,30 @@ def test_права_это_матрица_и_точечная_выдача_а_н
     assert "function renderResults" in html
 
 
+def test_права_без_права_говорят_о_праве_а_не_о_пустой_матрице():
+    """Отчёт 142 §3 строка 25, принципы 91: 8, Б3; карта t_eb9e0661.
+
+    У org, master и troupe нет `participants.manage` (`db/init/008`, `db/init/061`),
+    поэтому раздела `rights` в ответе панели нет вовсе. Прежний экран получал
+    пустой список и печатал «Матрица пуста. Роли не настроены» — ложное утверждение
+    о данных (у администратора матрица полная) — рядом с формой «Выдать право
+    человеку», которой человек без права всё равно не мог воспользоваться.
+    """
+    html = admin.RIGHTS_PAGE
+    assert 'id="rights-matrix" hidden' in html, "матрица отдаётся видимой — до ответа панели"
+    assert 'id="rights-grant" hidden' in html, "форма выдачи отдаётся видимой — до ответа панели"
+    assert "Права выдаёт администратор" in html, "нет объяснения, у кого права есть"
+    assert 'indexOf("rights")' in html, "экран не сверяет право раздела с ответом панели"
+    assert "ACTIONS.manage_rights" in html, "право выдачи берётся не из данных панели"
+    body = html.split("function applyRights", 1)[1]
+    assert body.index("if (can !== true)") < body.index("matrix = (BLOCKS.rights"), \
+        "матрица запрашивается и рисуется до проверки права"
+    # «Матрица пуста» осталась только честным пустым состоянием «право есть, данных нет»
+    assert 'if (!matrix.length) box.appendChild(empty("Матрица пуста"' in html
+    denied = html.split('id="rights-denied"', 1)[1].split("</section>", 1)[0]
+    assert "Матрица пуста" not in denied
+
+
 def test_аудит_по_двадцать_и_время_кто_что():
     html = admin.AUDIT_PAGE
     assert "shown += 20" in html
@@ -128,6 +152,26 @@ def test_приглашение_выпускается_в_лист_с_копир
     assert "Копировать" in html and "function copyText" in html
     assert "invite-issue" in html
     assert "/webapp/admin/invite-revoke" in html
+
+
+def test_приглашения_без_права_не_рисуют_форму_и_не_зовут_к_кнопке():
+    """Отчёт 142 §3 строка 24, принципы 91: 8, 9, Б3; карта t_343d42fe.
+
+    У troupe нет `registration.code.issue`, и форма «Выпустить код» стояла на
+    экране одновременно с отказом «Раздел доступен организатору и администратору».
+    У org и master формы не было, но пустое состояние звало к кнопке сверху,
+    которой у них нет. Право `registration.code.issue` приходит данными (`allowed`
+    и `actions.issue_codes` ответа панели), роль на странице его не выводит.
+    """
+    html = admin.INVITES_PAGE
+    assert 'id="invite-new" hidden' in html, "форма отдаётся видимой — до ответа данных"
+    assert 'indexOf("invites")' in html, "экран не сверяет право раздела с ответом панели"
+    assert "ERRORS.admin_panel_forbidden" in html, "причина не из общего словаря ядра"
+    assert "Коды выпускает администратор" in html
+    assert "Выпустите код кнопкой сверху" not in html, "экран зовёт к несуществующей кнопке"
+    script = html.split("function renderInvites", 1)[1]
+    assert script.index("if (!canIssue)") < script.index("Выпустите код кнопкой выше"), \
+        "пустое состояние без права нарисовано после пустого состояния с правом"
 
 
 def test_действия_подписаны_именем_объекта():
@@ -147,3 +191,87 @@ def test_общие_настройки_уведомлений_это_те_же_�
     assert "/webapp/admin/notifications/settings" in html
     assert "Частные" in html and "важнее общих" in html      # правило П-8 на экране
     assert html.count("ui-btn--primary") == 1                # одно главное действие
+
+
+def test_общие_настройки_уведомлений_без_права_не_рисуют_форму():
+    """Роль без `admin.panel` не получает ни переключателей, ни «Сохранить».
+
+    До 08.11.2026 форма стояла на экране всегда, а над ней висело «Не хватает прав
+    на это действие»: экран предлагал сохранить то, что сохранить нельзя
+    (принципы 91: 9, 12, Б3; дизайн-ревью 142 §3 строка 30, карта t_5b401a86).
+    Форма приходит скрытой и показывается только после 200 от настроек; на 403 —
+    сообщение об администраторе и ссылка на свои настройки.
+    """
+    html = admin.NOTIFICATION_DEFAULTS_PAGE
+    assert 'id="defaults-form" hidden' in html, "форма общих значений отдаётся видимой"
+    assert "#defaults-form[hidden]" in html, "`.ui-section` — флекс: атрибута `hidden` мало"
+    assert 'id="denied" hidden' in html, "нет блока «нет права»"
+    assert 'href="/webapp/notifications"' in html, "нет ссылки на свои настройки"
+    assert "if (res.status === 403) { showDenied(); return null; }" in html, \
+        "403 не отличается от сетевого сбоя"
+    assert "admin.panel" in html
+
+
+def test_заявки_без_права_говорят_о_праве_а_не_пустотой():
+    """docs/development/91 принцип 9, Б3: право проверяется до пустого состояния.
+
+    У master есть только `participants.view`: блок `pending` в ответе панели не
+    приходит, и экран рисовал «Заявок нет» — как будто решать нечего. У troupe
+    в том же месте честное «Раздел доступен организатору и администратору» (403),
+    то есть экран вёл себя по-разному у двух ролей без права.
+    """
+    html = admin.PENDING_PAGE
+    assert 'indexOf("pending")' in html, "экран не сверяет блок с правом"
+    assert "ERRORS.admin_panel_forbidden" in html, "слова не из общего словаря ядра"
+    assert html.index('indexOf("pending")') < html.index("var rows = BLOCKS.pending"), \
+        "проверка права стоит после чтения строк — пустое состояние успеет отрисоваться"
+
+
+def test_обращения_без_права_говорят_кто_их_разбирает():
+    """Отчёт 142 §3 строка 27, принципы 91: 9, Б3; docs/reports/142 §5.1.
+
+    У org, master и troupe нет `feedback.triage` (V-005: обращения идут админу
+    дайджестом), а экран писал «Открытых обращений нет» — читалось как «разбирать
+    нечего». Право приходит данными: раздел `feedback` в `allowed` ответа панели;
+    у troupe панель закрыта вовсе (403), и это тоже «нет права».
+    """
+    html = admin.FEEDBACK_QUEUE_PAGE
+    assert "Обращения разбирает администратор" in html
+    assert 'indexOf("feedback")' in html, "экран не сверяет раздел с правом"
+    # Очередь не запрашивается до подтверждённого права: в `refresh()` только
+    # проверка панели и вызов `loadQueue()`, а сам запрос живёт в отдельной функции.
+    body = html.split("function refresh()", 1)[1]
+    assert "return loadQueue()" in body, "очередь не грузится после проверки права"
+    assert 'api("/webapp/admin/feedback")' not in body, \
+        "очередь запрашивается раньше проверки права"
+    assert "res.status === 403" in body, "403 панели не признан отсутствием права"
+    # Пустое состояние осталось для того, у кого право есть.
+    assert "Открытых обращений нет" in html
+
+
+def test_у_заявки_одна_главная_кнопка_на_экран_а_не_на_строку():
+    """А9 отчёта 142, принцип 1 docs/development/91: главная кнопка одна на экран.
+
+    «Принять» стояло главным в каждой строке: четыре заявки — четыре главных.
+    Действие строки остаётся обычной кнопкой и рисуется только по праву.
+    """
+    html = admin.PENDING_PAGE
+    assert "ui-btn--primary" not in html
+    assert "if (ACTIONS.approve_pending)" in html, "кнопки строки без проверки права"
+    assert "Принять" in html and "Отклонить" in html
+
+
+def test_аудит_без_права_говорит_нет_доступа_а_не_пустой_журнал():
+    """Отчёт 142 §3 строка 28, принципы 91: 9, Б3; карта t_8212983f.
+
+    `audit.view` есть только у администратора: блок `audit` в ответе панели
+    org и master не приходит, и экран рисовал пустой журнал «Событий нет» —
+    как будто записей нет, а не как будто журнал закрыт. У troupe то же место
+    отвечает 403 и «Раздел доступен организатору и администратору». Право
+    проверяется до чтения блока, слова — из общего словаря ядра.
+    """
+    html = admin.AUDIT_PAGE
+    assert 'indexOf("audit")' in html, "экран не сверяет блок с правом"
+    assert "ERRORS.admin_panel_forbidden" in html, "слова не из общего словаря ядра"
+    assert html.index('indexOf("audit")') < html.index("var audit = BLOCKS.audit"), \
+        "проверка права стоит после чтения журнала — пустое состояние успеет отрисоваться"

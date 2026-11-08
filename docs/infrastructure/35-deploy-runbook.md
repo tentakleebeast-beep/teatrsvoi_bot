@@ -148,14 +148,18 @@ docker cp /tmp/svoi.dump svoi-postgres:/tmp/
 docker exec -i svoi-postgres pg_restore -U svoi -d svoi --clean --if-exists /tmp/svoi.dump
 ```
 
-Если база создаётся с нуля — применить миграции:
+Если база создаётся с нуля — применить миграции цепочкой Alembic (она же ведёт
+`alembic_version`; прогон `db/init/*.sql` напрямую оставляет учёт пустым и выкат
+потом падает на сверке версии):
 
 ```bash
-for f in db/init/*.sql; do
-  echo "→ $f"
-  docker exec -i svoi-postgres psql -U svoi -d svoi -v ON_ERROR_STOP=1 < "$f" || break
-done
+cd /opt/svoi
+sudo deploy/server-deploy.sh db        # alembic upgrade head поверх db/init/*.sql
+.venv/bin/python deploy/check_schema.py --expect-head --env-file .env
 ```
+
+Нужен только файл без полного прогона — `repair-schema` (раздел 10.2), он ставит
+версию сам.
 
 Проверка:
 
@@ -765,12 +769,16 @@ run сообщает админу, проверяет откат в логе и 
 cd /opt/svoi
 git fetch --tags && git checkout v0.3.0
 .venv/bin/pip install -r requirements.txt
-docker exec -i svoi-postgres psql -U svoi -d svoi -v ON_ERROR_STOP=1 < <(cat db/init/*.sql)   # все миграции по порядку номеров
+sudo deploy/server-deploy.sh db        # postgres, схема: alembic upgrade head (учёт версии ведёт он)
 sudo systemctl restart svoi-tool-api svoi-gateway
 sleep 5 && curl -s http://127.0.0.1:8000/health
 .venv/bin/python scripts/health_agent.py     # git_sha должен совпасть с HEAD
 bash scripts/deploy-check.sh                 # весь контур: /health, версия, gateway, юниты (§10a)
 ```
+
+Почему не `psql < db/init/*.sql`: такой прогон меняет структуру, но не трогает
+`alembic_version`, и следующий выкат останавливается на сверке версии (так упал v0.8.0
+08.11.2026, разбор — §10.2).
 
 Правило миграций: код новой версии не удаляет колонки сразу — сначала добавляет,
 потом (через релиз) чистит. Это даёт откат без восстановления базы.
@@ -808,6 +816,73 @@ bash scripts/deploy-check.sh --root /opt/svoi --url http://127.0.0.1:8000
 `alembic upgrade head`), ждёт
 `/health` и делает smoke-запрос `/tools/categories` с сервисным токеном. Если образ
 собирается, но не стартует или не видит базу — job красный.
+
+## 10.2. Порядок «миграция → версия → выкат» (repair-schema)
+
+Обычный выкат миграции не накатывает: `deploy.yml` вызывает `server-deploy.sh`, а тот
+`alembic upgrade head` не запускает. Штатный путь для новой схемы — workflow
+`.github/workflows/repair-schema.yml` (Actions → «ремонт схемы прода» → Run workflow,
+`files` — файлы из `db/init`, `confirm=apply`).
+
+Порядок один и тот же, что руками, что workflow:
+
+1. **миграция** — файлы `db/init/*.sql` применяются к базе;
+2. **версия** — `alembic_version` ставится на ревизию применённых файлов;
+3. **выкат** — `deploy/release.sh <тег> --apply`; его сверка `deploy/check_schema.py
+   --expect-head` требует, чтобы версия была равна head цепочки.
+
+Шаг 2 обязателен: `psql` про Alembic не знает. 08.11.2026 файл 061 был накатан через
+`repair-schema` (права роли `master` в базе появились), версия осталась на
+`060_participant_role_revoked`, выкат v0.8.0 остановился на строке «версия схемы 060 не
+равна head 061», откатился на v0.7.0 и потребовал ручного шага. Теперь workflow делает
+шаг 2 сам:
+
+* `deploy/check_schema.py --stamp-head --files "<список>"` — сначала сверяет структуру
+  с `db/init` (таблицы и колонки). Если структура отстаёт, версия не двигается: иначе
+  учёт обещал бы выкату то, чего в базе нет. Затем ставит версию на ревизию применённых
+  файлов (`db/init/NNN_x.sql` → ревизия `NNN_x`), а при пустом списке — на head.
+  Вперёд структуры версия не уходит и назад не откатывается.
+* `deploy/check_schema.py --expect-head` — явная проверка «`alembic current` = head»;
+  расхождение валит workflow с сообщением, что делать.
+
+Локально/на сервере те же проверки (обе читают `DATABASE_URL`, либо `--env-file PATH`):
+
+```bash
+.venv/bin/python deploy/check_schema.py                       # чего не хватает в структуре
+.venv/bin/python deploy/check_schema.py --expect-head          # версия = head (read-only)
+.venv/bin/python deploy/check_schema.py --stamp-head \
+    --files "db/init/061_master_role.sql"                      # поставить версию после psql-наката
+```
+
+### Если версия отстала (SQL накатан, `alembic_version` — нет)
+
+```
+версия схемы 060_participant_role_revoked не равна head 061_master_role
+ОШИБКА: версия схемы не равна head: server-deploy.sh db --migrate
+```
+
+Лечение — одна команда на сервере, файлы идемпотентны, повторный накат ничего не меняет:
+
+```bash
+cd /opt/svoi
+sudo deploy/server-deploy.sh db          # alembic upgrade head
+.venv/bin/python deploy/check_schema.py --expect-head --env-file .env
+```
+
+После этого повторять `deploy/release.sh <тег> --apply` — сверка версии пройдёт без
+ручных шагов. Откатывать выкат из-за одной версии не нужно: данные и структура в этот
+момент уже правильные, расходится только учёт.
+
+Два ограничения, о которых стоит помнить:
+
+* `--stamp-head` сверяет таблицы и колонки (что видят миграции), но не права, индексы
+  и строки справочников. Если файл меняет только данные (056–058, 061 в части прав), его
+  применение проверяется по факту — поэтому в списке `files` называйте ровно то, что
+  накатили: версия встанет по максимуму из названных файлов.
+* Версия ставится из checkout раннера, а не из `/opt/svoi`: на сервере лежит прошлый тег,
+  новых ревизий там ещё нет. Workflow копирует `alembic.ini`, `db/init`,
+  `services/tool-api/migrations` и `deploy/check_schema.py` во временный каталог
+  `/tmp/svoi-schema-repair` и запускает их серверным `.venv`.
 
 ## 11. Что нельзя делать
 

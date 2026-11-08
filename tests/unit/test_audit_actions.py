@@ -159,8 +159,8 @@ def test_webapp_body_require_names_capability(inventory):
     assert _route(data, "/webapp/tx/save").body_caps == ("budget.write",)
     assert "budget.write" in _route(data, "/webapp/tx/save").right_text
     files = _route(data, "/webapp/files/list")
-    assert files.body_caps == ("admin.panel",)
-    assert "admin.panel" in files.right_text
+    assert files.body_caps == ("files.access",)
+    assert "files.access" in files.right_text
     assert len(data["body_caps"]) >= 28
 
 
