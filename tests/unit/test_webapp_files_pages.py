@@ -73,6 +73,7 @@ def test_данные_файлов_закрыты_правом_files_access():
     assert MAIN.count('_webapp_require(who, "files.access")') >= 6
     assert '"admin.panel"' not in MAIN, "файлы снова закрыты админ-панелью"
     for endpoint in ("webapp_files_list", "webapp_files_presign", "webapp_files_commit",
+                     "webapp_file_delete",
                      "webapp_folder_files", "webapp_folder_order", "webapp_folder_zip"):
         start = MAIN.index(f"def {endpoint}(")
         block = MAIN[start:start + 1200]
@@ -90,6 +91,21 @@ def test_у_админа_одна_главная_кнопка_на_экране(
     # рисует кнопку строки (сохранить/утвердить), и это не главная кнопка экрана.
     assert page.count('class="ui-btn ui-btn--primary') == 1, "на экране больше одной главной кнопки"
     assert 'id="upload"' in page and 'class="ui-btn ui-btn--primary ui-btn--block"' in page
+
+
+def test_удаление_файла_кнопкой_с_подтверждением():
+    """FR-K5, FR-L8 (V-045): удаление — кнопка в строке файла и вопрос в листе.
+
+    Кнопка рисуется вместе со списком «Мои файлы», а список приходит только с правом
+    `files.access`: без права экран отвечает отказом и удалять нечего. Тот же маршрут
+    зовёт чат — второй копии удаления нет.
+    """
+    page = files.FILES_PAGE
+    assert "deleteFileButton(file" in page, "в строке файла нет кнопки удаления"
+    assert 'api("/webapp/files/" + file.id, { method: "DELETE" })' in page
+    assert 'sheet("Удалить файл?"' in page and '"Отмена"' in page
+    assert "Файл удалён" in page
+    assert 'if (res.status === 403)' in page, "без права экран не рисует список"
 
 
 def test_папка_играет_подряд_и_качает_архив():

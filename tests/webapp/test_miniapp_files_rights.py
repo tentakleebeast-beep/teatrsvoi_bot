@@ -51,3 +51,43 @@ def test_без_права_экран_говорит_у_кого_файлы(app_
     assert "Раздел доступен администратору, организатору и мастеру" in text, text
     assert page.locator("#list .ui-row").count() == 0, "файлы показаны роли без права"
     assert page.locator("#upload").is_disabled(), "кнопка загрузки без права осталась рабочей"
+
+
+@pytest.mark.parametrize("headers", WITH_RIGHT)
+def test_кнопка_удаления_есть_у_роли_с_правом(app_page, headers) -> None:
+    """FR-K5 (V-045): у роли с `files.access` в строке файла есть «Удалить».
+
+    Правило владельца — недоступное действие не показываем; поэтому кнопка живёт в том
+    же списке, который приходит только с правом, и не появляется отдельным обещанием.
+    """
+    page = app_page("/webapp/files", headers=headers)
+    page.wait_for_function(
+        "() => document.querySelectorAll('#list .ui-row').length > 0", timeout=10_000)
+
+    assert page.locator("#list .ui-row button:has-text('Удалить')").count() >= 1, \
+        "в строке файла нет кнопки удаления"
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_без_права_кнопки_удаления_нет(app_page) -> None:
+    """Роль без `files.access` не видит и кнопки удаления: файлов на экране нет вовсе."""
+    page = app_page("/webapp/files", headers={"X-SVOI-Role": "troupe"})
+    page.wait_for_selector("#status", timeout=10_000)
+
+    assert page.locator("button:has-text('Удалить')").count() == 0
+
+
+def test_кнопка_удаления_спрашивает_подтверждение(app_page) -> None:
+    """FR-L8: удаление не срабатывает первым нажатием — открывается лист с вопросом."""
+    page = app_page("/webapp/files")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#list .ui-row').length > 0", timeout=10_000)
+
+    page.locator("#list .ui-row button:has-text('Удалить')").first.click()
+    page.wait_for_selector(".ui-sheet", timeout=5_000)
+    text = page.inner_text(".ui-sheet")
+    assert "Удалить файл?" in text, text
+    assert "Отмена" in text and "Удалить" in text
+    # До подтверждения файл остаётся в списке.
+    assert page.locator("#list .ui-row").count() >= 1
+    assert not page.svoi_errors, page.svoi_errors

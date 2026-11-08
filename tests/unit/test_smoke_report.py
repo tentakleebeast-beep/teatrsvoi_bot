@@ -318,6 +318,11 @@ def test_источник_чисел_из_документа_19():
     assert smoke_report.source_problems(report) == []
     report["source"]["p0"] = 47
     assert any("p0" in item and "48" in item for item in smoke_report.source_problems(report))
+    # счётчики матрицы — факт дерева прогона: новый тест в main их меняет, и исторический
+    # отчёт не обязан совпадать с текущим деревом (сведение: 783 → 795 ссылок)
+    report = _minimal_report(source=smoke_report.source_block(rows, matrix))
+    report["source"]["test_refs"] = -1
+    assert smoke_report.source_problems(report) == []
     assert smoke_report.source_problems(_minimal_report(source={}))
 
 
