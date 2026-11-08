@@ -2,6 +2,15 @@
 
 Модуль — только своя разметка и скрипт: общее ядро (токен, запросы, строки,
 листы) и каркас лежат в `admin_core.py`. Границы и права — как в `docs/development/73`.
+
+Матрица и выдача прав — управление, а не просмотр: раздел `rights` в ответе панели
+отдаётся только с возможностью `participants.manage` (`app/webapp.py:ADMIN_BLOCKS`),
+она есть у администратора и нет у организатора, педагога и труппы (`db/init/008`,
+`db/init/061`). До правки раздел у этих ролей отсутствовал в ответе, страница
+получала пустой список и печатала «Матрица пуста. Роли не настроены» — ложное
+утверждение о данных рядом с формой «Выдать право человеку», которой человек
+всё равно не мог воспользоваться (отчёт 142 §3 строка 25, принципы 91: 8, Б3;
+карта t_eb9e0661).
 """
 
 from __future__ import annotations
@@ -12,6 +21,7 @@ _SCRIPT_RIGHTS = r"""
   var people = [];
   var matrix = [];
   var query = "";
+  var canManage = false;
 
   function capabilityCodes() {
     var seen = {};
@@ -136,6 +146,7 @@ _SCRIPT_RIGHTS = r"""
   }
 
   function openRights(person) {
+    if (!canManage) return;   // без права карточку не запрашиваем и лист не открываем
     sheet(person.display_name, el("div", "ui-skeleton"), [{ label: "Закрыть" }]);
     loadCard(person).then(function (card) {
       if (!window.SVOI || !window.SVOI.sheet) return;
@@ -143,15 +154,51 @@ _SCRIPT_RIGHTS = r"""
     });
   }
 
+  /* Экран без прав: ни матрицы, ни формы выдачи, ни пустого состояния — причину
+     уже сказал отказ сервера (403 панели или неудавшийся вход). */
+  function hideRights() {
+    canManage = false;
+    matrix = [];
+    people = [];
+    toggle($("rights-matrix"), false);
+    toggle($("rights-grant"), false);
+    toggle($("rights-denied"), false);
+    clear($("matrix"));
+    clear($("rights-results"));
+  }
+
+  /* Право `participants.manage` приходит данными: раздел `rights` в списке `allowed`
+     и действие `manage_rights` ответа `/webapp/admin/overview`. Роль на странице
+     право не выводит. Без права данных матрицы нет вовсе, поэтому её не рисуем и
+     форму выдачи не показываем — вместо «Матрица пуста. Роли не настроены» экран
+     говорит, у кого права есть (отчёт 142 §3 строка 25, принципы 91: 8, Б3;
+     карта t_eb9e0661). */
+  function applyRights(can) {
+    if (can !== true) {
+      hideRights();
+      toggle($("rights-denied"), true);
+      return;
+    }
+    canManage = true;
+    toggle($("rights-matrix"), true);
+    toggle($("rights-grant"), true);
+    toggle($("rights-denied"), false);
+    matrix = (BLOCKS.rights && BLOCKS.rights.matrix) || [];
+    people = (BLOCKS.people && BLOCKS.people.data) || [];
+    renderMatrix();
+    renderResults();
+  }
+
   function refresh() {
     return auth().then(function (denied) {
-      if (denied) { status(denied, true); return null; }
+      /* Вход не состоялся — ни матрицы, ни формы: причину печатают слова сервера. */
+      if (denied) { hideRights(); status(denied, true); return null; }
       return loadOverview().then(function (data) {
-        if (!data) return null;
-        people = (BLOCKS.people && BLOCKS.people.data) || [];
-        matrix = (BLOCKS.rights && BLOCKS.rights.matrix) || [];
-        renderMatrix();
-        renderResults();
+        /* 403 панели (troupe) и сетевая ошибка: права никто не подтвердил. Причину
+           `loadOverview` уже сказал в статусе, экран остаётся без разделов. */
+        if (!data) { hideRights(); return null; }
+        applyRights((data.allowed || []).indexOf("rights") !== -1
+          && Boolean(ACTIONS.manage_rights));
         return data;
       });
     });
@@ -171,12 +218,12 @@ _SCRIPT_RIGHTS = r"""
 """
 
 _BODY_RIGHTS = """
-<section class="ui-section">
+<section class="ui-section" id="rights-matrix" hidden>
   <div class="ui-section__head"><h2 class="ui-section__title">Роли и возможности</h2></div>
   <div id="matrix" style="display:flex;flex-direction:column;gap:12px"></div>
 </section>
 
-<section class="ui-section">
+<section class="ui-section" id="rights-grant" hidden>
   <div class="ui-section__head"><h2 class="ui-section__title">Выдать право человеку</h2></div>
   <div class="ui-field">
     <label class="ui-field__label" for="rights-search">Имя</label>
@@ -185,6 +232,14 @@ _BODY_RIGHTS = """
   </div>
   <div class="ui-small ui-muted" id="rights-hint">Начните вводить имя — покажем совпадения.</div>
   <div class="ui-list" id="rights-results"></div>
+</section>
+
+<section class="ui-section" id="rights-denied" hidden>
+  <div class="ui-empty">
+    <div class="ui-empty__title">Права выдаёт администратор</div>
+    <div class="ui-empty__text">Матрицу ролей и выдачу прав ведёт администратор:
+      у вашей роли этого права нет.</div>
+  </div>
 </section>
 
 <div class="ui-small ui-muted" id="status" role="status"></div>
