@@ -147,3 +147,30 @@ def test_общие_настройки_уведомлений_это_те_же_�
     assert "/webapp/admin/notifications/settings" in html
     assert "Частные" in html and "важнее общих" in html      # правило П-8 на экране
     assert html.count("ui-btn--primary") == 1                # одно главное действие
+
+
+def test_заявки_без_права_говорят_о_праве_а_не_пустотой():
+    """docs/development/91 принцип 9, Б3: право проверяется до пустого состояния.
+
+    У master есть только `participants.view`: блок `pending` в ответе панели не
+    приходит, и экран рисовал «Заявок нет» — как будто решать нечего. У troupe
+    в том же месте честное «Раздел доступен организатору и администратору» (403),
+    то есть экран вёл себя по-разному у двух ролей без права.
+    """
+    html = admin.PENDING_PAGE
+    assert 'indexOf("pending")' in html, "экран не сверяет блок с правом"
+    assert "ERRORS.admin_panel_forbidden" in html, "слова не из общего словаря ядра"
+    assert html.index('indexOf("pending")') < html.index("var rows = BLOCKS.pending"), \
+        "проверка права стоит после чтения строк — пустое состояние успеет отрисоваться"
+
+
+def test_у_заявки_одна_главная_кнопка_на_экран_а_не_на_строку():
+    """А9 отчёта 142, принцип 1 docs/development/91: главная кнопка одна на экран.
+
+    «Принять» стояло главным в каждой строке: четыре заявки — четыре главных.
+    Действие строки остаётся обычной кнопкой и рисуется только по праву.
+    """
+    html = admin.PENDING_PAGE
+    assert "ui-btn--primary" not in html
+    assert "if (ACTIONS.approve_pending)" in html, "кнопки строки без проверки права"
+    assert "Принять" in html and "Отклонить" in html
