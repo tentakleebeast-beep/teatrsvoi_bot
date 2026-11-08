@@ -1666,7 +1666,7 @@
     },
     {
       "id": "FR-F5",
-      "text": "Файлы студии (личные и общие): загрузка, доступ, теги, папки, архив; раздел открыт правом `files.access` — admin, org и master (V-039 (в)), у студийца права нет",
+      "text": "Файлы студии (личные и общие): загрузка, удаление, доступ, теги, папки, архив; раздел открыт правом `files.access` — admin, org и master (V-039 (в)), у студийца права нет",
       "priority": "P1",
       "status19": "частично",
       "line": 122,
@@ -1692,10 +1692,9 @@
         "сценарий:СМ-7/3. POST /files/upload (2026-11-08)",
         "сценарий:СМ-7/4. GET /files/{id}/content (2026-11-08)",
         "сценарий:СМ-7/5. GET /files/{id}/content (чужой) (2026-11-08)",
-        "сценарий:СМ-7/6. удаление файла (DELETE /files/{id}) (провал)",
         "сценарий:СМ-7/8. загрузка файла из чата Telegram (не проверено: нужен живой Telegram)"
       ],
-      "result": "провал",
+      "result": "пройдено",
       "cause": "",
       "matrix_tests": 18,
       "matrix_measured": 18,
@@ -4134,7 +4133,9 @@
       "result": "провал",
       "cause": "",
       "requirements": [
-        "FR-F5"
+        "FR-M8",
+        "FR-K5",
+        "FR-L8"
       ],
       "severity": "важно"
     },
@@ -4509,7 +4510,7 @@
       "evidence": "svoi-smoke/run-2026-11-08/k7-prepare-02.log, marker-02/pytest.log, k7-totals-after-cleanup.txt, k7-totals-after-restore.txt",
       "result": "провал",
       "cause": "",
-      "defect": "FR-F5 (удаление файла: DELETE /files/{id} → 405, файл продолжает отдаваться), карта t_61ec7e55 — критерий «оба прогона не падают» не выполнен; дублей и расхождения итогов нет"
+      "defect": "FR-M8/FR-K5/FR-L8 (удаление файла: DELETE /files/{id} → 405, файл продолжает отдаваться) — P0 документа 86, в силе по V-045, карта t_d4350819; критерий «оба прогона не падают» не выполнен; дублей и расхождения итогов нет"
     }
   ],
   "cleanup": {
@@ -4544,16 +4545,30 @@
       "actual": "day=2026-01-07",
       "evidence": "POST /tools/availability/parse → 200 {\"ok\":true,\"day\":\"2026-01-07\",\"start\":10,\"end\":12,\"kind\":\"busy\",\"outside_work_day\":false,\"label\":\"2026-01-07 10:00–12:00, занят\"}",
       "severity": "важно",
+      "requirement_ids": [
+        "FR-C2"
+      ],
+      "document": "docs/development/19-functional-requirements.md",
+      "card": "",
+      "decision": "",
       "id": "Д-01"
     },
     {
-      "requirement": "FR-F5",
+      "requirement": "FR-M8, FR-K5, FR-L8",
       "scenario": "СМ-7",
       "step": "6. удаление файла (DELETE /files/{id})",
       "expected": "код 200 и файл больше не отдаётся",
       "actual": "удаление 405 (method_not_allowed), повторное чтение 200",
       "evidence": "DELETE /files/1 → 405 {\"type\":\"https://svoi.local/errors/method_not_allowed\",\"title\":\"Метод не поддерживается\",\"status\":40; GET /files/1/content → 200 smoke file: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
       "severity": "важно",
+      "requirement_ids": [
+        "FR-M8",
+        "FR-K5",
+        "FR-L8"
+      ],
+      "document": "docs/development/86",
+      "card": "t_d4350819",
+      "decision": "V-045, ответ владельца 08.11.2026",
       "id": "Д-02"
     }
   ],
@@ -4573,7 +4588,7 @@
       },
       {
         "criterion": "P1 с доказательством",
-        "value": "18/34",
+        "value": "19/34",
         "target": ">= 27/34",
         "ok": false
       },
@@ -4691,5 +4706,5 @@
       "text": "Миграции только вперёд, идемпотентные"
     }
   ],
-  "summary": "Проверено 60 из 113 требований, не проверено 49, провалов 2 (FR-C2, FR-F5). Пороги §7 не пройдены: P0 с доказательством или причиной 47/48 (нужно 48/48); P1 с доказательством 18/34 (нужно >= 27/34); пропуски сценариев 8 (нужно <= 3). Проверки прогона: К5 пройдено; К7 провал. Слой В (прод) не выполнялся: нет ответа на V-042."
+  "summary": "Проверено 61 из 113 требований, не проверено 49, провалов 1 (FR-C2). Пороги §7 не пройдены: P0 с доказательством или причиной 47/48 (нужно 48/48); P1 с доказательством 19/34 (нужно >= 27/34); пропуски сценариев 8 (нужно <= 3). Проверки прогона: К5 пройдено; К7 провал. Слой В (прод) не выполнялся: нет ответа на V-042."
 }
