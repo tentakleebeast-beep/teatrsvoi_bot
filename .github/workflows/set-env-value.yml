@@ -1,0 +1,72 @@
+name: значение в .env на проде
+
+# Записывает НЕсекретное значение переменной в /opt/svoi/.env и перезапускает tool-api.
+#
+# Зачем: 01.11.2026 в проде ломался не только ключ — в LLM_MODEL лежала строка
+# «# если пусто — ASSISTANT_MODEL, затем openai/gpt-4o-mini» из .env.example вместе
+# с комментарием. Провайдер отвечал 400 «not a valid model ID», и каждый свободный
+# вопрос уходил в деградацию. Значение проверяется: переводы строк и не-ASCII
+# запрещены, печатается только длина.
+
+on:
+  workflow_dispatch:
+    inputs:
+      name:
+        description: "Имя переменной, например LLM_MODEL"
+        required: true
+      value:
+        description: "Значение (без кавычек и переводов строк)"
+        required: true
+      confirm:
+        description: "Напишите apply"
+        required: true
+        default: ""
+
+concurrency:
+  group: set-env-value
+  cancel-in-progress: false
+
+jobs:
+  set-value:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'apply'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: записать значение
+        env:
+          NAME: ${{ inputs.name }}
+          VALUE: ${{ inputs.value }}
+        run: |
+          set -euo pipefail
+          case "$NAME" in
+            *[!A-Z0-9_]*) echo "имя переменной должно быть ЗАГЛАВНЫМИ_С_ПОДЧЁРКИВАНИЕМ" >&2; exit 1 ;;
+          esac
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            'cat > /tmp/set_env_key.py' < scripts/ops/set_env_key.py
+          printf '%s' "$VALUE" | ssh -i ~/.ssh/deploy_key -o BatchMode=yes \
+            "root@$DEPLOY_HOST" 'umask 077; cat > /tmp/newkey'
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "set -eu
+             /opt/svoi/.venv/bin/python /tmp/set_env_key.py --env /opt/svoi/.env --name '$NAME' --value-file /tmp/newkey
+             rm -f /tmp/newkey /tmp/set_env_key.py
+             chown svoi:svoi /opt/svoi/.env && chmod 600 /opt/svoi/.env
+             systemctl restart svoi-tool-api && sleep 4 && systemctl is-active svoi-tool-api"
+
+      - name: проверить снаружи
+        run: |
+          set -euo pipefail
+          curl -fsS --max-time 25 https://svoi-theater-samara.online/api/health | head -c 300
+          echo

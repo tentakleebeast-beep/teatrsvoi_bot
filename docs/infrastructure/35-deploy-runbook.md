@@ -820,17 +820,17 @@ bash scripts/deploy-check.sh --root /opt/svoi --url http://127.0.0.1:8000
 5. Оставлять `N8N_BASIC_AUTH_ACTIVE=false` на публичном домене — редактор открыт всем.
 6. Забывать `chmod 600` на `.env` и `secrets/google-sa.json`.
 
-## 12. Выкат через GitHub Actions (когда с рабочей машины сервер недоступен)
+## 12. Выкат через GitHub Actions (публичный репозиторий)
 
-Сеть до прода бывает закрыта (узел VPN не достаёт адрес, порт 22 режется), а раннеры
-GitHub достают его напрямую. Поэтому выкат умеет идти из CI, с той же логикой, что руками:
-`deploy/server-deploy.sh app|units|smoke`.
+Прод обновляется по команде владельца. Workflow `.github/workflows/deploy.yml` запускается
+руками (`workflow_dispatch`), автоматического деплоя нет. Файл живёт в публичном
+репозитории `tentakleebeast-beep/teatrsvoi_bot` (docs/development/26 §10); там же заданы
+секрет `DEPLOY_SSH_KEY` и переменная `DEPLOY_HOST`. Прод `/opt/svoi` берёт код из этого же
+публичного репозитория (`origin = https://github.com/tentakleebeast-beep/teatrsvoi_bot.git`).
 
-**Правило не меняется:** прод обновляется только по команде владельца. Workflow
-`.github/workflows/deploy.yml` запускается руками (`workflow_dispatch`), автоматического
-деплоя нет. Сам файл живёт в приватном репозитории `teatrsvoi_bot-private`
-(docs/development/26 §10): `deploy/release.sh` запускает его там, а в публичном срезе
-прод-workflow нет.
+SSH с рабочей машины до прода с 08.11.2026 проверен и работает: ручной путь через
+`ssh svoi-prod` — резерв, а не единственный способ. Рабочий путь — GitHub Actions,
+запущенный руками; с раннеров GitHub сервер достаётся напрямую.
 
 Что нужно один раз:
 
@@ -838,65 +838,26 @@ GitHub достают его напрямую. Поэтому выкат уме�
    ```bash
    cp ~/.ssh/svoi_prod ~/.ssh/deploy_prod
    ssh-keygen -p -f ~/.ssh/deploy_prod -N ""      # старая фраза, затем пустая
-   pbcopy < ~/.ssh/deploy_prod                    # в буфер, на экран не выводится
+   gh secret set DEPLOY_SSH_KEY -R tentakleebeast-beep/teatrsvoi_bot < ~/.ssh/deploy_prod
    ```
 2. GitHub → Settings → Secrets and variables → Actions → **New repository secret**:
-   имя `DEPLOY_SSH_KEY`, значение — содержимое приватного ключа целиком
-   (от `-----BEGIN OPENSSH PRIVATE KEY-----` до `-----END OPENSSH PRIVATE KEY-----`).
-3. Необязательно: переменная `DEPLOY_HOST`, если адрес сервера сменится (по умолчанию
-   берётся `203.0.113.10`).
+   имя `DEPLOY_SSH_KEY`, значение — содержимое приватного ключа целиком.
+3. Переменная `DEPLOY_HOST` — адрес сервера (если не задана, workflow не стартует:
+   плейсхолдер в файле убран, чтобы адрес не лежал в публичном дереве).
 
-Порядок выката: Actions → «деплой на прод» → Run workflow → тег (например `v0.3.1`) →
-`dry_run: true` (только посмотреть версию, разницу и число миграций) → затем `dry_run: false`.
-При падении проверки после выката workflow сам делает `rollback` на предыдущий тег.
+Порядок выката: `deploy/release.sh <версия> --apply` — ставит тег, пушит его в публичный
+репозиторий, запускает `deploy.yml` там же и ждёт результат. Либо Actions → «деплой на прод»
+→ Run workflow → тег → `dry_run: true` (только посмотреть версию, разницу и число миграций)
+→ затем `dry_run: false`. При падении проверки после выката workflow сам делает `rollback`
+на предыдущий тег.
 
-## 13. Свой раннер GitHub Actions на VPS (пока квота минут закрыта)
+## 13. Свой раннер GitHub Actions на VPS — снят
 
-С 04.11.2026 GitHub перестал стартовать job'ы приватного репозитория: падение за 3–4 с
-с пустым списком шагов (`steps: []`) — выбрана квота минут Actions, код при этом цел.
-Пока квота не снята, лёгкие проверки идут на своём раннере на том же VPS.
-
-Что установлено (проверено 04.11.2026):
-
-- пользователь `runner` (без sudo и без группы `docker`), раннер 2.338.2 в `/opt/actions-runner`;
-- служба `actions.runner.tentakleebeast-beep-teatrsvoi_bot.svoi-vps.service`, автозапуск включён;
-- метки `self-hosted`, `linux`, `x64`, `svoi-vps`; кэш pip — `/opt/actions-runner/pip-cache`;
-- в GitHub виден как `svoi-vps`, статус `online`.
-
-Что считается здесь: `lint`, `contract`, `types`, `deadcode` — без docker и без базы.
-
-Что осталось на `ubuntu-latest`: `tests`, `webapp`, `webapp-webkit`, `images`. Им нужен
-контейнер Postgres, а доступ к docker-сокету на прод-машине равен root. Пока квота закрыта,
-эти job'ы пропускаются переменной репозитория `CI_GITHUB_RUNNERS=off`; удалить переменную
-(`gh variable delete CI_GITHUB_RUNNERS`) — и они вернутся без правки workflow.
-
-Почему объём именно такой: у машины 1 vCPU, 1.9 ГБ RAM (около 870 МБ свободно) и 2 ГБ swap,
-рядом живут бот, tool-api, Postgres и n8n.
-
-Перерегистрация раннера, если отвязался:
-
-```bash
-TOK=$(gh api -X POST repos/<owner>/<repo>/actions/runners/registration-token -q .token)
-ssh root@<IP>
-su - runner -c "cd /opt/actions-runner && ./config.sh --unattended \
-  --url https://github.com/<owner>/<repo> --token $TOK \
-  --name svoi-vps --labels self-hosted,linux,x64,svoi-vps --work _work --replace"
-cd /opt/actions-runner && ./svc.sh install runner && ./svc.sh start
-```
-
-Проверка: `gh api repos/<owner>/<repo>/actions/runners` → `svoi-vps online`;
-`gh workflow run "проверки" --ref <ветка>` → зелёный прогон.
-
-Удалить: `./svc.sh stop && ./svc.sh uninstall` в `/opt/actions-runner`, затем `userdel -r runner`
-и удаление раннера в GitHub.
-
-Риск, который надо помнить: раннер исполняет код из репозитория на боевой машине. Поэтому
-триггер — `push` в `main` и ручной запуск; `pull_request` на него не отдан.
-
-Ещё факт, который расходится с §12: с рабочей машины SSH до прода **проходит** по ключу
-`~/.ssh/deploy_prod` (проверено 04.11.2026), поэтому «недоступен» — не всегда так.
-Пара `Host svoi-prod` в `~/.ssh/config` теперь указывает на `deploy_prod` (исправлено 05.11.2026),
-поэтому хватает `ssh svoi-prod`.
+Раннер `svoi-vps` поднимался 04.11.2026 как обход закрытой квоты минут Actions. После
+публикации репозитория минуты для публичных репозиториев не тарифицируются, и 08.11.2026
+раннер снят целиком: `/opt/actions-runner` удалён, служба удалена, регистрация в GitHub
+убрана. CI идёт на `ubuntu-latest`; self-hosted на публичном репозитории с `pull_request`
+не возвращается — это исполнение кода из форка на прод-машине.
 
 ## 14. Карта версий и опорные точки
 

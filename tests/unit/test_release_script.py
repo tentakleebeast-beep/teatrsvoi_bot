@@ -181,6 +181,6 @@ def test_apply_запускает_workflow_и_сообщает_об_откате
     # тег ушёл в origin — выкатывается именно он
     assert _git(tmp_path / "origin.git", "rev-parse", "-q", "--verify",
                 "refs/tags/v0.4.0").returncode == 0
-    # выкат идёт из приватного репозитория: в публичном срезе deploy.yml нет (docs/26 §10)
+    # выкат идёт из единственного публичного репозитория (docs/26 §10)
     assert set(repo_log.read_text(encoding="utf-8").split()) == {
-        "tentakleebeast-beep/teatrsvoi_bot-private"}
+        "tentakleebeast-beep/teatrsvoi_bot"}
