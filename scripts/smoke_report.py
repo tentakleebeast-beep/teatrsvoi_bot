@@ -6,15 +6,19 @@
 правка начиналась с нуля. Здесь один вход — три файла, один выход — отчёт из §3.4 дизайна
 `docs/development/143`: `.md` для человека и `.json` как источник истины для дельты.
 
-    # вход: junit от pytest, матрица от test_audit, сценарии от tests/smoke/helpers.py
+    # вход: junit полного прогона `tests/` (сценарии — своим файлом, если он есть),
+    # матрица от test_audit, журнал сценариев, данные уборки
     env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py \\
-        --junit smoke-junit.xml --matrix matrix.json --scenarios scenarios.json \\
-        --cleanup cleanup.json --out docs/reports/145-smoke-2026-11-08
+        --junit smoke-junit-full.xml [--junit smoke-junit.xml] \\
+        --matrix smoke-matrix.json --scenarios smoke-scenarios.json \\
+        --cleanup smoke-cleanup.json --out docs/reports/145-smoke-2026-11-08
 
     # проверка готового отчёта (код 1 и список ID, если строка врёт)
     env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py --check docs/reports/145-smoke-2026-11-08.json
 
 Правила, которые держит скрипт (docs/development/143 §3.2):
+  * слой А — junit **полного** прогона `tests/`, а не только `tests/smoke`: у требования
+    с тестом в матрице обязан быть исход, иначе отчёт не собирается (Д1, урок L-031);
   * `пройдено` ставится только по факту прогона — статус «готово» в документе 19
     доказательством не считается и в результат не переносится;
   * `не проверено` без причины из закрытого списка — ошибка отчёта, а не пустая клетка;
@@ -58,8 +62,15 @@ CAUSES = (
 )
 RESULTS = ("пройдено", "провал", "не проверено", "не проверяется")
 SEVERITIES = ("блокер", "важно", "мелко")
-# Пороги §7 дизайна: имена колонок и значения по умолчанию.
-P0_TARGET, P1_TARGET, SCENARIO_TARGET, SCENARIO_SKIP_MAX = 47, 34, 12, 3
+# Пороги §7 дизайна: значения по умолчанию для сценариев; P0 и P1 считаются от числа
+# строк документа 19, а не от литерала (Д3: в дизайне стояло 47, фактических P0 — 48).
+# P1 — «≥ 80 %» по К17: 34 строки → 27.
+P1_SHARE = 0.8
+SCENARIO_TARGET, SCENARIO_SKIP_MAX = 12, 3
+# Сильнейшее свидетельство побеждает при склейке junit'ов: провал важнее пройденного,
+# пройденное — важнее пропуска. Иначе пропуск сценария в полном наборе отменял бы факт
+# прогона сценариев, а провал терялся бы за зелёным исходом другого файла.
+RESULT_RANK = {"провал": 3, "пройдено": 2, "не проверено": 1}
 # Причина непроверки по коду причины из окружения/фикстуры (журнал шага может не назвать её).
 SKIP_CAUSE_MAP = (
     (re.compile(r"telegram|chat_id|доставк", re.IGNORECASE), "нужен живой Telegram"),
@@ -99,18 +110,31 @@ def read_json(path: Path | str | None) -> dict | None:
     return data
 
 
-def junit_outcomes(path: Path | str | None) -> dict[tuple[str, str], dict]:
-    """Исходы pytest из junit XML: `(файл, имя теста) → {result, message}`.
+def junit_files(source) -> list[Path]:
+    """Файлы слоя А из аргумента: путь, список путей (или строка через запятую).
+
+    Слой А — это junit **полного** прогона `tests/`; прогон сценариев даёт свой файл,
+    и его тоже можно передать. Возвращает все названные файлы, ничего не угадывая.
+    """
+    if not source:
+        return []
+    items = source if isinstance(source, (list, tuple, set)) else [source]
+    files: list[Path] = []
+    for item in items:
+        for part in str(item).split(","):
+            part = part.strip()
+            if part:
+                files.append(Path(part))
+    return files
+
+
+def parse_junit(file: Path) -> dict[tuple[str, str], dict]:
+    """Исходы одного junit-файла: `(файл теста, имя теста) → {result, message}`.
 
     Ключ — по `file` и `name` атрибутам; параметризованные тесты срезаются до имени
     функции, иначе `test_x[a-b]` не нашёл бы строку матрицы `test_x`. Один тест —
     одна запись: иначе счётчики в отчёте удвоятся.
     """
-    if not path:
-        return {}
-    file = Path(path)
-    if not file.is_file():
-        raise SystemExit(f"smoke_report.py: нет junit-файла {file}")
     tree = ET.parse(file)  # noqa: S314 — локальный файл собственного прогона
     outcomes: dict[tuple[str, str], dict] = {}
     for case in tree.getroot().iter("testcase"):
@@ -127,6 +151,42 @@ def junit_outcomes(path: Path | str | None) -> dict[tuple[str, str], dict]:
             outcome = {"result": "пройдено", "message": ""}
         outcomes[(shown, name)] = outcome
     return outcomes
+
+
+def _checked(file: Path) -> dict[tuple[str, str], dict]:
+    """Разбор junit с понятной ошибкой, если файла нет (вход отчёта, а не догадка)."""
+    if not file.is_file():
+        raise SystemExit(f"smoke_report.py: нет junit-файла {file}")
+    return parse_junit(file)
+
+
+def junit_sources(source) -> list[dict]:
+    """Объём каждого источника слоя А числом: тестов, пройдено, провал, пропуск.
+
+    Урок L-031: критерий, сшивающий два входа, называет источник каждого и его объём.
+    """
+    sources = []
+    for file in junit_files(source):
+        outcomes = _checked(file)
+        sources.append({
+            "path": str(file),
+            "tests": len(outcomes),
+            "passed": sum(1 for o in outcomes.values() if o["result"] == "пройдено"),
+            "failed": sum(1 for o in outcomes.values() if o["result"] == "провал"),
+            "skipped": sum(1 for o in outcomes.values() if o["result"] == "не проверено"),
+        })
+    return sources
+
+
+def junit_outcomes(source) -> dict[tuple[str, str], dict]:
+    """Склеенные исходы всех junit'ов слоя А: побеждает сильнейшее свидетельство."""
+    merged: dict[tuple[str, str], dict] = {}
+    for file in junit_files(source):
+        for key, outcome in _checked(file).items():
+            current = merged.get(key)
+            if current is None or RESULT_RANK[outcome["result"]] > RESULT_RANK[current["result"]]:
+                merged[key] = outcome
+    return merged
 
 
 def outcome_for(outcomes: dict, entry: dict) -> dict | None:
@@ -203,30 +263,40 @@ def gate_evidence(row: dict, gates: list[dict]) -> list[str]:
 # --- матрица -------------------------------------------------------------------
 
 def build_requirements(rows: list[dict], matrix: dict, outcomes: dict,
-                       steps: list[dict], gates: list[dict], date: str) -> list[dict]:
-    """Строки матрицы: доказательства с датой прогона, результат, причина, дефект."""
+                       steps: list[dict], gates: list[dict], date: str) -> tuple[list[dict], list[dict]]:
+    """Строки матрицы: доказательства с датой прогона, результат, причина, дефект.
+
+    Возвращает (строки, непарные тесты). Второе — тесты, которые есть в матрице, но
+    исхода в junit не имеют: их нельзя выдать за «нет автотеста» (Д1), поэтому отчёт
+    с непустым списком не собирается.
+    """
     by_scenario: dict[str, list[dict]] = {}
     for step in steps:
         for req_id in step["requirements"]:
             by_scenario.setdefault(req_id, []).append(step)
 
     requirements = []
+    unmatched: list[dict] = []
     for row in rows:
         evidence: list[str] = []
         causes: list[str] = []
         failed = False
         passed = False
+        entries = matrix.get(row["id"], [])
+        measured = 0
 
-        for entry in matrix.get(row["id"], []):
-            outcome = outcome_for(outcomes, entry)
-            label = f"тест:{entry['file']}::{entry['test']}"
-            if outcome is None:
-                continue                      # тест есть в коде, но не прогонялся
+        for entry in entries:
             # Сценарий сам себя доказывает шагами: его падение в junit — следствие провала
             # одного шага, и переносить это на все FR файла значит красить красным то, что
             # проверено и прошло (первый прогон дал 8 «провалов» из двух дефектов).
             if by_scenario.get(row["id"]) and entry["file"].startswith("tests/smoke/"):
                 continue
+            outcome = outcome_for(outcomes, entry)
+            label = f"тест:{entry['file']}::{entry['test']}"
+            if outcome is None:
+                unmatched.append({"id": row["id"], "file": entry["file"], "test": entry["test"]})
+                continue
+            measured += 1
             if outcome["result"] == "пройдено":
                 evidence.append(f"{label} ({date})")
                 passed = True
@@ -276,11 +346,15 @@ def build_requirements(rows: list[dict], matrix: dict, outcomes: dict,
             "evidence": evidence,
             "result": result,
             "cause": cause,
+            # Объём входа слоя А по этой строке: сколько тестов в матрице и у скольких
+            # есть исход в junit. Без этих чисел «нет автотеста» неотличимо от «не прогоняли».
+            "matrix_tests": len(entries),
+            "matrix_measured": measured,
             # слой В до ответа на V-042 не выполняется (К12): колонка всегда «нужен прод».
             "prod": "не проверено",
             "prod_cause": "нужен прод",
         })
-    return requirements
+    return requirements, unmatched
 
 
 def build_defects(steps: list[dict], requirements: list[dict], outcomes: dict,
@@ -344,14 +418,25 @@ def delta(current: list[dict], previous: dict | None) -> dict:
             "removed": removed}
 
 
+def share_target(rows: list[dict], share: float) -> int:
+    """Порог «≥ доли от числа строк» с округлением как в дизайне 143: 34 × 0.8 = 27.2 → 27.
+
+    Знаменатель берётся из `test_audit.requirement_rows()`, а не из литерала в дизайне:
+    иначе «Факт» и «Порог» печатают разные знаменатели (Д3), и читатель видит ошибку
+    машины там, где просто устаревшее число в документе.
+    """
+    return int(len(rows) * share + 0.5)
+
+
 def thresholds(requirements: list[dict], steps: list[dict], defects: list[dict],
                cleanup: dict | None) -> dict:
     """Пороги §7 дизайна: числа печатает машина, а не человек (К17).
 
-    Строки приоритета `не задан` (25 требований без шкалы) из процентов исключены (К18).
+    Строки приоритета `не задан` (24 требования без шкалы) из процентов исключены (К18).
     """
     p0 = [r for r in requirements if r["priority"] == "P0"]
     p1 = [r for r in requirements if r["priority"] == "P1"]
+    p1_target = share_target(p1, P1_SHARE)
     p0_ok = sum(1 for r in p0 if r["result"] in ("пройдено", "не проверяется")
                 or (r["result"] == "не проверено" and r["cause"] in CAUSES))
     p1_ok = sum(1 for r in p1 if r["result"] == "пройдено")
@@ -362,10 +447,11 @@ def thresholds(requirements: list[dict], steps: list[dict], defects: list[dict],
     leftovers = sum(int(value) for value in (cleanup.get("counts") or {}).values())
     month_ok = cleanup.get("month_total_restored", None)
     checks = [
+        # Знаменатель порога = знаменатель факта = число строк P0 в документе 19.
         {"criterion": "P0 с доказательством или причиной", "value": f"{p0_ok}/{len(p0)}",
-         "target": f"{P0_TARGET}/{P0_TARGET}", "ok": p0_ok == len(p0)},
+         "target": f"{len(p0)}/{len(p0)}", "ok": p0_ok == len(p0)},
         {"criterion": "P1 с доказательством", "value": f"{p1_ok}/{len(p1)}",
-         "target": f">= {P1_TARGET}/{P1_TARGET}", "ok": p1_ok >= P1_TARGET},
+         "target": f">= {p1_target}/{len(p1)}", "ok": p1_ok >= p1_target},
         {"criterion": "сценарии", "value": f"{len(scenario_ids)}/{SCENARIO_TARGET}",
          "target": f"{SCENARIO_TARGET}/{SCENARIO_TARGET}",
          "ok": len(scenario_ids) == SCENARIO_TARGET},
@@ -426,7 +512,7 @@ def render_markdown(report: dict) -> str:
     lines += ["", f"Итог: {'пороги пройдены' if report['thresholds']['ok'] else 'пороги не пройдены'}.",
               "", "## 2. Слои доказательств", "",
               "| Слой | Что прогнано | Результат |", "|---|---|---|",
-              f"| А. Авто | junit `{report['junit']}`: "
+              f"| А. Авто | junit полного прогона `tests/`: "
               f"{sum(report['layers']['junit'].values())} тестов | "
               f"{report['layers']['junit']['passed']} пройдено, "
               f"{report['layers']['junit']['failed']} провал, "
@@ -436,6 +522,13 @@ def render_markdown(report: dict) -> str:
               f"{sum(1 for s in report['scenarios'] if s['result'] == 'пройдено')} пройдено, "
               f"{sum(1 for s in report['scenarios'] if s['result'] == 'провал')} провал |",
               "| В. Прод | не выполнялся | `не проверено`, причина `нужен прод` (V-042) |", ""]
+    if report["layers"].get("junit_sources"):
+        lines += ["Источники слоя А (источник и его объём — числом):", ""]
+        for source in report["layers"]["junit_sources"]:
+            lines.append(f"- `{source['path']}` — {source['tests']} тестов: "
+                         f"{source['passed']} пройдено, {source['failed']} провал, "
+                         f"{source['skipped']} пропущено")
+        lines.append("")
     if report["layers"].get("gates"):
         lines += ["Гейт-скрипты:", ""]
         for gate in report["layers"]["gates"]:
@@ -506,12 +599,13 @@ def build(args: argparse.Namespace) -> dict:
         raise SystemExit("smoke_report.py: без --matrix отчёт не собрать "
                          "(scripts/test_audit.py --matrix --json > matrix.json)")
     outcomes = junit_outcomes(args.junit)
+    sources = junit_sources(args.junit)
     steps = flat_steps(read_json(args.scenarios))
     cleanup = read_json(args.cleanup) or {}
     previous = read_json(args.previous) or {}
     gates = run_gates(enabled=not args.no_gates)
     date = args.date or dt.date.today().isoformat()
-    requirements = build_requirements(rows, matrix, outcomes, steps, gates, date)
+    requirements, unmatched = build_requirements(rows, matrix, outcomes, steps, gates, date)
     defects = build_defects(steps, requirements, outcomes, matrix)
 
     junit_counts = {"passed": sum(1 for o in outcomes.values() if o["result"] == "пройдено"),
@@ -525,10 +619,12 @@ def build(args: argparse.Namespace) -> dict:
         "env": args.env,
         "marker": args.marker or cleanup.get("marker", ""),
         "dump_sha256": args.dump_sha or cleanup.get("dump_sha256", ""),
-        "junit": str(args.junit or ""),
-        "layers": {"junit": junit_counts, "gates": gates,
+        "junit": ", ".join(source["path"] for source in sources),
+        "layers": {"junit": junit_counts, "junit_sources": sources, "gates": gates,
                    "prod": {"executed": False, "cause": "нужен прод"}},
         "requirements": requirements,
+        # Тесты, у которых нет исхода в junit: непустой список валит отчёт (Д1).
+        "unmatched_tests": unmatched,
         "scenarios": steps,
         "cleanup": cleanup,
         "defects": defects,
@@ -541,15 +637,20 @@ def build(args: argparse.Namespace) -> dict:
 
 
 def validate(report: dict) -> list[str]:
-    """Проверка отчёта на противоречия (К9, К13, К14). Возвращает список проблем."""
+    """Проверка отчёта на противоречия (К9, К13, К14, Д1). Возвращает список проблем."""
     problems: list[str] = []
     for key in ("version", "commit", "date", "env", "dump_sha256", "layers",
-                "requirements", "scenarios", "cleanup", "defects"):
+                "requirements", "scenarios", "cleanup", "defects", "unmatched_tests"):
         if key not in report:
             problems.append(f"нет ключа {key}")
     requirements = report.get("requirements", [])
     if len(requirements) != 113:
         problems.append(f"строк матрицы {len(requirements)}, а требований в документе 19 — 113")
+    # Д1: тест есть в матрице, исхода в junit нет — прогон неполный, и строка
+    # «нет автотеста» у такого требования — не факт, а дыра во входе.
+    for item in report.get("unmatched_tests", []):
+        problems.append(f"{item.get('id')}: тест {item.get('file')}::{item.get('test')} есть "
+                        f"в матрице, исхода в junit нет — прогон неполный")
     seen: set[str] = set()
     for req in requirements:
         req_id = req.get("id", "?")
@@ -558,9 +659,17 @@ def validate(report: dict) -> list[str]:
         seen.add(req_id)
         if req.get("result") not in RESULTS:
             problems.append(f"{req_id}: неизвестный результат {req.get('result')!r}")
+        if "matrix_tests" not in req:
+            problems.append(f"{req_id}: нет объёма тестов в матрице — отчёт собран "
+                            f"без сверки с junit")
+        elif req["matrix_tests"] and not req.get("matrix_measured"):
+            problems.append(f"{req_id}: в матрице {req['matrix_tests']} тестов, ни одного "
+                            f"исхода в junit — «нет автотеста» при наличии теста недопустимо")
         if req.get("result") == "не проверено":
             if req.get("cause") not in CAUSES:
                 problems.append(f"{req_id}: причина {req.get('cause')!r} вне закрытого списка §3.3")
+            if req.get("cause") == "нет автотеста" and req.get("matrix_tests"):
+                problems.append(f"{req_id}: «нет автотеста», хотя тест в матрице есть")
         if req.get("result") == "провал" and not any(
                 d.get("requirement") == req_id for d in report.get("defects", [])):
             problems.append(f"{req_id}: провал без записи в defects[]")
@@ -594,7 +703,9 @@ def git_head() -> str:
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Отчёт смоука: матрица, сценарии, дельта",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--junit", default=None, help="junit XML от pytest")
+    parser.add_argument("--junit", action="append", default=None,
+                        help="junit XML от pytest; можно несколько раз (полный прогон tests/ "
+                             "обязателен, junit сценариев — по желанию)")
     parser.add_argument("--matrix", default=None, help="JSON от test_audit.py --matrix")
     parser.add_argument("--scenarios", default=None, help="JSON журнала сценариев")
     parser.add_argument("--cleanup", default=None, help="JSON от smoke_data.py check")

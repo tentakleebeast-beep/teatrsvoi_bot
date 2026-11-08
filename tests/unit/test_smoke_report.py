@@ -1,9 +1,10 @@
 """Матрица требований и отчёт смоука: scripts/test_audit.py --matrix, scripts/smoke_report.py.
 
 Обоснование: FR-… связи «требование → доказательство» — docs/development/143 §3 (Э3),
-критерии К1–К3, К9, К14. Проверяется машина сверки, а не прогон на стенде: строки
+критерии К1–К3, К9, К14, К17. Проверяется машина сверки, а не прогон на стенде: строки
 документа 19 читаются как есть, junit join'ится по имени теста, шаг без
-ожидаемого/фактического результата валит отчёт.
+ожидаемого/фактического результата валит отчёт, порог P1 считается по К17 (80 %),
+а тест в матрице без исхода в junit валит отчёт, а не превращается в «нет автотеста».
 """
 
 from __future__ import annotations
@@ -129,3 +130,82 @@ def test_документы_смоука_на_месте(path):
     """К20–К21: runbook и дизайн лежат в docs/development и связаны."""
     text = Path(path).read_text(encoding="utf-8")
     assert "smoke" in text.lower()
+
+
+def test_два_junit_склеиваются_и_сильнейший_исход_побеждает(tmp_path):
+    """Д1: слой А принимает несколько junit; пропуск одного прогона не отменяет пройденное."""
+    smoke = _write_junit(tmp_path / "smoke.xml", [("test_ok", "skipped", "стенд не включён"),
+                                                  ("test_bad", "failed", ""),
+                                                  ("test_only_smoke", "passed", "")])
+    full = _write_junit(tmp_path / "full.xml", [("test_ok", "passed", ""),
+                                                ("test_bad", "passed", "")])
+    outcomes = smoke_report.junit_outcomes([str(full), str(smoke)])
+    # пройдено в одном прогоне сильнее пропуска в другом
+    assert outcomes[("tests/smoke/test_cm01_login.py", "test_ok")]["result"] == "пройдено"
+    # провал сильнее пройденного, в каком бы файле он ни был
+    assert outcomes[("tests/smoke/test_cm01_login.py", "test_bad")]["result"] == "провал"
+    assert outcomes[("tests/smoke/test_cm01_login.py", "test_only_smoke")]["result"] == "пройдено"
+    sources = smoke_report.junit_sources([str(full), str(smoke)])
+    assert [source["tests"] for source in sources] == [2, 3]
+    assert [source["skipped"] for source in sources] == [0, 1]
+    assert [source["failed"] for source in sources] == [0, 1]
+
+
+def test_тест_в_матрице_без_исхода_валит_отчёт():
+    """Д1/К3: тест в матрице есть, исхода в junit нет — отчёт не собирается."""
+    rows = [{"id": "FR-A1", "text": "Доступ владельца", "priority": "P0",
+             "status": "готово", "confirm": "код", "line": 1}]
+    matrix = {"FR-A1": [{"file": "tests/unit/test_files.py", "test": "test_access"}]}
+    requirements, unmatched = smoke_report.build_requirements(
+        rows, matrix, {}, [], [], "2026-11-08")
+    assert requirements[0]["matrix_tests"] == 1
+    assert requirements[0]["matrix_measured"] == 0
+    assert unmatched == [{"id": "FR-A1", "file": "tests/unit/test_files.py",
+                          "test": "test_access"}]
+    report = {"version": 1, "commit": "x", "date": "2026-11-08", "env": "стенд",
+              "dump_sha256": "x", "layers": {}, "scenarios": [], "cleanup": {}, "defects": [],
+              "requirements": requirements, "unmatched_tests": unmatched}
+    problems = smoke_report.validate(report)
+    assert any("исхода в junit нет" in item for item in problems)
+    assert any("«нет автотеста» при наличии теста" in item for item in problems)
+
+
+def _p1_rows(passed: int) -> list[dict]:
+    """34 строки P1: `passed` из них с доказательством, остальные — без автотеста."""
+    return [{"id": f"FR-P{i}", "priority": "P1",
+             "result": "пройдено" if i < passed else "не проверено",
+             "cause": "" if i < passed else "нет автотеста"} for i in range(34)]
+
+
+def test_порог_p1_27_из_34_по_к17():
+    """К17: порог P1 — 80 % от числа строк (27 из 34); 27 проходит, 26 — нет."""
+    steps = [{"scenario": f"СМ-{number}", "result": "пройдено"} for number in range(1, 13)]
+    cleanup = {"counts": {}, "month_total_restored": True,
+               "messages_to_people": 0, "prod_writes": 0}
+
+    def p1_check(passed: int) -> dict:
+        block = smoke_report.thresholds(_p1_rows(passed), steps, [], cleanup)
+        return next(item for item in block["checks"] if item["criterion"].startswith("P1"))
+
+    enough, not_enough = p1_check(27), p1_check(26)
+    assert enough["ok"] is True
+    assert enough["value"] == "27/34"
+    assert enough["target"] == ">= 27/34"
+    assert not_enough["ok"] is False
+    # знаменатель порога и факта один и тот же (Д3)
+    assert not_enough["target"] == ">= 27/34"
+    assert not_enough["value"] == "26/34"
+    # порог считается из числа строк, а не из литерала в дизайне
+    assert smoke_report.share_target(_p1_rows(0), smoke_report.P1_SHARE) == 27
+
+
+def test_знаменатель_p0_один_в_факте_и_пороге():
+    """Д3: у P0 знаменатель «Факт» = «Порог» = числу строк документа 19."""
+    rows = [{"id": "FR-A1", "priority": "P0", "result": "пройдено", "cause": ""},
+            {"id": "FR-A2", "priority": "P0", "result": "не проверено", "cause": "нет данных в копии"},
+            {"id": "FR-A3", "priority": "не задан", "result": "не проверено", "cause": "нет автотеста"}]
+    block = smoke_report.thresholds(rows, [], [], {"counts": {}, "month_total_restored": True})
+    p0 = next(item for item in block["checks"] if item["criterion"].startswith("P0"))
+    assert p0["value"] == "2/2"
+    assert p0["target"] == "2/2"
+    assert p0["ok"] is True

@@ -59,13 +59,20 @@ curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8011/health   # 200
 ```bash
 set -a; . ./.env.smoke; set +a
 SVOI_SMOKE_TESTS=1 .venv/bin/python -m pytest tests/smoke -q \
-    --junitxml=smoke-junit.xml
+    --junitxml=smoke-junit-smoke.xml
 ```
 
 Что происходит: 12 сценариев СМ-1…СМ-12 пишут шаги в `smoke-scenarios.json` (путь —
 `SVOI_SMOKE_SCENARIOS`), создают объекты с маркером и в конце (СМ-12) вызывают
 `scripts/smoke_data.py cleanup`. Без `SVOI_SMOKE_TESTS=1` те же тесты показываются
 `skipped` с причиной «стенд не включён», и `scripts/check_done.py` остаётся зелёным.
+
+Этот прогон даёт **свой** junit — только 12 тестов сценариев. Для слоя А отчёта его мало:
+матрица требований строится по всему `tests/`, и junit только сценариев оставляет больше
+сотни тестов без исхода (первый прогон 08.11.2026 из-за этого назвал 57 требований
+«нет автотеста», хотя тесты есть и зелены). Полный прогон делается отдельно, следующим
+шагом в §5; в отчёт идёт он, junit сценариев можно передать вторым `--junit` — исходы
+склеиваются, побеждает сильнейшее свидетельство (провал > пройдено > пропуск).
 
 Маркер — `SMOKE-<YYYYMMDD>-<NN>`; `NN` — номер прогона в этот день. Второй прогон в тот же
 день идёт с `-02` и не пересекается с первым ни людьми, ни адресатами.
@@ -86,21 +93,35 @@ SVOI_SMOKE_TESTS=1 .venv/bin/python -m pytest tests/smoke -q \
 
 ## 5. Отчёт
 
+Слою А нужен junit **полного** прогона `tests/` — не только сценариев. Он же и есть
+проверка гейта, поэтому порядок такой:
+
 ```bash
-.venv/bin/python scripts/test_audit.py --matrix --json > smoke-matrix.json
-.venv/bin/python scripts/smoke_report.py \
-    --junit smoke-junit.xml --matrix smoke-matrix.json \
+# 1. Полный прогон: junit для слоя А (exit 0 — условие отчёта)
+env -u PYTHONPATH .venv/bin/python -m pytest -p no:warnings -o addopts="" -q \
+    --junitxml=smoke-junit-full.xml
+
+# 2. Матрица «требование → тест» по всему tests/
+env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json > smoke-matrix.json
+
+# 3. Отчёт: общий junit обязателен, junit сценариев — необязательный второй вход
+env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py \
+    --junit smoke-junit-full.xml --junit smoke-junit-smoke.xml \
+    --matrix smoke-matrix.json \
     --scenarios smoke-scenarios.json --cleanup smoke-cleanup.json \
     --previous docs/reports/<предыдущий>-smoke-<дата>.json \
-    --out docs/reports/145-smoke-$(date +%Y-%m-%d) --number 145
+    --out docs/reports/<NNN>-smoke-$(date +%Y-%m-%d) --number <NNN>
 ```
 
-Ключи: `--previous` — дельта к прошлому прогону (без него в отчёте строка «первый прогон,
-дельты нет»); `--check <json>` — проверка готового отчёта (код 1 и список ID, если строка
-«не проверено» без причины или шаг без ожидаемого/фактического).
+Ключи: `--junit` можно повторять (исходы склеиваются, побеждает провал, затем пройдено,
+затем пропуск); `--previous` — дельта к прошлому прогону (без него в отчёте строка
+«первый прогон, дельты нет»); `--check <json>` — проверка готового отчёта (код 1 и список
+ID, если строка «не проверено» без причины, шаг без ожидаемого/фактического, или у
+требования есть тест в матрице, а исхода в junit нет).
 
 Код возврата `smoke_report.py` — 1, если не пройден хоть один порог §7 дизайна; это не
-ошибка скрипта, а состояние прогона.
+ошибка скрипта, а состояние прогона. Отдельный код 1 с текстом «отчёт не собран» —
+сломанный вход (например, неполный junit): такой отчёт не пишется вовсе.
 
 ```bash
 .venv/bin/python scripts/build_docs_index.py      # индекс docs/ после нового отчёта
