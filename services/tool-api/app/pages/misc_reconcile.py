@@ -2,6 +2,13 @@
 
 Вложенный экран с шапкой и «‹»; возврат ведёт в `/webapp/more` (`window.SVOI_BACK`),
 а не всегда на «Главную» (docs/86 §6). Общий JS — `misc_common.py`.
+
+Право `budget.import` есть у админа и организатора; у `troupe` и `master` его нет,
+и раньше кнопка «Проверить» оставалась на экране — нажатие упиралось в 403 без
+объяснения (карта t_01784cc4, отчёт 142 §3 строка 10). Страница — публичная
+константа, поэтому «есть ли право» приезжает запросом `/webapp/nav` уже после
+входа (docs/architecture/25 §9.2): без права вместо кнопки стоит фраза, кто ведёт
+сверку. Отказ 403 на самом вызове ведёт к тому же объяснению.
 """
 
 from __future__ import annotations
@@ -10,8 +17,13 @@ from app.pages import layout
 from app.pages.misc_common import JS_COMMON as _JS_COMMON
 
 _BODY_RECONCILE = """
-<p class="ui-small ui-muted">Сверяет базу с таблицей: чего нет в листе, что изменили
+<p class="ui-small ui-muted" id="intro">Сверяет базу с таблицей: чего нет в листе, что изменили
 вручную и что удалили.</p>
+
+<div class="ui-card" id="denied" hidden>
+  <span class="ui-card__label">Сверку ведёт организатор</span>
+  <span class="ui-small ui-muted">Расхождения базы с листом закрывает он: у вашей роли сверки нет.</span>
+</div>
 
 <button class="ui-btn ui-btn--primary ui-btn--block" id="check" type="button">Проверить</button>
 
@@ -62,6 +74,26 @@ _SCRIPT_RECONCILE = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_
     box.hidden = !text;
   }
 
+  /* Нет права `budget.import`: кнопки нет, вместо неё — кто ведёт сверку.
+     Счётчики и «Применить» прячем тоже: без сверки их нечем наполнить. */
+  function deny() {
+    $("intro").hidden = true;
+    $("check").hidden = true;
+    $("apply").hidden = true;
+    $("summary").hidden = true;
+    $("denied").hidden = false;
+    showError("");
+    showDone("");
+  }
+
+  /* Права спрашивает сервер (`/webapp/nav`): страница — публичная константа.
+     Убираем кнопку только по явному ответу; сломанный nav не должен отнимать
+     сверку у организатора (так же решена строка сводки, карта t_70a6d8e5). */
+  function applyCaps(body) {
+    if (!body || body.ok !== true || typeof body.reconcile !== "boolean") { return; }
+    if (!body.reconcile) { deny(); }
+  }
+
   function draw(report) {
     var budget = (report && report.budget) || {};
     counts.missing = Number(budget["нет_в_бд"] || 0);
@@ -100,6 +132,11 @@ _SCRIPT_RECONCILE = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_
       showError("Откройте приложение из бота — сессия не подтверждена.");
       return;
     }
+    if (result.status === 403) {
+      // Право сняли после открытия или nav не ответил: говорим то же, что и на входе.
+      deny();
+      return;
+    }
     if (!result.body.ok) {
       button.textContent = apply ? "Применить" : "Проверить";
       showError("Сверка не прошла. Попробуйте ещё раз через минуту.");
@@ -131,6 +168,11 @@ _SCRIPT_RECONCILE = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_
       ],
     });
   });
+
+  /* Права — до первого нажатия: участник не должен увидеть кнопку, которая
+     упрётся в 403 (карта t_01784cc4). Ответа нет — кнопка остаётся. */
+  api("/webapp/nav").then(function (answer) { applyCaps(answer.body); },
+                          function () { /* nav не ответил: решает сервер на вызове */ });
 
 })();
 </script>"""
