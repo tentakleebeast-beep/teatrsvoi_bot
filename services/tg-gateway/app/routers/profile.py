@@ -24,7 +24,14 @@ async def answer_profile(message: Message) -> None:
     p = res["data"]
     roles = ", ".join(texts.ROLE_TITLES.get(r, r) for r in (p.get("roles") or [p.get("role")]))
     caps = p.get("capabilities") or []
-    lines = [p["display_name"], f"{texts.PREFIX_ROLES}{roles}", ""]
+    lines = [p["display_name"], f"{texts.PREFIX_ROLES}{roles}"]
+    # Педагог видит и свои дисциплины: без строки «педагог» отвечает на вопрос
+    # «что я веду» отказом (140 §4.1). Данные — из ответа `/tools/participants/me`.
+    subjects = [str(item.get("name") or "") for item in (p.get("disciplines") or [])]
+    subjects = [name for name in subjects if name]
+    if subjects:
+        lines.append(f"{texts.PREFIX_DISCIPLINES}{', '.join(subjects)}")
+    lines.append("")
     if caps:
         lines.append("Могу: " + ", ".join(texts.CAP_TITLES.get(c, c) for c in caps))
     else:

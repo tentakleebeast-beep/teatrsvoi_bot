@@ -31,6 +31,11 @@ ORG = ["registration.approve", "participants.view", "budget.read", "budget.read.
        "system.health"]
 ORG_WITH_CODES = ORG + ["registration.code.issue"]
 MANAGER = ["participants.view", "participants.manage"]
+# Роль «педагог» (db/init/061, docs/architecture/140 §3): семь возможностей, без денег,
+# управления людьми и админ-панели.
+MASTER = ["files.access", "notes.write", "participants.view",
+          "schedule.availability.self", "schedule.read.all", "schedule.slots",
+          "schedule.write"]
 
 
 class FakeMessage:
@@ -255,13 +260,18 @@ def test_Л4_экран_прав_отказывает_без_manage(gw, fake_api
 def test_Л4_вход_в_панель_только_у_админа(gw):
     """FR-A6: пункт «Админ-панель» в разделе «Админ» — по admin.panel.
 
-    Организатор видит там свои действия (участники, заявки, приглашения), а вход
-    в панель — нет: иначе он нажимает пункт и получает отказ.
+    Организатор видит там свои действия (заявки, приглашения), а вход в панель —
+    нет: иначе он нажимает пункт и получает отказ. С карты Э1 «Участники» живут
+    в группе «Люди»: их открывает и педагог по `participants.view`, а группа «Админ»
+    ему не рисуется вовсе. Набор пунктов организатора при этом не сузился.
     """
-    org_items = dict(gw.menu_groups(ORG))["Админ"]
-    assert "Админ-панель" not in org_items
-    assert {"Участники", "Заявки"} <= set(org_items), "свои действия организатор не теряет"
-    assert "Админ-панель" in dict(gw.menu_groups(ADMIN))["Админ"]
+    org_groups = dict(gw.menu_groups(ORG))
+    assert "Админ-панель" not in org_groups["Админ"]
+    assert {"Заявки"} <= set(org_groups["Админ"]), "свои действия организатор не теряет"
+    assert org_groups["Люди"] == ["Участники"], "«Участники» переехали в «Люди»"
+    admin_groups = dict(gw.menu_groups(ADMIN))
+    assert "Админ-панель" in admin_groups["Админ"]
+    assert admin_groups["Люди"] == ["Участники"]
 
 
 # ------------------------------------------------------------- Д8: тариф взноса
@@ -374,3 +384,116 @@ def test_Л7_заблокированный_виден_в_списке_люде�
     markup = cb.message.answers[-1][1]
     assert "panel:person:3" in datas(markup)
     assert "заблокированных 1" in cb.message.answers[-1][0]
+
+
+# --------------------------------------------------- Э1: роль «педагог» в чате
+ME_MASTER = {"ok": True, "data": {
+    "id": 7, "chat_id": 555, "display_name": "Крылов Виктор", "person_key": "крылов",
+    "role": "troupe", "status": "active", "roles": ["master"],
+    "capabilities": MASTER, "disciplines": [{"code": "acting", "name": "Актёрское мастерство"}],
+}}
+
+
+def test_Э1_меню_педагога_без_денег_и_админа(gw):
+    """FR-A1: у педагога ровно четыре группы и «Участники» в «Люди» (140 §4.1).
+
+    Групп «Деньги» и «Админ» нет: у роли нет ни одного бюджетного права и нет
+    admin.panel — иначе человек видел бы пункты, нажатие которых даёт отказ.
+    """
+    groups = dict(gw.menu_groups(MASTER))
+    assert list(groups) == ["Занятость", "Профиль", "Люди", "Помощь"]
+    assert groups["Занятость"] == ["Занятость", "Расписание", "Поиск окон"]
+    assert groups["Люди"] == ["Участники"]
+    assert "Деньги" not in groups and "Админ" not in groups
+
+
+def test_Э1_кто_я_показывает_дисциплины(gw, fake_api):
+    """FR-A1: «Кто я» — «Роли: педагог», «Дисциплины: …», «Возможностей: 7» (Г9).
+
+    Дисциплины берутся из ответа `/tools/participants/me`, а не из локального
+    списка: у гейтвея нет своей копии справочника дисциплин.
+    """
+    fake_api.answers["/tools/participants/me"] = ME_MASTER
+    message = FakeMessage()
+    assert asyncio.run(gw.about_me(message)) is True
+
+    text = message.answers[-1][0]
+    assert "Роли: педагог" in text
+    assert "Дисциплины: Актёрское мастерство" in text
+    assert "Возможностей: 7" in text
+    assert "Админ-панель" not in text
+
+
+def test_Э1_меню_педагога_печатает_дисциплины(gw):
+    """FR-A1: `/start` педагога показывает дисциплины и не даёт входа в панель."""
+    message = FakeMessage()
+    asyncio.run(gw.send_menu(message, 555, "Крылов Виктор", ["master"], MASTER,
+                             [{"code": "acting", "name": "Актёрское мастерство"}]))
+    text = message.answers[-1][0]
+    assert "Роли: педагог" in text
+    assert "Дисциплины: Актёрское мастерство" in text
+    assert "panel:root" not in str(message.answers[-1][1])
+
+
+def test_Э1_админ_не_теряет_ни_одного_пункта(gw):
+    """FR-A6: переезд «Участников» в «Люди» не сузил набор действий админа (Г12)."""
+    items = [item for _, items in gw.menu_groups(ADMIN) for item in items]
+    assert set(items) == {
+        "Расход и доход", "Бюджет", "Сверка листов", "Мои взносы",
+        "Занятость", "Расписание", "Поиск окон", "Мой профиль",
+        "Админ-панель", "Участники", "Заявки", "Приглашения",
+        "Обратная связь", "Что умею", "Справка",
+    }
+
+
+def test_Э1_роли_педагога_открываются_через_дисциплины(gw, fake_api, caps):
+    """FR-A1: «Педагог» в ролях ведёт на экран дисциплин, а не в выдачу без них.
+
+    Сервер отклонил бы выдачу без дисциплины (`master_discipline_required`), поэтому
+    оболочка не отправляет запрос, который заведомо провалится (140 §2.2).
+    """
+    caps["caps"] = MANAGER
+    fake_api.answers["/tools/participants/2/card"] = {
+        "ok": True, "data": {"id": 2, "display_name": "Арина", "roles": ["troupe"],
+                             "capabilities": [], "disciplines": []}}
+    cb = FakeCb("panel:proles:2")
+    asyncio.run(gw.panel_person_roles(cb))
+    assert "panel:mroles:2" in datas(cb.message.answers[-1][1])
+
+    fake_api.answers["/tools/disciplines"] = {"ok": True, "disciplines": [
+        {"code": "acting", "name": "Актёрское мастерство"},
+        {"code": "music", "name": "Музыка"}]}
+    cb = FakeCb("panel:mroles:2")
+    asyncio.run(gw.panel_person_master(cb))
+    markup = cb.message.answers[-1][1]
+    assert "panel:mrel:2:music:1" in datas(markup)
+    assert "panel:mgrant:2" not in datas(markup), "без отмеченной дисциплины роли нет"
+
+
+def test_Э1_выдача_педагога_уходит_с_дисциплинами(gw, fake_api, caps):
+    """FR-A1: кнопка «Выдать роль педагога» несёт коды отмеченных дисциплин (Г2)."""
+    caps["caps"] = MANAGER
+    fake_api.answers["/tools/participants/2/card"] = {
+        "ok": True, "data": {"id": 2, "display_name": "Арина", "roles": ["troupe"],
+                             "capabilities": [],
+                             "disciplines": [{"code": "music", "name": "Музыка"}]}}
+    cb = FakeCb("panel:mgrant:2")
+    asyncio.run(gw.panel_person_master_grant(cb))
+
+    assert ("/admin/grant", {"participant_id": 2, "role": "master", "enabled": True,
+                             "disciplines": ["music"]}, "POST") in fake_api.calls
+    assert "Роль педагога выдана" in cb.alerts
+
+
+def test_Э1_снятие_последней_дисциплины_показано_словами(gw, fake_api, caps):
+    """FR-A1: отказ `master_without_discipline` из чата виден человеку (Г4)."""
+    caps["caps"] = MANAGER
+    fake_api.answers["/admin/participant/discipline"] = {
+        "ok": False, "code": "master_without_discipline"}
+    cb = FakeCb("panel:mrel:2:music:0")
+    asyncio.run(gw.panel_person_master_link(cb))
+
+    assert ("/admin/participant/discipline",
+            {"participant_id": 2, "discipline": "music", "enabled": False},
+            "POST") in fake_api.calls
+    assert cb.alerts and "Не удалось" in cb.alerts[0], "отказ сервера не должен молчать"

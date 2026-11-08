@@ -54,41 +54,37 @@ CHAT_ACTION_BUTTONS: tuple[tuple[str, tuple[str, ...], str], ...] = (
 )
 
 
-def _chat_action_rows(caps: list[str]) -> list[list[tuple[str, str]]]:
-    """Строки кнопок-действий, доступных этому набору возможностей.
-
-    Кнопки с одинаковым требованием идут одной строкой — так же, как они стояли
-    до выноса в константу: расход и доход рядом, занятость отдельно.
-    """
-    rows: list[list[tuple[str, str]]] = []
-    current: tuple[str, ...] | None = None
-    for text, need, data in CHAT_ACTION_BUTTONS:
-        if need and not core.has(caps, *need):
-            continue
-        if not rows or need != current:
-            rows.append([])
-            current = need
-        rows[-1].append((text, data))
-    return rows
-
-
 def _chat_action_buttons(*labels: str) -> list[list[tuple[str, str]]]:
     """Кнопки-действия по подписям — для сообщений без проверки прав."""
     wanted = set(labels)
     return [[(text, data)] for text, _, data in CHAT_ACTION_BUTTONS if text in wanted]
 
 
+def disciplines_line(disciplines: list[dict] | None) -> str:
+    """Строка «Дисциплины: Музыка» — только если человек ведёт хоть что-то (140 §4.1).
+
+    Дисциплины приходят из ответа `/tools/participants/me` (`disciplines: [{code,name}]`),
+    а не из локального списка: у роли нет собственной копии справочника.
+    """
+    names = [str(item.get("name") or item.get("code") or "") for item in (disciplines or [])]
+    names = [name for name in names if name]
+    return f"{texts.PREFIX_DISCIPLINES}{', '.join(names)}" if names else ""
+
+
 # ------------------------------------------------------------------ /start
 async def send_menu(message: Message, chat_id: int, name: str, roles: list[str],
-                    caps: list[str]) -> None:
-    rows = _chat_action_rows(caps)
-    if "budget.read.self" in caps:
-        rows.append([(texts.TITLE_DUES, "sar:dues")])
-    if core.has(caps, "participants.manage", "participants.view"):
-        rows.append([(texts.TITLE_ADMIN, "panel:root")])
+                    caps: list[str], disciplines: list[dict] | None = None) -> None:
+    # Кнопок здесь нет: состав меню — группами `keyboards.menu_groups` по правам, и
+    # «Админ-панель» появляется по `admin.panel`, а не по `participants.view`. Педагог
+    # `participants.view` имеет, поэтому прежнее условие вело его в отказ (140 §4.1).
     titles = ", ".join(texts.ROLE_TITLES.get(r, r) for r in roles)
+    lines = [name, f"{texts.PREFIX_ROLES}{titles}"]
+    subjects = disciplines_line(disciplines)
+    if subjects:
+        lines.append(subjects)
+    lines.append(f"Возможностей: {len(caps)}")
     await message.answer(
-        f"{name}\n{texts.PREFIX_ROLES}{titles}\nВозможностей: {len(caps)}\n\n"
+        "\n".join(lines) + "\n\n"
         "Выберите раздел кнопкой (внутри — пункты). Данные — командой "
         "(/expense 3000 реквизит, /busy занят 28.10 с 10 до 14) или формой; "
         "спросить можно текстом: «что у меня завтра», «что ты умеешь?».",
@@ -130,7 +126,8 @@ async def start(message: Message, state: FSMContext) -> None:
     if res.get("ok"):
         p = res["data"]
         await send_menu(message, chat_id, p["display_name"],
-                        p.get("roles") or [p["role"]], p.get("capabilities") or [])
+                        p.get("roles") or [p["role"]], p.get("capabilities") or [],
+                        p.get("disciplines"))
         return
 
     boot = await core.api("/admin/bootstrap",
@@ -155,9 +152,12 @@ async def about_me(message: Message) -> bool:
     p = me["data"]
     roles = ", ".join(texts.ROLE_TITLES.get(r, r) for r in (p.get("roles") or [p["role"]]))
     caps = len(p.get("capabilities") or [])
-    await message.answer(
-        f"{p['display_name']}\n{texts.PREFIX_ROLES}{roles}\nВозможностей: {caps}\n"
-        f"Ключ: {p.get('person_key') or '—'}")
+    lines = [p["display_name"], f"{texts.PREFIX_ROLES}{roles}"]
+    subjects = disciplines_line(p.get("disciplines"))
+    if subjects:
+        lines.append(subjects)
+    lines += [f"Возможностей: {caps}", f"Ключ: {p.get('person_key') or '—'}"]
+    await message.answer("\n".join(lines))
     return True
 
 

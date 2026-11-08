@@ -169,6 +169,39 @@ def ensure_role_row(conn, participant_id: int, role: str) -> None:
 
 
 
+def teacher_disciplines(conn, participant_id: int) -> list[str]:
+    """Коды дисциплин, которые человек ведёт (db/init/061, `v_participant_disciplines`).
+
+    Единственный источник «что человек преподаёт»: `participant_discipline` с
+    `relation='teacher'`. `is_teacher`/`specialty` остаются историческими признаками
+    для правил состава тренинга и подписи, но не для проверки «мастер ведёт эту
+    дисциплину» (docs/architecture/140 §1).
+    """
+    row = conn.execute("select teacher_disciplines from v_participant_disciplines "
+                       "where participant_id = %s", (participant_id,)).fetchone()
+    return list(row["teacher_disciplines"] or []) if row else []
+
+
+
+def disciplines_out(conn, participant_id: int) -> list[dict]:
+    """Дисциплины педагога в виде `[{code, name}]` — для карточки, «Кто я» и Mini App.
+
+    Коды и названия лежат в двух массивах одной строки view, порядок в них общий
+    (`discipline.sort_order, code`), поэтому они склеиваются по индексу, а не
+    повторным запросом: иначе два ответа об одном человеке могли разойтись.
+    """
+    row = conn.execute("select teacher_disciplines, teacher_titles "
+                       "from v_participant_disciplines where participant_id = %s",
+                       (participant_id,)).fetchone()
+    if row is None:
+        return []
+    codes = list(row["teacher_disciplines"] or [])
+    titles = list(row["teacher_titles"] or [])
+    return [{"code": code, "name": titles[index] if index < len(titles) else code}
+            for index, code in enumerate(codes)]
+
+
+
 # Схема БД описывается один раз — файлами db/init/*.sql, накат и учёт — Alembic
 # (docs/reports/132). Второго описания здесь нет намеренно: `DDL` с подмножеством
 # таблиц поднимал сервис на отставшей базе, и Mini App падал 500-й на новых колонках.
@@ -314,12 +347,16 @@ def require(capability: str):
 
 
 def _participant_out(p: dict, roles: list[str] | None = None,
-                     caps: list[str] | None = None) -> dict:
+                     caps: list[str] | None = None,
+                     disciplines: list[dict] | None = None) -> dict:
     return {"id": p["id"], "chat_id": p["tg_chat_id"], "display_name": p["display_name"],
             "person_key": p.get("person_key"), "role": p["role"], "status": p["status"],
             "drive_folder": p.get("drive_folder"),
             "roles": roles if roles is not None else p.get("roles", [p["role"]]),
-            "capabilities": caps if caps is not None else p.get("caps", [])}
+            "capabilities": caps if caps is not None else p.get("caps", []),
+            # дисциплины педагога: те же данные, что в карточке, — «Кто я», чат и Mini App
+            # не собирают их сами (одна форма ответа об одном человеке)
+            "disciplines": disciplines or []}
 
 
 
@@ -352,10 +389,11 @@ def _person_card(participant_id: int, viewer_id: int | None = None,
             """select id, kind, status, created_at, left(text, 200) as text
                from feedback where participant_id = %s order by id desc limit 5""",
             (participant_id,)).fetchall()
+        disciplines = disciplines_out(conn, participant_id)
     birthday = row.get("birth_date") or row.get("birthday")
     today = datetime.now(TZ).date()
     return {"ok": True, "data": {
-        **_participant_out(row, roles, caps),
+        **_participant_out(row, roles, caps, disciplines),
         "aliases": [{"alias": a["alias"], "kind": a["alias_kind"]} for a in aliases],
         "travel_minutes": row["travel_minutes"],
         "phone": phone_for(viewer_id, participant_id, row["phone"], viewer_caps),
@@ -728,7 +766,8 @@ HOME_SECTIONS = (
 )
 
 
-ROLE_LABELS = {"admin": "администратор", "org": "организатор", "troupe": "студиец"}
+ROLE_LABELS = {"admin": "администратор", "org": "организатор", "troupe": "студиец",
+               "master": "педагог"}
 
 
 

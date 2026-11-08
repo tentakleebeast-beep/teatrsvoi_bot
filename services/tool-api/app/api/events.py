@@ -151,7 +151,43 @@ def _busy_people(conn, participant_ids: list[int], day: date,
 
 
 
-def _prepare_assignment(body: AssignIn) -> tuple[dict | None, list[dict], list[dict]]:
+def _discipline_denied(conn, who: dict, kind: str | None,
+                       discipline: str | None) -> str | None:
+    """Мастер назначает тренинг только по своей дисциплине (140 §1, §4.3).
+
+    Возвращает текст отказа или `None`. Правило про дисциплину относится только к
+    тренингу: репетиция, показ и аренда дисциплины не имеют. Администратора и
+    организатора оно не касается — у них нет роли `master` либо есть `*`.
+    `who` из Mini App приходит без `caps`/`roles` (`/webapp/preview` зовёт обработчик
+    напрямую, а не через `Depends`), поэтому недостающее читается из базы, а не
+    считается отсутствующим: иначе мастер терял бы проверку только в приложении.
+    """
+    if kind != "training":
+        return None
+    # 0 — владелец до bootstrap: у него нет ни ролей, ни дисциплин, проверка не про него
+    actor_id = int(who.get("id") or 0)
+    caps = who.get("caps")
+    if caps is None:
+        caps = core.resolve_caps(conn, actor_id)
+    if "*" in caps:
+        return None
+    roles = who.get("roles")
+    if roles is None:
+        roles = core.resolve_roles(conn, actor_id)
+    if "master" not in roles:
+        return None
+    taught = core.teacher_disciplines(conn, actor_id)
+    if discipline and discipline in taught:
+        return None
+    names = ", ".join(item["name"] for item in core.disciplines_out(conn, actor_id))
+    available = names or "ни одной"
+    if not discipline:
+        return f"Укажите дисциплину тренинга: вы ведёте {available}."
+    return f"Вы не ведёте эту дисциплину: доступны {available}."
+
+
+def _prepare_assignment(body: AssignIn, who: dict | None = None
+                        ) -> tuple[dict | None, list[dict], list[dict]]:
     """
     Собирает карточку события: разбирает текст, находит людей и дату,
     проверяет занятость. Возвращает (карточка, ошибки, предупреждения).
@@ -213,6 +249,11 @@ def _prepare_assignment(body: AssignIn) -> tuple[dict | None, list[dict], list[d
 
         busy = _busy_people(conn, [person["id"] for person in people], day, from_hour, to_hour)
 
+        # Мастер — только по своей дисциплине (140 §1). Проверка после разбора
+        # `discipline` и до записи: иначе карточка строилась бы, а отказ приходил
+        # на подтверждении, когда событие уже в календаре.
+        denied = _discipline_denied(conn, who, kind, body.discipline) if who else None
+
     warnings = []
     if staff_note:
         warnings.append({"code": "discipline_missing", "text": staff_note})
@@ -265,6 +306,8 @@ def _prepare_assignment(body: AssignIn) -> tuple[dict | None, list[dict], list[d
                                f"Выберите другое время."})
     if not people and not ambiguous:
         errors.append({"code": "no_people", "text": "Не понял, кто участвует."})
+    if denied:
+        errors.append({"code": "discipline_not_taught", "text": denied})
     return card, errors, warnings
 
 
@@ -276,14 +319,18 @@ def events_preview(body: AssignIn,
     Карточка назначения без записи: что получится, если назначить.
     Ошибки помещения блокируют, занятость людей — только предупреждает (docs/architecture/51).
     """
-    card, errors, warnings = _prepare_assignment(body)
+    card, errors, warnings = _prepare_assignment(body, who)
     if card is None:
         # карточки нет — ключ всё равно присутствует: контракт один для всех исходов (S-8)
         return {"ok": False, "errors": errors, "input_error": True, "card": None,
                 "warnings": [], "can_assign": False, "proposal_id": None}
 
+    # Отказ по дисциплине не сохраняет заявку: иначе предложение легло бы в базу и
+    # подтвердилось уже без проверки, которая стоит только на входе в карточку.
+    denied = any(item["code"] == "discipline_not_taught" for item in errors)
+
     proposal_id = None
-    if body.persist:
+    if body.persist and not denied:
         with core.pool.connection() as conn:
             proposal = conn.execute("""
                 insert into slot_proposal (request, candidates, created_by)
@@ -375,6 +422,10 @@ def events_assign(payload: dict,
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "unknown_kind")
         if not 0 <= from_hour < to_hour <= 24:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad_time_range")
+        # Мастер назначает тренинг только по своей дисциплине (140 §1): отказ до записи,
+        # в том числе для карточки, присланной руками, и для заявки из Mini App.
+        if _discipline_denied(conn, who, card.get("kind"), card.get("discipline")):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "discipline_not_taught")
         venue = card.get("venue") or core.default_venue_code()
 
         # повторная проверка: между предпросмотром и подтверждением могли пройти минуты

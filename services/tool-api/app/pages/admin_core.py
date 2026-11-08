@@ -34,9 +34,11 @@ _CORE = r"""
   var ACTIONS = {};
   var BLOCKS = {};
 
-  var ROLE = { admin: "администратор", org: "организатор", troupe: "труппа" };
-  var ROLE_ACC = { admin: "администратора", org: "организатора", troupe: "труппу" };
-  var ROLE_ORDER = ["admin", "org", "troupe"];
+  var ROLE = { admin: "администратор", org: "организатор", troupe: "труппа",
+               master: "педагог" };
+  var ROLE_ACC = { admin: "администратора", org: "организатора", troupe: "труппу",
+                   master: "педагога" };
+  var ROLE_ORDER = ["admin", "org", "troupe", "master"];
   var STATUS = { active: "активен", pending: "ждёт решения", archived: "в архиве",
                  blocked: "заблокирован" };
   var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня",
@@ -52,6 +54,11 @@ _CORE = r"""
     "cannot_revoke_last_role": "Нельзя отозвать последнюю роль: человек потеряет доступ.",
     "self_revoke_admin": "Нельзя отозвать роль администратора у себя.",
     "last_admin": "Это последний администратор. Сначала назначьте другого.",
+    "master_discipline_required": "Педагогу нужна дисциплина: выберите хотя бы одну.",
+    "unknown_discipline": "Такой дисциплины нет. Обновите экран и выберите из списка.",
+    "master_without_discipline": "Нельзя снять последнюю дисциплину у педагога: "
+      + "сначала отзовите роль.",
+    "discipline_not_taught": "Вы не ведёте эту дисциплину.",
     "self_archive": "Себя в архив отправить нельзя.",
     "no_spreadsheet": "Лист бюджета не настроен."
   };

@@ -309,11 +309,17 @@ def approve(body: ApproveIn, who: dict = Depends(core.require("registration.appr
 
 class GrantIn(core.ApiIn):
     participant_id: int
-    role: Literal["admin", "org", "troupe"] | None = None   # добавить роль
+    # `master` — роль педагога (db/init/061, docs/architecture/140): права пакетом,
+    # дисциплины — отдельным полем ниже.
+    role: Literal["admin", "org", "troupe", "master"] | None = None   # добавить роль
     enabled: bool = True                                    # False — отозвать роль
     capability: str | None = None      # выдать/отобрать возможность
     allowed: bool | None = None
     reason: str | None = None
+    # Коды дисциплин, которые педагог ведёт (`discipline.code`, как в `AssignIn.discipline`
+    # и `GET /tools/disciplines`). Обязательны при выдаче `master`: роль без дисциплины
+    # не может выполнить свою работу (140 §2.2, V-037 вариант а).
+    disciplines: list[str] | None = None
 
 
 
@@ -328,6 +334,37 @@ def capability_catalog(who: dict = Depends(core.require("participants.view"))) -
 
 
 
+def _disciplines_to_teach(conn, body: GrantIn) -> list[str]:
+    """Дисциплины педагога из тела запроса: непустой список существующих кодов.
+
+    Отказ до записи: роль без дисциплины не попадает в базу, связь не создаётся
+    (140 §2.2, V-037 вариант а — «запрещать выдачу»).
+    """
+    codes = [code.strip() for code in (body.disciplines or []) if code and code.strip()]
+    if not codes:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "master_discipline_required")
+    rows = conn.execute("select code from discipline where code = any(%s)",
+                        (codes,)).fetchall()
+    known = {row["code"] for row in rows}
+    unknown = [code for code in codes if code not in known]
+    if unknown:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "unknown_discipline: " + ", ".join(unknown))
+    return list(dict.fromkeys(codes))
+
+
+def _teach_disciplines(conn, participant_id: int, codes: list[str]) -> None:
+    """Записать «человек ведёт дисциплину»: строки `participant_discipline.relation='teacher'`.
+
+    Повторная выдача — та же строка с `relation='teacher'`, а не вторая: ключ
+    `(participant_id, discipline_id)` один (db/init/029).
+    """
+    conn.execute("""insert into participant_discipline (participant_id, discipline_id, relation)
+                    select %s, id, 'teacher' from discipline where code = any(%s)
+                    on conflict (participant_id, discipline_id) do update
+                      set relation = 'teacher'""", (participant_id, list(codes)))
+
+
 @router.post("/admin/grant")
 def grant(body: GrantIn, who: dict = Depends(core.require("participants.manage"))) -> dict:
     with core.pool.connection() as conn:
@@ -335,6 +372,10 @@ def grant(body: GrantIn, who: dict = Depends(core.require("participants.manage")
                               (body.participant_id,)).fetchone()
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "participant_not_found")
+
+        # Выдача педагога: дисциплина обязательна и проверяется до записи.
+        teaching = (_disciplines_to_teach(conn, body)
+                    if body.role == "master" and body.enabled else [])
 
         if body.role and body.enabled:
             # Повторная выдача возвращает прежнюю строку, а не заводит вторую:
@@ -345,8 +386,15 @@ def grant(body: GrantIn, who: dict = Depends(core.require("participants.manage")
                               set revoked_at = null, revoked_by = null,
                                   revoke_reason = null, granted_by = excluded.granted_by""",
                          (body.participant_id, body.role, who.get("id")))
+            if teaching:
+                # Мастер обязан попадать в состав тренинга: `_staff_by_rules` читает
+                # и `participant_discipline`, и старый признак `is_teacher` (140 §6.3).
+                _teach_disciplines(conn, body.participant_id, teaching)
+                conn.execute("update participant set is_teacher = true "
+                             "where id = %s and not is_teacher", (body.participant_id,))
             core.audit(conn, "human", who.get("id"), "rbac.role.grant", "participant",
-                  str(body.participant_id), after={"role": body.role})
+                  str(body.participant_id),
+                  after={"role": body.role, **({"disciplines": teaching} if teaching else {})})
 
         if body.role and not body.enabled:
             # нельзя оставить человека без ролей: он потеряет доступ целиком
@@ -396,6 +444,57 @@ def grant(body: GrantIn, who: dict = Depends(core.require("participants.manage")
         roles = core.resolve_roles(conn, body.participant_id)
         caps = core.resolve_caps(conn, body.participant_id)
     return {"ok": True, "roles": roles, "capabilities": caps}
+
+
+
+class DisciplineIn(core.ApiIn):
+    participant_id: int
+    discipline: str                       # код, как в `AssignIn.discipline` и `/tools/disciplines`
+    enabled: bool = True                  # False — снять связь «ведёт эту дисциплину»
+
+
+@router.post("/admin/participant/discipline")
+def participant_discipline(body: DisciplineIn,
+                           who: dict = Depends(core.require("participants.manage"))) -> dict:
+    """Дисциплины человека: выдать или снять связь `participant_discipline.relation='teacher'`.
+
+    Право — `participants.manage`, как у `/admin/grant`: это правка связей человека, а не
+    расписания. Связь предметная: роль `master` при снятии дисциплины **не** отзывается
+    (140 §1) — доступ снимается отдельным отзывом роли. Последнюю дисциплину у мастера
+    снять нельзя: роль без дисциплины не может выбрать тренинг (V-037 вариант а).
+    """
+    with core.pool.connection() as conn:
+        person = conn.execute("select id, display_name from participant where id = %s",
+                              (body.participant_id,)).fetchone()
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "participant_not_found")
+        discipline = conn.execute("select id from discipline where code = %s",
+                                  (body.discipline,)).fetchone()
+        if discipline is None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "unknown_discipline")
+
+        if body.enabled:
+            _teach_disciplines(conn, body.participant_id, [body.discipline])
+            core.audit(conn, "human", who.get("id"), "rbac.discipline.grant", "participant",
+                       str(body.participant_id), after={"discipline": body.discipline})
+        else:
+            if "master" in core.resolve_roles(conn, body.participant_id):
+                left = conn.execute(
+                    "select count(*) as n from participant_discipline "
+                    "where participant_id = %s and relation = 'teacher' "
+                    "and discipline_id <> %s",
+                    (body.participant_id, discipline["id"])).fetchone()["n"]
+                if left == 0:
+                    raise HTTPException(status.HTTP_409_CONFLICT, "master_without_discipline")
+            conn.execute("delete from participant_discipline "
+                         "where participant_id = %s and discipline_id = %s "
+                         "and relation = 'teacher'",
+                         (body.participant_id, discipline["id"]))
+            core.audit(conn, "human", who.get("id"), "rbac.discipline.revoke", "participant",
+                       str(body.participant_id), after={"discipline": body.discipline})
+
+        disciplines = core.disciplines_out(conn, body.participant_id)
+    return {"ok": True, "participant_id": body.participant_id, "disciplines": disciplines}
 
 
 
@@ -726,6 +825,14 @@ def webapp_admin_approve(body: ApproveIn, who: dict = Depends(core.webapp_actor)
 def webapp_admin_grant(body: GrantIn, who: dict = Depends(core.webapp_actor)) -> dict:
     """Выдать или отозвать роль/возможность из Mini App (`participants.manage`)."""
     return grant(body, who=core._webapp_require(who, "participants.manage"))
+
+
+
+@router.post("/webapp/admin/discipline")
+def webapp_admin_discipline(body: DisciplineIn,
+                            who: dict = Depends(core.webapp_actor)) -> dict:
+    """Дисциплины педагога из Mini App: тот же обработчик и то же право, что у чата."""
+    return participant_discipline(body, who=core._webapp_require(who, "participants.manage"))
 
 
 

@@ -252,8 +252,9 @@ def test_организатору_панель_не_нужна(gw, monkeypatch):
 
 def test_у_организатора_есть_заявки_и_приглашения(gw):
     """То, что раньше жило только в панели, стало пунктами меню."""
-    items = dict(gw.menu_groups(ORG_CAPS))["Админ"]
-    assert items == ["Участники", "Заявки", "Приглашения"]
+    items = dict(gw.menu_groups(ORG_CAPS))["Люди"]
+    assert items == ["Участники"]
+    assert dict(gw.menu_groups(ORG_CAPS))["Админ"] == ["Заявки", "Приглашения"]
 
 
 def test_труппа_не_видит_панель(gw, monkeypatch):
