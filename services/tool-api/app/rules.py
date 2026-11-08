@@ -175,10 +175,17 @@ def parse_availability(text: str, today: date | None = None) -> dict[str, Any]:
                 day = today + timedelta(days=delta or 7)
                 break
     if day is None:
-        m = re.search(r"(\d{1,2})[.\s/](\d{1,2})", t)
+        # dd.mm[.yyyy] — год в тексте обязателен к сохранению: «07.01.2027» не должен
+        # превращаться в текущий год (дефект Д-01 смоука Э3, FR-C2).
+        m = re.search(r"(?<!\d)(\d{1,2})[.\s/](\d{1,2})(?:[./](\d{2,4}))?(?!\d)", t)
         if m:
+            raw_year = m.group(3)
+            if raw_year:
+                year = int(raw_year) if len(raw_year) == 4 else 2000 + int(raw_year)
+            else:
+                year = today.year
             try:
-                day = date(today.year, int(m.group(2)), int(m.group(1)))
+                day = date(year, int(m.group(2)), int(m.group(1)))
             except ValueError:
                 day = None
     if day is None:
