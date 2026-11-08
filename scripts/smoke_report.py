@@ -529,18 +529,23 @@ def build_defects(steps: list[dict], requirements: list[dict], outcomes: dict,
         # их провал уже записан дефектом шага, с требованием шага и картой держателя.
         if requirement["id"] not in failed_tests or requirement["result"] != "провал":
             continue
-        broken = [label for label in requirement["evidence"]
-                  if label.startswith("тест:") and "провал" in label
-                  and not label.startswith("тест:tests/smoke/")]
+        # Признак провала — исход в junit, а не слово «провал» в подписи:
+        # у теста может быть такое имя (`test_провал_...`), и он при этом зелёный.
+        broken = [f"тест:{entry['file']}::{entry['test']}"
+                  for entry in matrix.get(requirement["id"], [])
+                  if not entry["file"].startswith("tests/smoke/")
+                  and (outcome_for(outcomes, entry) or {}).get("result") == "провал"]
         if not broken:
             continue
+        evidence = next((label for label in requirement["evidence"]
+                         if label.startswith(broken[0]) and label.endswith(", провал)")), broken[0])
         defects.append({
             "requirement": requirement["id"],
             "scenario": "",
             "step": broken[0].split(" (")[0],
             "expected": "тест проходит",
             "actual": "тест упал в junit",
-            "evidence": broken[0],
+            "evidence": evidence,
             "severity": "важно",
         })
     for number, defect in enumerate(defects, start=1):

@@ -1,7 +1,7 @@
 {
   "version": 1,
   "number": "145",
-  "commit": "4641267",
+  "commit": "5d28dd7",
   "date": "2026-11-08",
   "env": "стенд svoi_smoke",
   "marker": "SMOKE-20261108-01",
@@ -16,8 +16,8 @@
     "p2": 7,
     "unset": 24,
     "with_tests": 59,
-    "test_refs": 765,
-    "unique_pairs": 478,
+    "test_refs": 766,
+    "unique_pairs": 479,
     "command": "env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json"
   },
   "layers": {
@@ -25,8 +25,8 @@
       {
         "layer": "core",
         "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-core.xml",
-        "tests": 2955,
-        "passed": 2534,
+        "tests": 2956,
+        "passed": 2535,
         "failed": 0,
         "skipped": 421
       },
@@ -79,8 +79,8 @@
     }
   },
   "coverage": {
-    "pairs": 478,
-    "covered": 478,
+    "pairs": 479,
+    "covered": 479,
     "missing": []
   },
   "requirements": [
@@ -796,14 +796,15 @@
         "тест:tests/unit/test_rules_availability.py::test_явный_год_сохраняется (2026-11-08)",
         "тест:tests/unit/test_rules_availability.py::test_явный_год_осенью (2026-11-08)",
         "тест:tests/unit/test_smoke_report.py::test_провал_теста_сценария_не_красит_строку_но_виден (2026-11-08)",
+        "тест:tests/unit/test_smoke_report.py::test_дефект_по_тесту_не_размножается_на_строки_файла (2026-11-08)",
         "сценарий:СМ-2/1. POST /tools/availability/parse («занят в среду с 10 до 12») (2026-11-08)",
         "сценарий:СМ-2/2. POST /tools/availability/parse (дата с годом) (провал)",
         "сценарий:СМ-2/3. POST /tools/availability/commit (занят 10–12) (2026-11-08)"
       ],
       "result": "провал",
       "cause": "",
-      "matrix_tests": 11,
-      "matrix_measured": 11,
+      "matrix_tests": 12,
+      "matrix_measured": 12,
       "prod": "не проверено",
       "prod_cause": "нужен прод"
     },
@@ -4539,84 +4540,14 @@
       "id": "Д-02"
     },
     {
-      "requirement": "FR-A8",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm07_files.py::test_cm07_files",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-03"
-    },
-    {
       "requirement": "FR-C2",
       "scenario": "",
-      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
+      "step": "тест:tests/unit/test_smoke_report.py::test_провал_теста_сценария_не_красит_строку_но_виден",
       "expected": "тест проходит",
       "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "evidence": "тест:tests/unit/test_smoke_report.py::test_провал_теста_сценария_не_красит_строку_но_виден (2026-11-08)",
       "severity": "важно",
-      "id": "Д-04"
-    },
-    {
-      "requirement": "FR-C4",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-05"
-    },
-    {
-      "requirement": "FR-C5",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-06"
-    },
-    {
-      "requirement": "FR-C10",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-07"
-    },
-    {
-      "requirement": "FR-C9",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-08"
-    },
-    {
-      "requirement": "FR-F5",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm07_files.py::test_cm07_files",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-09"
-    },
-    {
-      "requirement": "FR-F7",
-      "scenario": "",
-      "step": "тест:tests/smoke/test_cm07_files.py::test_cm07_files",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
-      "severity": "важно",
-      "id": "Д-10"
+      "id": "Д-03"
     }
   ],
   "delta": {

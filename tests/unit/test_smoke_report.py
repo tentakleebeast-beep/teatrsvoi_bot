@@ -246,14 +246,19 @@ def test_дефект_по_тесту_не_размножается_на_стр�
     rows = [{"id": "FR-C4", "text": "Перезапись с аудитом", "priority": "P1",
              "status": "частично", "confirm": "код", "line": 70},
             {"id": "FR-A1", "text": "Доступ владельца", "priority": "P0",
-             "status": "готово", "confirm": "код", "line": 1}]
+             "status": "готово", "confirm": "код", "line": 1},
+            {"id": "FR-B1", "text": "Имя теста со словом провал", "priority": "P0",
+             "status": "готово", "confirm": "код", "line": 2}]
     matrix = {"FR-C4": [{"file": "tests/smoke/test_cm02_availability.py",
                          "test": "test_cm02_availability"}],
-              "FR-A1": [{"file": "tests/unit/test_rules.py", "test": "test_access"}]}
+              "FR-A1": [{"file": "tests/unit/test_rules.py", "test": "test_access"}],
+              "FR-B1": [{"file": "tests/unit/test_rules.py", "test": "test_провал_не_страшен"}]}
     outcomes = {("tests/smoke/test_cm02_availability.py", "test_cm02_availability"):
                 {"result": "провал", "message": "boom"},
                 ("tests/unit/test_rules.py", "test_access"):
-                {"result": "провал", "message": "boom"}}
+                {"result": "провал", "message": "boom"},
+                ("tests/unit/test_rules.py", "test_провал_не_страшен"):
+                {"result": "пройдено", "message": ""}}
     steps = [{"scenario": "СМ-2", "title": "", "roles": [], "domain": "", "step": "4. commit",
               "expected": "200", "actual": "200", "evidence": "x", "result": "пройдено",
               "cause": "", "requirements": ["FR-C4"], "severity": "важно"}]
