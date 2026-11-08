@@ -115,6 +115,30 @@ def test_права_это_матрица_и_точечная_выдача_а_н
     assert "function renderResults" in html
 
 
+def test_права_без_права_говорят_о_праве_а_не_о_пустой_матрице():
+    """Отчёт 142 §3 строка 25, принципы 91: 8, Б3; карта t_eb9e0661.
+
+    У org, master и troupe нет `participants.manage` (`db/init/008`, `db/init/061`),
+    поэтому раздела `rights` в ответе панели нет вовсе. Прежний экран получал
+    пустой список и печатал «Матрица пуста. Роли не настроены» — ложное утверждение
+    о данных (у администратора матрица полная) — рядом с формой «Выдать право
+    человеку», которой человек без права всё равно не мог воспользоваться.
+    """
+    html = admin.RIGHTS_PAGE
+    assert 'id="rights-matrix" hidden' in html, "матрица отдаётся видимой — до ответа панели"
+    assert 'id="rights-grant" hidden' in html, "форма выдачи отдаётся видимой — до ответа панели"
+    assert "Права выдаёт администратор" in html, "нет объяснения, у кого права есть"
+    assert 'indexOf("rights")' in html, "экран не сверяет право раздела с ответом панели"
+    assert "ACTIONS.manage_rights" in html, "право выдачи берётся не из данных панели"
+    body = html.split("function applyRights", 1)[1]
+    assert body.index("if (can !== true)") < body.index("matrix = (BLOCKS.rights"), \
+        "матрица запрашивается и рисуется до проверки права"
+    # «Матрица пуста» осталась только честным пустым состоянием «право есть, данных нет»
+    assert 'if (!matrix.length) box.appendChild(empty("Матрица пуста"' in html
+    denied = html.split('id="rights-denied"', 1)[1].split("</section>", 1)[0]
+    assert "Матрица пуста" not in denied
+
+
 def test_аудит_по_двадцать_и_время_кто_что():
     html = admin.AUDIT_PAGE
     assert "shown += 20" in html
@@ -167,6 +191,25 @@ def test_общие_настройки_уведомлений_это_те_же_�
     assert "/webapp/admin/notifications/settings" in html
     assert "Частные" in html and "важнее общих" in html      # правило П-8 на экране
     assert html.count("ui-btn--primary") == 1                # одно главное действие
+
+
+def test_общие_настройки_уведомлений_без_права_не_рисуют_форму():
+    """Роль без `admin.panel` не получает ни переключателей, ни «Сохранить».
+
+    До 08.11.2026 форма стояла на экране всегда, а над ней висело «Не хватает прав
+    на это действие»: экран предлагал сохранить то, что сохранить нельзя
+    (принципы 91: 9, 12, Б3; дизайн-ревью 142 §3 строка 30, карта t_5b401a86).
+    Форма приходит скрытой и показывается только после 200 от настроек; на 403 —
+    сообщение об администраторе и ссылка на свои настройки.
+    """
+    html = admin.NOTIFICATION_DEFAULTS_PAGE
+    assert 'id="defaults-form" hidden' in html, "форма общих значений отдаётся видимой"
+    assert "#defaults-form[hidden]" in html, "`.ui-section` — флекс: атрибута `hidden` мало"
+    assert 'id="denied" hidden' in html, "нет блока «нет права»"
+    assert 'href="/webapp/notifications"' in html, "нет ссылки на свои настройки"
+    assert "if (res.status === 403) { showDenied(); return null; }" in html, \
+        "403 не отличается от сетевого сбоя"
+    assert "admin.panel" in html
 
 
 def test_заявки_без_права_говорят_о_праве_а_не_пустотой():
