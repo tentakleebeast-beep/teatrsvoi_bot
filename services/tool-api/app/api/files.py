@@ -90,6 +90,22 @@ def file_meta(file_id: int, who: dict = Depends(core.current)) -> dict:
 
 
 
+@router.delete("/files/{file_id}")
+def file_delete(file_id: int, who: dict = Depends(core.current)) -> dict:
+    """Удалить свой файл: мягкая метка, ответ — как у `folders/{file_id}/delete` (V-045).
+
+    Содержимое и имя в событии аудита — метаданные записи, байтов там нет никогда.
+    После удаления файл не отдаётся ни `GET /files/{id}`, ни `…/content`, не виден в
+    списках и в архивах папок — все чтения фильтруют `deleted_at is null`.
+    """
+    with core.pool.connection() as conn:
+        result = files_store.remove(conn, who, file_id)
+        core.audit(conn, "human", who.get("id"), "file.delete", "file_object", str(file_id),
+                   after={"name": result["name"], "folder_links": result["folders_detached"],
+                          "soft": True})
+    return {"ok": True, **result}
+
+
 @router.get("/files/{file_id}/content")
 def file_content(file_id: int, who: dict = Depends(core.current)) -> StreamingResponse:
     """Байты файла для отправки в чат. Только владельцу, и только по проверке на запросе.
@@ -349,6 +365,23 @@ def webapp_files_commit(body: WebAppCommitIn,
         "duration_sec": saved.duration_sec, "duplicate": saved.duplicate,
         "quota_left_mb": round(saved.quota_left / (1024 * 1024))}}
 
+
+
+@router.delete("/webapp/files/{file_id}")
+def webapp_file_delete(file_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Удалить свой файл с экрана: тот же `files_store.remove`, что у `DELETE /files/{id}`.
+
+    Право входа — `files.access`; кого именно пускает удаление, решает домен: только
+    владелец, чужой личный файл отвечает 404. Кнопка «Удалить» на экране показывается
+    всегда, когда список файлов открыт: он и так содержит лишь свои файлы.
+    """
+    viewer = core._webapp_require(who, "files.access")
+    with core.pool.connection() as conn:
+        result = files_store.remove(conn, viewer, file_id)
+        core.audit(conn, "human", viewer.get("id"), "file.delete", "file_object", str(file_id),
+                   after={"name": result["name"], "folder_links": result["folders_detached"],
+                          "soft": True, "via": "webapp"})
+    return {"ok": True, **result}
 
 
 class FolderOrderIn(core.ApiIn):

@@ -343,6 +343,29 @@ def file_for_viewer(conn, file_id: int, who: dict) -> tuple[dict | None, bool]:
     return None, False
 
 
+def remove(conn, who: dict, file_id: int) -> dict:
+    """Мягко удалить свой файл: строка остаётся, но больше нигде не видна (FR-M8, FR-L8).
+
+    Удаляет только владелец: чужой личный файл отвечает 404, как несуществующий (FR-K8),
+    и админ здесь не исключение — доступ админа к чужому файлу открывается grant'ом
+    (`file_access`), а не правом стереть его. Связи с папками снимаются, сами папки
+    остаются: файл уходит из выдачи, списков и архивов папок (FR-M8).
+
+    Байты в хранилище не трогаем: `deleted_at` — обратимая метка (`db/init/046`), и
+    второй записи о том же файле не появится, пока строка жива. Квота освобождается
+    сразу — `used_bytes` считает только `deleted_at is null`.
+    """
+    row = file_for(conn, file_id, int(who.get("id") or 0))
+    if row is None:
+        raise FileRejected("file_not_found", "Файл не найден.", 404)
+    detached = conn.execute(
+        "delete from file_folder where file_id = %s returning folder_id", (file_id,)).fetchall()
+    conn.execute(
+        "update file_object set deleted_at = now() where id = %s and deleted_at is null",
+        (file_id,))
+    return {"id": file_id, "name": row["name"], "folders_detached": len(detached)}
+
+
 def list_files(conn, participant_id: int, limit: int = 20) -> list[dict]:
     """Последние файлы человека: то, что бот покажет списком с кнопками."""
     rows = conn.execute(

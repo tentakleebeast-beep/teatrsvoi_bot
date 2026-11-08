@@ -40,6 +40,8 @@ COMMANDS = (
     ("cmd_rename", "/rename 12 Новое имя"),
     ("cmd_rmfolder", "/rmfolder 12"),
     ("cmd_order", "/order 12 3 1 2"),
+    # V-045: удаление файла — новое действие человека, вход в чате тоже под правом
+    ("cmd_rm", "/rm 12"),
 )
 
 

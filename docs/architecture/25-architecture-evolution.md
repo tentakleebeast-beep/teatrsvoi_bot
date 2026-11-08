@@ -342,6 +342,7 @@ Google Sheets) — тогда вход даёт ссылку, а данные ж
 | Ф4 | Папки: создать, переименовать, удалить, порядок | админ, org (общие) | экран — `files.access` (кого пускает — `folders`), чат — `admin.panel` | `POST /folders`, `POST /folders/{folder_id}/rename`, `POST /folders/{folder_id}/delete`, `POST /folders/{folder_id}/order` (+ оболочки `POST /webapp/folders`, `POST /webapp/folders/{folder_id}/rename`, `POST /webapp/folders/{folder_id}/delete`, `POST /webapp/folder/{folder_id}/order`) | Mini App «Файлы студии» и `/webapp/folder` | команды чата `/folders`, `/mkdir`, `/rename`, `/rmfolder`, `/order` | FR-F5, docs/86 | дубль |
 | Ф5 | Скачать папку архивом | админ, org, master (экран) | экран — `files.access`, чат — `admin.panel` | чтение `GET /folders/{folder_id}/zip` (`GET /webapp/folder/{folder_id}/zip`) | Mini App «Файлы студии» → папка | команда `/zip` в чате | FR-F5, docs/86 | оба |
 | Ф6 | Записать и посмотреть заметку | участник | `notes.write` | `POST /tools/notes`, `POST /tools/notes/{note_id}`, оболочка `POST /webapp/notes/save` | Mini App «Ещё → Заметки» (`/webapp/notes`) | `/note` в чате с подтверждением (алиас `/заметка`) | FR-F7 (новое) | нет |
+| Ф7 | Удалить свой файл | владелец файла | чат — `admin.panel`, экран — `files.access` | `DELETE /files/{file_id}` (оболочка `DELETE /webapp/files/{file_id}`) | Mini App «Файлы студии» и чат | кнопка «Удалить» с подтверждением в чате и на экране, команда `/rm` | FR-F5, docs/86 (FR-K5, FR-M8, FR-L8) | нет |
 
 ### Обращения, уведомления, настройки
 
@@ -363,8 +364,9 @@ Google Sheets) — тогда вход даёт ссылку, а данные ж
 | Х1 | Посмотреть аудит действий | админ | `audit.view` | чтение `GET /tools/audit/recent` | Mini App «Управление → Аудит» | пункт «Аудит» в панели | FR-A8, FR-A11 (новое) | оба |
 | Х4 | Посмотреть состояние сервисов | админ | `admin.panel` | чтение `GET /webapp/admin/services`, `GET /health` | Mini App «Управление → Сервисы» | пункт «Сервисы» в панели | FR-H16 (новое) | экран |
 
-Строк в реестре — 47: это §3 отчёта 124 без изменений по составу (шесть строк объединены
-с другими, пять удалены, десять добавлены — §4.4 отчёта). Строка Л5 «Отозвать роль» слита
+Строк в реестре — 48: это §3 отчёта 124 без изменений по составу (шесть строк объединены
+с другими, пять удалены, десять добавлены — §4.4 отчёта) плюс строка Ф7 «Удалить свой файл»,
+добавленная 08.11.2026 решением владельца V-045. Строка Л5 «Отозвать роль» слита
 в Л4: выдача и отзыв — две стороны одного права и одного экрана.
 
 Что реестр показывает после прохода Ш-02…Ш-12:
