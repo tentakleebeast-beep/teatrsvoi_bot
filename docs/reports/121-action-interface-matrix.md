@@ -171,15 +171,15 @@
 | FR-H6 | P1 | частично | наличие Mini App — платформа, а не действие | docs/development/19-functional-requirements.md#L151 |
 | FR-H7 | P2 | не начато | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L152 |
 | FR-H11 | P0 | не начато | уведомление приходит само, отдельного шага человека нет | docs/development/19-functional-requirements.md#L156 |
-| FR-D21 | — | не начато | проверка пересечений — часть действия «Назначить событие» | docs/development/19-functional-requirements.md#L212 |
-| FR-D22 | — | частично | правило фиксации присутствия режиссёра, отдельного шага нет | docs/development/19-functional-requirements.md#L213 |
-| FR-G16 | — | не начато | ретенция — миграция и архив | docs/development/19-functional-requirements.md#L217 |
-| FR-G7 | — | не начато | TTL заявок — серверное правило | docs/development/19-functional-requirements.md#L218 |
-| FR-G8 | — | готово | уникальность псевдонимов — ограничение базы | docs/development/19-functional-requirements.md#L219 |
-| FR-H12 | — | готово (systemd `Restart=always`, журнал journald) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L220 |
-| FR-H13 | — | готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L221 |
-| FR-G11 | — | готово | нет отдельного действия участника: серверное правило или расчёт | docs/development/19-functional-requirements.md#L239 |
-| FR-G14 | — | не начато | форматирование листов — скрипт | docs/development/19-functional-requirements.md#L243 |
+| FR-D21 | P1 | не начато | проверка пересечений — часть действия «Назначить событие» | docs/development/19-functional-requirements.md#L212 |
+| FR-D22 | P2 | частично | правило фиксации присутствия режиссёра, отдельного шага нет | docs/development/19-functional-requirements.md#L213 |
+| FR-G16 | P1 | не начато | ретенция — миграция и архив | docs/development/19-functional-requirements.md#L217 |
+| FR-G7 | P2 | не начато | TTL заявок — серверное правило | docs/development/19-functional-requirements.md#L218 |
+| FR-G8 | P1 | готово | уникальность псевдонимов — ограничение базы | docs/development/19-functional-requirements.md#L219 |
+| FR-H12 | P0 | готово (systemd `Restart=always`, журнал journald) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L220 |
+| FR-H13 | P1 | готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L221 |
+| FR-G11 | P0 | готово | нет отдельного действия участника: серверное правило или расчёт | docs/development/19-functional-requirements.md#L239 |
+| FR-G14 | P2 | не начато | форматирование листов — скрипт | docs/development/19-functional-requirements.md#L243 |
 <!-- requirements:end -->
 
 ## Сценарии `docs/20`
