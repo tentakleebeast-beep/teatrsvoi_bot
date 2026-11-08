@@ -1,13 +1,17 @@
-"""JS формы операции: дата, тип, категория, план/факт, сохранение и «Вернуть».
+"""JS формы операции: права, дата, тип, категория, план/факт, сохранение и «Вернуть».
 
 Живёт отдельно от разметки (`pages/money_tx.py`) по той же причине: скрипт
-большой, а модуль экрана должен оставаться читаемым (~400 строк). Текст
-скрипта не менялся.
+большой, а модуль экрана должен оставаться читаемым (~400 строк). Проверка прав
+(«Операции записывает организатор») — отдельным фрагментом в
+`pages/money_tx_rights.py`: он подклеивается внутрь этого же замыкания между
+формой и её завершением, поэтому видит `$` и `loadCategories`.
 """
 
 from __future__ import annotations
 
-_SCRIPT_TX = r"""
+from app.pages.money_tx_rights import _TX_RIGHTS
+
+_SCRIPT_TX_FORM = r"""
 <script>
 window.SVOI_BACK = "/webapp/money";
 (function () {
@@ -347,6 +351,12 @@ window.SVOI_BACK = "/webapp/money";
       showValidation(result.body.detail);
       return;                       // ключ сохраняем: повтор после правки — та же операция
     }
+    if (result.status === 403) {
+      // Права могли поменяться после открытия экрана: показываем то же состояние,
+      // что и при старте, а не «сервер не принял операцию».
+      showDenied();
+      return;
+    }
     if (!result.body || !result.body.ok) {
       var detail = result.body && result.body.detail;
       alertMessage("Не записано: " + (typeof detail === "string"
@@ -373,8 +383,12 @@ window.SVOI_BACK = "/webapp/money";
   $("tx-amount").addEventListener("input", function () { clearError("amount"); });
   $("tx-category").addEventListener("change", function () { clearError("category"); });
   $("tx-purpose").addEventListener("input", function () { clearError("purpose"); });
+"""
 
-  loadCategories();
+_SCRIPT_TX_END = r"""
 })();
 </script>
 """
+
+_SCRIPT_TX = _SCRIPT_TX_FORM + _TX_RIGHTS + _SCRIPT_TX_END
+

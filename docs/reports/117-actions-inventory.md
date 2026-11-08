@@ -239,7 +239,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/form-data` | `services/tool-api/app/api/webapp_api.py:138` | Mini App: admin_disciplines | сессия Mini App | test_webapp_search.py | — |
 | GET `/webapp/grid` | `services/tool-api/app/api/schedule.py:48` | Mini App: week_summary | сессия Mini App + schedule.read.all | server.py, test_miniapp_system.py, test_smoke_fixes.py (+2) | право проверяется в теле обработчика, а не в зависимости: schedule.read.all |
 | GET `/webapp/home` | `services/tool-api/app/pages/routes.py:65` | Mini App: kit, layout, person, routes, webapp-shell.js; чат: _show_open_card, ensure_menu_button, main, with_home; скрипты: ui_review, ux_audit | — | server.py, test_agent_task.py, test_miniapp_hub.py (+5) | экран Mini App: HTML без данных |
-| GET `/webapp/home/data` | `services/tool-api/app/api/webapp_api.py:279` | Mini App: home, money_script, routes | сессия Mini App | server.py, test_broadcast_rights.py, test_webapp_home.py (+2) | — |
+| GET `/webapp/home/data` | `services/tool-api/app/api/webapp_api.py:279` | Mini App: home, money_script, money_tx, money_tx_rights, routes | сессия Mini App | server.py, test_broadcast_rights.py, test_webapp_home.py (+2) | — |
 | GET `/webapp/money` | `services/tool-api/app/pages/routes.py:90` | Mini App: layout, misc_dues, money_script, money_tx, money_tx_script, routes; скрипты: ui_review, ux_audit | — | server.py, test_webapp_layout.py, test_webapp_misc_pages.py | экран Mini App: HTML без данных |
 | GET `/webapp/month-grid` | `services/tool-api/app/api/schedule.py:110` | Mini App: month | сессия Mini App + schedule.read.all | server.py, test_webapp_month_grid.py, test_webapp_week_page.py | право проверяется в теле обработчика, а не в зависимости: schedule.read.all |
 | GET `/webapp/more` | `services/tool-api/app/pages/routes.py:70` | Mini App: admin_core, files, home, kit, layout, misc_broadcast, misc_feedback, misc_notifications, misc_profile, misc_reconcile, notes, routes, services, webapp-shell.js; скрипты: ui_review, ux_audit | — | server.py, test_miniapp_hub.py, test_webapp_assets.py (+2) | экран Mini App: HTML без данных |
@@ -311,7 +311,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | `misc.RECONCILE_PAGE` | `/webapp/admin/reconcile`, `/webapp/more` | нет |
 | `/webapp/services` | `services/tool-api/app/pages/routes.py:142` | `services.SERVICES_PAGE` | `/webapp/admin/services`, `/webapp/more` | нет |
 | `/webapp/slots` | `services/tool-api/app/pages/routes.py:122` | `misc.SLOTS_PAGE` | `/webapp/assign`, `/webapp/preview`, `/webapp/slots/find`, `/webapp/slots/people`, `/webapp/week` | нет |
-| `/webapp/tx` | `services/tool-api/app/pages/routes.py:102` | `money.TX_PAGE` | `/webapp/categories`, `/webapp/money`, `/webapp/tx/save` | нет |
+| `/webapp/tx` | `services/tool-api/app/pages/routes.py:102` | `money.TX_PAGE` | `/webapp/categories`, `/webapp/home/data`, `/webapp/money`, `/webapp/tx/save` | нет |
 | `/webapp/ui` | `services/tool-api/app/pages/routes.py:137` | `kit.UI_KIT_PAGE` | — | нет |
 | `/webapp/week` | `services/tool-api/app/pages/routes.py:75` | `week.WEEK_PAGE` | `/webapp/availability/clear`, `/webapp/availability/template/apply`, `/webapp/availability/template/from-week`, `/webapp/availability/week`, `/webapp/nav` | нет |
 | `/webapp/week/month` | `services/tool-api/app/pages/routes.py:85` | `week.MONTH_PAGE` | `/webapp/month-grid`, `/webapp/week/summary` | нет |
