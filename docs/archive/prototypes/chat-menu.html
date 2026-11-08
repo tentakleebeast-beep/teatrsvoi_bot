@@ -1,0 +1,118 @@
+<!doctype html>
+<!-- Архив. Заменён: docs/development/92-navigation-model.md (четыре нижние вкладки вместо меню-хаба) и docs/development/91-design-system.md. Причина: переделка Ш-1…Ш-10 закрыта, эталон дизайн-системы — prototypes/ux2-mini-app.html. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>СВОИ — меню чата по ролям</title>
+<style>
+  /* Клавиатуры бота по ролям: то, что человек видит в чате до всякого Mini App.
+     Состав пунктов — из MENU_GROUPS: недоступное не показывается. */
+  :root {
+    --tg-bg: #0e1621; --tg-card: #232e3c; --tg-text: #ffffff; --tg-hint: #708499;
+    --tg-accent: #5288c1; --tg-line: rgba(255,255,255,.10);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: #0b131c; color: #e8eef5;
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 17px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 20px; color: #9fb0c2; font-size: 13px; }
+  .row { display: flex; gap: 24px; flex-wrap: wrap; align-items: flex-start; }
+  .col { width: 330px; }
+  .col h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .05em;
+            color: #9fb0c2; margin: 0 0 8px; font-weight: 600; }
+  .phone { border-radius: 34px; padding: 8px; background: #000;
+           box-shadow: 0 18px 44px rgba(0,0,0,.5); }
+  .screen { border-radius: 28px; overflow: hidden; background: var(--tg-bg);
+            display: flex; flex-direction: column; height: 560px; }
+  .chat-top { padding: 18px 12px 10px; display: flex; align-items: center; gap: 8px;
+              border-bottom: 1px solid var(--tg-line); }
+  .chat-top .back { color: #6ab2f2; font-size: 18px; }
+  .chat-top .who { font-size: 14px; font-weight: 600; }
+  .chat-top .sub { font-size: 11px; color: var(--tg-hint); }
+  .chat-body { flex: 1; padding: 12px; display: flex; flex-direction: column; gap: 8px; }
+  .bubble { max-width: 84%; padding: 8px 11px; border-radius: 13px; font-size: 13px;
+            background: #182533; align-self: flex-start; white-space: pre-line; }
+  .bubble.me { background: #2b5278; align-self: flex-end; }
+  .kbd { padding: 8px; display: flex; flex-direction: column; gap: 5px;
+         border-top: 1px solid var(--tg-line); background: #17212b; }
+  .kbd .line { display: flex; gap: 5px; }
+  .kbd button { flex: 1; border: 0; border-radius: 8px; padding: 9px 4px; font: inherit;
+                font-size: 13px; background: var(--tg-card); color: #fff; }
+  .kbd .wide { flex: 1; }
+  .inline { padding: 10px 12px; display: flex; gap: 6px; flex-wrap: wrap;
+            border-top: 1px solid var(--tg-line); background: #17212b; }
+  .inline button { border: 1px solid var(--tg-line); background: #1c2733; color: #cfe0f0;
+                   border-radius: 8px; padding: 7px 10px; font: inherit; font-size: 12px; }
+  .inline .on { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+  .note { font-size: 12px; color: #9fb0c2; margin: 8px 0 0; }
+</style>
+</head>
+<body>
+<h1>Меню чата по ролям</h1>
+<p class="lead">Постоянная клавиатура бота. Недоступное не показывается: у труппы нет «Админа»,
+у труппы нет «Бюджета» и «Расписания» — только «Мои взносы» и «Занятость».</p>
+
+<div class="row">
+
+  <div class="col">
+    <h2>Труппа</h2>
+    <div class="phone"><div class="screen">
+      <div class="chat-top"><span class="back">‹</span>
+        <div><div class="who">СВОИ · бот</div><div class="sub">бот</div></div></div>
+      <div class="chat-body">
+        <div class="bubble">Среда не отмечена. Отметьте до четверга — организатор спросит.</div>
+        <div class="bubble me">Занятость</div>
+      </div>
+      <div class="kbd">
+        <div class="line"><button>Деньги</button><button>Время</button></div>
+        <div class="line"><button>Профиль</button><button>Помощь</button></div>
+      </div>
+    </div></div>
+    <p class="note">«Деньги» → «Мои взносы». «Время» → «Занятость».</p>
+  </div>
+
+  <div class="col">
+    <h2>Организатор</h2>
+    <div class="phone"><div class="screen">
+      <div class="chat-top"><span class="back">‹</span>
+        <div><div class="who">СВОИ · бот</div><div class="sub">бот</div></div></div>
+      <div class="chat-body">
+        <div class="bubble">Неделя 2–8 ноября: отмечено 6 из 7 дней.
+Суббота: заняты трое из одиннадцати.</div>
+        <div class="bubble me">Бюджет</div>
+      </div>
+      <div class="kbd">
+        <div class="line"><button>Деньги</button><button>Время</button><button>Админ</button></div>
+        <div class="line"><button>Профиль</button><button>Помощь</button></div>
+      </div>
+    </div></div>
+    <p class="note">«Админ» → «Админ-панель»: заявки, участники, приглашения.</p>
+  </div>
+
+  <div class="col">
+    <h2>Администратор</h2>
+    <div class="phone"><div class="screen">
+      <div class="chat-top"><span class="back">‹</span>
+        <div><div class="who">СВОИ · бот</div><div class="sub">бот</div></div></div>
+      <div class="chat-body">
+        <div class="bubble">Крупная сумма: реквизит 120 000 ₽. Подтвердить?</div>
+        <div class="bubble me">Админ</div>
+      </div>
+      <div class="inline">
+        <button>Участники</button><button>Заявки</button><button>Права</button>
+        <button>Бюджет</button><button>Обратная связь</button><button>Аудит</button>
+        <button>Сервисы</button><button>Сверка файл ↔ база</button>
+        <button>Дописать в лист</button><button>Выпустить инвайт-код</button>
+      </div>
+      <div class="kbd">
+        <div class="line"><button>Деньги</button><button>Время</button><button>Админ</button></div>
+        <div class="line"><button>Профиль</button><button>Помощь</button></div>
+      </div>
+    </div></div>
+    <p class="note">«Админ» раскрывает подменю кнопками — команд печатать не нужно.</p>
+  </div>
+
+</div>
+</body>
+</html>

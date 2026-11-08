@@ -1,0 +1,2697 @@
+{
+ "meta": {
+  "title": "Матрица «действие участника × интерфейс»",
+  "generated_by": "scripts/check_action_matrix.py --write",
+  "sources": [
+   "docs/development/19-functional-requirements.md",
+   "docs/development/20-scenarios.md",
+   "docs/development/12-bot-behavior.md",
+   "docs/development/21-intent-cascade.md",
+   "docs/development/48-mini-app-grid.md",
+   "docs/development/82-ux-navigation.md",
+   "docs/development/90-ui-review.md",
+   "docs/development/91-design-system.md",
+   "docs/development/92-navigation-model.md",
+   "docs/development/93-cjm.md"
+  ],
+  "requirement_rows": 113,
+  "scenario_rows": 30,
+  "action_rows": 56
+ },
+ "actions": [
+  {
+   "id": "ACT-001",
+   "action": "Войти впервые и получить права владельца",
+   "who": [
+    "владелец"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-A1"
+   ],
+   "scenarios": [
+    "S-01"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L30",
+    "docs/development/20-scenarios.md#L17"
+   ],
+   "note": "Доступ по совпадению chat_id с ADMIN_CHAT_ID, без кода"
+  },
+  {
+   "id": "ACT-002",
+   "action": "Зарегистрироваться по одноразовому коду и выбрать себя из списка",
+   "who": [
+    "участник",
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-A2",
+    "FR-A3"
+   ],
+   "scenarios": [
+    "S-02",
+    "S-03"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L31",
+    "docs/development/19-functional-requirements.md#L32",
+    "docs/development/20-scenarios.md#L31",
+    "docs/development/20-scenarios.md#L43"
+   ],
+   "note": "Повторная привязка того же chat_id невозможна"
+  },
+  {
+   "id": "ACT-003",
+   "action": "Подать заявку «меня нет в списке»",
+   "who": [
+    "участник"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-A4"
+   ],
+   "scenarios": [
+    "S-04"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L33",
+    "docs/development/20-scenarios.md#L51"
+   ],
+   "note": "Создаёт запись pending и уведомляет администратора"
+  },
+  {
+   "id": "ACT-004",
+   "action": "Подтвердить или отклонить заявку",
+   "who": [
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-A4"
+   ],
+   "scenarios": [
+    "S-04"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L33",
+    "docs/development/20-scenarios.md#L51",
+    "docs/development/92-navigation-model.md#L137"
+   ],
+   "note": "В чате — кнопки в уведомлении; в Mini App — раздел «Заявки»",
+   "anchor": "| Заявки | `registration.approve` | число pending |"
+  },
+  {
+   "id": "ACT-005",
+   "action": "Выдать или отозвать роль и возможность",
+   "who": [
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-A6"
+   ],
+   "scenarios": [
+    "S-24"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L35",
+    "docs/development/20-scenarios.md#L255",
+    "docs/development/92-navigation-model.md#L140"
+   ],
+   "note": "Один путь записи `/admin/grant` (`enabled=false` — отзыв роли, `allowed=false` — отзыв возможности); отзыв роли — пометка строки, а не удаление; входы: карточка человека в чате, экраны «Люди» и «Права» в Mini App",
+   "anchor": "| Права | `participants.manage` | — |"
+  },
+  {
+   "id": "ACT-006",
+   "action": "Архивировать ушедшего из театра",
+   "who": [
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-A7"
+   ],
+   "scenarios": [
+    "S-05"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L36",
+    "docs/development/20-scenarios.md#L62",
+    "docs/development/92-navigation-model.md#L141"
+   ],
+   "note": "Один путь записи `/admin/archive` и `…/unarchive` у чата и экрана; входы: карточка человека и раздел «Архив» в чате, раздел «Архив» в Mini App",
+   "anchor": "| Архив | `participants.manage` | — |"
+  },
+  {
+   "id": "ACT-007",
+   "action": "Заблокировать участника",
+   "who": [
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-A9"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L38"
+   ],
+   "note": "`POST /admin/block` (`blocked=false` — вернуть доступ), одна функция у чата и экрана; статус `blocked` закрывает доступ и в чате, и в Mini App сразу; кнопки в карточке человека и на экране «Люди»"
+  },
+  {
+   "id": "ACT-008",
+   "action": "Посмотреть аудит действий",
+   "who": [
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-A8",
+    "FR-A11"
+   ],
+   "scenarios": [
+    "S-25"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L37",
+    "docs/development/20-scenarios.md#L264",
+    "docs/development/92-navigation-model.md#L143"
+   ],
+   "note": "Чат: /admin → «Аудит»; Mini App: «Управление → Аудит» (FR-A11)",
+   "anchor": "| Аудит | `audit.view` | — |"
+  },
+  {
+   "id": "ACT-009",
+   "action": "Заполнить профиль (анкета)",
+   "who": [
+    "участник"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-H15"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L221",
+    "docs/development/92-navigation-model.md#L168",
+    "docs/development/82-ux-navigation.md#L85"
+   ],
+   "note": "Имя, короткие имена, время в пути, манифест для AI",
+   "anchor": "| Профиль | анкета: имя, короткие имена"
+  },
+  {
+   "id": "ACT-010",
+   "action": "Изменить тариф взноса человеку",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-B7",
+    "FR-B16"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L50",
+    "docs/development/19-functional-requirements.md#L72"
+   ],
+   "note": "API есть (participant.dues_tariff), экрана админ-панели нет"
+  },
+  {
+   "id": "ACT-011",
+   "action": "Посмотреть свои взносы",
+   "who": [
+    "участник"
+   ],
+   "interface": "оба",
+   "status": "P0, выполнено",
+   "requirements": [
+    "FR-B7"
+   ],
+   "scenarios": [
+    "S-10"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L50",
+    "docs/development/20-scenarios.md#L112",
+    "docs/development/92-navigation-model.md#L122"
+   ],
+   "note": "Чат: «Мои взносы» /dues; Mini App: «Деньги» и /webapp/dues",
+   "anchor": "- «Мои взносы» в чате (`/dues`) и на экране"
+  },
+  {
+   "id": "ACT-012",
+   "action": "Внести оплату взноса",
+   "who": [
+    "участник"
+   ],
+   "interface": "нигде",
+   "status": "P0, выполнено",
+   "requirements": [
+    "FR-B7"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L50",
+    "docs/development/93-cjm.md#L51"
+   ],
+   "note": "Решения П-9, П-11: заявки и оплаты из чата нет — оплату вносит организатор доходом"
+  },
+  {
+   "id": "ACT-013",
+   "action": "Записать расход или доход свободным текстом",
+   "who": [
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-B1",
+    "FR-B2",
+    "FR-B3"
+   ],
+   "scenarios": [
+    "S-06",
+    "S-09"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L44",
+    "docs/development/19-functional-requirements.md#L45",
+    "docs/development/20-scenarios.md#L73",
+    "docs/development/20-scenarios.md#L105"
+   ],
+   "note": "Разбор правилами и каскадом, черновик с кнопками, запись в БД и лист"
+  },
+  {
+   "id": "ACT-014",
+   "action": "Подтвердить, изменить или отменить черновик операции",
+   "who": [
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-B2"
+   ],
+   "scenarios": [
+    "S-06"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L45",
+    "docs/development/20-scenarios.md#L77",
+    "docs/development/82-ux-navigation.md#L178"
+   ],
+   "note": "«Изменить» по 82 §4.2 ведёт в форму Mini App с предзаполнением"
+  },
+  {
+   "id": "ACT-015",
+   "action": "Записать операцию формой",
+   "who": [
+    "организатор"
+   ],
+   "interface": "оба",
+   "status": "P0, частично",
+   "requirements": [
+    "FR-B1",
+    "FR-B2"
+   ],
+   "scenarios": [
+    "S-07"
+   ],
+   "sources": [
+    "docs/development/12-bot-behavior.md#L94",
+    "docs/development/92-navigation-model.md#L117",
+    "docs/development/93-cjm.md#L72"
+   ],
+   "note": "Форма в чате — да; в Mini App вход «Записать операцию» описан в 92, но 93 фиксирует «плитки нет»",
+   "anchor": "| Организатор | сегмент **Операции**"
+  },
+  {
+   "id": "ACT-016",
+   "action": "Пополнить справочник категорий и синонимов",
+   "who": [
+    "админ"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-B4"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L47",
+    "docs/development/12-bot-behavior.md#L138"
+   ],
+   "note": "12 §5: справочник и личные алиасы настраиваются из Telegram"
+  },
+  {
+   "id": "ACT-017",
+   "action": "Посмотреть агрегаты по деньгам",
+   "who": [
+    "организатор",
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-B14"
+   ],
+   "scenarios": [
+    "S-12"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L57",
+    "docs/development/20-scenarios.md#L139",
+    "docs/development/92-navigation-model.md#L118"
+   ],
+   "note": "Чат: ответ на «сколько у нас денег»; Mini App: «Деньги → Бюджет» (админ)",
+   "anchor": "| Админ | то же + **Бюджет** (итоги месяца, статьи, план/факт)"
+  },
+  {
+   "id": "ACT-018",
+   "action": "Сверить листы (файл ↔ база)",
+   "who": [
+    "админ"
+   ],
+   "interface": "оба",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-B13",
+    "FR-B12",
+    "FR-G12",
+    "FR-G13"
+   ],
+   "scenarios": [
+    "S-23"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L56",
+    "docs/development/20-scenarios.md#L248",
+    "docs/development/92-navigation-model.md#L145"
+   ],
+   "note": "Чат: кнопка «Сверить листы»; Mini App: «Управление → Сверка листов»",
+   "anchor": "| Сверка листов | `budget.import` | — |"
+  },
+  {
+   "id": "ACT-019",
+   "action": "Поправить суммы в листе «Транзакции»",
+   "who": [
+    "владелец"
+   ],
+   "interface": "нигде",
+   "status": "P0, частично",
+   "requirements": [
+    "FR-B12",
+    "FR-B13"
+   ],
+   "scenarios": [
+    "S-23"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L55",
+    "docs/development/20-scenarios.md#L248"
+   ],
+   "note": "Правка вне бота — в Google Sheets, затем сверка; занятость в базу не применяется"
+  },
+  {
+   "id": "ACT-020",
+   "action": "Спланировать доходы и расходы (план/факт)",
+   "who": [
+    "админ"
+   ],
+   "interface": "нигде",
+   "status": "P2, частично",
+   "requirements": [
+    "FR-B15"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L58"
+   ],
+   "note": "Только схема, логики и экрана нет"
+  },
+  {
+   "id": "ACT-021",
+   "action": "Отметить занятость свободным текстом",
+   "who": [
+    "участник"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-C2"
+   ],
+   "scenarios": [
+    "S-15"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L65",
+    "docs/development/20-scenarios.md#L173"
+   ],
+   "note": "«Занят в среду после 18» → подтверждение → запись"
+  },
+  {
+   "id": "ACT-022",
+   "action": "Отметить занятость формой в чате",
+   "who": [
+    "участник"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-C3"
+   ],
+   "scenarios": [
+    "S-16"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L66",
+    "docs/development/20-scenarios.md#L181"
+   ],
+   "note": "День → время → подтверждение"
+  },
+  {
+   "id": "ACT-023",
+   "action": "Отметить занятость по часам в Mini App",
+   "who": [
+    "участник"
+   ],
+   "interface": "Mini App",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-C3",
+    "FR-C9",
+    "FR-D6",
+    "FR-H8"
+   ],
+   "scenarios": [
+    "S-15"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L74",
+    "docs/development/48-mini-app-grid.md#L42",
+    "docs/development/92-navigation-model.md#L92"
+   ],
+   "note": "Лист дня и неделя есть; FR-H8 переписан на неделю, статус «не начато» до Ш-03",
+   "anchor": "- **Строка дня — карточка.**"
+  },
+  {
+   "id": "ACT-024",
+   "action": "Заполнить неделю по шаблону «обычная неделя»",
+   "who": [
+    "участник"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-C10"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L73",
+    "docs/development/92-navigation-model.md#L96"
+   ],
+   "note": "Кнопки на /webapp/days; в 92 — строка-действие в листе дня",
+   "anchor": "- Шаблон недели — одна строка-действие внизу листа"
+  },
+  {
+   "id": "ACT-025",
+   "action": "Посмотреть сводку свободных по дням",
+   "who": [
+    "организатор"
+   ],
+   "interface": "оба",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-C5"
+   ],
+   "scenarios": [
+    "S-17",
+    "S-21"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L68",
+    "docs/development/20-scenarios.md#L193",
+    "docs/development/20-scenarios.md#L231"
+   ],
+   "note": "Чат: счётчики «свободны/известно»; Mini App: сводка недели"
+  },
+  {
+   "id": "ACT-026",
+   "action": "Посмотреть сводку «люди × дни»",
+   "who": [
+    "организатор"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-H9"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L154",
+    "docs/development/48-mini-app-grid.md#L14",
+    "docs/development/92-navigation-model.md#L104"
+   ],
+   "note": "Сетка месяца /webapp/week/month: только чтение, источник — Google-таблица, расхождение с базой показывается; POST /webapp/grid удалён (Ш-04)",
+   "anchor": "- **Сетка месяца** `/webapp/week/month` (З9, FR-H9)"
+  },
+  {
+   "id": "ACT-027",
+   "action": "Найти окна (top-3) для репетиции или тренинга",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-D5",
+    "FR-D7"
+   ],
+   "scenarios": [
+    "S-22",
+    "S-26",
+    "S-27"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L69",
+    "docs/development/19-functional-requirements.md#L83",
+    "docs/development/19-functional-requirements.md#L85",
+    "docs/development/20-scenarios.md#L242",
+    "docs/development/20-scenarios.md#L301",
+    "docs/development/20-scenarios.md#L312"
+   ],
+   "note": "FR-C6 слито в FR-D5; вход из чата и сценариев — Ш-06"
+  },
+  {
+   "id": "ACT-028",
+   "action": "Запросить занятость рассылкой с кнопками",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P2, не начато",
+   "requirements": [
+    "FR-C8"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L71"
+   ],
+   "note": "Механизма нет"
+  },
+  {
+   "id": "ACT-029",
+   "action": "Посмотреть метрику покрытия занятости",
+   "who": [
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P2, готово",
+   "requirements": [
+    "FR-C7"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L70"
+   ],
+   "note": "Строка в «Расписании» gateway"
+  },
+  {
+   "id": "ACT-030",
+   "action": "Посмотреть расписание и ближайшие события",
+   "who": [
+    "участник"
+   ],
+   "interface": "оба",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-D1",
+    "FR-D26"
+   ],
+   "scenarios": [
+    "S-21"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L80",
+    "docs/development/19-functional-requirements.md#L225",
+    "docs/development/20-scenarios.md#L222",
+    "docs/development/93-cjm.md#L61"
+   ],
+   "note": "Чат: неделя по дням и ссылка на календарь; Mini App: «Сегодня» на Главной (П-5)"
+  },
+  {
+   "id": "ACT-031",
+   "action": "Заполнить черновой календарь на неделю",
+   "who": [
+    "владелец"
+   ],
+   "interface": "нигде",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-D2",
+    "FR-D3"
+   ],
+   "scenarios": [
+    "S-20"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L81",
+    "docs/development/20-scenarios.md#L216"
+   ],
+   "note": "Скрипт scripts/calendar_fill_draft.py, интерфейса нет"
+  },
+  {
+   "id": "ACT-032",
+   "action": "Назначить событие: окно → карточка → календарь",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P0, частично",
+   "requirements": [
+    "FR-H10",
+    "FR-D15"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L152",
+    "docs/development/19-functional-requirements.md#L93",
+    "docs/development/93-cjm.md#L91"
+   ],
+   "note": "Есть в чате и на экране /webapp/assign; сквозной сценарий не проверен"
+  },
+  {
+   "id": "ACT-033",
+   "action": "Отменить событие",
+   "who": [
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-D18"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L194"
+   ],
+   "note": "Кнопка «Отменить» в карточке события в чате, подтверждение до записи (Ш-06)"
+  },
+  {
+   "id": "ACT-034",
+   "action": "Перенести событие",
+   "who": [
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-D19"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L195"
+   ],
+   "note": "Кнопка «Перенести» в карточке события, «было → стало» подтверждается до записи (Ш-06)"
+  },
+  {
+   "id": "ACT-035",
+   "action": "Изменить состав события после назначения",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P1, не начато",
+   "requirements": [
+    "FR-D20"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L196"
+   ]
+  },
+  {
+   "id": "ACT-036",
+   "action": "Заменить педагога на конкретную дату",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P1, не начато",
+   "requirements": [
+    "FR-D23"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L199"
+   ]
+  },
+  {
+   "id": "ACT-037",
+   "action": "Отметить, что педагог провёл занятие",
+   "who": [
+    "педагог"
+   ],
+   "interface": "нигде",
+   "status": "P1, не начато",
+   "requirements": [
+    "FR-D25"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L201"
+   ]
+  },
+  {
+   "id": "ACT-038",
+   "action": "Подтвердить тренинг без педагога своей дисциплины",
+   "who": [
+    "организатор"
+   ],
+   "interface": "нигде",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-D24"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L200"
+   ]
+  },
+  {
+   "id": "ACT-039",
+   "action": "Задать свободный вопрос ассистенту",
+   "who": [
+    "участник"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-E1",
+    "FR-E2"
+   ],
+   "scenarios": [
+    "S-13"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L101",
+    "docs/development/19-functional-requirements.md#L102",
+    "docs/development/20-scenarios.md#L154"
+   ]
+  },
+  {
+   "id": "ACT-040",
+   "action": "Спросить «кто я»",
+   "who": [
+    "участник"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-E3"
+   ],
+   "scenarios": [
+    "S-11"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L103",
+    "docs/development/20-scenarios.md#L121"
+   ]
+  },
+  {
+   "id": "ACT-041",
+   "action": "Спросить данные: кто зарегистрирован, деньги, расписание",
+   "who": [
+    "участник",
+    "организатор"
+   ],
+   "interface": "чат",
+   "status": "P0, готово",
+   "requirements": [
+    "FR-E4"
+   ],
+   "scenarios": [
+    "S-12",
+    "S-21"
+   ],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L104",
+    "docs/development/20-scenarios.md#L136",
+    "docs/development/20-scenarios.md#L222"
+   ]
+  },
+  {
+   "id": "ACT-042",
+   "action": "Сообщить о проблеме или запросе на доработку текстом",
+   "who": [
+    "участник"
+   ],
+   "interface": "чат",
+   "status": "P2, готово",
+   "requirements": [
+    "FR-I1"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L108"
+   ],
+   "note": "FR-E8 слито в FR-I1: просьба о доработке — вид обращения, отдельного типа нет"
+  },
+  {
+   "id": "ACT-043",
+   "action": "Настроить квоты AI человеку или роли",
+   "who": [
+    "админ"
+   ],
+   "interface": "чат",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-E6"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L106",
+    "docs/development/12-bot-behavior.md#L136"
+   ],
+   "note": "12 §5 относит квоты к настройке из Telegram; вторая ветка квоту не проверяет"
+  },
+  {
+   "id": "ACT-044",
+   "action": "Утвердить новую категорию из очереди",
+   "who": [
+    "админ"
+   ],
+   "interface": "нигде",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-E11"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L111",
+    "docs/development/21-intent-cascade.md#L116"
+   ],
+   "note": "Только scripts/intent_report.py --approve/--reject"
+  },
+  {
+   "id": "ACT-045",
+   "action": "Открыть и загрузить файлы студии",
+   "who": [
+    "админ"
+   ],
+   "interface": "Mini App",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-F5"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L121",
+    "docs/development/92-navigation-model.md#L393"
+   ],
+   "note": "92 §9.1: работает у админа; FR-F5 — частично, права другим участникам позже (П-7)",
+   "anchor": "«Ещё» → раздел «Личное» → **«Файлы студии»**"
+  },
+  {
+   "id": "ACT-046",
+   "action": "Записать заметку",
+   "who": [
+    "участник"
+   ],
+   "interface": "оба",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-F7"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L124",
+    "docs/development/92-navigation-model.md#L170"
+   ],
+   "note": "дом — Mini App «Ещё → Заметки»; в чате карточка с подтверждением",
+   "anchor": "| Заметки | личные и общие заметки"
+  },
+  {
+   "id": "ACT-047",
+   "action": "Настроить тихие часы и типы уведомлений",
+   "who": [
+    "участник"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-G3",
+    "FR-G17"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L132",
+    "docs/development/92-navigation-model.md#L169",
+    "docs/development/82-ux-navigation.md#L205"
+   ],
+   "note": "Частные — в профиле, общие — в админ-панели; частные важнее (П-8)",
+   "anchor": "| Уведомления | три типа событий и тихие часы"
+  },
+  {
+   "id": "ACT-048",
+   "action": "Отправить рассылку участникам",
+   "who": [
+    "организатор",
+    "админ"
+   ],
+   "interface": "Mini App",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-G2"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L131",
+    "docs/development/92-navigation-model.md#L144"
+   ],
+   "note": "Право notify.send только у админа; организатору не выдаём (П-6)",
+   "anchor": "| Рассылка | `notify.send` (только у админа, П-6)"
+  },
+  {
+   "id": "ACT-049",
+   "action": "Посмотреть сводку недоставленных уведомлений",
+   "who": [
+    "админ"
+   ],
+   "interface": "нигде",
+   "status": "P1, не начато",
+   "requirements": [
+    "FR-H14"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L207"
+   ]
+  },
+  {
+   "id": "ACT-050",
+   "action": "Настроить гранулярность записи в человеческий лист",
+   "who": [
+    "админ"
+   ],
+   "interface": "нигде",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-G9"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L222"
+   ],
+   "note": "finance_granularity — настройка в БД, экрана нет"
+  },
+  {
+   "id": "ACT-051",
+   "action": "Настроить карту источников листа",
+   "who": [
+    "админ"
+   ],
+   "interface": "нигде",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-G10"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L223"
+   ],
+   "note": "finance_source_map — настройка в БД, экрана нет"
+  },
+  {
+   "id": "ACT-052",
+   "action": "Посмотреть состояние сервисов",
+   "who": [
+    "админ"
+   ],
+   "interface": "Mini App",
+   "status": "P2, готово",
+   "requirements": [
+    "FR-H16"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/92-navigation-model.md#L146",
+    "docs/development/93-cjm.md#L155"
+   ],
+   "note": "Экран /webapp/services и API есть; требование FR-H16",
+   "anchor": "| Сервисы | `admin.panel` | состояние: работают / внимание |"
+  },
+  {
+   "id": "ACT-053",
+   "action": "Отправить обратную связь",
+   "who": [
+    "участник"
+   ],
+   "interface": "оба",
+   "status": "—, готово",
+   "requirements": [
+    "FR-I1"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L219",
+    "docs/development/92-navigation-model.md#L171"
+   ],
+   "note": "Обратная связь принимает и просьбу о доработке (FR-E8 слито в FR-I1)",
+   "anchor": "| Обратная связь | отправить и посмотреть свои сообщения |"
+  },
+  {
+   "id": "ACT-054",
+   "action": "Разобрать обращение и ответить автору",
+   "who": [
+    "админ"
+   ],
+   "interface": "Mini App",
+   "status": "—, готово",
+   "requirements": [
+    "FR-I2"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L220",
+    "docs/development/92-navigation-model.md#L142"
+   ],
+   "note": "«Управление → Обращения»; счётчик новых — на «Главной»",
+   "anchor": "| Обращения | `feedback.triage` | число новых |"
+  },
+  {
+   "id": "ACT-055",
+   "action": "Посмотреть карточку человека",
+   "who": [
+    "организатор"
+   ],
+   "interface": "оба",
+   "status": "P1, частично",
+   "requirements": [
+    "FR-A10"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L40",
+    "docs/development/92-navigation-model.md#L157"
+   ],
+   "note": "Карточка и API есть; экрана «Люди» с занятостью и долгом нет",
+   "anchor": "«Люди» — не только список: нажатие на человека открывает карточку"
+  },
+  {
+   "id": "ACT-056",
+   "action": "Настроить общие уведомления студии",
+   "who": [
+    "админ"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-G17"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L137",
+    "docs/development/92-navigation-model.md#L148"
+   ],
+   "note": "Обещано 92 §2.4; экран /webapp/admin/t/notifications, маршрут /webapp/admin/notifications/settings, право admin.panel (Ш-11)",
+   "anchor": "| Общие уведомления | `admin.panel` | — |"
+  }
+ ],
+ "requirements": [
+  {
+   "id": "FR-A1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Владелец получает доступ администратора без кода, по совпадению `chat_id` с `ADMIN_CHAT_ID`",
+   "source": "docs/development/19-functional-requirements.md#L31",
+   "participant_action": true,
+   "actions": [
+    "ACT-001"
+   ]
+  },
+  {
+   "id": "FR-A2",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Регистрация по одноразовому коду с TTL; повторная регистрация того же `chat_id` невозможна",
+   "source": "docs/development/19-functional-requirements.md#L32",
+   "participant_action": true,
+   "actions": [
+    "ACT-002"
+   ]
+  },
+  {
+   "id": "FR-A3",
+   "priority": "P0",
+   "status": "готово",
+   "text": "После кода человек выбирает себя из списка — привязка к существующей записи, без дублей",
+   "source": "docs/development/19-functional-requirements.md#L33",
+   "participant_action": true,
+   "actions": [
+    "ACT-002"
+   ]
+  },
+  {
+   "id": "FR-A4",
+   "priority": "P0",
+   "status": "готово",
+   "text": "«Меня нет в списке» создаёт заявку `pending` и уведомляет администратора с кнопками",
+   "source": "docs/development/19-functional-requirements.md#L34",
+   "participant_action": true,
+   "actions": [
+    "ACT-003",
+    "ACT-004"
+   ]
+  },
+  {
+   "id": "FR-A5",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Роли множественные (`admin`, `org`, `troupe`); доступ определяется возможностями (capability), а не ролью",
+   "source": "docs/development/19-functional-requirements.md#L35",
+   "participant_action": false,
+   "actions": [],
+   "reason": "модель прав: возможность проверяется на сервере, отдельного шага нет"
+  },
+  {
+   "id": "FR-A6",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Точечная выдача/отзыв возможности и роли конкретному человеку, с причиной и записью в аудит; операции доступны из интерфейса, а не только SQL или командой",
+   "source": "docs/development/19-functional-requirements.md#L36",
+   "participant_action": true,
+   "actions": [
+    "ACT-005"
+   ]
+  },
+  {
+   "id": "FR-A7",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Ушедший из театра → `archived`: не виден в списках, счётчиках, окнах; история сохраняется; архив и возврат доступны из интерфейса и из чата",
+   "source": "docs/development/19-functional-requirements.md#L37",
+   "participant_action": true,
+   "actions": [
+    "ACT-006"
+   ]
+  },
+  {
+   "id": "FR-A8",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Любое действие пишется в аудит с автором (`человек` / `бот (AI)` / `система`)",
+   "source": "docs/development/19-functional-requirements.md#L38",
+   "participant_action": true,
+   "actions": [
+    "ACT-008"
+   ]
+  },
+  {
+   "id": "FR-A9",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Блокировка участника (`blocked`) с немедленным прекращением доступа; операция доступна из интерфейса, а не только SQL",
+   "source": "docs/development/19-functional-requirements.md#L39",
+   "participant_action": true,
+   "actions": [
+    "ACT-007"
+   ]
+  },
+  {
+   "id": "FR-A10",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Карточка человека: организатор видит роли, тариф, занятость, долг; дом — экран «Люди», вход — карточка в чате",
+   "source": "docs/development/19-functional-requirements.md#L40",
+   "participant_action": true,
+   "actions": [
+    "ACT-055"
+   ]
+  },
+  {
+   "id": "FR-A11",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Просмотр аудита действий: админ, экран «Управление → Аудит», вход из чата",
+   "source": "docs/development/19-functional-requirements.md#L41",
+   "participant_action": true,
+   "actions": [
+    "ACT-008"
+   ]
+  },
+  {
+   "id": "FR-B1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Разбор свободного текста о трате: сумма (`12к`, `45 000`), тип, категория, контрагент, дата, проект",
+   "source": "docs/development/19-functional-requirements.md#L47",
+   "participant_action": true,
+   "actions": [
+    "ACT-013",
+    "ACT-015"
+   ]
+  },
+  {
+   "id": "FR-B2",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Черновик с кнопками «Записать / Изменить / Отмена»; запись только после подтверждения",
+   "source": "docs/development/19-functional-requirements.md#L48",
+   "participant_action": true,
+   "actions": [
+    "ACT-013",
+    "ACT-014",
+    "ACT-015"
+   ]
+  },
+  {
+   "id": "FR-B3",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Запись в Postgres + строка в лист `Транзакции`; при недоступности Google запись в БД сохраняется",
+   "source": "docs/development/19-functional-requirements.md#L49",
+   "participant_action": true,
+   "actions": [
+    "ACT-013"
+   ]
+  },
+  {
+   "id": "FR-B4",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Словарь категорий и синонимов, пополняемый без деплоя; дом — админ-панель Mini App, чат — вход",
+   "source": "docs/development/19-functional-requirements.md#L50",
+   "participant_action": true,
+   "actions": [
+    "ACT-016"
+   ]
+  },
+  {
+   "id": "FR-B5",
+   "priority": "P0",
+   "status": "убрано",
+   "text": "Сумма выше 100 000 ₽ требует подтверждения второго организатора",
+   "source": "docs/development/19-functional-requirements.md#L51",
+   "participant_action": false,
+   "actions": [],
+   "reason": "требование снято 30.10.2026 — механизма подтверждения нет"
+  },
+  {
+   "id": "FR-B6",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Доли от сборов: `rate_pct` + база, автоматическая сверка арифметики (±1 %)",
+   "source": "docs/development/19-functional-requirements.md#L52",
+   "participant_action": false,
+   "actions": [],
+   "reason": "расчёт долей и сверка арифметики — код и представление"
+  },
+  {
+   "id": "FR-B7",
+   "priority": "P0",
+   "status": "выполнено",
+   "text": "Взносы: начисление по тарифу и долг; оплату вносит организатор как доход студии; «Мои взносы» показывает только свои",
+   "source": "docs/development/19-functional-requirements.md#L53",
+   "participant_action": true,
+   "actions": [
+    "ACT-010",
+    "ACT-011",
+    "ACT-012"
+   ]
+  },
+  {
+   "id": "FR-B8",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Импорт исторических данных из xlsx (июль–октябрь 2026), сверка сумм с файлом",
+   "source": "docs/development/19-functional-requirements.md#L54",
+   "participant_action": false,
+   "actions": [],
+   "reason": "импорт исторических данных — скрипт"
+  },
+  {
+   "id": "FR-B9",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Человеческие отчёты: месяц — отдельный лист, блоки рядом, цвета, итоги",
+   "source": "docs/development/19-functional-requirements.md#L55",
+   "participant_action": false,
+   "actions": [],
+   "reason": "месячный отчёт собирает скрипт"
+  },
+  {
+   "id": "FR-B10",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Инварианты (баланс, дубли, доли, авансы) проверяются кодом и отчётом `Проверки`",
+   "source": "docs/development/19-functional-requirements.md#L56",
+   "participant_action": false,
+   "actions": [],
+   "reason": "проверка инвариантов — скрипт и лист «Проверки»"
+  },
+  {
+   "id": "FR-B11",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Идемпотентность записи: повторное подтверждение не создаёт вторую операцию",
+   "source": "docs/development/19-functional-requirements.md#L57",
+   "participant_action": false,
+   "actions": [],
+   "reason": "свойство записи (идемпотентность), а не шаг человека"
+  },
+  {
+   "id": "FR-B12",
+   "priority": "P0",
+   "status": "частично",
+   "text": "Регрессивный пересчёт: файл — источник истины, расхождения на лист `Проверки`",
+   "source": "docs/development/19-functional-requirements.md#L58",
+   "participant_action": true,
+   "actions": [
+    "ACT-018",
+    "ACT-019"
+   ]
+  },
+  {
+   "id": "FR-B13",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Двусторонняя сверка: ручные правки листов подхватываются, удалённые строки → `rejected`, отчёт на лист",
+   "source": "docs/development/19-functional-requirements.md#L59",
+   "participant_action": true,
+   "actions": [
+    "ACT-018",
+    "ACT-019"
+   ]
+  },
+  {
+   "id": "FR-B14",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Запросы с агрегатами: «сколько у нас денег», «сколько потратили на Бунина»",
+   "source": "docs/development/19-functional-requirements.md#L60",
+   "participant_action": true,
+   "actions": [
+    "ACT-017"
+   ]
+  },
+  {
+   "id": "FR-B15",
+   "priority": "P2",
+   "status": "частично",
+   "text": "Планируемые доходы/расходы (`expected`, `budget_plan`) отдельно от факта",
+   "source": "docs/development/19-functional-requirements.md#L61",
+   "participant_action": true,
+   "actions": [
+    "ACT-020"
+   ]
+  },
+  {
+   "id": "FR-C1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Импорт часовой матрицы 0/1 из файла (8 000+ значений)",
+   "source": "docs/development/19-functional-requirements.md#L67",
+   "participant_action": false,
+   "actions": [],
+   "reason": "импорт часовой матрицы — скрипт"
+  },
+  {
+   "id": "FR-C2",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Ввод занятости свободным текстом: «занят в среду после 18», «свободен 28.10 с 10 до 14»",
+   "source": "docs/development/19-functional-requirements.md#L68",
+   "participant_action": true,
+   "actions": [
+    "ACT-021"
+   ]
+  },
+  {
+   "id": "FR-C3",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Ввод занятости формой: день → время → подтверждение",
+   "source": "docs/development/19-functional-requirements.md#L69",
+   "participant_action": true,
+   "actions": [
+    "ACT-022",
+    "ACT-023"
+   ]
+  },
+  {
+   "id": "FR-C4",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Перезапись с аудитом; импорт не перетирает свежую ручную запись",
+   "source": "docs/development/19-functional-requirements.md#L70",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило записи: аудит и защита от затирания при импорте"
+  },
+  {
+   "id": "FR-C5",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Сводка свободных по дням для организатора",
+   "source": "docs/development/19-functional-requirements.md#L71",
+   "participant_action": true,
+   "actions": [
+    "ACT-025"
+   ]
+  },
+  {
+   "id": "FR-C7",
+   "priority": "P2",
+   "status": "готово",
+   "text": "Метрика покрытия занятости (доля людей с актуальными данными)",
+   "source": "docs/development/19-functional-requirements.md#L72",
+   "participant_action": true,
+   "actions": [
+    "ACT-029"
+   ]
+  },
+  {
+   "id": "FR-C8",
+   "priority": "P2",
+   "status": "не начато",
+   "text": "Запрос занятости рассылкой с кнопками",
+   "source": "docs/development/19-functional-requirements.md#L73",
+   "participant_action": true,
+   "actions": [
+    "ACT-028"
+   ]
+  },
+  {
+   "id": "FR-B16",
+   "priority": "P1",
+   "status": "не начато",
+   "text": "Тарифы взносов в админ-панели Mini App: кто сколько вносит, с какого месяца",
+   "source": "docs/development/19-functional-requirements.md#L74",
+   "participant_action": true,
+   "actions": [
+    "ACT-010"
+   ]
+  },
+  {
+   "id": "FR-C10",
+   "priority": "P1",
+   "status": "готово",
+   "text": "«Обычная неделя»: шаблон занятости по дням недели; кнопка «Сохранить шаблон недели» запоминает неделю, кнопка «Заполнить по шаблону» показывает лист предпросмотра и заполняет пустые дни",
+   "source": "docs/development/19-functional-requirements.md#L75",
+   "participant_action": true,
+   "actions": [
+    "ACT-024"
+   ]
+  },
+  {
+   "id": "FR-C9",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Занятость карточкой дня: состояние, две границы, комментарий; запись в лист каноном, перенос правок человека обратно в базу",
+   "source": "docs/development/19-functional-requirements.md#L76",
+   "participant_action": true,
+   "actions": [
+    "ACT-023"
+   ]
+  },
+  {
+   "id": "FR-D1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Чтение боевого календаря (только чтение), доступ по service account",
+   "source": "docs/development/19-functional-requirements.md#L82",
+   "participant_action": true,
+   "actions": [
+    "ACT-030"
+   ]
+  },
+  {
+   "id": "FR-D2",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Черновой календарь для обкатки: бот пишет только туда",
+   "source": "docs/development/19-functional-requirements.md#L83",
+   "participant_action": true,
+   "actions": [
+    "ACT-031"
+   ]
+  },
+  {
+   "id": "FR-D3",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Палитра: цвет события по типу (`config/calendar-palette.yaml`)",
+   "source": "docs/development/19-functional-requirements.md#L84",
+   "participant_action": true,
+   "actions": [
+    "ACT-031"
+   ]
+  },
+  {
+   "id": "FR-D5",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Поиск окон в двух областях: события студии (репетиция, тренинг, показ, встреча) и субаренда (свободный зал); сетка 08:00–24:00 (16 клеток), минимум часов, строгость по типу, top-3 с пояснением, детерминированный скоринг, входы из сводки, карточки события и чата",
+   "source": "docs/development/19-functional-requirements.md#L85",
+   "participant_action": true,
+   "actions": [
+    "ACT-027"
+   ]
+  },
+  {
+   "id": "FR-D6",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Три состояния клетки: свободен / занят / не отмечено; «не уверен» отдельно",
+   "source": "docs/development/19-functional-requirements.md#L86",
+   "participant_action": true,
+   "actions": [
+    "ACT-023"
+   ]
+  },
+  {
+   "id": "FR-D7",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Режим «максимум свободных» для тренингов и общих сборов",
+   "source": "docs/development/19-functional-requirements.md#L87",
+   "participant_action": true,
+   "actions": [
+    "ACT-027"
+   ]
+  },
+  {
+   "id": "FR-D8",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Разбор субъекта запроса: роли, псевдонимы, проекты, падежи",
+   "source": "docs/development/19-functional-requirements.md#L88",
+   "participant_action": false,
+   "actions": [],
+   "reason": "разбор субъекта — часть запроса, отдельного шага нет"
+  },
+  {
+   "id": "FR-D9",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Роль (персонаж) как псевдоним человека внутри спектакля",
+   "source": "docs/development/19-functional-requirements.md#L89",
+   "participant_action": false,
+   "actions": [],
+   "reason": "роль как псевдоним — данные, отдельного шага нет"
+  },
+  {
+   "id": "FR-D10",
+   "priority": "P1",
+   "status": "не начато",
+   "text": "Учёт занятости в событиях (`event_plan`) при поиске окон",
+   "source": "docs/development/19-functional-requirements.md#L90",
+   "participant_action": false,
+   "actions": [],
+   "reason": "вычитание интервалов событий — расчёт"
+  },
+  {
+   "id": "FR-D11",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Маска названий «Тип - Название» с нормализацией проектов",
+   "source": "docs/development/19-functional-requirements.md#L91",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило формирования события — код, не шаг человека"
+  },
+  {
+   "id": "FR-D12",
+   "priority": "P1",
+   "status": "готово",
+   "text": "События, уходящие в ночь, заканчиваются 23:55",
+   "source": "docs/development/19-functional-requirements.md#L92",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило формирования события — код, не шаг человека"
+  },
+  {
+   "id": "FR-D13",
+   "priority": "P0",
+   "status": "готово",
+   "text": "События арендаторов (`Аренда`, `Показ`) помечаются как доход студии",
+   "source": "docs/development/19-functional-requirements.md#L93",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило формирования события — код, не шаг человека"
+  },
+  {
+   "id": "FR-D14",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Разворот регулярных серий (`RRULE`) в конкретные даты без дублей",
+   "source": "docs/development/19-functional-requirements.md#L94",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило формирования события — код, не шаг человека"
+  },
+  {
+   "id": "FR-D15",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Создание события ботом с машинными свойствами (`svoi_kind`, `svoi_venue`, `svoi_participant_ids`)",
+   "source": "docs/development/19-functional-requirements.md#L95",
+   "participant_action": true,
+   "actions": [
+    "ACT-032"
+   ]
+  },
+  {
+   "id": "FR-D16",
+   "priority": "P0",
+   "status": "готово",
+   "text": "События календаря вычитаются из занятости при поиске окон",
+   "source": "docs/development/19-functional-requirements.md#L96",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило формирования события — код, не шаг человека"
+  },
+  {
+   "id": "FR-D17",
+   "priority": "P1",
+   "status": "не начато",
+   "text": "Учёт дохода от аренды/показов в бюджете",
+   "source": "docs/development/19-functional-requirements.md#L97",
+   "participant_action": false,
+   "actions": [],
+   "reason": "учёт дохода от аренды — расчёт"
+  },
+  {
+   "id": "FR-E1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Роутер (tool-api `POST /tools/route`, был n8n) определяет сценарий: `budget` / `schedule` / `dues` / `assistant`",
+   "source": "docs/development/19-functional-requirements.md#L103",
+   "participant_action": true,
+   "actions": [
+    "ACT-039"
+   ]
+  },
+  {
+   "id": "FR-E2",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Свободные вопросы отвечает LLM с манифестом; адрес и ключ LLM задаются окружением (`LLM_BASE_URL`, `LLM_API_KEY`)",
+   "source": "docs/development/19-functional-requirements.md#L104",
+   "participant_action": true,
+   "actions": [
+    "ACT-039"
+   ]
+  },
+  {
+   "id": "FR-E3",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Ассистент знает имя и роли пишущего, отвечает на «кто я» без просьбы представиться",
+   "source": "docs/development/19-functional-requirements.md#L105",
+   "participant_action": true,
+   "actions": [
+    "ACT-040"
+   ]
+  },
+  {
+   "id": "FR-E4",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Вопросы о данных (список участников, профиль, деньги, расписание недели) отвечает детерминированный код, не LLM",
+   "source": "docs/development/19-functional-requirements.md#L106",
+   "participant_action": true,
+   "actions": [
+    "ACT-041"
+   ]
+  },
+  {
+   "id": "FR-E5",
+   "priority": "P0",
+   "status": "частично",
+   "text": "LLM обходится только при недоступности провайдера или исчерпанной квоте; тогда — формы",
+   "source": "docs/development/19-functional-requirements.md#L107",
+   "participant_action": false,
+   "actions": [],
+   "reason": "режим деградации — правило поведения"
+  },
+  {
+   "id": "FR-E6",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Квоты AI на человека (запросы/сутки, токены/месяц) с жёсткой остановкой; настройка в админ-панели Mini App, ветка каскада проверяет квоту",
+   "source": "docs/development/19-functional-requirements.md#L108",
+   "participant_action": true,
+   "actions": [
+    "ACT-043"
+   ]
+  },
+  {
+   "id": "FR-E7",
+   "priority": "P0",
+   "status": "не начато",
+   "text": "Факт-валидатор: число/дата/имя в ответе сверяются с источником",
+   "source": "docs/development/19-functional-requirements.md#L109",
+   "participant_action": false,
+   "actions": [],
+   "reason": "валидатор ответа — серверная проверка"
+  },
+  {
+   "id": "FR-E9",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Каскад разбора: правила → модель из закрытого списка → кнопки; порог 0.7",
+   "source": "docs/development/19-functional-requirements.md#L110",
+   "participant_action": false,
+   "actions": [],
+   "reason": "каскад разбора — механизм, а не шаг"
+  },
+  {
+   "id": "FR-E10",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Журнал разбора и очередь фраз для доработки словаря",
+   "source": "docs/development/19-functional-requirements.md#L111",
+   "participant_action": false,
+   "actions": [],
+   "reason": "журнал разбора — серверная запись"
+  },
+  {
+   "id": "FR-E11",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Новые категории только через ручное утверждение",
+   "source": "docs/development/19-functional-requirements.md#L112",
+   "participant_action": true,
+   "actions": [
+    "ACT-044"
+   ]
+  },
+  {
+   "id": "FR-F1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Месячные листы бюджета в привычном виде (07–10.2026)",
+   "source": "docs/development/19-functional-requirements.md#L118",
+   "participant_action": false,
+   "actions": [],
+   "reason": "лист собирает скрипт, человек читает его в Google Sheets"
+  },
+  {
+   "id": "FR-F2",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Матрицы занятости по месяцам (даты × часы, цвета)",
+   "source": "docs/development/19-functional-requirements.md#L119",
+   "participant_action": false,
+   "actions": [],
+   "reason": "лист собирает скрипт, человек читает его в Google Sheets"
+  },
+  {
+   "id": "FR-F3",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Лист `Журнал бота` с автором действия",
+   "source": "docs/development/19-functional-requirements.md#L120",
+   "participant_action": false,
+   "actions": [],
+   "reason": "лист собирает скрипт, человек читает его в Google Sheets"
+  },
+  {
+   "id": "FR-F4",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Лист `Проверки` со статусом инвариантов",
+   "source": "docs/development/19-functional-requirements.md#L121",
+   "participant_action": false,
+   "actions": [],
+   "reason": "лист собирает скрипт, человек читает его в Google Sheets"
+  },
+  {
+   "id": "FR-F5",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Файлы студии (личные и общие): загрузка, доступ, теги, папки, архив; пока только админ, права другим участникам — позже",
+   "source": "docs/development/19-functional-requirements.md#L122",
+   "participant_action": true,
+   "actions": [
+    "ACT-045"
+   ]
+  },
+  {
+   "id": "FR-F6",
+   "priority": "P2",
+   "status": "не начато",
+   "text": "Контакты и аудитория из «Записной книжки театра» (сегменты, каналы связи)",
+   "source": "docs/development/19-functional-requirements.md#L123",
+   "participant_action": false,
+   "actions": [],
+   "reason": "справочник контактов — данные, действия нет"
+  },
+  {
+   "id": "FR-F7",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Заметки (личные и общие): текст и теги, экран «Ещё → Заметки», подтверждение в чате",
+   "source": "docs/development/19-functional-requirements.md#L124",
+   "participant_action": true,
+   "actions": [
+    "ACT-046"
+   ]
+  },
+  {
+   "id": "FR-G1",
+   "priority": "P1",
+   "status": "не начато",
+   "text": "Напоминания о событиях T−24 и T−2",
+   "source": "docs/development/19-functional-requirements.md#L130",
+   "participant_action": false,
+   "actions": [],
+   "reason": "уведомление приходит само, отдельного шага человека нет"
+  },
+  {
+   "id": "FR-G5",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Напоминание о взносах и о незаполненной занятости",
+   "source": "docs/development/19-functional-requirements.md#L131",
+   "participant_action": false,
+   "actions": [],
+   "reason": "уведомление приходит само, отдельного шага человека нет"
+  },
+  {
+   "id": "FR-G6",
+   "priority": "P0",
+   "status": "отменено",
+   "text": "Подтверждение крупных трат и доходов администратором с уведомлением в чат",
+   "source": "docs/development/19-functional-requirements.md#L132",
+   "participant_action": false,
+   "actions": [],
+   "reason": "требование отменено 30.10.2026 — маршруты подтверждения удалены"
+  },
+  {
+   "id": "FR-G2",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Рассылка участникам: только админ, право `notify.send`; шаблон, предпросмотр, число адресатов",
+   "source": "docs/development/19-functional-requirements.md#L133",
+   "participant_action": true,
+   "actions": [
+    "ACT-048"
+   ]
+  },
+  {
+   "id": "FR-G3",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Тихие часы 20:00–08:00 по Самаре, срочное — без переноса; настройка в профиле Mini App, частные важнее общих",
+   "source": "docs/development/19-functional-requirements.md#L134",
+   "participant_action": true,
+   "actions": [
+    "ACT-047"
+   ]
+  },
+  {
+   "id": "FR-G4",
+   "priority": "P1",
+   "status": "не начато",
+   "text": "Дедупликация уведомлений",
+   "source": "docs/development/19-functional-requirements.md#L135",
+   "participant_action": false,
+   "actions": [],
+   "reason": "дедупликация — серверное правило"
+  },
+  {
+   "id": "FR-G15",
+   "priority": "P2",
+   "status": "не начато",
+   "text": "Недельный дайджест для организатора",
+   "source": "docs/development/19-functional-requirements.md#L136",
+   "participant_action": false,
+   "actions": [],
+   "reason": "уведомление приходит само, отдельного шага человека нет"
+  },
+  {
+   "id": "FR-G17",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Настройки уведомлений: общие в админ-панели, частные в профиле; частные важнее общих",
+   "source": "docs/development/19-functional-requirements.md#L137",
+   "participant_action": true,
+   "actions": [
+    "ACT-047",
+    "ACT-056"
+   ]
+  },
+  {
+   "id": "FR-H1",
+   "priority": "P0",
+   "status": "готово",
+   "text": "`GET /health` с состоянием БД, участников, архива",
+   "source": "docs/development/19-functional-requirements.md#L146",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H2",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Проверка инвариантов одной командой, код выхода 1 при нарушении",
+   "source": "docs/development/19-functional-requirements.md#L147",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H3",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Миграции только вперёд, идемпотентные",
+   "source": "docs/development/19-functional-requirements.md#L148",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H4",
+   "priority": "P0",
+   "status": "частично",
+   "text": "Unit / integration / system тесты по `docs/development/16`",
+   "source": "docs/development/19-functional-requirements.md#L149",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H5",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Запуск одной командой (`docker compose up`)",
+   "source": "docs/development/19-functional-requirements.md#L150",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H6",
+   "priority": "P1",
+   "status": "частично",
+   "text": "Telegram Mini App для меню, форм и админки",
+   "source": "docs/development/19-functional-requirements.md#L151",
+   "participant_action": false,
+   "actions": [],
+   "reason": "наличие Mini App — платформа, а не действие"
+  },
+  {
+   "id": "FR-H7",
+   "priority": "P2",
+   "status": "не начато",
+   "text": "Прод-контур: VPS, webhook вместо polling, TLS",
+   "source": "docs/development/19-functional-requirements.md#L152",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H8",
+   "priority": "P0",
+   "status": "готово",
+   "text": "Участник заполняет свою неделю в Mini App: отметки по дням, часы — в листе дня; корректировка — на экране недели или сообщением в чате",
+   "source": "docs/development/19-functional-requirements.md#L153",
+   "participant_action": true,
+   "actions": [
+    "ACT-023"
+   ]
+  },
+  {
+   "id": "FR-H9",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Сводная сетка «люди × дни»: только чтение, только организатору, месяц; правок нет",
+   "source": "docs/development/19-functional-requirements.md#L154",
+   "participant_action": true,
+   "actions": [
+    "ACT-026"
+   ]
+  },
+  {
+   "id": "FR-H10",
+   "priority": "P0",
+   "status": "частично",
+   "text": "Организатор назначает событие из окна: карточка → календарь → расписание",
+   "source": "docs/development/19-functional-requirements.md#L155",
+   "participant_action": true,
+   "actions": [
+    "ACT-032"
+   ]
+  },
+  {
+   "id": "FR-H11",
+   "priority": "P0",
+   "status": "не начато",
+   "text": "Бот уведомляет участников назначенного события",
+   "source": "docs/development/19-functional-requirements.md#L156",
+   "participant_action": false,
+   "actions": [],
+   "reason": "уведомление приходит само, отдельного шага человека нет"
+  },
+  {
+   "id": "FR-H16",
+   "priority": "P2",
+   "status": "готово",
+   "text": "Состояние сервисов в Mini App для админа: бот, приложение, база, разбор текста, календарь, таблица бюджета; проверка снова",
+   "source": "docs/development/19-functional-requirements.md#L157",
+   "participant_action": true,
+   "actions": [
+    "ACT-052"
+   ]
+  },
+  {
+   "id": "FR-D18",
+   "priority": "—",
+   "status": "готово",
+   "text": "Отмена события: снятие из календаря, уведомление участникам, аудит; вход из чата по карточке события",
+   "source": "docs/development/19-functional-requirements.md#L209",
+   "participant_action": true,
+   "actions": [
+    "ACT-033"
+   ]
+  },
+  {
+   "id": "FR-D19",
+   "priority": "—",
+   "status": "готово",
+   "text": "Перенос события: связь «было → стало», уведомление о новом времени; вход из чата по карточке события",
+   "source": "docs/development/19-functional-requirements.md#L210",
+   "participant_action": true,
+   "actions": [
+    "ACT-034"
+   ]
+  },
+  {
+   "id": "FR-D20",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Изменение состава после назначения с уведомлением",
+   "source": "docs/development/19-functional-requirements.md#L211",
+   "participant_action": true,
+   "actions": [
+    "ACT-035"
+   ]
+  },
+  {
+   "id": "FR-D21",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Проверка пересечения с уже назначенными событиями при назначении",
+   "source": "docs/development/19-functional-requirements.md#L212",
+   "participant_action": false,
+   "actions": [],
+   "reason": "проверка пересечений — часть действия «Назначить событие»"
+  },
+  {
+   "id": "FR-D22",
+   "priority": "—",
+   "status": "частично",
+   "text": "Фиксация присутствия режиссёра меняется после назначения",
+   "source": "docs/development/19-functional-requirements.md#L213",
+   "participant_action": false,
+   "actions": [],
+   "reason": "правило фиксации присутствия режиссёра, отдельного шага нет"
+  },
+  {
+   "id": "FR-D23",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Замещение педагога на конкретную дату",
+   "source": "docs/development/19-functional-requirements.md#L214",
+   "participant_action": true,
+   "actions": [
+    "ACT-036"
+   ]
+  },
+  {
+   "id": "FR-D24",
+   "priority": "—",
+   "status": "готово",
+   "text": "Тренинг без педагога своей дисциплины — предупреждение с подтверждением",
+   "source": "docs/development/19-functional-requirements.md#L215",
+   "participant_action": true,
+   "actions": [
+    "ACT-038"
+   ]
+  },
+  {
+   "id": "FR-D25",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Отметка «педагог провёл занятие» как основание для начисления",
+   "source": "docs/development/19-functional-requirements.md#L216",
+   "participant_action": true,
+   "actions": [
+    "ACT-037"
+   ]
+  },
+  {
+   "id": "FR-G16",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Ретенция `availability_hour`: срок и архив",
+   "source": "docs/development/19-functional-requirements.md#L217",
+   "participant_action": false,
+   "actions": [],
+   "reason": "ретенция — миграция и архив"
+  },
+  {
+   "id": "FR-G7",
+   "priority": "—",
+   "status": "не начато",
+   "text": "TTL непринятых заявок `slot_proposal` (7 дней)",
+   "source": "docs/development/19-functional-requirements.md#L218",
+   "participant_action": false,
+   "actions": [],
+   "reason": "TTL заявок — серверное правило"
+  },
+  {
+   "id": "FR-G8",
+   "priority": "—",
+   "status": "готово",
+   "text": "Уникальность псевдонимов без учёта регистра",
+   "source": "docs/development/19-functional-requirements.md#L219",
+   "participant_action": false,
+   "actions": [],
+   "reason": "уникальность псевдонимов — ограничение базы"
+  },
+  {
+   "id": "FR-H12",
+   "priority": "—",
+   "status": "готово (systemd `Restart=always`, журнал journald)",
+   "text": "Супервизор gateway и tool-api, ротация логов",
+   "source": "docs/development/19-functional-requirements.md#L220",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H13",
+   "priority": "—",
+   "status": "готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь)",
+   "text": "Healthcheck-агент с уведомлением админу при падении",
+   "source": "docs/development/19-functional-requirements.md#L221",
+   "participant_action": false,
+   "actions": [],
+   "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
+  },
+  {
+   "id": "FR-H14",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Сводка «кому не удалось доставить уведомление»",
+   "source": "docs/development/19-functional-requirements.md#L222",
+   "participant_action": true,
+   "actions": [
+    "ACT-049"
+   ]
+  },
+  {
+   "id": "FR-I1",
+   "priority": "—",
+   "status": "готово",
+   "text": "Обратная связь участников, включая просьбу о доработке: кнопка меню, форма Mini App, разбор организатором, ответ автору",
+   "source": "docs/development/19-functional-requirements.md#L234",
+   "participant_action": true,
+   "actions": [
+    "ACT-042",
+    "ACT-053"
+   ]
+  },
+  {
+   "id": "FR-I2",
+   "priority": "—",
+   "status": "готово",
+   "text": "Пункт «Обратная связь» в админ-панели: кто, что и когда написал, со статусами",
+   "source": "docs/development/19-functional-requirements.md#L235",
+   "participant_action": true,
+   "actions": [
+    "ACT-054"
+   ]
+  },
+  {
+   "id": "FR-H15",
+   "priority": "—",
+   "status": "готово",
+   "text": "Профиль: имя, короткие имена, время в пути, манифест для AI; манифест попадает в промпт",
+   "source": "docs/development/19-functional-requirements.md#L236",
+   "participant_action": true,
+   "actions": [
+    "ACT-009"
+   ]
+  },
+  {
+   "id": "FR-G9",
+   "priority": "—",
+   "status": "готово",
+   "text": "Гранулярность записи в человеческий лист — настройка по разделу (`finance_granularity`)",
+   "source": "docs/development/19-functional-requirements.md#L237",
+   "participant_action": true,
+   "actions": [
+    "ACT-050"
+   ]
+  },
+  {
+   "id": "FR-G10",
+   "priority": "—",
+   "status": "готово",
+   "text": "Карта источников листа: «как написано» → статья и проект (`finance_source_map`)",
+   "source": "docs/development/19-functional-requirements.md#L238",
+   "participant_action": true,
+   "actions": [
+    "ACT-051"
+   ]
+  },
+  {
+   "id": "FR-G11",
+   "priority": "—",
+   "status": "готово",
+   "text": "Идентификатор операции в скрытой колонке листа — основа идемпотентного переноса",
+   "source": "docs/development/19-functional-requirements.md#L239",
+   "participant_action": false,
+   "actions": [],
+   "reason": "нет отдельного действия участника: серверное правило или расчёт"
+  },
+  {
+   "id": "FR-D26",
+   "priority": "—",
+   "status": "готово",
+   "text": "Расписание в чате: группировка по дням, тип мероприятия, ссылка на календарь",
+   "source": "docs/development/19-functional-requirements.md#L240",
+   "participant_action": true,
+   "actions": [
+    "ACT-030"
+   ]
+  },
+  {
+   "id": "FR-G12",
+   "priority": "—",
+   "status": "частично (dry-run)",
+   "text": "Перенос операций базы в лист «Финансы 2026 от 07»",
+   "source": "docs/development/19-functional-requirements.md#L241",
+   "participant_action": true,
+   "actions": [
+    "ACT-018"
+   ]
+  },
+  {
+   "id": "FR-G13",
+   "priority": "—",
+   "status": "готово (`scripts/read_finance_sheet.py`, dry-run по умолчанию)",
+   "text": "Чтение правок из человеческого листа в базу",
+   "source": "docs/development/19-functional-requirements.md#L242",
+   "participant_action": true,
+   "actions": [
+    "ACT-018"
+   ]
+  },
+  {
+   "id": "FR-G14",
+   "priority": "—",
+   "status": "не начато",
+   "text": "Форматирование технических листов (шапки, группировка, рамки)",
+   "source": "docs/development/19-functional-requirements.md#L243",
+   "participant_action": false,
+   "actions": [],
+   "reason": "форматирование листов — скрипт"
+  }
+ ],
+ "scenarios": [
+  {
+   "id": "S-01",
+   "line": 17,
+   "source": "docs/development/20-scenarios.md#L17",
+   "actor": "владелец",
+   "action": "Первый вход владельца",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-001"
+   ]
+  },
+  {
+   "id": "S-02",
+   "line": 31,
+   "source": "docs/development/20-scenarios.md#L31",
+   "actor": "организатор",
+   "action": "Регистрация организатора по коду",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-002"
+   ]
+  },
+  {
+   "id": "S-03",
+   "line": 43,
+   "source": "docs/development/20-scenarios.md#L43",
+   "actor": "участник",
+   "action": "Регистрация актёра труппы",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-002"
+   ]
+  },
+  {
+   "id": "S-04",
+   "line": 51,
+   "source": "docs/development/20-scenarios.md#L51",
+   "actor": "участник",
+   "action": "Человека нет в списке",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-003",
+    "ACT-004"
+   ]
+  },
+  {
+   "id": "S-05",
+   "line": 62,
+   "source": "docs/development/20-scenarios.md#L62",
+   "actor": "владелец",
+   "action": "Уход из театра (архив)",
+   "interface": "Mini App",
+   "status": "частично",
+   "actions": [
+    "ACT-006"
+   ]
+  },
+  {
+   "id": "S-06",
+   "line": 73,
+   "source": "docs/development/20-scenarios.md#L73",
+   "actor": "организатор",
+   "action": "Расход свободным текстом",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-013",
+    "ACT-014"
+   ]
+  },
+  {
+   "id": "S-07",
+   "line": 85,
+   "source": "docs/development/20-scenarios.md#L85",
+   "actor": "участник",
+   "action": "Расход через форму и права",
+   "interface": "чат",
+   "status": "частично",
+   "actions": [
+    "ACT-015"
+   ]
+  },
+  {
+   "id": "S-08",
+   "line": 94,
+   "source": "docs/development/20-scenarios.md#L94",
+   "actor": "организатор",
+   "action": "Крупная трата без второго подтверждения",
+   "interface": "чат",
+   "status": "снято 30.10.2026",
+   "actions": []
+  },
+  {
+   "id": "S-09",
+   "line": 105,
+   "source": "docs/development/20-scenarios.md#L105",
+   "actor": "организатор",
+   "action": "Доход от показа",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-013"
+   ]
+  },
+  {
+   "id": "S-10",
+   "line": 112,
+   "source": "docs/development/20-scenarios.md#L112",
+   "actor": "участник",
+   "action": "Мои взносы",
+   "interface": "оба",
+   "status": "работает",
+   "actions": [
+    "ACT-011"
+   ]
+  },
+  {
+   "id": "S-11",
+   "line": 121,
+   "source": "docs/development/20-scenarios.md#L121",
+   "actor": "участник",
+   "action": "«Кто я»",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-040"
+   ]
+  },
+  {
+   "id": "S-12",
+   "line": 136,
+   "source": "docs/development/20-scenarios.md#L136",
+   "actor": "организатор",
+   "action": "«Кто зарегистрирован»",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-017",
+    "ACT-041"
+   ]
+  },
+  {
+   "id": "S-13",
+   "line": 151,
+   "source": "docs/development/20-scenarios.md#L151",
+   "actor": "участник",
+   "action": "Вопрос ассистенту",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-039"
+   ]
+  },
+  {
+   "id": "S-14",
+   "line": 160,
+   "source": "docs/development/20-scenarios.md#L160",
+   "actor": "участник",
+   "action": "LLM недоступен — формы",
+   "interface": "чат",
+   "status": "работает",
+   "actions": []
+  },
+  {
+   "id": "S-15",
+   "line": 173,
+   "source": "docs/development/20-scenarios.md#L173",
+   "actor": "участник",
+   "action": "Занятость текстом",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-021",
+    "ACT-023"
+   ]
+  },
+  {
+   "id": "S-16",
+   "line": 181,
+   "source": "docs/development/20-scenarios.md#L181",
+   "actor": "участник",
+   "action": "Занятость формой",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-022"
+   ]
+  },
+  {
+   "id": "S-17",
+   "line": 190,
+   "source": "docs/development/20-scenarios.md#L190",
+   "actor": "организатор",
+   "action": "Сводка занятости",
+   "interface": "оба",
+   "status": "частично",
+   "actions": [
+    "ACT-025"
+   ]
+  },
+  {
+   "id": "S-18",
+   "line": 199,
+   "source": "docs/development/20-scenarios.md#L199",
+   "actor": "владелец",
+   "action": "Отчёт по месяцу",
+   "interface": "нигде",
+   "status": "работает (Google Sheets, не интерфейс)",
+   "actions": []
+  },
+  {
+   "id": "S-19",
+   "line": 207,
+   "source": "docs/development/20-scenarios.md#L207",
+   "actor": "владелец",
+   "action": "Проверка инвариантов",
+   "interface": "нигде",
+   "status": "работает (терминал и лист)",
+   "actions": []
+  },
+  {
+   "id": "S-20",
+   "line": 213,
+   "source": "docs/development/20-scenarios.md#L213",
+   "actor": "владелец",
+   "action": "Черновой календарь на неделю",
+   "interface": "нигде",
+   "status": "работает (скрипт)",
+   "actions": [
+    "ACT-031"
+   ]
+  },
+  {
+   "id": "S-21",
+   "line": 222,
+   "source": "docs/development/20-scenarios.md#L222",
+   "actor": "участник",
+   "action": "Спросить у бота расписание",
+   "interface": "чат",
+   "status": "работает",
+   "actions": [
+    "ACT-025",
+    "ACT-030",
+    "ACT-041"
+   ]
+  },
+  {
+   "id": "S-22",
+   "line": 239,
+   "source": "docs/development/20-scenarios.md#L239",
+   "actor": "организатор",
+   "action": "Найти окно для репетиции",
+   "interface": "нигде",
+   "status": "частично",
+   "actions": [
+    "ACT-027"
+   ]
+  },
+  {
+   "id": "S-23",
+   "line": 245,
+   "source": "docs/development/20-scenarios.md#L245",
+   "actor": "владелец",
+   "action": "Ручная правка таблицы",
+   "interface": "нигде",
+   "status": "частично (Google Sheets)",
+   "actions": [
+    "ACT-018",
+    "ACT-019"
+   ]
+  },
+  {
+   "id": "S-24",
+   "line": 255,
+   "source": "docs/development/20-scenarios.md#L255",
+   "actor": "админ",
+   "action": "Выдать право",
+   "interface": "чат",
+   "status": "работает командой",
+   "actions": [
+    "ACT-005"
+   ]
+  },
+  {
+   "id": "S-25",
+   "line": 264,
+   "source": "docs/development/20-scenarios.md#L264",
+   "actor": "админ",
+   "action": "Аудит",
+   "interface": "оба",
+   "status": "работает",
+   "actions": [
+    "ACT-008"
+   ]
+  },
+  {
+   "id": "S-26",
+   "line": 301,
+   "source": "docs/development/20-scenarios.md#L301",
+   "actor": "организатор",
+   "action": "Окна для конкретных людей по ролям",
+   "interface": "нигде",
+   "status": "описан, реализации нет",
+   "actions": [
+    "ACT-027"
+   ]
+  },
+  {
+   "id": "S-27",
+   "line": 312,
+   "source": "docs/development/20-scenarios.md#L312",
+   "actor": "организатор",
+   "action": "Тренинг для максимального числа людей",
+   "interface": "нигде",
+   "status": "описан, реализации нет",
+   "actions": [
+    "ACT-027"
+   ]
+  },
+  {
+   "id": "S-28",
+   "line": 322,
+   "source": "docs/development/20-scenarios.md#L322",
+   "actor": "организатор",
+   "action": "Крупная трата пишется сразу",
+   "interface": "чат",
+   "status": "работает",
+   "actions": []
+  },
+  {
+   "id": "S-29",
+   "line": 332,
+   "source": "docs/development/20-scenarios.md#L332",
+   "actor": "организатор",
+   "action": "Напоминание о незаполненной занятости",
+   "interface": "чат",
+   "status": "описан, автоматической рассылки нет",
+   "actions": []
+  },
+  {
+   "id": "S-30",
+   "line": 340,
+   "source": "docs/development/20-scenarios.md#L340",
+   "actor": "участник",
+   "action": "Пусто и свободно — разные вещи",
+   "interface": "чат",
+   "status": "описан",
+   "actions": []
+  }
+ ],
+ "contradictions": "см. раздел «Противоречия между документами» в 121-action-interface-matrix.md"
+}

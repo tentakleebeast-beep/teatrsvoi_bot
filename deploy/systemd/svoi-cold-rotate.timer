@@ -1,0 +1,10 @@
+[Unit]
+Description=SVOI files: cold rotation, every day at 05:10
+
+[Timer]
+OnCalendar=*-*-* 05:10:00
+Persistent=true
+RandomizedDelaySec=600
+
+[Install]
+WantedBy=timers.target

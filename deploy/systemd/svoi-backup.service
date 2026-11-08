@@ -1,0 +1,15 @@
+[Unit]
+Description=SVOI database backup: pg_dump, rotation, storage copy (docs/infrastructure/110)
+Documentation=file:///opt/svoi/docs/infrastructure/110-backups-and-restore.md
+After=network.target docker.service
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/scripts/backup.sh
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

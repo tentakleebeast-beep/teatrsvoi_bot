@@ -1,0 +1,32 @@
+{
+  "teatrsvoi": {
+    "done": 21,
+    "done_in_window": 14,
+    "cycle_median_h": 1.4,
+    "runs_total": 70,
+    "runs_per_card": 2.5,
+    "timeouts": 4,
+    "crashes": 11,
+    "rework": 3,
+    "rework_rate": 0.14,
+    "followup_cards": 12,
+    "followup_rate": 0.57,
+    "queue": [
+      {
+        "id": "t_4b7d8d8e",
+        "title": "Релизный цикл: версии по тегам",
+        "status": "ready",
+        "age_h": 26.3
+      },
+      {
+        "id": "t_f1856dd3",
+        "title": "A-1. Агентный режим",
+        "status": "todo",
+        "age_h": 3.0
+      }
+    ],
+    "open": 15,
+    "oldest_open_h": 26.3,
+    "blocked": 2
+  }
+}

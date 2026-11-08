@@ -1,0 +1,21 @@
+[Unit]
+Description=SVOI tool-api
+Documentation=file:///opt/svoi/docs/infrastructure/35-deploy-runbook.md
+After=network.target docker.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/.venv/bin/python -m uvicorn app.main:app --app-dir services/tool-api --host 127.0.0.1 --port 8000
+Restart=always
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

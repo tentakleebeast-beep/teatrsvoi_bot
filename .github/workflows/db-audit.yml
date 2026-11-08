@@ -1,0 +1,31 @@
+name: аудит данных
+
+# Только чтение. Запускает scripts/ops/audit_data.sql на сервере и печатает результат.
+
+on:
+  workflow_dispatch:
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: отчёт
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" 'cat > /tmp/audit_data.sql' < scripts/ops/audit_data.sql
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            'docker cp /tmp/audit_data.sql svoi-postgres:/tmp/audit_data.sql && docker exec -i svoi-postgres psql -U svoi -d svoi -f /tmp/audit_data.sql; rm -f /tmp/audit_data.sql'

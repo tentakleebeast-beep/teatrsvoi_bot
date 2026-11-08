@@ -1,0 +1,2537 @@
+{
+ "ran_at": "2026-11-01",
+ "runs": [
+  {
+   "model": "openai/gpt-4.1-nano",
+   "mode": "single",
+   "metrics": {
+    "count": 30,
+    "adequate": 0.16666666666666666,
+    "refused": 0.6333333333333333,
+    "wrong": 0.2,
+    "steps_avg": 1.0,
+    "p50": 1.8,
+    "p95": 4.34,
+    "tokens_avg": 137.46666666666667
+   },
+   "answers": [
+    {
+     "question": "Q-01",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-01']"
+     ],
+     "text": "Я не могу посмотреть текущую дату.",
+     "latency": 4.77,
+     "steps": 1,
+     "tokens_in": 117,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-02",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Реквизит и костюмы'] и нет отказа"
+     ],
+     "text": "Понял, расход на реквизит — 3000. Нужно что-то еще?",
+     "latency": 1.87,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 20,
+     "tools": []
+    },
+    {
+     "question": "Q-03",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [45000, 'Аренда помещения'] и нет отказа"
+     ],
+     "text": "Спасибо за информацию. Чем могу помочь?",
+     "latency": 1.79,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-04",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Понял, закупка на 500. Нужно что-то конкретное?",
+     "latency": 1.95,
+     "steps": 1,
+     "tokens_in": 119,
+     "tokens_out": 17,
+     "tools": []
+    },
+    {
+     "question": "Q-05",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Продажа билетов'] и нет отказа"
+     ],
+     "text": "Отлично, билеты проданы на 68080. Что нужно сделать дальше?",
+     "latency": 1.93,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 19,
+     "tools": []
+    },
+    {
+     "question": "Q-06",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['21', 'Гонорары и доли'] и нет отказа"
+     ],
+     "text": "Понял, спасибо за информацию.",
+     "latency": 1.82,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-07",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['сред', '18']"
+     ],
+     "text": "Я не могу посмотреть расписание, уточните у организаторов или в группе.",
+     "latency": 1.87,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 17,
+     "tools": []
+    },
+    {
+     "question": "Q-08",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-10-28', '10:00', '14:00']"
+     ],
+     "text": "Я не могу проверить расписание. Обратитесь к организатору или в группу.",
+     "latency": 2.04,
+     "steps": 1,
+     "tokens_in": 126,
+     "tokens_out": 19,
+     "tools": []
+    },
+    {
+     "question": "Q-09",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['пятниц', 'вечер'] и нет отказа"
+     ],
+     "text": "Понял, спасибо за информацию.",
+     "latency": 1.73,
+     "steps": 1,
+     "tokens_in": 118,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-10",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['кнопк', 'меню', 'деньги']] и нет отказа"
+     ],
+     "text": "Для записи расхода укажите сумму, дату, категорию расхода и описание. Например: \"Покупка реквизита, 500 руб., 20 марта\".",
+     "latency": 1.86,
+     "steps": 1,
+     "tokens_in": 117,
+     "tokens_out": 36,
+     "tools": []
+    },
+    {
+     "question": "Q-11",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Иванов', 'Виктор'], ['админ', 'admin', 'организатор']]"
+     ],
+     "text": "Я не могу определить, кто вы. Чем могу помочь?",
+     "latency": 2.19,
+     "steps": 1,
+     "tokens_in": 116,
+     "tokens_out": 13,
+     "tools": []
+    },
+    {
+     "question": "Q-12",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['воскресен']"
+     ],
+     "text": "Я не могу определить текущий день недели.",
+     "latency": 1.82,
+     "steps": 1,
+     "tokens_in": 118,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-13",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['UTC+4', 'UTC +4', 'GMT+4', 'Самар']]"
+     ],
+     "text": "Я не могу посмотреть точный часовой пояс студии.",
+     "latency": 1.6,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 13,
+     "tools": []
+    },
+    {
+     "question": "Q-14",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Репа ЖН', '15:00']"
+     ],
+     "text": "Извините, я не могу посмотреть ваше расписание.",
+     "latency": 1.76,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 13,
+     "tools": []
+    },
+    {
+     "question": "Q-15",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Репа ЖН', ['Валери', 'Аренда']]"
+     ],
+     "text": "Я не могу посмотреть текущие события. Обратитесь к календарю или группе в Telegram для актуальной информации.",
+     "latency": 1.63,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 24,
+     "tools": []
+    },
+    {
+     "question": "Q-16",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-02', '16:00']"
+     ],
+     "text": "Я не могу посмотреть текущие даты аренды. Обратитесь к организаторам или в группу для уточнения.",
+     "latency": 1.64,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 25,
+     "tools": []
+    },
+    {
+     "question": "Q-17",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-04', '18:00']"
+     ],
+     "text": "Я не могу посмотреть календарь.",
+     "latency": 1.73,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-18",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-10-26', 'занят']"
+     ],
+     "text": "Я не могу посмотреть ваши личные данные или календарь.",
+     "latency": 1.63,
+     "steps": 1,
+     "tokens_in": 129,
+     "tokens_out": 13,
+     "tools": []
+    },
+    {
+     "question": "Q-19",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [210998, 'октябр']"
+     ],
+     "text": "Я не могу посмотреть данные о доходах.",
+     "latency": 1.64,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-20",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [266104]"
+     ],
+     "text": "Я не могу посмотреть расходы за сентябрь.",
+     "latency": 1.93,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-21",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [696999]"
+     ],
+     "text": "Я не могу посмотреть информацию о доходах за всё время.",
+     "latency": 1.87,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 13,
+     "tools": []
+    },
+    {
+     "question": "Q-22",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [10000, 'октябр']"
+     ],
+     "text": "Я не могу посмотреть информацию о взносах.",
+     "latency": 1.82,
+     "steps": 1,
+     "tokens_in": 125,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-23",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['не начисл', 'не выставл', 'нет начисл', 'начислений нет']]"
+     ],
+     "text": "Я не могу проверить, начислены ли взносы за ноябрь. Обратитесь к ответственному за это лицу или в бухгалтерию.",
+     "latency": 1.63,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 31,
+     "tools": []
+    },
+    {
+     "question": "Q-24",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Пурга', 'Бунин', 'насекомых']]"
+     ],
+     "text": "Я не могу просмотреть ваши файлы.",
+     "latency": 1.58,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-25",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['файлов нет', 'нет файлов', 'пусто', 'не найдено', 'ни одного файла', 'ничего не лежит', 'ничего нет', 'папка пуст']]"
+     ],
+     "text": "Я не могу посмотреть содержимое папки.",
+     "latency": 1.56,
+     "steps": 1,
+     "tokens_in": 131,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-26",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['нет репетиц', 'репетиций нет', 'не запланирован', 'нет событ']]"
+     ],
+     "text": "Я не могу посмотреть расписание репетиций. Обратитесь к руководителю или в группу.",
+     "latency": 4.34,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 21,
+     "tools": []
+    },
+    {
+     "question": "Q-27",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу посмотреть текущий курс доллара.",
+     "latency": 1.75,
+     "steps": 1,
+     "tokens_in": 119,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-28",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу посмотреть погоду. Рекомендую проверить через погодные сервисы или приложения.",
+     "latency": 1.67,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 20,
+     "tools": []
+    },
+    {
+     "question": "Q-29",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу посмотреть актуальные цены на аренду зала в Самаре.",
+     "latency": 1.8,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 17,
+     "tools": []
+    },
+    {
+     "question": "Q-30",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу просматривать актуальные обновления за последний месяц. Рекомендую проверить официальный блог Google или документацию API для свежих новостей.",
+     "latency": 2.19,
+     "steps": 1,
+     "tokens_in": 122,
+     "tokens_out": 32,
+     "tools": []
+    }
+   ]
+  },
+  {
+   "model": "openai/gpt-4.1-nano",
+   "mode": "agent",
+   "metrics": {
+    "count": 30,
+    "adequate": 0.5,
+    "refused": 0.16666666666666666,
+    "wrong": 0.3333333333333333,
+    "steps_avg": 1.9666666666666666,
+    "p50": 2.55,
+    "p95": 6.51,
+    "tokens_avg": 1150.2
+   },
+   "answers": [
+    {
+     "question": "Q-01",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня 1 ноября 2026 года.",
+     "latency": 2.15,
+     "steps": 2,
+     "tokens_in": 856,
+     "tokens_out": 21,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-02",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Реквизит и костюмы'] и нет отказа"
+     ],
+     "text": "Это расходы за текущий месяц, 3000 на реквизит уже учтены.",
+     "latency": 9.41,
+     "steps": 2,
+     "tokens_in": 872,
+     "tokens_out": 39,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-03",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Аренда помещения'] и нет отказа"
+     ],
+     "text": "Оплата аренды 45 000 уже зафиксирована.",
+     "latency": 4.2,
+     "steps": 2,
+     "tokens_in": 1071,
+     "tokens_out": 27,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-04",
+     "verdict": "wrong",
+     "notes": [
+      "сумма есть, но уточнения категории нет"
+     ],
+     "text": "Закупка на 500 уже оплачена.",
+     "latency": 2.83,
+     "steps": 2,
+     "tokens_in": 1067,
+     "tokens_out": 24,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-05",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Продажа билетов']"
+     ],
+     "text": "Это я не вижу информации о продаже билетов на сумму 68080.",
+     "latency": 2.56,
+     "steps": 2,
+     "tokens_in": 1071,
+     "tokens_out": 30,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-06",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['21', 'Гонорары и доли']"
+     ],
+     "text": "Это я не вижу информации о сборе или выплатах Крылову.",
+     "latency": 6.51,
+     "steps": 2,
+     "tokens_in": 1077,
+     "tokens_out": 31,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-07",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В среду после 18:00 у вас запланирована репетиция \"ЖН Маша, Витя, Люда, Дарья, Марк?\".",
+     "latency": 4.8,
+     "steps": 2,
+     "tokens_in": 1615,
+     "tokens_out": 66,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-08",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "28.10 занят с 18:00, свободен с 00:00 до конца дня. Время с 10:00 до 14:00 свободно.",
+     "latency": 2.19,
+     "steps": 2,
+     "tokens_in": 1066,
+     "tokens_out": 50,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-09",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В пятницу вечером у вас запланирована репетиция с Машей, Витей, Людой, Даиной и Марком с 18:00 до 23:55.",
+     "latency": 4.22,
+     "steps": 2,
+     "tokens_in": 1611,
+     "tokens_out": 71,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-10",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['расход', ['кнопк', 'меню', 'деньги']]"
+     ],
+     "text": "Это я не вижу.",
+     "latency": 2.47,
+     "steps": 2,
+     "tokens_in": 1024,
+     "tokens_out": 19,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-11",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Иванов', 'Виктор'], ['админ', 'admin', 'организатор']]"
+     ],
+     "text": "этого я не вижу",
+     "latency": 1.14,
+     "steps": 1,
+     "tokens_in": 400,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-12",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня воскресенье.",
+     "latency": 2.3,
+     "steps": 2,
+     "tokens_in": 858,
+     "tokens_out": 16,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-13",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Студия работает в часовом поясе UTC+4.",
+     "latency": 2.13,
+     "steps": 2,
+     "tokens_in": 868,
+     "tokens_out": 26,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-14",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Репа ЖН', '15:00'] и нет отказа"
+     ],
+     "text": "Сегодня у вас запланированы репетиции и аренда с Валерием.",
+     "latency": 3.83,
+     "steps": 2,
+     "tokens_in": 1615,
+     "tokens_out": 48,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-15",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Репа ЖН'] и нет отказа"
+     ],
+     "text": "На этой неделе запланировано 12 событий, в основном репетиции и аренды с Валерием.",
+     "latency": 4.21,
+     "steps": 2,
+     "tokens_in": 1617,
+     "tokens_out": 55,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-16",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Ближайшая аренда зала — 2 ноября с 16:00 до 17:30.",
+     "latency": 4.06,
+     "steps": 2,
+     "tokens_in": 1617,
+     "tokens_out": 54,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-17",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В календаре 4 ноября запланирована аренда Валерия с 18:00 до 19:30.",
+     "latency": 4.37,
+     "steps": 2,
+     "tokens_in": 1615,
+     "tokens_out": 55,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-18",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['2026-10-26'] и нет отказа"
+     ],
+     "text": "На прошлой неделе у вас были заняты следующие дни: 2, 3, 4, 6, 7 и 8 ноября.",
+     "latency": 3.57,
+     "steps": 2,
+     "tokens_in": 1633,
+     "tokens_out": 63,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-19",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [210998] и нет отказа"
+     ],
+     "text": "Доходы за октябрь составили 696 999 рублей.",
+     "latency": 2.35,
+     "steps": 2,
+     "tokens_in": 872,
+     "tokens_out": 34,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-20",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [266104] и нет отказа"
+     ],
+     "text": "Расходы в сентябре составили 864 508 рублей.",
+     "latency": 2.55,
+     "steps": 2,
+     "tokens_in": 870,
+     "tokens_out": 34,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-21",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [696999] и нет отказа"
+     ],
+     "text": "Общий доход за всё время составляет 125000 рублей.",
+     "latency": 2.32,
+     "steps": 2,
+     "tokens_in": 1069,
+     "tokens_out": 26,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-22",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Вы заплатили взносы за октябрь. Сумма — 10 000 рублей.",
+     "latency": 2.66,
+     "steps": 2,
+     "tokens_in": 1079,
+     "tokens_out": 35,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-23",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Взносы за ноябрь еще не начислены.",
+     "latency": 2.31,
+     "steps": 2,
+     "tokens_in": 1075,
+     "tokens_out": 26,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-24",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Пурга', 'Бунин', 'насекомых']]"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.32,
+     "steps": 2,
+     "tokens_in": 861,
+     "tokens_out": 28,
+     "tools": [
+      "read_files_meta"
+     ]
+    },
+    {
+     "question": "Q-25",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В папке \"Спектакли/Пурга/музыка\" ничего не лежит.",
+     "latency": 2.39,
+     "steps": 2,
+     "tokens_in": 896,
+     "tokens_out": 51,
+     "tools": [
+      "read_files_meta"
+     ]
+    },
+    {
+     "question": "Q-26",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['нет репетиц', 'репетиций нет', 'не запланирован', 'нет событ']] и нет отказа"
+     ],
+     "text": "В субботу запланирована репетиция \"ЖН Сэм и Наташа\" с 15:00 до 18:00.",
+     "latency": 3.89,
+     "steps": 2,
+     "tokens_in": 1621,
+     "tokens_out": 61,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-27",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу",
+     "latency": 2.11,
+     "steps": 2,
+     "tokens_in": 866,
+     "tokens_out": 26,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-28",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу",
+     "latency": 2.52,
+     "steps": 2,
+     "tokens_in": 873,
+     "tokens_out": 29,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-29",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу",
+     "latency": 2.09,
+     "steps": 2,
+     "tokens_in": 880,
+     "tokens_out": 30,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-30",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу",
+     "latency": 2.78,
+     "steps": 2,
+     "tokens_in": 877,
+     "tokens_out": 31,
+     "tools": [
+      "web_search"
+     ]
+    }
+   ]
+  },
+  {
+   "model": "openai/gpt-4o-mini",
+   "mode": "single",
+   "metrics": {
+    "count": 30,
+    "adequate": 0.13333333333333333,
+    "refused": 0.7666666666666667,
+    "wrong": 0.1,
+    "steps_avg": 1.0,
+    "p50": 1.28,
+    "p95": 1.89,
+    "tokens_avg": 140.36666666666667
+   },
+   "answers": [
+    {
+     "question": "Q-01",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-01']"
+     ],
+     "text": "Не могу посмотреть текущее число.",
+     "latency": 1.46,
+     "steps": 1,
+     "tokens_in": 117,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-02",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [3000, 'Реквизит и костюмы']"
+     ],
+     "text": "Не могу посмотреть детали бюджета или расходов. Рекомендую обратиться к ответственному за финансы в вашей студии.",
+     "latency": 2.1,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 24,
+     "tools": []
+    },
+    {
+     "question": "Q-03",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [45000, 'Аренда помещения']"
+     ],
+     "text": "Не могу проверить информацию о платеже. Если у вас есть вопросы по аренде, задавайте!",
+     "latency": 1.61,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 21,
+     "tools": []
+    },
+    {
+     "question": "Q-04",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [500]"
+     ],
+     "text": "Не могу посмотреть детали закупки.",
+     "latency": 0.97,
+     "steps": 1,
+     "tokens_in": 119,
+     "tokens_out": 7,
+     "tools": []
+    },
+    {
+     "question": "Q-05",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [68080, 'Продажа билетов']"
+     ],
+     "text": "Не могу посмотреть детали по продаже билетов.",
+     "latency": 1.39,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-06",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['21', 'Гонорары и доли']"
+     ],
+     "text": "Не могу проверить информацию о сборах и выплатах. Рекомендую обратиться к ответственным за финансовые вопросы в театре.",
+     "latency": 1.28,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 27,
+     "tools": []
+    },
+    {
+     "question": "Q-07",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['сред', '18']"
+     ],
+     "text": "Не могу проверить расписание. Пожалуйста, уточните у других участников или посмотрите в календаре.",
+     "latency": 1.8,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-08",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-10-28', '10:00', '14:00']"
+     ],
+     "text": "Не могу проверить расписание. Пожалуйста, уточните у организаторов.",
+     "latency": 1.05,
+     "steps": 1,
+     "tokens_in": 126,
+     "tokens_out": 16,
+     "tools": []
+    },
+    {
+     "question": "Q-09",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['пятниц', 'вечер'] и нет отказа"
+     ],
+     "text": "Понял. Если нужно перенести встречу или репетицию, сообщи, когда тебе удобно.",
+     "latency": 1.51,
+     "steps": 1,
+     "tokens_in": 118,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-10",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['кнопк', 'меню', 'деньги']] и нет отказа"
+     ],
+     "text": "Для записи расхода обычно нужно указать сумму, дату, категорию расхода и, возможно, комментарий. Если у вас есть специальная форма или система учета, следуйте их инструкциям.",
+     "latency": 1.76,
+     "steps": 1,
+     "tokens_in": 117,
+     "tokens_out": 40,
+     "tools": []
+    },
+    {
+     "question": "Q-11",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Иванов', 'Виктор'], ['админ', 'admin', 'организатор']]"
+     ],
+     "text": "Я не могу узнать, кто вы. Могу помочь с вопросами о театре-студии «СВОИ» или других темах.",
+     "latency": 1.14,
+     "steps": 1,
+     "tokens_in": 116,
+     "tokens_out": 31,
+     "tools": []
+    },
+    {
+     "question": "Q-12",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['воскресен']"
+     ],
+     "text": "Не могу посмотреть.",
+     "latency": 0.93,
+     "steps": 1,
+     "tokens_in": 118,
+     "tokens_out": 4,
+     "tools": []
+    },
+    {
+     "question": "Q-13",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['UTC+4', 'UTC +4', 'GMT+4', 'Самар']] и нет отказа"
+     ],
+     "text": "Студия работает в московском часовом поясе (UTC+3).",
+     "latency": 1.08,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 17,
+     "tools": []
+    },
+    {
+     "question": "Q-14",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Репа ЖН', '15:00']"
+     ],
+     "text": "Не могу посмотреть расписание. Пожалуйста, уточните у организаторов или проверьте в доступных источниках.",
+     "latency": 1.14,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 25,
+     "tools": []
+    },
+    {
+     "question": "Q-15",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Репа ЖН', ['Валери', 'Аренда']]"
+     ],
+     "text": "Не могу посмотреть, какие события запланированы на этой неделе. Рекомендую обратиться к расписанию или администратору театра.",
+     "latency": 1.26,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 30,
+     "tools": []
+    },
+    {
+     "question": "Q-16",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-02', '16:00']"
+     ],
+     "text": "Не могу посмотреть информацию о ближайшей аренде зала. Пожалуйста, уточните у организаторов.",
+     "latency": 1.89,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-17",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-04', '18:00']"
+     ],
+     "text": "Не могу посмотреть календарь. Пожалуйста, уточните, что именно вас интересует.",
+     "latency": 1.05,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 19,
+     "tools": []
+    },
+    {
+     "question": "Q-18",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-10-26']"
+     ],
+     "text": "Не могу посмотреть, какие дни у вас заняты.",
+     "latency": 1.56,
+     "steps": 1,
+     "tokens_in": 129,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-19",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [210998]"
+     ],
+     "text": "Не могу посмотреть данные о доходах за октябрь.",
+     "latency": 1.5,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-20",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [266104, 'сентябр']"
+     ],
+     "text": "Не могу посмотреть данные о расходах.",
+     "latency": 1.22,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-21",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [696999]"
+     ],
+     "text": "Не могу посмотреть данные о доходах.",
+     "latency": 1.25,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-22",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [10000, 'октябр']"
+     ],
+     "text": "Не могу посмотреть информацию о ваших взносах.",
+     "latency": 1.54,
+     "steps": 1,
+     "tokens_in": 125,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-23",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['не начисл', 'не выставл', 'нет начисл', 'начислений нет']]"
+     ],
+     "text": "Не могу посмотреть информацию о взносах. Рекомендую обратиться к ответственному за финансовые вопросы.",
+     "latency": 1.75,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-24",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Пурга', 'Бунин', 'насекомых']]"
+     ],
+     "text": "Не могу посмотреть, какие спектакли заведены у вас в файлах.",
+     "latency": 1.15,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 15,
+     "tools": []
+    },
+    {
+     "question": "Q-25",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['файлов нет', 'нет файлов', 'пусто', 'не найдено', 'ни одного файла', 'ничего не лежит', 'ничего нет', 'папка пуст']]"
+     ],
+     "text": "Не могу посмотреть, что лежит в этой папке.",
+     "latency": 1.4,
+     "steps": 1,
+     "tokens_in": 131,
+     "tokens_out": 12,
+     "tools": []
+    },
+    {
+     "question": "Q-26",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['нет репетиц', 'репетиций нет', 'не запланирован', 'нет событ']]"
+     ],
+     "text": "Не могу посмотреть расписание репетиций. Пожалуйста, уточните у руководства или в группе.",
+     "latency": 1.42,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-27",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Не могу посмотреть курс доллара. Рекомендую проверить актуальную информацию на финансовом сайте или в приложении.",
+     "latency": 1.05,
+     "steps": 1,
+     "tokens_in": 119,
+     "tokens_out": 24,
+     "tools": []
+    },
+    {
+     "question": "Q-28",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Не могу посмотреть погоду. Рекомендую проверить прогноз на сайте или в приложении погоды.",
+     "latency": 0.99,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 21,
+     "tools": []
+    },
+    {
+     "question": "Q-29",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Не могу посмотреть актуальные цены на аренду зала в Самаре. Рекомендую обратиться к местным агентствам или сайтам аренды.",
+     "latency": 1.27,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 31,
+     "tools": []
+    },
+    {
+     "question": "Q-30",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Не могу посмотреть последние обновления Google Calendar API. Рекомендую проверить официальную документацию или блог Google для актуальной информации.",
+     "latency": 1.56,
+     "steps": 1,
+     "tokens_in": 122,
+     "tokens_out": 27,
+     "tools": []
+    }
+   ]
+  },
+  {
+   "model": "openai/gpt-4o-mini",
+   "mode": "agent",
+   "metrics": {
+    "count": 30,
+    "adequate": 0.5666666666666667,
+    "refused": 0.3,
+    "wrong": 0.13333333333333333,
+    "steps_avg": 1.9333333333333333,
+    "p50": 2.25,
+    "p95": 5.53,
+    "tokens_avg": 1084.7
+   },
+   "answers": [
+    {
+     "question": "Q-01",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня 1 ноября 2026 года, воскресенье.",
+     "latency": 2.28,
+     "steps": 2,
+     "tokens_in": 862,
+     "tokens_out": 22,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-02",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [3000, 'Реквизит и костюмы']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.25,
+     "steps": 2,
+     "tokens_in": 1038,
+     "tokens_out": 18,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-03",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [45000, 'Аренда помещения']"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 1.14,
+     "steps": 1,
+     "tokens_in": 407,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-04",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [500]"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.1,
+     "steps": 2,
+     "tokens_in": 1034,
+     "tokens_out": 18,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-05",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [68080, 'Продажа билетов']"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 1.0,
+     "steps": 1,
+     "tokens_in": 407,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-06",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['21', 'Гонорары и доли']"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 0.98,
+     "steps": 1,
+     "tokens_in": 410,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-07",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В среду, 28 октября, ты занят после 18:00.",
+     "latency": 2.32,
+     "steps": 2,
+     "tokens_in": 1060,
+     "tokens_out": 28,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-08",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "28 октября с 10 до 14 свободен. Однако с 18:00 у вас запланировано занятие.",
+     "latency": 2.25,
+     "steps": 2,
+     "tokens_in": 1072,
+     "tokens_out": 37,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-09",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['вечер'] и нет отказа"
+     ],
+     "text": "В пятницу, 30 октября, у вас занятое время, но конкретные часы не указаны.",
+     "latency": 2.42,
+     "steps": 2,
+     "tokens_in": 1056,
+     "tokens_out": 35,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-10",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['расход', ['кнопк', 'меню', 'деньги']]"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 1.03,
+     "steps": 1,
+     "tokens_in": 403,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-11",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Иванов', 'Виктор'], ['админ', 'admin', 'организатор']]"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 1.25,
+     "steps": 1,
+     "tokens_in": 402,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-12",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня воскресенье.",
+     "latency": 2.29,
+     "steps": 2,
+     "tokens_in": 864,
+     "tokens_out": 14,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-13",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Студия работает в часовом поясе UTC+4.",
+     "latency": 2.0,
+     "steps": 2,
+     "tokens_in": 874,
+     "tokens_out": 24,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-14",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня у вас по расписанию:\n\n1. Репа ЖН Сэм и Наташа с 15:00 до 18:00.\n2. Репа ЖН Маша, Витя, Люда, Дарья, Марк? с 18:00 до 23:55.",
+     "latency": 5.53,
+     "steps": 3,
+     "tokens_in": 2139,
+     "tokens_out": 100,
+     "tools": [
+      "now",
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-15",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "На этой неделе запланированы следующие события:\n\n1. 01 ноября (воскресенье):\n   - Репа ЖН Сэм и Наташа с 15:00 до 18:00\n   - Репа ЖН Маша, Витя, Люда, Дарья, Марк? с 18:00 до 23:55\n\n2. 02 ноября (понедельник):\n   - Аренда Валерия с 16:00 до 17:30\n   - Аренда Валерия с 18:00 до 19:30\n\n3. 03 ноября (вторник):\n   - Аренда Валерия с 09:00 до 10:30\n   - Аренда Валерия с 18:00 до 19:30\n\n4. 04 ноября (среда):\n   - Аренда Валерия с 18:00 до 19:30\n\n5. 06 ноября (пятница):\n   - Аренда Валерия с 09:00 до 10:30\n   - Аренда Валерия с 16:00 до 17:30",
+     "latency": 6.17,
+     "steps": 3,
+     "tokens_in": 2142,
+     "tokens_out": 278,
+     "tools": [
+      "now",
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-16",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-02', '16:00']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 3.86,
+     "steps": 2,
+     "tokens_in": 1623,
+     "tokens_out": 36,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-17",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-04', '18:00']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 3.62,
+     "steps": 2,
+     "tokens_in": 1621,
+     "tokens_out": 36,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-18",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "На прошлой неделе у вас были заняты следующие дни:\n\n- 26 октября (12:00 - 15:00)\n- 27 октября\n- 28 октября (с 18:00)\n- 29 октября\n- 30 октября",
+     "latency": 2.62,
+     "steps": 2,
+     "tokens_in": 1078,
+     "tokens_out": 64,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-19",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [210998] и нет отказа"
+     ],
+     "text": "В октябре доходы составили 696999 рублей.",
+     "latency": 2.91,
+     "steps": 2,
+     "tokens_in": 878,
+     "tokens_out": 30,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-20",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [266104] и нет отказа"
+     ],
+     "text": "Расходы в сентябре составили 864508 рублей.",
+     "latency": 2.09,
+     "steps": 2,
+     "tokens_in": 876,
+     "tokens_out": 31,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-21",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Общий доход за всё время составляет 696999 рублей.",
+     "latency": 2.11,
+     "steps": 2,
+     "tokens_in": 1036,
+     "tokens_out": 23,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-22",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В октябре вы заплатили 10 000 рублей.",
+     "latency": 2.44,
+     "steps": 2,
+     "tokens_in": 1085,
+     "tokens_out": 25,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-23",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Взносы за ноябрь не начислены.",
+     "latency": 2.2,
+     "steps": 2,
+     "tokens_in": 1081,
+     "tokens_out": 23,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-24",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "У вас заведены следующие спектакли:\n\n1. Бунин\n2. Жизнь насекомых\n3. И всё же...\n4. Пурга\n5. Чёрная пурга\n\nВ файлах нет дополнительных документов.",
+     "latency": 2.41,
+     "steps": 2,
+     "tokens_in": 1296,
+     "tokens_out": 68,
+     "tools": [
+      "read_files_meta"
+     ]
+    },
+    {
+     "question": "Q-25",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В папке Спектакли/Пурга/музыка нет файлов.",
+     "latency": 2.18,
+     "steps": 2,
+     "tokens_in": 902,
+     "tokens_out": 45,
+     "tools": [
+      "read_files_meta"
+     ]
+    },
+    {
+     "question": "Q-26",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['нет репетиц', 'репетиций нет', 'не запланирован', 'нет событ']] и нет отказа"
+     ],
+     "text": "В субботу, 1 ноября 2026 года, запланированы следующие репетиции:\n\n1. Репа ЖН Сэм и Наташа с 15:00 до 18:00.\n2. Репа ЖН Маша, Витя, Люда, Дарья, Марк? с 18:00 до 23:55.",
+     "latency": 5.3,
+     "steps": 3,
+     "tokens_in": 2148,
+     "tokens_out": 114,
+     "tools": [
+      "now",
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-27",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 2.2,
+     "steps": 2,
+     "tokens_in": 872,
+     "tokens_out": 25,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-28",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 2.52,
+     "steps": 2,
+     "tokens_in": 880,
+     "tokens_out": 29,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-29",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 2.08,
+     "steps": 2,
+     "tokens_in": 887,
+     "tokens_out": 30,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-30",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "этого я не вижу.",
+     "latency": 2.32,
+     "steps": 2,
+     "tokens_in": 884,
+     "tokens_out": 31,
+     "tools": [
+      "web_search"
+     ]
+    }
+   ]
+  },
+  {
+   "model": "openai/gpt-4o",
+   "mode": "single",
+   "metrics": {
+    "count": 30,
+    "adequate": 0.13333333333333333,
+    "refused": 0.7666666666666667,
+    "wrong": 0.1,
+    "steps_avg": 1.0,
+    "p50": 1.35,
+    "p95": 2.25,
+    "tokens_avg": 139.46666666666667
+   },
+   "answers": [
+    {
+     "question": "Q-01",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-01']"
+     ],
+     "text": "Я не могу посмотреть текущую дату.",
+     "latency": 2.53,
+     "steps": 1,
+     "tokens_in": 117,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-02",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [3000, 'Реквизит и костюмы']"
+     ],
+     "text": "Я не могу посмотреть данные о расходах. Обратитесь к ответственному за финансы или бухгалтерию театра.",
+     "latency": 1.65,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 24,
+     "tools": []
+    },
+    {
+     "question": "Q-03",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [45000, 'Аренда помещения']"
+     ],
+     "text": "Я не могу проверить информацию об оплате аренды.",
+     "latency": 1.14,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-04",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [500]"
+     ],
+     "text": "Я не могу посмотреть детали закупок. Обратись к ответственному за закупки или в бухгалтерию.",
+     "latency": 1.35,
+     "steps": 1,
+     "tokens_in": 119,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-05",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [68080, 'Продажа билетов']"
+     ],
+     "text": "Я не могу посмотреть данные о продажах билетов.",
+     "latency": 0.92,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-06",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['21', 'Гонорары и доли']"
+     ],
+     "text": "Я не могу посмотреть информацию о распределении сборов.",
+     "latency": 1.26,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-07",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['сред', '18']"
+     ],
+     "text": "Не могу посмотреть расписание. Лучше уточнить у руководителя студии или в группе участников.",
+     "latency": 1.26,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 19,
+     "tools": []
+    },
+    {
+     "question": "Q-08",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-10-28', '10:00', '14:00']"
+     ],
+     "text": "Я не могу посмотреть расписание. Пожалуйста, уточните у администратора или в общем чате.",
+     "latency": 1.62,
+     "steps": 1,
+     "tokens_in": 126,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-09",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['пятниц', 'вечер'] и нет отказа"
+     ],
+     "text": "Хорошо, учту. Если нужно перенести встречу или занятие, дай знать.",
+     "latency": 1.22,
+     "steps": 1,
+     "tokens_in": 118,
+     "tokens_out": 20,
+     "tools": []
+    },
+    {
+     "question": "Q-10",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['кнопк', 'меню', 'деньги']]"
+     ],
+     "text": "Я не могу записать расход. Обратись, пожалуйста, к ответственному за финансы в театре-студии.",
+     "latency": 1.24,
+     "steps": 1,
+     "tokens_in": 117,
+     "tokens_out": 27,
+     "tools": []
+    },
+    {
+     "question": "Q-11",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['Иванов', 'Виктор'], ['админ', 'admin', 'организатор']] и нет отказа"
+     ],
+     "text": "Ты участник нашего театра-студии «СВОИ». Если нужна помощь, дай знать!",
+     "latency": 1.28,
+     "steps": 1,
+     "tokens_in": 116,
+     "tokens_out": 22,
+     "tools": []
+    },
+    {
+     "question": "Q-12",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['воскресен']"
+     ],
+     "text": "Извини, я не могу посмотреть текущую дату.",
+     "latency": 1.66,
+     "steps": 1,
+     "tokens_in": 118,
+     "tokens_out": 12,
+     "tools": []
+    },
+    {
+     "question": "Q-13",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['UTC+4', 'UTC +4', 'GMT+4', 'Самар']] и нет отказа"
+     ],
+     "text": "Студия работает в часовом поясе Москвы, который соответствует московскому времени (MSK).",
+     "latency": 1.63,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 21,
+     "tools": []
+    },
+    {
+     "question": "Q-14",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Репа ЖН', '15:00']"
+     ],
+     "text": "Я не могу посмотреть ваше расписание.",
+     "latency": 1.2,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 8,
+     "tools": []
+    },
+    {
+     "question": "Q-15",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['Репа ЖН', ['Валери', 'Аренда']]"
+     ],
+     "text": "Я не могу посмотреть расписание событий на этой неделе. Рекомендую уточнить информацию у организаторов или на официальных ресурсах театра-студии «СВОИ».",
+     "latency": 1.71,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 39,
+     "tools": []
+    },
+    {
+     "question": "Q-16",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-02', '16:00']"
+     ],
+     "text": "Я не могу посмотреть расписание аренды зала.",
+     "latency": 1.26,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-17",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-04', '18:00']"
+     ],
+     "text": "Я не могу посмотреть календарь.",
+     "latency": 1.01,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 7,
+     "tools": []
+    },
+    {
+     "question": "Q-18",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-10-26', 'занят']"
+     ],
+     "text": "Я не могу посмотреть ваш календарь или расписание.",
+     "latency": 1.27,
+     "steps": 1,
+     "tokens_in": 129,
+     "tokens_out": 11,
+     "tools": []
+    },
+    {
+     "question": "Q-19",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [210998, 'октябр']"
+     ],
+     "text": "Я не могу посмотреть данные о доходах.",
+     "latency": 1.81,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-20",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [266104, 'сентябр']"
+     ],
+     "text": "Я не могу посмотреть данные о расходах.",
+     "latency": 1.09,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-21",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [696999]"
+     ],
+     "text": "Я не могу посмотреть данные о доходах.",
+     "latency": 1.13,
+     "steps": 1,
+     "tokens_in": 120,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-22",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [10000, 'октябр']"
+     ],
+     "text": "Я не могу посмотреть информацию о взносах.",
+     "latency": 1.67,
+     "steps": 1,
+     "tokens_in": 125,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-23",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['не начисл', 'не выставл', 'нет начисл', 'начислений нет']]"
+     ],
+     "text": "Я не могу посмотреть информацию о взносах.",
+     "latency": 1.56,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 10,
+     "tools": []
+    },
+    {
+     "question": "Q-24",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Пурга', 'Бунин', 'насекомых']]"
+     ],
+     "text": "Я не могу посмотреть, какие спектакли заведены у вас в файлах.",
+     "latency": 1.71,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 16,
+     "tools": []
+    },
+    {
+     "question": "Q-25",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['файлов нет', 'нет файлов', 'пусто', 'не найдено', 'ни одного файла', 'ничего не лежит', 'ничего нет', 'папка пуст']]"
+     ],
+     "text": "Я не могу посмотреть содержимое папки.",
+     "latency": 1.62,
+     "steps": 1,
+     "tokens_in": 131,
+     "tokens_out": 9,
+     "tools": []
+    },
+    {
+     "question": "Q-26",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['нет репетиц', 'репетиций нет', 'не запланирован', 'нет событ']]"
+     ],
+     "text": "Я не могу посмотреть расписание репетиций. Обратись, пожалуйста, к администратору или проверь в общем чате театра.",
+     "latency": 1.63,
+     "steps": 1,
+     "tokens_in": 123,
+     "tokens_out": 31,
+     "tools": []
+    },
+    {
+     "question": "Q-27",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу посмотреть текущий курс доллара. Рекомендую проверить его на финансовых сайтах или в приложениях банков.",
+     "latency": 2.25,
+     "steps": 1,
+     "tokens_in": 119,
+     "tokens_out": 27,
+     "tools": []
+    },
+    {
+     "question": "Q-28",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу посмотреть прогноз погоды. Рекомендую проверить его на специализированных сайтах или в приложениях.",
+     "latency": 1.35,
+     "steps": 1,
+     "tokens_in": 121,
+     "tokens_out": 24,
+     "tools": []
+    },
+    {
+     "question": "Q-29",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу посмотреть текущие цены на аренду зала в Самаре. Рекомендую обратиться напрямую к арендаторам или посмотреть на сайтах с объявлениями.",
+     "latency": 1.3,
+     "steps": 1,
+     "tokens_in": 124,
+     "tokens_out": 35,
+     "tools": []
+    },
+    {
+     "question": "Q-30",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Я не могу предоставить информацию о последних обновлениях Google Calendar API, так как у меня нет доступа к актуальным данным. Рекомендую проверить официальную документацию Google или их блог для получения свежей информации.",
+     "latency": 1.47,
+     "steps": 1,
+     "tokens_in": 122,
+     "tokens_out": 44,
+     "tools": []
+    }
+   ]
+  },
+  {
+   "model": "openai/gpt-4o",
+   "mode": "agent",
+   "metrics": {
+    "count": 30,
+    "adequate": 0.5333333333333333,
+    "refused": 0.23333333333333334,
+    "wrong": 0.23333333333333334,
+    "steps_avg": 2.033333333333333,
+    "p50": 2.46,
+    "p95": 5.3,
+    "tokens_avg": 1090.0
+   },
+   "answers": [
+    {
+     "question": "Q-01",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня 1 ноября 2026 года, воскресенье.",
+     "latency": 2.14,
+     "steps": 2,
+     "tokens_in": 862,
+     "tokens_out": 22,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-02",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [3000, 'Реквизит и костюмы'] и нет отказа"
+     ],
+     "text": "Укажи, пожалуйста, месяц, к которому относится этот расход.",
+     "latency": 1.11,
+     "steps": 1,
+     "tokens_in": 407,
+     "tokens_out": 15,
+     "tools": []
+    },
+    {
+     "question": "Q-03",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [45000, 'Аренда помещения']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.52,
+     "steps": 2,
+     "tokens_in": 878,
+     "tokens_out": 25,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-04",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [500]"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 3.51,
+     "steps": 3,
+     "tokens_in": 1391,
+     "tokens_out": 34,
+     "tools": [
+      "now",
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-05",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [68080, 'Продажа билетов']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.92,
+     "steps": 2,
+     "tokens_in": 878,
+     "tokens_out": 25,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-06",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['21', 'Гонорары и доли']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.92,
+     "steps": 2,
+     "tokens_in": 884,
+     "tokens_out": 25,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-07",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В среду после 18:00 ты занят.",
+     "latency": 2.97,
+     "steps": 2,
+     "tokens_in": 1060,
+     "tokens_out": 23,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-08",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "28 октября ты занят с 18:00. С 10 до 14 свободен.",
+     "latency": 2.17,
+     "steps": 2,
+     "tokens_in": 1072,
+     "tokens_out": 31,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-09",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['вечер'] и нет отказа"
+     ],
+     "text": "В пятницу, 30 октября, ты занят весь день.",
+     "latency": 2.84,
+     "steps": 2,
+     "tokens_in": 1056,
+     "tokens_out": 25,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-10",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [['кнопк', 'меню', 'деньги']] и нет отказа"
+     ],
+     "text": "Записать расход самостоятельно нельзя. Если нужно внести изменения в бюджет, обратитесь к администратору студии.",
+     "latency": 1.13,
+     "steps": 1,
+     "tokens_in": 403,
+     "tokens_out": 26,
+     "tools": []
+    },
+    {
+     "question": "Q-11",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Иванов', 'Виктор'], ['админ', 'admin', 'организатор']]"
+     ],
+     "text": "Я не могу определить, кто вы, без дополнительной информации.",
+     "latency": 1.17,
+     "steps": 1,
+     "tokens_in": 402,
+     "tokens_out": 14,
+     "tools": []
+    },
+    {
+     "question": "Q-12",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Сегодня воскресенье.",
+     "latency": 2.94,
+     "steps": 2,
+     "tokens_in": 864,
+     "tokens_out": 14,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-13",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Студия работает в часовом поясе UTC+4.",
+     "latency": 2.22,
+     "steps": 2,
+     "tokens_in": 874,
+     "tokens_out": 24,
+     "tools": [
+      "now"
+     ]
+    },
+    {
+     "question": "Q-14",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Репа ЖН', '15:00'] и нет отказа"
+     ],
+     "text": "Сегодня, 1 ноября, у тебя свободный день.",
+     "latency": 2.46,
+     "steps": 2,
+     "tokens_in": 1131,
+     "tokens_out": 52,
+     "tools": [
+      "now",
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-15",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов ['Репа ЖН'] и нет отказа"
+     ],
+     "text": "На этой неделе запланированы следующие события:\n\n1 ноября:\n- Репетиция ЖН Сэм и Наташа с 15:00 до 18:00\n- Репетиция ЖН Маша, Витя, Люда, Дарья, Марк? с 18:00 до 23:55\n\n2 ноября:\n- Аренда Валерий с 16:00 до 17:30\n- Аренда Валерий с 18:00 до 19:30\n\n3 ноября:\n- Аренда Валерий с 09:00 до 10:30\n- Аренда Валерий с 18:00 до 19:30\n\n4 ноября:\n- Аренда Валерий с 18:00 до 19:30\n\n6 ноября:\n- Аренда Валерий с 09:00 до 10:30\n- Аренда Валерий с 16:00 до 17:30\n\n7 ноября:\n- Аренда Валерий с 12:00 до 13:30",
+     "latency": 6.03,
+     "steps": 3,
+     "tokens_in": 2142,
+     "tokens_out": 264,
+     "tools": [
+      "now",
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-16",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Ближайшая аренда зала запланирована на 2 ноября 2026 года с 16:00 до 17:30.",
+     "latency": 4.63,
+     "steps": 3,
+     "tokens_in": 2133,
+     "tokens_out": 59,
+     "tools": [
+      "now",
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-17",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов ['2026-11-04', '18:00']"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 4.36,
+     "steps": 2,
+     "tokens_in": 1621,
+     "tokens_out": 36,
+     "tools": [
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-18",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "На прошлой неделе у тебя были заняты следующие дни:\n- 26 октября с 12:00 до 15:00\n- 27 октября\n- 28 октября с 18:00\n- 29 октября\n- 30 октября",
+     "latency": 2.46,
+     "steps": 2,
+     "tokens_in": 1078,
+     "tokens_out": 64,
+     "tools": [
+      "read_availability"
+     ]
+    },
+    {
+     "question": "Q-19",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [210998] и нет отказа"
+     ],
+     "text": "Доходы в октябре составили 696999 рублей.",
+     "latency": 2.43,
+     "steps": 2,
+     "tokens_in": 878,
+     "tokens_out": 31,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-20",
+     "verdict": "wrong",
+     "notes": [
+      "нет фактов [266104] и нет отказа"
+     ],
+     "text": "В сентябре расходы составили 864508 рублей.",
+     "latency": 2.2,
+     "steps": 2,
+     "tokens_in": 876,
+     "tokens_out": 29,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-21",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Доход за всё время составил 696999 рублей.",
+     "latency": 2.4,
+     "steps": 2,
+     "tokens_in": 1036,
+     "tokens_out": 23,
+     "tools": [
+      "read_budget"
+     ]
+    },
+    {
+     "question": "Q-22",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В октябре вы заплатили 10,000.00.",
+     "latency": 2.12,
+     "steps": 2,
+     "tokens_in": 1085,
+     "tokens_out": 26,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-23",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "Взносы за ноябрь еще не начислены.",
+     "latency": 2.1,
+     "steps": 2,
+     "tokens_in": 1081,
+     "tokens_out": 24,
+     "tools": [
+      "read_dues"
+     ]
+    },
+    {
+     "question": "Q-24",
+     "verdict": "refused",
+     "notes": [
+      "нет фактов [['Пурга', 'Бунин', 'насекомых']]"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.51,
+     "steps": 2,
+     "tokens_in": 867,
+     "tokens_out": 26,
+     "tools": [
+      "read_files_meta"
+     ]
+    },
+    {
+     "question": "Q-25",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В папке Спектакли/Пурга/музыка файлов нет.",
+     "latency": 2.79,
+     "steps": 2,
+     "tokens_in": 902,
+     "tokens_out": 45,
+     "tools": [
+      "read_files_meta"
+     ]
+    },
+    {
+     "question": "Q-26",
+     "verdict": "adequate",
+     "notes": [],
+     "text": "В субботу, 7 ноября 2026 года, репетиций не запланировано.",
+     "latency": 5.3,
+     "steps": 3,
+     "tokens_in": 2148,
+     "tokens_out": 59,
+     "tools": [
+      "now",
+      "read_schedule"
+     ]
+    },
+    {
+     "question": "Q-27",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 3.88,
+     "steps": 2,
+     "tokens_in": 872,
+     "tokens_out": 25,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-28",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.28,
+     "steps": 2,
+     "tokens_in": 884,
+     "tokens_out": 33,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-29",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.1,
+     "steps": 2,
+     "tokens_in": 889,
+     "tokens_out": 32,
+     "tools": [
+      "web_search"
+     ]
+    },
+    {
+     "question": "Q-30",
+     "verdict": "adequate",
+     "notes": [
+      "отказ — эталон для класса «нужен веб»"
+     ],
+     "text": "Этого я не вижу.",
+     "latency": 2.39,
+     "steps": 2,
+     "tokens_in": 884,
+     "tokens_out": 31,
+     "tools": [
+      "web_search"
+     ]
+    }
+   ]
+  }
+ ]
+}

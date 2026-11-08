@@ -1,0 +1,23 @@
+# Исключения из правила «конфиг только через settings» (R-4, docs/reports/79).
+#
+# Формат строки: <путь от корня репозитория> <число совпадений> # <причина>
+# Путь — файл в services/**, кроме settings.py. Число — сколько чтений окружения
+# (os.getenv / os.environ / os.environ.get) осталось в файле. Причина — почему
+# исключение живёт: без неё строка не принимается.
+#
+# Список должен только сокращаться: перевели модуль на settings — уменьшите число
+# или уберите строку. Мёртвая запись (файла нет или совпадений меньше) — ошибка.
+# Обновить числа: env -u PYTHONPATH .venv/bin/python scripts/check_settings.py --update-allowlist
+#
+# Пустые чтения здесь не значатся: core.py упоминает os.environ только в докстринге.
+
+services/tg-gateway/app/single_instance.py 1  # путь замка SVOI_GATEWAY_LOCK читается при вызове lock_path(), нужен тестам и второму стенду; перевод — отдельной картой
+services/tool-api/app/agently/config.py 1  # помощник _env для чтения настроек агента по имени переменной из шаблона; перевод — отдельной картой
+services/tool-api/app/agently/models.py 1  # путь к файлу моделей AGENT_MODELS_PATH читается при вызове path(), нужен тестам; перевод — отдельной картой
+services/tool-api/app/api/admin.py 1  # os.environ передаётся дочернему процессу целиком (env={**os.environ}), значений не читает; уйдёт картой по admin.py
+services/tool-api/app/cold.py 1  # каталог холодного хранения STORAGE_COLD_DIR читается при вызове; перевод — отдельной картой
+services/tool-api/app/files_store.py 10  # S3-хранилище: набор STORAGE_* читается в адаптере при вызове, у клиента свой набор ключей; перевод — отдельной картой
+services/tool-api/app/llm.py 1  # провайдер по имени LLM_PROVIDER_<NAME>: имя приходит аргументом функции; перевод — отдельной картой
+services/tool-api/app/ui_texts.py 1  # путь к файлу текстов UI_TEXTS_PATH читается при вызове path(), нужен тестам; перевод — отдельной картой
+services/tool-api/app/version.py 1  # GIT_SHA передаётся аргументом env (по умолчанию os.environ) и подменяется тестами; перевод — отдельной картой
+services/tool-api/migrations/env.py 1  # накат схемы идёт до старта сервиса и вне приложения: Settings ещё не сконфигурирован, Alembic нужен один адрес базы (docs/reports/132)

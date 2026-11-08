@@ -1,0 +1,15 @@
+[Unit]
+Description=SVOI server-side feedback triage: answer questions, deliver bugs to dev
+Documentation=file:///opt/svoi/docs/infrastructure/75-hosting-and-migration.md
+After=network.target svoi-tool-api.service postgresql.service
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/.venv/bin/python scripts/feedback_triage.py --apply
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

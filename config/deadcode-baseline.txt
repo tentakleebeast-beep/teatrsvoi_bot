@@ -1,0 +1,57 @@
+# Известный мёртвый код: карта t_b9c9674c (конфиг vulture/deadcode), разбор — отдельной картой.
+# Ключ: путь::имя. Список должен только сокращаться; пополнять — осознанно и с причиной.
+# Обновить: env -u PYTHONPATH .venv/bin/python scripts/check_deadcode.py --update-baseline
+#
+# Группа 1. Используется только тестами — docs/reports/84 §2.3: это не мусор, но и не
+# рабочий код; решение (использовать или удалить вместе с тестами) — продуктовое.
+# Разбор ведёт карта t_f8a2d14f: baseline сокращён с 30 до 25 ключей. Сняты две строки,
+# которые тогда не воспроизводились (single_instance.release вернулась — см. ниже;
+# registry.all_tools), и три
+# функции удалены вместе с проверявшими их тестами: menu_labels, is_howto, format_duration.
+# check_coverage — проверка покрытия реестра функций: её единственный потребитель —
+# tests/unit/test_agent_features.py (карта t_09672cea).
+services/tool-api/app/agently/features.py::check_coverage
+# scenario_keys — ключи раздела `scenarios` реестра функций: их сверяет сторож кнопок
+# tests/unit/test_agent_features.py с исходниками menu.py/keyboards.py (карта t_09672cea).
+services/tool-api/app/agently/features.py::scenario_keys
+# CHAT_BUTTONS — закрытый список подписей кнопок чата: его читает покрытие реестра
+# функций (tests/unit/test_agent_features.py), сам бот строит кнопки по BTN_OPEN_MENU
+# и BTN_COPY_CODE (карта t_09672cea).
+services/tg-gateway/app/keyboards.py::CHAT_BUTTONS
+# single_instance.release — отпускает замок одного экземпляра; единственный потребитель —
+# tests/unit/test_gateway_single_instance.py (в бою замок снимает ядро при выходе).
+# Строку снимали и 02.11.2026, и 04.11.2026 (карта t_7f1a347d) как «не воспроизводится»,
+# но находка настоящая: vulture считает имя использованным при любом его появлении, и
+# сейчас её маскирует `args.release` в scripts/kanban_backoff.py (обращение к атрибуту).
+# Уйдут `--release` и его разбор — строка снова понадобится, но уже без записи, почему.
+services/tg-gateway/app/single_instance.py::release
+# with_files и with_caps сняты 04.11.2026 (карта t_6d1789bb): строки «Личного» на «Ещё»
+# отдаются данными (`/webapp/home/data` → `more.personal`) и рисуются скриптом страницы,
+# а подпись вкладки ставит `webapp-shell.js` по `/webapp/nav`. Серверная подстановка по
+# правам в HTML невозможна после 05b7d2b, и функции удалены вместе с ней.
+services/tool-api/app/person_key.py::is_valid
+services/tool-api/app/schedule_sheet.py::column_index
+services/tool-api/app/slots.py::longest_window
+services/tool-api/app/webapp_page.py::PAGE
+services/tool-api/app/webapp_page.py::DAYS_PAGE
+services/tool-api/app/webapp_page.py::MY_PAGE
+services/tool-api/app/webapp_page.py::GRID_PAGE
+services/tool-api/app/webapp_page.py::SEARCH_PAGE
+services/tool-api/app/webapp_page.py::ADMIN_PAGE
+#
+# Группа 2. Ни одного обращения вне объявления (проверено grep по services, scripts,
+# deploy, tests: только комментарии и docstring). Чистка — отдельной картой.
+services/tool-api/app/api/admin.py::warn_days
+services/tool-api/app/cold.py::is_cold
+services/tool-api/app/core.py::DATABASE_URL
+services/tool-api/app/core.py::CALENDAR_ID_VENUE
+services/tool-api/app/core.py::HOME_SECTIONS
+services/tool-api/app/core.py::configure
+services/tool-api/app/core.py::page_texts
+services/tool-api/app/files_store.py::file_for
+services/tool-api/app/files_store.py::remove_from_folder
+services/tool-api/app/pages/admin_core.py::STYLE
+services/tool-api/app/subject.py::role_hint
+
+# Сброс флага отмены между тестами: зовётся только из tests/, в рантайме не нужен.
+services/tool-api/app/agently/tasks.py::clear_all

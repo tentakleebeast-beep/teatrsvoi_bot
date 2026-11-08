@@ -1,0 +1,76 @@
+#!/usr/bin/env bash
+# Хук перед push: защита основной ветки от воркера.
+#
+# Правило docs/development/26 §7a п.9: воркер не пушит в main — её собирает
+# worker-review. Контекст воркера определяем по переменным Hermes: он их
+# выставляет при запуске карты, у человека их нет.
+#
+# Поведение:
+#   воркер (HERMES_KANBAN_TASK или HERMES_PROFILE=worker-*):
+#       push в main/master — запрещён (код 1);
+#   ревьюер (HERMES_PROFILE=worker-review):
+#       push в main/master — разрешён без предупреждения: он и собирает main
+#       (§7 п.8); профиль перебивает HERMES_KANBAN_TASK;
+#   человек (переменных нет):
+#       push в main/master — разрешён с предупреждением;
+#   ветка вне схемы wt/<task-id> или card-* — предупреждение, не блокировка.
+#
+# Установка — вместе с pre-commit, один раз на клон:
+#     git config core.hooksPath .githooks
+# Обойти проверку: git push --no-verify
+#
+# Force-push и удаление веток карта не рассматривает.
+
+set -u
+
+is_reviewer=0
+case "${HERMES_PROFILE:-}" in
+    worker-review) is_reviewer=1 ;;
+esac
+
+is_worker=0
+if [ "$is_reviewer" -eq 0 ]; then
+    if [ -n "${HERMES_KANBAN_TASK:-}" ]; then
+        is_worker=1
+    fi
+    case "${HERMES_PROFILE:-}" in
+        worker-*) is_worker=1 ;;
+    esac
+fi
+
+status=0
+
+# stdin: <local ref> <local sha> <remote ref> <remote sha>, по строке на ветку.
+while IFS=' ' read -r local_ref local_sha remote_ref remote_sha; do
+    [ -z "${remote_ref:-}" ] && continue
+    case "$remote_ref" in
+        refs/heads/*) branch=${remote_ref#refs/heads/} ;;
+        *) continue ;;                       # теги и прочие ссылки не наша забота
+    esac
+
+    case "$branch" in
+        main|master)
+            if [ "$is_worker" -eq 1 ]; then
+                if [ -n "${HERMES_KANBAN_TASK:-}" ]; then
+                    suggested="wt/${HERMES_KANBAN_TASK}"
+                else
+                    suggested="wt/<task-id>"
+                fi
+                printf 'pre-push: не пройдено — push в %s запрещён\n' "$branch"
+                printf 'Правило (docs/development/26 §7a п.9): воркер не пушит в основную ветку, её собирает worker-review.\n'
+                printf 'Пушьте свою ветку: git push origin %s\n' "$suggested"
+                printf 'обойти: git push --no-verify\n'
+                status=1
+            elif [ "$is_reviewer" -eq 0 ]; then
+                # Ревьюеру предупреждение не печатаем: main — его работа (§7 п.8).
+                printf 'pre-push: предупреждение — %s это основная ветка\n' "$branch" >&2
+            fi
+            ;;
+        wt/*|card-*) ;;
+        *)
+            printf 'pre-push: предупреждение — ветка %s вне схемы wt/<task-id> или card-*\n' "$branch" >&2
+            ;;
+    esac
+done
+
+exit "$status"

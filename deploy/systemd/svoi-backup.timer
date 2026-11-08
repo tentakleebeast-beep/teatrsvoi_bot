@@ -1,0 +1,14 @@
+[Unit]
+Description=SVOI database backup, every day at 03:30 (Europe/Samara, V-027)
+
+[Timer]
+# 03:30 по Самаре: сервер живёт в Europe/Samara (deploy/server-deploy.sh provision).
+# RandomizedDelaySec разносит запуск с другими ночными таймерами, но не сдвигает
+# бэкап за пределы ночи.
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=300
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

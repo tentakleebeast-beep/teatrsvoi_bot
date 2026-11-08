@@ -1,0 +1,10 @@
+[Unit]
+Description=SVOI planning of reminders, every day at 09:00
+
+[Timer]
+OnCalendar=*-*-* 09:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

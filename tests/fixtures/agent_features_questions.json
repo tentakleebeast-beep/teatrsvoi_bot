@@ -1,0 +1,63 @@
+{
+  "version": 1,
+  "about": "10 вопросов живого замера реестра функций (карта t_09672cea, docs/development/108 §9). Запуск: scripts/check_agent_features.py --chat-id <id>; прогон делается от администратора, потому что вопросы про запись и бюджет проверяют полный набор действий.",
+  "questions": [
+    {
+      "id": "F-01",
+      "text": "Что ты умеешь?",
+      "kind": "capabilities"
+    },
+    {
+      "id": "F-02",
+      "text": "Что можно записать?",
+      "kind": "capabilities"
+    },
+    {
+      "id": "F-03",
+      "text": "Что можно посмотреть?",
+      "kind": "capabilities"
+    },
+    {
+      "id": "F-04",
+      "text": "Какие действия тебе доступны?",
+      "kind": "capabilities"
+    },
+    {
+      "id": "F-05",
+      "text": "Что можно записать и посмотреть?",
+      "kind": "capabilities"
+    },
+    {
+      "id": "F-06",
+      "text": "Запиши расход 500 рублей на реквизит",
+      "kind": "proposal",
+      "tools": ["propose_budget_tx"],
+      "propose": true,
+      "contains": ["подтверд"]
+    },
+    {
+      "id": "F-07",
+      "text": "Сколько денег в бюджете за этот месяц?",
+      "kind": "tool",
+      "tools": ["read_budget"]
+    },
+    {
+      "id": "F-08",
+      "text": "Какие у меня взносы?",
+      "kind": "tool",
+      "tools": ["read_dues"]
+    },
+    {
+      "id": "F-09",
+      "text": "Кто свободен завтра?",
+      "kind": "tool_or_honest",
+      "tools": ["read_availability"]
+    },
+    {
+      "id": "F-10",
+      "text": "Перенеси репетицию на час позже",
+      "kind": "honest",
+      "forbidden": ["перенёс", "перенесла", "перенесено", "готово", "сделано"]
+    }
+  ]
+}

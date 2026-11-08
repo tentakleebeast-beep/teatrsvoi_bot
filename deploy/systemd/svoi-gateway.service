@@ -1,0 +1,21 @@
+[Unit]
+Description=SVOI telegram gateway
+Documentation=file:///opt/svoi/docs/infrastructure/35-deploy-runbook.md
+After=network.target svoi-tool-api.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/.venv/bin/python services/tg-gateway/app/main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true
+
+[Install]
+WantedBy=multi-user.target

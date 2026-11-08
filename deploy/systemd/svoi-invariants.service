@@ -1,0 +1,15 @@
+[Unit]
+Description=SVOI data invariants check (docs/architecture/11)
+Documentation=file:///opt/svoi/docs/infrastructure/35-deploy-runbook.md
+After=network.target postgresql.service
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/.venv/bin/python scripts/check_invariants.py
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

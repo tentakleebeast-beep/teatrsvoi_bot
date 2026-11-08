@@ -1,0 +1,84 @@
+[project]
+name = "teatrsvoi-bot"
+version = "0.1.0"
+description = "Telegram-бот театра-студии «СВОИ»: бюджет, занятость, взносы, расписание"
+# Одна версия Python на весь контур (аудит 96, находки N-2/N-3): CI (.github/workflows/tests.yml),
+# образы (services/*/Dockerfile), локальный venv, прод на VPS (docs/infrastructure/35) и
+# ruff target-version — 3.12. Совпадение проверяет tests/unit/test_toolchain_versions.py.
+requires-python = ">=3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+exclude = [".venv", "node_modules", "sources_example", ".git"]
+
+[tool.ruff.lint]
+# F — реальные ошибки (неиспользуемые импорты/переменные), E/W — стиль, I — порядок импортов,
+# B — типичные баги, UP — устаревшие конструкции. Остальное включаем по мере разбора.
+select = ["F", "E", "W", "I", "B", "UP"]
+# B008: Depends() в аргументах по умолчанию — штатный приём FastAPI
+# E501: длина строки — следит редактор, не ломаем существующие тексты
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["E402", "F401"]
+"scripts/*" = ["E402"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["integration: требует Postgres (svoi_test)",
+           "webapp: браузерные тесты Mini App, включаются SVOI_WEBAPP_TESTS=1"]
+
+[tool.mypy]
+# Пилот (R-7, docs/reports/79): строгая проверка типов на чистых модулях.
+# Здесь нет ни сети, ни БД — ошибка типа означает ошибку кода, а не «сервис недоступен»,
+# поэтому именно эти модули можно проверять без поблажек. Список расширяется по мере
+# разбора: `mypy` без аргументов проверяет ровно перечисленное ниже.
+python_version = "3.12"
+strict = true
+files = [
+    "services/tool-api/app/rules.py",
+    "services/tool-api/app/slots.py",
+    "services/tool-api/app/window_policy.py",
+    "services/tool-api/app/assign.py",
+    "services/tool-api/app/subject.py",
+]
+
+[tool.vulture]
+# Мёртвый код (docs/reports/84, приложение). Без этого блока vulture полезен только
+# глазами: на репозитории он выдаёт 289 сообщений, и почти все — обработчики,
+# которые регистрирует декоратор (`@router.message`, `@app.get`), а не вызов по имени.
+# ignore_decorators снимает их до анализа, поэтому шум остаётся только по коду,
+# который действительно нигде не вызывается.
+min_confidence = 60
+paths = ["services", "scripts", "deploy"]
+ignore_decorators = [
+    "@router.*",          # aiogram: message, callback_query, get, post, delete, errors
+    "@app.*",             # FastAPI/aiogram: get, post, exception_handler, on_event, middleware
+    "@field_validator",   # pydantic вызывает валидатор сам
+    "@model_validator",
+    "@property",
+    "@classmethod",
+]
+# Ложные срабатывания движка: атрибуты чужих объектов (aiogram, psycopg, sqlite3, FastAPI)
+# и поля pydantic-моделей — их читает не код репозитория, а библиотека или клиент.
+# `cls` — первый аргумент `@classmethod`-валидаторов (vulture считает его переменной).
+ignore_names = ["autocommit", "parse_mode", "row_factory", "openapi", "roles_note", "cls"]
+
+[tool.deadcode]
+# Ключи этого раздела читает НЕ deadcode, а scripts/check_deadcode.py — и вот почему.
+# deadcode 2.4.1 конфигурационных файлов не понимает вовсе (`--help`: только флаги),
+# а его флаги `--ignore-*-decorated-with` разбираются в argparse и не применяются:
+# `DeadCodeVisitor.ignore_decorators` остаётся пустым списком. Проверено на этом
+# репозитории — 289 сообщений и с флагами, и без них. Поэтому декораторы отсеивает
+# наш скрипт по AST, а параметры берёт отсюда, чтобы конфиг инструментов лежал в
+# одном месте. Известный мёртвый код — в config/deadcode-baseline.txt.
+paths = ["services", "scripts", "deploy"]
+ignore_decorators = [
+    "@router.*",
+    "@app.*",
+    "@field_validator",
+    "@model_validator",
+]
+# Тот же список ложных срабатываний, что у vulture: один класс шума — один список.
+ignore_names = ["autocommit", "parse_mode", "row_factory", "openapi", "roles_note", "cls"]

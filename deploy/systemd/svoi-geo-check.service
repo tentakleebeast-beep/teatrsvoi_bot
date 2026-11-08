@@ -1,0 +1,16 @@
+[Unit]
+Description=SVOI доступность Mini App из РФ (замер с внешних узлов, алерт админу)
+Documentation=file:///opt/svoi/docs/infrastructure/75-hosting-and-migration.md
+After=network-online.target svoi-tool-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/.venv/bin/python scripts/check_availability.py --apply --probes 8 --min-ok 5
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

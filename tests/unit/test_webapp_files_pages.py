@@ -1,0 +1,85 @@
+"""Экраны файлов на дизайн-системе v2 и доступ только администратору (92 §9).
+
+Проверяем то, ради чего экраны переписаны: они собраны тем же каркасом, что и
+остальные, раздел закрыт правом `admin.panel` на сервере, а загрузка по-прежнему
+идёт мимо Telegram (`presign → commit`).
+
+Правила и требования раздела: docs/development/86-files-and-storage.md.
+"""
+
+import pathlib
+import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "services" / "tool-api"))
+
+from app.pages import files, routes  # noqa: E402
+
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]")
+# маршруты файлов живут в своём домене (этап B, карта t_135f65cd)
+MAIN = (ROOT / "services" / "tool-api" / "app" / "api" / "files.py").read_text(encoding="utf-8")
+ROUTES = (ROOT / "services" / "tool-api" / "app" / "pages" / "routes.py").read_text(encoding="utf-8")
+
+
+def test_экраны_собраны_каркасом():
+    for page in (files.FILES_PAGE, files.FOLDER_PAGE):
+        assert page.startswith("<!doctype html>")
+        assert 'class="ui-page"' in page, "экран не на каркасе дизайн-системы"
+        assert "ui-appbar__back" in page, "нет шапки с возвратом"
+        assert page.count("<link rel=\"stylesheet\"") == 1, "ровно один файл стилей — общий"
+
+
+def test_нет_эмодзи_и_таблиц():
+    for page in (files.FILES_PAGE, files.FOLDER_PAGE):
+        assert not EMOJI.search(page)
+        assert "<table" not in page, "таблицы на телефоне не используем"
+
+
+def test_своих_стилей_минимум():
+    """Дизайн-система разрешает одну-две собственные строки (§7), не свой файл стилей."""
+    assert files.FILES_PAGE.count("<style>") == 1
+    assert files.FILES_PAGE.count(".files-hint {") == 1
+    assert files.FILES_PAGE.count(".files-actions {") == 1
+
+
+def test_экран_файлов_загружает_мимо_телеграма():
+    page = files.FILES_PAGE
+    assert "/webapp/files/presign" in page and "/webapp/files/commit" in page
+    assert "/webapp/files/list" in page
+    assert "PUT" in page, "файл кладётся в хранилище напрямую"
+    assert 'accept="' not in page, "тип проверяет сервер, а не input"
+
+
+def test_страницы_публичны_а_данные_закрыты():
+    """Страница — публичный HTML-каркас: Telegram не шлёт Authorization при переходе.
+
+    Закрывать надо данные (/webapp/files/*, /webapp/folder/*), а не разметку —
+    иначе человек открывает кнопку и получает 401 вместо экрана.
+    """
+    assert "def webapp_files_page() -> str:" in ROUTES
+    assert "def webapp_folder_page() -> str:" in ROUTES
+    assert "def webapp_files_page(who: dict" not in ROUTES
+
+
+def test_данные_файлов_тоже_закрыты():
+    """Кнопку спрятать мало: прямой запрос к API должен получать отказ."""
+    assert MAIN.count('_webapp_require(who, "admin.panel")') >= 6
+    for endpoint in ("webapp_files_list", "webapp_files_presign", "webapp_files_commit",
+                     "webapp_folder_files", "webapp_folder_order", "webapp_folder_zip"):
+        start = MAIN.index(f"def {endpoint}(")
+        block = MAIN[start:start + 1200]
+        assert 'admin.panel' in block, f"{endpoint} без проверки прав"
+
+
+def test_папка_играет_подряд_и_качает_архив():
+    page = files.FOLDER_PAGE
+    assert "/webapp/folder/" in page and "/zip" in page
+    assert "addEventListener(\"ended\"" in page, "треки должны идти подряд"
+    assert "<audio" in page and "hidden" in page, "плеер не выставляем на показ"
+
+
+def test_маршруты_файлов_на_месте():
+    router = routes.build_router(actor=lambda: {}, caps_for=lambda who: [])
+    paths = {route.path for route in router.routes}
+    assert {"/webapp/files", "/webapp/folder"} <= paths

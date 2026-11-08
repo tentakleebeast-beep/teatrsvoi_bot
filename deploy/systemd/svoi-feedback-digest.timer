@@ -1,0 +1,10 @@
+[Unit]
+Description=SVOI daily digest of feedback, every day at 11:00
+
+[Timer]
+OnCalendar=*-*-* 11:00:00
+Persistent=true
+RandomizedDelaySec=120
+
+[Install]
+WantedBy=timers.target

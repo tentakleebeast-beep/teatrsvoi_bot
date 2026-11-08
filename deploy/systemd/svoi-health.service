@@ -1,0 +1,17 @@
+[Unit]
+Description=SVOI health-agent (сборка против HEAD, алерт админу)
+Documentation=file:///opt/svoi/docs/infrastructure/35-deploy-runbook.md
+After=network.target svoi-tool-api.service
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+Environment=SVOI_ROOT=/opt/svoi
+ExecStart=/opt/svoi/.venv/bin/python scripts/health_agent.py --apply
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

@@ -1,0 +1,133 @@
+# Локальный контур разработки.
+# n8n в контуре больше нет (V-026, 01.11.2026): роутер — /tools/route внутри tool-api.
+services:
+  postgres:
+    image: postgres:16
+    container_name: svoi-postgres
+    environment:
+      POSTGRES_DB: svoi
+      POSTGRES_USER: svoi
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-svoi_dev_password}
+    ports:
+      - "5433:5432"          # 5433, чтобы не конфликтовать с локальным postgres, если появится
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      # initdb.d убран: схему накатывает сервис migrate (Alembic), а не postgres
+      # при создании пустого тома (docs/reports/132). На непустом томе initdb.d
+      # не работал вовсе — отсюда расхождения схемы на dev и на проде.
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U svoi -d svoi"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Объектное хранилище файлов бота (Ш-1, docs/development/80).
+  # Секрет RPC лежит в .env — его генерирует scripts/storage_up.py, в git его нет.
+  garage:
+    image: dxflrs/garage:v2.1.0
+    # Локальная среда: имя с суффиксом -dev, чтобы не путаться с прод-хранилищем.
+    container_name: svoi-garage-dev
+    command: ["/garage", "server"]
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:-}
+    ports:
+      - "127.0.0.1:3900:3900"     # S3 API — только локально, наружу не смотрит
+      - "127.0.0.1:3903:3903"     # admin API и метрики
+    volumes:
+      - gardata:/var/lib/garage
+      - ./config/garage.toml:/etc/garage.toml:ro
+    healthcheck:
+      # Без -c /garage ищет конфиг по умолчанию, не находит его и всегда показывает
+      # unhealthy при живом сервисе (аудит 31.10). Проверяем рабочую конфигурацию.
+      test: ["CMD", "/garage", "-c", "/etc/garage.toml", "status"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+    restart: unless-stopped
+
+  # Накат схемы: one-shot, тот же образ, что у tool-api. Учёт применённого —
+  # таблица alembic_version. Повторный запуск ничего не применяет (ревизии
+  # сверяются с версией), параллельный ждёт advisory lock в env.py.
+  migrate:
+    build:
+      context: .
+      dockerfile: services/tool-api/Dockerfile
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://svoi:${POSTGRES_PASSWORD:-svoi_dev_password}@postgres:5432/svoi
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: ["alembic", "-c", "alembic.ini", "upgrade", "head"]
+    restart: "no"
+
+  tool-api:
+    build:
+      context: .
+      dockerfile: services/tool-api/Dockerfile
+    container_name: svoi-tool-api
+    env_file: .env
+    environment:
+      DATABASE_URL: postgresql://svoi:${POSTGRES_PASSWORD:-svoi_dev_password}@postgres:5432/svoi
+      # Внутри compose поиск живёт контейнером рядом: адрес фиксирован здесь, а не
+      # в .env, иначе `127.0.0.1` из локального файла указывал бы контейнеру на себя.
+      AGENT_WEB_SEARCH_URL: http://searxng:8080/search
+    ports:
+      - "8000:8000"
+    depends_on:
+      # Сервис поднимается только на накатанной схеме; без этого старт падал бы
+      # на сверке версии (fail-fast в app/schema_version.py).
+      migrate:
+        condition: service_completed_successfully
+      postgres:
+        condition: service_healthy
+      searxng:
+        condition: service_started
+    volumes:
+      - ./secrets:/app/secrets:ro
+    restart: unless-stopped
+
+  # Внешний поиск агента (решение владельца 05.11.2026, docs/development/108 §4).
+  # Слушает только 127.0.0.1 — открытый поисковый API наружу не выставляется.
+  # Обновление вместе с остальными контейнерами: `docker compose pull searxng`.
+  searxng:
+    image: searxng/searxng:latest
+    container_name: svoi-searxng-dev
+    environment:
+      SEARXNG_SECRET: ${SEARXNG_SECRET:-svoi-dev-secret-change-in-prod}
+      SEARXNG_BASE_URL: http://127.0.0.1:8080/
+    ports:
+      - "127.0.0.1:8080:8080"
+    volumes:
+      - ./config/searxng/settings.yml:/etc/searxng/settings.yml:ro
+    restart: unless-stopped
+
+  tg-gateway:
+    build:
+      context: .
+      dockerfile: services/tg-gateway/Dockerfile
+    container_name: svoi-gateway
+    env_file: .env
+    environment:
+      TOOL_API_URL: http://tool-api:8000
+    depends_on:
+      - tool-api
+    restart: unless-stopped
+
+volumes:
+  pgdata:
+  gardata:
+    # Имя фиксировано: без `name:` compose добавил бы к нему имя каталога проекта,
+    # и файлы локального хранилища «пропали» бы при переносе репозитория или запуске
+    # из другого worktree. `external` здесь не нужен и вреден: он требует, чтобы том
+    # уже существовал, и на чистой машине первый `docker compose up` падал с
+    # `external volume "s3-storage_gardata" not found`. С `name:` compose создаёт
+    # том сам, а существующий том с этим именем переиспользует — данные не теряются.
+    # На машинах, где том уже есть, compose печатает предупреждение «volume ...
+    # already exists but was not created by Docker Compose / for project ...»:
+    # это не ошибка, том найден по имени и смонтирован. Возвращать `external: true`
+    # из-за этой строки нельзя — сломается первый запуск.
+    # Обратная сторона: `docker compose down -v` теперь удаляет и этот том (внешний
+    # он бы не тронул) — локальные файлы хранилища стираются вместе с ним.
+    name: s3-storage_gardata

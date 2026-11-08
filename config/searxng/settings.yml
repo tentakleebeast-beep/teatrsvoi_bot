@@ -1,0 +1,30 @@
+# SearXNG для внешнего поиска агента (карта «Озадачить», docs/development/108 §4).
+#
+# Форматы: `html` нужен для страницы поиска, `json` — для `web_search` агента.
+# Включать json без причины нельзя: это открытый поисковый API без авторизации,
+# поэтому сервис слушает только 127.0.0.1 (в compose) и только localhost (на VPS).
+use_default_settings: true
+
+general:
+  instance_name: "svoi-searxng"
+
+server:
+  bind_address: "0.0.0.0"      # внутри контейнера; наружу порт не публикуется
+  port: 8080
+  limiter: false               # локальный поиск: бот ходит сам, капчи быть не должно
+  image_proxy: false
+  # secret_key берётся из окружения (SEARXNG_SECRET в docker-compose.yml).
+  # В git значения нет: dev-значение по умолчанию задаёт compose, прод — .env.
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+ui:
+  static_use_hash: true
+
+outgoing:
+  request_timeout: 4.0
+  max_request_timeout: 8.0

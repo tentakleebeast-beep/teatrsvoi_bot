@@ -1,0 +1,32 @@
+# Триггеры риска: карты, которые трогают эти места, проверяет worker-test.
+# Правило и порядок работы — docs/development/107-kanban-risk-routing.md.
+# Сверка — по строке «Область:» в теле карты; шаблоны — glob по путям.
+risk_paths:
+  # Mini App: страницы — это HTML и JS внутри python-констант
+  - "services/tool-api/app/pages/**"
+  - "services/tool-api/app/webapp_page.py"
+  - "services/tool-api/app/static/**"
+  # вход в Mini App и права: токен, initData, сессии
+  - "services/tool-api/app/webapp.py"
+  - "services/tool-api/app/api/webapp_api.py"
+  - "services/tool-api/app/privacy.py"
+  - "services/tool-api/app/file_access.py"
+  # контракт ошибок: коды и тексты видит человек
+  - "services/tool-api/app/errors.py"
+  # двери наружу
+  - "services/tg-gateway/app/routers/**"
+  - "services/tg-gateway/app/texts.py"
+
+# Что обязан сделать worker-test, если карта попала под триггер.
+checks:
+  - "браузерный набор на двух движках (chromium и webkit), вывод в карту"
+  - "каждый подключённый на странице css/js отдаётся: 200 и непустое тело"
+  - "репро-тест на дефект из карты остаётся в tests/"
+  - "без воспроизведения дефекта карта не закрывается"
+
+# Карты, которые под триггер не попадают: правки скриптов, документов, CI.
+not_risk_paths:
+  - "scripts/**"
+  - "docs/**"
+  - ".github/**"
+  - "db/init/**"

@@ -1,0 +1,149 @@
+"""Админские экраны Mini App: без таблиц, ленты вкладок и горизонтального скролла.
+
+Проверяем то, из-за чего панель переделывалась (docs/development/92 §5): каждый
+раздел — вложенный экран с возвратом в «Управление», строки вместо таблиц,
+действия в листе человека, пагинация по 20 и никаких `alert`/`confirm`.
+"""
+
+from __future__ import annotations
+
+import pathlib
+import re
+import sys
+
+ROOT = pathlib.Path(__file__).resolve().parents[2]
+sys.path.insert(0, str(ROOT / "services" / "tool-api"))
+
+from app.pages import admin  # noqa: E402
+
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]")
+
+PAGES = {
+    "Люди": admin.PEOPLE_PAGE,
+    "Взносы": admin.DUES_ADMIN_PAGE,
+    "Заявки": admin.PENDING_PAGE,
+    "Права": admin.RIGHTS_PAGE,
+    "Архив": admin.ARCHIVE_PAGE,
+    "Аудит": admin.AUDIT_PAGE,
+    "Приглашения": admin.INVITES_PAGE,
+    "Уведомления": admin.NOTIFICATION_DEFAULTS_PAGE,
+}
+
+
+def test_разделы_отдельными_экранами():
+    assert set(PAGES) == {"Люди", "Взносы", "Заявки", "Права", "Архив", "Аудит",
+                          "Приглашения", "Уведомления"}
+    for title, html in PAGES.items():
+        assert f"<title>{title}</title>" in html
+
+
+def test_каждый_экран_вложенный_и_возвращается_в_управление():
+    for html in PAGES.values():
+        assert 'href="/webapp/more"' in html          # «‹» в шапке
+        assert 'class="ui-screen"' in html            # без нижних вкладок
+        assert "ui-tabbar" not in html
+        assert 'window.SVOI_BACK = "/webapp/more"' in html
+
+
+def test_взносы_начисляются_кнопкой_с_подтверждением():
+    """Д6: путь начисления вызывается из UI, а не только по curl."""
+    html = admin.DUES_ADMIN_PAGE
+    assert "Начислить за месяц" in html
+    assert "/webapp/admin/dues/accrue" in html      # тот же обработчик, что у пути-канона
+    assert "/webapp/admin/dues" in html             # данные месяца
+    assert "SVOI.sheet(" in html, "начисление без подтверждения"
+    assert "/webapp/admin/tariff" in html           # Д8: тариф тем же правом
+
+
+def test_нет_таблиц_и_горизонтального_скролла():
+    for title, html in PAGES.items():
+        assert "<table" not in html, f"{title}: таблица на телефоне"
+        assert "overflow-x: auto" not in html, f"{title}: лента вкладок"
+        assert "overflow-x: auto" not in html
+        assert "@media" not in html or "max-width" not in html
+
+
+def test_нет_эмодзи_и_модалов():
+    for title, html in PAGES.items():
+        match = EMOJI.search(html)
+        assert not match, f"{title}: эмодзи {match.group(0) if match else ''}"
+        assert "alert(" not in html and "confirm(" not in html and "prompt(" not in html
+
+
+def test_нет_служебных_фраз():
+    for title, html in PAGES.items():
+        assert "проверяются на сервере" not in html, title
+        assert "теми же правами" not in html, title
+
+
+def test_люди_ищутся_и_тариф_справа_из_карточки():
+    html = admin.PEOPLE_PAGE
+    assert 'class="ui-input" id="people-search"' in html
+    assert "inputmode=\"search\"" in html
+    assert "/webapp/admin/overview" in html
+    assert "/webapp/admin/person" in html          # тарифа в списке нет — берём карточкой
+    assert "function enrich" in html and "data-tariff" in html
+    assert "Показать ещё" in html                  # страницы по 20
+
+
+def test_лист_человека_вместо_полей_в_строке():
+    html = admin.PEOPLE_PAGE
+    assert "SVOI.sheet" in html
+    assert "ui-sheet" in html or "window.SVOI.sheet" in html
+    assert "/webapp/admin/grant" in html          # роли и права
+    assert "/webapp/admin/tariff" in html         # тариф
+    assert "/webapp/admin/archive" in html        # архив
+    assert "select" not in html.split("<script>")[0].lower()  # в разметке нет select
+
+
+def test_заявки_принимаются_и_отклоняются_кнопками():
+    html = admin.PENDING_PAGE
+    assert "Принять" in html and "Отклонить" in html
+    assert "ui-btn--sm" in html                   # 44 px внутри строки
+    assert "/webapp/admin/approve" in html
+    assert "SVOI.sheet" in html                   # отклонение — через лист
+
+
+def test_права_это_матрица_и_точечная_выдача_а_не_второй_список():
+    html = admin.RIGHTS_PAGE
+    assert '"ui-dl"' in html
+    assert "BLOCKS.rights" in html and "matrix" in html
+    assert "rights-search" in html
+    assert "capability" in html and "/webapp/admin/grant" in html
+    # полного списка людей на экране нет: строки появляются только после ввода
+    assert "rights-results" in html
+    assert "function renderResults" in html
+
+
+def test_аудит_по_двадцать_и_время_кто_что():
+    html = admin.AUDIT_PAGE
+    assert "shown += 20" in html
+    assert "actionWord" in html and "actor_name" in html
+    assert "when(event.ts, true)" in html
+
+
+def test_приглашение_выпускается_в_лист_с_копированием():
+    html = admin.INVITES_PAGE
+    assert "/webapp/admin/invite\"" in html
+    assert "Копировать" in html and "function copyText" in html
+    assert "invite-issue" in html
+    assert "/webapp/admin/invite-revoke" in html
+
+
+def test_действия_подписаны_именем_объекта():
+    """Опасное подтверждение называет человека или код, а не «вы уверены?»."""
+    assert "В архив: " in admin.PEOPLE_PAGE
+    assert "Отклонить заявку: " in admin.PENDING_PAGE
+    assert "Отозвать код: " in admin.INVITES_PAGE
+
+
+def test_общие_настройки_уведомлений_это_те_же_три_типа_и_тихие_часы():
+    """FR-G17 (О5): общий экран повторяет форму частного, но задаёт значения студии."""
+    html = admin.NOTIFICATION_DEFAULTS_PAGE
+    assert 'class="ui-switch-row' in html
+    assert html.count('<button class="ui-switch-row') == 3
+    assert "quiet_from" in html and "quiet_to" in html
+    assert "20:00" in html and "08:00" in html
+    assert "/webapp/admin/notifications/settings" in html
+    assert "Частные" in html and "важнее общих" in html      # правило П-8 на экране
+    assert html.count("ui-btn--primary") == 1                # одно главное действие

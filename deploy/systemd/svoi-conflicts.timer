@@ -1,0 +1,10 @@
+[Unit]
+Description=SVOI conflict watcher, every 5 minutes
+
+[Timer]
+OnCalendar=*-*-* *:00/5:00
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

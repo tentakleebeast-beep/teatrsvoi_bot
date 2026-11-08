@@ -1,0 +1,243 @@
+name: проверки
+
+# Все job'ы идут на GitHub-hosted ubuntu-latest. Self-hosted раннер `svoi-vps` снят
+# до публикации репозитория (plan 129 §Ш-06): на публичном репозитории он означал бы
+# исполнение кода из форка на прод-машине с docker, базой и .env. Минуты Actions для
+# публичных репозиториев не тарифицируются, поэтому квота больше не ограничивает.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: зависимости
+        run: pip install ruff==0.17.3
+      - name: линтер
+        run: ruff check . --output-format=concise
+      - name: обоснованность тестов (ID требования или дефекта)
+        # docs/development/26 §7a: тест без ID не принимается. Скрипт читает только
+        # исходники tests/** — база и зависимости сервисов не нужны.
+        run: python scripts/test_audit.py --strict
+      - name: конфиг только через settings
+        # R-4: чтение окружения вне settings.py — долг, а не стиль. Список исключений
+        # с причинами — config/settings-allowlist.txt; мёртвая запись тоже ошибка.
+        run: python scripts/check_settings.py
+      - name: компиляция (синтаксис всех модулей)
+        run: python -m compileall -q services scripts tests
+
+  tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: svoi
+          POSTGRES_USER: svoi
+          POSTGRES_PASSWORD: svoi_dev_password
+        ports: ["5433:5432"]
+        options: >-
+          --health-cmd "pg_isready -U svoi" --health-interval 5s
+          --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: зависимости
+        run: pip install -r requirements-dev.txt
+      - name: тесты (unit + integration на реальном Postgres)
+        # tests/webapp сюда не входит намеренно: он идёт отдельным job `webapp`.
+        # Иначе 282 браузерных теста скипаются молча и «skipped» в отчёте выглядит
+        # как норма (аудит 96, N-3).
+        env:
+          TEST_DATABASE_URL: postgresql://svoi:svoi_dev_password@127.0.0.1:5433/svoi_test
+          DATABASE_URL: postgresql://svoi:svoi_dev_password@127.0.0.1:5433/svoi
+        run: >
+          pytest -p no:warnings --ignore=tests/webapp
+          --cov=services --cov=scripts --cov-report=term-missing
+
+  contract:
+    # Отдельный job, потому что снимок схемы не требует базы: он импортирует app и
+    # сравнивает contracts/openapi.json. Раньше жил внутри `tests` и падал вместе с
+    # ним. Изменил маршрут, метод или поле — обнови снимок тем же коммитом (`--write`)
+    # и напиши перечень изменений в отчёте карты (docs/development/26 §4a).
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: зависимости
+        run: pip install -r requirements-dev.txt
+      - name: контракт API не менялся молча
+        run: python scripts/openapi_snapshot.py
+      - name: инвентарь действий не разошёлся с кодом (отчёт 117)
+        # scripts/audit_actions.py сверяет docs/reports/117 с кодом и контрактом и падает
+        # при расхождении. Живёт в job `contract`, а не в `lint`/`tests`: скрипт читает
+        # маршруты через app.main и требует requirements-dev (fastapi и др. — в `lint`
+        # ставится только ruff), а `tests` сейчас пропускается вместе с GitHub-раннерами.
+        # Ни сети, ни БД шагу не нужно: он разбирает исходники и снимок контракта.
+        run: python scripts/audit_actions.py --check
+
+  types:
+    # R-7 (docs/reports/79): поломки в чистых модулях ловил только глаз.
+    # Список модулей и строгость — в pyproject.toml [tool.mypy], поэтому `mypy`
+    # без аргументов проверяет ровно пилот, а не весь репозиторий.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: зависимости
+        run: pip install -r requirements-dev.txt
+      - name: типы (mypy --strict на чистых модулях)
+        run: mypy
+
+  deadcode:
+    # docs/reports/84, приложение: vulture/deadcode без конфига бесполезны — 289
+    # сообщений на репозитории, и почти все про обработчики, которых регистрирует
+    # декоратор. Конфиг — pyproject.toml, декораторы для deadcode отсеивает
+    # scripts/check_deadcode.py (своих он не умеет), известный мёртвый код —
+    # config/deadcode-baseline.txt. Поэтому на чистом main шаг зелёный, а новая
+    # мёртвая функция его красит и видна в логе.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: зависимости
+        run: pip install -r requirements-dev.txt
+      - name: мёртвый код (vulture + deadcode без шума на декораторах)
+        run: python scripts/check_deadcode.py
+
+  webapp:
+    # Дыра в гейте (аудит 96): 282 браузерных теста пропускались без SVOI_WEBAPP_TESTS,
+    # поэтому «зелёный CI» ничего не говорил об интерфейсе Mini App.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: зависимости
+        run: |
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps chromium
+      - name: браузерные тесты Mini App (движок Chromium)
+        # Прогон с проверкой, что тесты действительно выполнились: если
+        # SVOI_WEBAPP_TESTS не дойдёт до pytest, он не упадёт, а всё скипнется —
+        # ровно та дыра, из-за которой гейт был зелёным при непроверенном UI.
+        env:
+          SVOI_WEBAPP_TESTS: "1"
+        run: |
+          set -euo pipefail
+          pytest tests/webapp -p no:warnings --browser chromium -rs | tee /tmp/webapp-run.txt
+          if grep -q 'включите SVOI_WEBAPP_TESTS' /tmp/webapp-run.txt; then
+            echo "браузерные тесты пропущены: SVOI_WEBAPP_TESTS не дошёл до pytest" >&2
+            exit 1
+          fi
+
+  webapp-webkit:
+    # docs/reports/104 §5.1: iOS не проверялся в гейте. conftest.py пропускает
+    # профиль, если движок не совпадает с запущенным, поэтому на Chromium все
+    # iPhone-профили (WebKit) скипались молча — а «наложение текста» владелец
+    # поймал именно на iPhone. Второй job гоняет тот же набор на WebKit.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: зависимости
+        run: |-
+          pip install -r requirements-dev.txt
+          python -m playwright install --with-deps webkit
+      - name: браузерные тесты Mini App (движок WebKit, iOS)
+        # Три проверки поверх самого прогона:
+        # 1) SVOI_WEBAPP_TESTS дошёл до pytest — иначе всё скипнется и job
+        #    останется зелёным (та же дыра, что в job `webapp`);
+        # 2) iPhone-профили не скипнуты — если движок не WebKit, conftest
+        #    пропустит их и job снова ничего не проверит;
+        # 3) скипнуты только Android-профили: их движок Chromium, на WebKit их
+        #    место занимает job `webapp`. Больше скипов быть не должно.
+        env:
+          SVOI_WEBAPP_TESTS: "1"
+          # pytest переносит длинные строки по ширине терминала; при переносе
+          # имя устройства уезжает на следующую строку и grep ниже промахнётся.
+          COLUMNS: "200"
+        run: |-
+          set -euo pipefail
+          pytest tests/webapp -p no:warnings --browser webkit -rs | tee /tmp/webapp-webkit-run.txt
+          if grep -q 'включите SVOI_WEBAPP_TESTS' /tmp/webapp-webkit-run.txt; then
+            echo "браузерные тесты пропущены: SVOI_WEBAPP_TESTS не дошёл до pytest" >&2
+            exit 1
+          fi
+          if grep -E '^SKIPPED.*iPhone' /tmp/webapp-webkit-run.txt; then
+            echo "iPhone-профили скипнуты на WebKit: iOS снова не проверен" >&2
+            exit 1
+          fi
+          skipped=$(grep -cE '^SKIPPED' /tmp/webapp-webkit-run.txt || true)
+          android=2
+          if [ "${skipped}" -gt "${android}" ]; then
+            echo "скипнуто ${skipped} групп, а Android-профилей всего ${android}: на WebKit пропущено лишнее" >&2
+            exit 1
+          fi
+
+  images:
+    # R-5: образы должны не только собираться, но и запускаться с настоящей базой.
+    # Схема накатывается Alembic тем же образом, что и на проде (`upgrade head`), а не
+    # initdb: postgres поднимается пустым, mount db/init в job больше не используется.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: сборка образов обоих сервисов
+        run: |
+          docker build --tag svoi-tool-api:ci --file services/tool-api/Dockerfile .
+          docker build --tag svoi-tg-gateway:ci --file services/tg-gateway/Dockerfile .
+      - name: tool-api с postgres, /health и smoke
+        run: |
+          set -euo pipefail
+          docker network create svoi-ci
+          docker run -d --name pg-ci --network svoi-ci \
+            -e POSTGRES_DB=svoi -e POSTGRES_USER=svoi -e POSTGRES_PASSWORD=ci_password \
+            postgres:16
+          for _ in $(seq 1 60); do
+            docker exec pg-ci pg_isready -U svoi -d svoi && break
+            sleep 2
+          done
+          # схема — только через Alembic: пустая база, затем upgrade head (как на проде).
+          # Образ тот же, что стартует ниже, поэтому проверяется и его migrations/.
+          docker run --rm --network svoi-ci \
+            -e DATABASE_URL=postgresql://svoi:ci_password@pg-ci:5432/svoi \
+            svoi-tool-api:ci alembic -c alembic.ini upgrade head
+          docker run -d --name api-ci --network svoi-ci -p 8000:8000 \
+            -e DATABASE_URL=postgresql://svoi:ci_password@pg-ci:5432/svoi \
+            -e ENV=ci -e TOOL_API_TOKEN=ci-token -e ADMIN_CHAT_ID=123456789 \
+            -e GIT_SHA="$(git rev-parse HEAD)" svoi-tool-api:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:8000/health -o /tmp/svoi-health.json; then break; fi
+            sleep 2
+          done
+          curl -fsS http://127.0.0.1:8000/health | tee /tmp/svoi-health.json
+          grep -q '"ok":true' /tmp/svoi-health.json
+          curl -fsS -H "Authorization: Bearer ci-token" -H "X-Actor-Chat-Id: 123456789" \
+            http://127.0.0.1:8000/tools/categories | tee /tmp/svoi-categories.json
+          grep -q '"ok":true' /tmp/svoi-categories.json
+      - name: логи контейнеров при падении
+        if: failure()
+        run: |
+          docker logs pg-ci || true
+          docker logs api-ci || true

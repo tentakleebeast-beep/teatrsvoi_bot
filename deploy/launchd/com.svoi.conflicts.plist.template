@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>com.svoi.conflicts</string>
+
+	<!-- Сторож конфликта поллеров на маке: лог гейтвея здесь местный
+	     (~/Library/Logs/svoi), journald на маке нет. Раз в 5 минут — алерт
+	     админу не позже чем через 5 минут после начала эпизода 409
+	     (карта t_4aa28fe9, docs/infrastructure/08 §1a). -->
+	<key>ProgramArguments</key>
+	<array>
+		<string>@PYTHON@</string>
+		<string>@PROJECT@/scripts/conflict_watch.py</string>
+		<string>--source</string>
+		<string>files</string>
+		<string>--log-dir</string>
+		<string>@LOG_DIR@</string>
+		<string>--env</string>
+		<string>@ENV@</string>
+		<string>--apply</string>
+	</array>
+
+	<key>WorkingDirectory</key>
+	<string>@PROJECT@</string>
+
+	<!-- Не демон: короткий прогон раз в 5 минут. RunAtLoad — чтобы сторож
+	     проверил лог сразу после входа, а не через пять минут. -->
+	<key>RunAtLoad</key>
+	<true/>
+	<key>StartInterval</key>
+	<integer>300</integer>
+
+	<key>EnvironmentVariables</key>
+	<dict>
+		<key>PYTHONPATH</key>
+		<string></string>
+		<key>PYTHONUNBUFFERED</key>
+		<string>1</string>
+		<!-- Агент на маке всегда dev (.env.dev, dev-бот): прод-контур на сервере. -->
+		<key>SVOI_ENV</key>
+		<string>@ENV@</string>
+	</dict>
+
+	<key>StandardOutPath</key>
+	<string>@LOG_DIR@/conflicts.log</string>
+	<key>StandardErrorPath</key>
+	<string>@LOG_DIR@/conflicts.err.log</string>
+</dict>
+</plist>

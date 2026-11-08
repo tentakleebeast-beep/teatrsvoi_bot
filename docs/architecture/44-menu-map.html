@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>СВОИ — граф меню по ролям</title>
+<style>
+  /* Схема переходов по кнопкам: три дорожки по ролям, справа — что делает пункт. */
+  :root {
+    --bg: #f7f8fa; --fg: #1c2530; --muted: #5d6b7a; --line: #d8dee6;
+    --card: #ffffff; --accent: #2f6fed; --soft: #eef3fd;
+    --troupe: #7a5af8; --org: #0f8a6a; --admin: #b25e00;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 28px; background: var(--bg); color: var(--fg);
+         font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  h1 { font-size: 20px; margin: 0 0 4px; }
+  p.lead { margin: 0 0 22px; color: var(--muted); max-width: 900px; }
+
+  .lanes { display: grid; grid-template-columns: repeat(3, minmax(300px, 1fr)); gap: 18px; }
+  .lane { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+          padding: 16px; }
+  .lane h2 { font-size: 14px; margin: 0 0 2px; }
+  .lane .caps { font-size: 11px; color: var(--muted); margin-bottom: 14px; }
+  .lane.troupe h2 { color: var(--troupe); }
+  .lane.org h2 { color: var(--org); }
+  .lane.admin h2 { color: var(--admin); }
+
+  .node { border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px;
+          font-size: 13px; background: #fff; position: relative; }
+  .node.root { background: var(--soft); border-color: #c9d8f5; font-weight: 600; }
+  .node.group { margin-top: 18px; font-weight: 600; }
+  .node.group::before { content: ""; position: absolute; left: 18px; top: -19px;
+                        height: 18px; border-left: 2px solid var(--line); }
+  .items { margin: 6px 0 0 12px; padding-left: 12px; border-left: 2px solid var(--line); }
+  .item { display: flex; gap: 8px; align-items: baseline; padding: 4px 0; font-size: 13px; }
+  .item .b { border: 1px solid var(--line); border-radius: 6px; padding: 1px 7px;
+             background: var(--soft); white-space: nowrap; font-size: 12px; }
+  .item .what { color: var(--muted); font-size: 12px; }
+  .only { font-size: 10px; text-transform: uppercase; letter-spacing: .04em;
+          color: var(--admin); }
+  .none { color: #b0453a; font-size: 12px; }
+
+  /* --- Mini App: экраны и выходы --- */
+  .miniapp { margin-top: 26px; }
+  .miniapp h2 { font-size: 15px; margin: 0 0 4px; }
+  .miniapp p.sub { margin: 0 0 14px; color: var(--muted); font-size: 12px; }
+  .screens { display: grid; grid-template-columns: repeat(3, minmax(300px, 1fr)); gap: 18px; }
+  .screen-box { background: var(--card); border: 1px solid var(--line); border-radius: 14px;
+                padding: 14px; }
+  .screen-box h3 { font-size: 13px; margin: 0 0 8px; }
+  .screen-box .entry { font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+  .mini-node { border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px;
+               background: #fff; margin-bottom: 10px; font-size: 13px; }
+  .mini-node b { display: block; margin-bottom: 3px; }
+  .mini-node .row2 { font-size: 12px; color: var(--muted); }
+  .exit { font-size: 12px; color: var(--muted); border-left: 2px solid #c9d8f5;
+          padding-left: 10px; }
+
+  .legend { margin-top: 22px; display: grid; grid-template-columns: repeat(2, minmax(300px, 1fr));
+            gap: 12px; }
+  .legend div { background: var(--card); border: 1px solid var(--line); border-radius: 10px;
+                padding: 10px 12px; font-size: 12px; color: var(--muted); }
+  .legend b { color: var(--fg); }
+  code { font-family: ui-monospace, SFMono-Regular, monospace; font-size: 11px;
+         background: #eef1f5; border-radius: 4px; padding: 0 4px; }
+</style>
+</head>
+<body>
+<h1>Граф переходов по меню кнопок</h1>
+<p class="lead">Что видит каждая роль в чате и куда попадает нажатием. Пункт без права не показывается —
+поэтому у труппы нет «Админа», а у организатора нет админ-панели. Текстом можно всё то же самое:
+фраза уходит в разбор, но кнопки — основной путь.</p>
+
+<div class="lanes">
+
+  <div class="lane troupe">
+    <h2>Труппа</h2>
+    <div class="caps">schedule.availability.self · budget.read.self · feedback.send</div>
+
+    <div class="node root">Клавиатура: Деньги · Время · Профиль · Помощь</div>
+
+    <div class="node group">Деньги</div>
+    <div class="items">
+      <div class="item"><span class="b">Мои взносы</span><span class="what">тариф и учтено ли за месяц</span></div>
+    </div>
+
+    <div class="node group">Время</div>
+    <div class="items">
+      <div class="item"><span class="b">Занятость</span><span class="what">неделя по дням → Mini App «Открыть неделю»</span></div>
+    </div>
+
+    <div class="node group">Профиль</div>
+    <div class="items">
+      <div class="item"><span class="b">Мой профиль</span><span class="what">анкета: контакты, короткие имена</span></div>
+    </div>
+
+    <div class="node group">Помощь</div>
+    <div class="items">
+      <div class="item"><span class="b">Обратная связь</span><span class="what">проблема или пожелание</span></div>
+      <div class="item"><span class="b">Что умею</span><span class="what">список пунктов из меню</span></div>
+    </div>
+  </div>
+
+  <div class="lane org">
+    <h2>Организатор</h2>
+    <div class="caps">budget.* · schedule.* · registration.approve · registration.code.issue · participants.view</div>
+
+    <div class="node root">Клавиатура: Деньги · Время · Админ · Профиль · Помощь</div>
+
+    <div class="node group">Деньги</div>
+    <div class="items">
+      <div class="item"><span class="b">Расход и доход</span><span class="what">форма в Mini App: категория, сумма, дата учёта, статья, план/факт</span></div>
+      <div class="item"><span class="b">Сверить листы</span><span class="what">синхронизация базы с листами бюджета на Google Drive</span></div>
+      <div class="item"><span class="b">Мои взносы</span><span class="what">свои взносы</span></div>
+    </div>
+
+    <div class="node group">Время</div>
+    <div class="items">
+      <div class="item"><span class="b">Занятость</span><span class="what">своя + чужая по дням</span></div>
+      <div class="item"><span class="b">Расписание</span><span class="what">что идёт на неделе</span></div>
+      <div class="item"><span class="b">Поиск окон</span><span class="what">критерии в Mini App → таблица окон с пояснениями</span></div>
+    </div>
+
+    <div class="node group">Админ <span class="only">без панели</span></div>
+    <div class="items">
+      <div class="item"><span class="b">Участники</span><span class="what">список людей; нажатие → профиль и тариф</span></div>
+      <div class="item"><span class="b">Заявки</span><span class="what">принять / отклонить кнопками</span></div>
+      <div class="item"><span class="b">Приглашения</span><span class="what">код на 7 дней, копируется нажатием</span></div>
+    </div>
+
+    <div class="node group">Помощь</div>
+    <div class="items">
+      <div class="item"><span class="b">Обратная связь</span><span class="what">приём обращений</span></div>
+      <div class="item"><span class="b">Что умею</span><span class="what">свои пункты</span></div>
+    </div>
+
+    <div class="node" style="margin-top:14px; background:#f2fbf7; border-color:#bfe6d8">
+      Расход и доход пишутся сразу, любой суммы: подтверждающего нет —
+      суммы вносят организаторы, и они же за них отвечают
+    </div>
+  </div>
+
+  <div class="lane admin">
+    <h2>Администратор</h2>
+    <div class="caps">всё, что у организатора + admin.panel · participants.manage · audit.view · budget.import</div>
+
+    <div class="node root">Клавиатура: Деньги · Время · Админ · Профиль · Помощь</div>
+
+    <div class="node group">Админ <span class="only">полный набор</span></div>
+    <div class="items">
+      <div class="item"><span class="b">Админ-панель</span>
+        <span class="what">Участники · Заявки · Права · Приглашения · Бюджет · Обращения · Аудит · Сервисы · Сверка · Дописать в лист</span></div>
+      <div class="item"><span class="b">Заявки</span><span class="what">то же, сразу кнопками</span></div>
+      <div class="item"><span class="b">Пригласить</span><span class="what">код с копированием</span></div>
+    </div>
+
+    <div class="node group">Остальные разделы</div>
+    <div class="items">
+      <div class="item"><span class="b">Деньги</span><span class="what">как у организатора + «Бюджет»: итоги и статьи</span></div>
+      <div class="item"><span class="b">Время</span><span class="what">как у организатора</span></div>
+      <div class="item"><span class="b">Помощь</span><span class="what">+ «Справка» по ролям (<code>howto.read</code>)</span></div>
+    </div>
+
+    <div class="node" style="margin-top:14px; background:#fff7ee; border-color:#f0d9bb">
+      Точечные права выдаются в карточке человека: <span class="b">Роли</span> и
+      <span class="b">Возможности</span> — без команд
+    </div>
+  </div>
+</div>
+
+<div class="miniapp">
+  <h2>Mini App: что открывается поверх чата</h2>
+  <p class="sub">Вход — только кнопкой из бота (адрес подписан данными Telegram). Прямая ссылка из
+  браузера не откроется: без подписи бот не знает, кто пришёл. Выход — «×» в шапке, человек
+  возвращается в чат, ничего не теряя.</p>
+
+  <div class="screens">
+    <div class="screen-box">
+      <h3>Труппа</h3>
+      <div class="entry">кнопки «Неделя» в меню бота и «Открыть неделю» после регистрации</div>
+      <div class="mini-node"><b>Неделя</b>
+        <div class="row2">7 дней: чипы «Свободен · Занят · Не знаю», две границы времени,
+        комментарий. Кнопки: «Сохранить неделю», «Заполнить по обычной неделе»,
+        «Запомнить как обычную». Лист Google обновляется сам.</div></div>
+      <div class="mini-node"><b>Профиль</b>
+        <div class="row2">анкета: имя, короткие имена, телефон, род, время в пути. Тариф и
+        «учтено ли за месяц» — без реестра начислений.</div></div>
+      <div class="exit">Выходы: «×» → чат · «Сохранить» остаётся в окне</div>
+    </div>
+
+    <div class="screen-box">
+      <h3>Организатор</h3>
+      <div class="entry">те же кнопки; админ-панели у него нет</div>
+      <div class="mini-node"><b>Неделя</b>
+        <div class="row2">своя занятость теми же карточками. Чужая занятость — в чате
+        («Занятость», «Расписание», «Найти окна»), чтобы не путать «моё» и «общее».</div></div>
+      <div class="mini-node"><b>Профиль</b>
+        <div class="row2">своя анкета: контакты, род, время в пути.</div></div>
+      <div class="mini-node"><b>Операция</b>
+        <div class="row2">расход или доход: сумма, категория, статья, дата учёта, план/факт.</div></div>
+      <div class="mini-node"><b>Поиск окон</b>
+        <div class="row2">даты, длительность, кто обязателен и кто желателен, строгость →
+        таблица окон с пояснениями («все свободны», «нет Даины — свободна с 18:30»).</div></div>
+      <div class="mini-node"><b>Профиль участника</b>
+        <div class="row2">сведения о человеке и сумма взноса: тариф со следующего месяца,
+        учтено ли за текущий.</div></div>
+      <div class="exit">Выходы: «×» → чат · заявки и приглашения — кнопками в чате</div>
+    </div>
+
+    <div class="screen-box">
+      <h3>Администратор</h3>
+      <div class="entry">«Админ» → «Админ-панель» в чате</div>
+      <div class="mini-node"><b>Админ-панель</b>
+        <div class="row2">Участники (по 10 на страницу) · Заявки · Права · Приглашения
+        (код копируется нажатием) · Бюджет · Обращения · Аудит · Сервисы ·
+        Сверка файл ↔ база · Дописать в лист.</div></div>
+      <div class="mini-node"><b>Неделя и профиль</b>
+        <div class="row2">как у всех: своя занятость и своя анкета.</div></div>
+      <div class="exit">Выходы: «×» → чат · раздел панели открывается по якорю</div>
+    </div>
+  </div>
+
+  <div class="legend" style="margin-top:14px">
+    <div><b>Дом и вход:</b> «Занятость» и «Неделя» ведут в один экран; «Мой профиль» —
+    в анкету Mini App; «Админ-панель» — в панель. У каждого действия один дом, а кнопки чата
+    дают вход в него (П-1, docs/plans/37 §2): кнопочный путь для каждого действия не нужен.</div>
+    <div><b>Дом = карточка или экран:</b> назначение события — карточка в чате и экран
+    /webapp/assign; поиск окон — экран, вход из чата (П-10).</div>
+  </div>
+</div>
+
+<div class="legend">
+  <div><b>Mini App — основное рабочее место:</b> неделя занятости (7 дней × 4 поля), анкета,
+  админ-панель. В чате остаются быстрые записи, короткие ответы и входы в дома.</div>
+  <div><b>Свободный текст</b> не отдельный путь, а ярлык к тем же действиям: «занят в среду после 18»,
+  «расход 3000 на реквизит», «кто свободен в субботу».</div>
+  <div><b>Права решают видимость:</b> пункт с нехваткой права не рисуется, а не отвечает отказом.</div>
+  <div><b>Подтверждений сумм больше нет</b> (убрано 30.10.2026, docs/architecture/25, §4): расходы и доходы вносят
+  только организаторы и пишутся сразу. Осталась одна защита — правку человека в листе бот не затирает без
+  явной кнопки «Перезаписать моё».</div>
+</div>
+</body>
+</html>

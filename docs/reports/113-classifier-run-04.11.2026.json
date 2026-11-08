@@ -1,0 +1,188 @@
+{
+ "ran_at": "2026-11-04",
+ "model": "openai/gpt-4.1-nano",
+ "mode": "classifier",
+ "count": 30,
+ "measured": [
+  {
+   "question": "Q-01",
+   "tokens_in": 86,
+   "tokens_out": 4,
+   "latency": 1.45
+  },
+  {
+   "question": "Q-02",
+   "tokens_in": 90,
+   "tokens_out": 4,
+   "latency": 1.02
+  },
+  {
+   "question": "Q-03",
+   "tokens_in": 90,
+   "tokens_out": 4,
+   "latency": 0.91
+  },
+  {
+   "question": "Q-04",
+   "tokens_in": 88,
+   "tokens_out": 4,
+   "latency": 0.86
+  },
+  {
+   "question": "Q-05",
+   "tokens_in": 90,
+   "tokens_out": 4,
+   "latency": 1.1
+  },
+  {
+   "question": "Q-06",
+   "tokens_in": 93,
+   "tokens_out": 3,
+   "latency": 0.71
+  },
+  {
+   "question": "Q-07",
+   "tokens_in": 89,
+   "tokens_out": 3,
+   "latency": 0.71
+  },
+  {
+   "question": "Q-08",
+   "tokens_in": 95,
+   "tokens_out": 3,
+   "latency": 0.9
+  },
+  {
+   "question": "Q-09",
+   "tokens_in": 87,
+   "tokens_out": 3,
+   "latency": 1.49
+  },
+  {
+   "question": "Q-10",
+   "tokens_in": 86,
+   "tokens_out": 4,
+   "latency": 1.14
+  },
+  {
+   "question": "Q-11",
+   "tokens_in": 85,
+   "tokens_out": 4,
+   "latency": 1.02
+  },
+  {
+   "question": "Q-12",
+   "tokens_in": 87,
+   "tokens_out": 4,
+   "latency": 0.85
+  },
+  {
+   "question": "Q-13",
+   "tokens_in": 92,
+   "tokens_out": 4,
+   "latency": 0.79
+  },
+  {
+   "question": "Q-14",
+   "tokens_in": 89,
+   "tokens_out": 3,
+   "latency": 0.84
+  },
+  {
+   "question": "Q-15",
+   "tokens_in": 90,
+   "tokens_out": 3,
+   "latency": 0.93
+  },
+  {
+   "question": "Q-16",
+   "tokens_in": 90,
+   "tokens_out": 3,
+   "latency": 0.77
+  },
+  {
+   "question": "Q-17",
+   "tokens_in": 89,
+   "tokens_out": 3,
+   "latency": 0.77
+  },
+  {
+   "question": "Q-18",
+   "tokens_in": 98,
+   "tokens_out": 3,
+   "latency": 0.91
+  },
+  {
+   "question": "Q-19",
+   "tokens_in": 90,
+   "tokens_out": 4,
+   "latency": 0.9
+  },
+  {
+   "question": "Q-20",
+   "tokens_in": 89,
+   "tokens_out": 4,
+   "latency": 0.87
+  },
+  {
+   "question": "Q-21",
+   "tokens_in": 89,
+   "tokens_out": 4,
+   "latency": 0.97
+  },
+  {
+   "question": "Q-22",
+   "tokens_in": 94,
+   "tokens_out": 3,
+   "latency": 3.98
+  },
+  {
+   "question": "Q-23",
+   "tokens_in": 92,
+   "tokens_out": 3,
+   "latency": 0.79
+  },
+  {
+   "question": "Q-24",
+   "tokens_in": 93,
+   "tokens_out": 4,
+   "latency": 0.77
+  },
+  {
+   "question": "Q-25",
+   "tokens_in": 100,
+   "tokens_out": 4,
+   "latency": 0.82
+  },
+  {
+   "question": "Q-26",
+   "tokens_in": 92,
+   "tokens_out": 3,
+   "latency": 0.82
+  },
+  {
+   "question": "Q-27",
+   "tokens_in": 88,
+   "tokens_out": 4,
+   "latency": 0.84
+  },
+  {
+   "question": "Q-28",
+   "tokens_in": 90,
+   "tokens_out": 4,
+   "latency": 0.79
+  },
+  {
+   "question": "Q-29",
+   "tokens_in": 93,
+   "tokens_out": 4,
+   "latency": 1.3
+  },
+  {
+   "question": "Q-30",
+   "tokens_in": 91,
+   "tokens_out": 4,
+   "latency": 0.99
+  }
+ ]
+}

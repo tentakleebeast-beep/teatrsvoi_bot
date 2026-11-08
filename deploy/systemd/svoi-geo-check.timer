@@ -1,0 +1,10 @@
+[Unit]
+Description=SVOI доступность Mini App из РФ, раз в час
+
+[Timer]
+OnCalendar=*-*-* *:20:00
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,128 @@
+{
+ "source_run": "docs/reports/112-agent-eval-run-01.11.2026.json",
+ "ran_at": "2026-11-01",
+ "usd_rub": 80.5573,
+ "usd_rub_date": "2026-11-02",
+ "usd_rub_source": "ЦБ РФ, XML_daily.asp на 02.11.2026",
+ "rows": [
+  {
+   "model": "openai/gpt-4.1-nano",
+   "mode": "single",
+   "count": 30,
+   "tokens_in": 121.5,
+   "tokens_out": 16.0,
+   "usd_per_1000": 0.0185,
+   "rub_per_1000": 1.49,
+   "run_cost_usd": 0.000556,
+   "adequate": 0.167,
+   "p95": 4.34
+  },
+  {
+   "model": "openai/gpt-4.1-nano",
+   "mode": "agent",
+   "count": 30,
+   "tokens_in": 1113.1,
+   "tokens_out": 37.1,
+   "usd_per_1000": 0.1262,
+   "rub_per_1000": 10.16,
+   "run_cost_usd": 0.003785,
+   "adequate": 0.5,
+   "p95": 6.51
+  },
+  {
+   "model": "openai/gpt-4o-mini",
+   "mode": "single",
+   "count": 30,
+   "tokens_in": 121.5,
+   "tokens_out": 18.9,
+   "usd_per_1000": 0.0295,
+   "rub_per_1000": 2.38,
+   "run_cost_usd": 0.000886,
+   "adequate": 0.133,
+   "p95": 1.89
+  },
+  {
+   "model": "openai/gpt-4o-mini",
+   "mode": "agent",
+   "count": 30,
+   "tokens_in": 1043.9,
+   "tokens_out": 40.8,
+   "usd_per_1000": 0.1811,
+   "rub_per_1000": 14.59,
+   "run_cost_usd": 0.005432,
+   "adequate": 0.567,
+   "p95": 5.53
+  },
+  {
+   "model": "openai/gpt-4o",
+   "mode": "single",
+   "count": 30,
+   "tokens_in": 121.5,
+   "tokens_out": 18.0,
+   "usd_per_1000": 0.4834,
+   "rub_per_1000": 38.94,
+   "run_cost_usd": 0.014502,
+   "adequate": 0.133,
+   "p95": 2.25
+  },
+  {
+   "model": "openai/gpt-4o",
+   "mode": "agent",
+   "count": 30,
+   "tokens_in": 1051.3,
+   "tokens_out": 38.7,
+   "usd_per_1000": 3.0155,
+   "rub_per_1000": 242.92,
+   "run_cost_usd": 0.090465,
+   "adequate": 0.533,
+   "p95": 5.3
+  },
+  {
+   "model": "openai/gpt-4.1-nano",
+   "mode": "assistant",
+   "count": 30,
+   "tokens_in": 1203.6,
+   "tokens_out": 40.7,
+   "usd_per_1000": 0.1367,
+   "rub_per_1000": 11.01,
+   "classifier_model": "openai/gpt-4.1-nano",
+   "adequate": 0.5,
+   "p95": 6.51
+  },
+  {
+   "model": "openai/gpt-4o-mini",
+   "mode": "assistant",
+   "count": 30,
+   "tokens_in": 1134.4,
+   "tokens_out": 44.4,
+   "usd_per_1000": 0.1916,
+   "rub_per_1000": 15.44,
+   "classifier_model": "openai/gpt-4.1-nano",
+   "adequate": 0.567,
+   "p95": 5.53
+  },
+  {
+   "model": "openai/gpt-4o",
+   "mode": "assistant",
+   "count": 30,
+   "tokens_in": 1141.8,
+   "tokens_out": 42.3,
+   "usd_per_1000": 3.026,
+   "rub_per_1000": 243.77,
+   "classifier_model": "openai/gpt-4.1-nano",
+   "adequate": 0.533,
+   "p95": 5.3
+  }
+ ],
+ "classifier": {
+  "model": "openai/gpt-4.1-nano",
+  "mode": "classifier",
+  "count": 30,
+  "tokens_in": 90.5,
+  "tokens_out": 3.6,
+  "usd_per_1000": 0.0105,
+  "rub_per_1000": 0.85,
+  "p95": 2.61
+ },
+ "classifier_source": "docs/reports/113-classifier-run-04.11.2026.json"
+}

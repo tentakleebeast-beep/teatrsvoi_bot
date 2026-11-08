@@ -1,0 +1,167 @@
+<!doctype html>
+<!-- Архив. Заменён: docs/development/92-navigation-model.md (четыре нижние вкладки вместо меню-хаба) и docs/development/91-design-system.md. Причина: переделка Ш-1…Ш-10 закрыта, эталон дизайн-системы — prototypes/ux2-mini-app.html. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>СВОИ — окна организатора</title>
+<style>
+  /* Три новых экрана Mini App для организатора: операция, поиск окон, профиль человека. */
+  :root {
+    --tg-bg: #17212b; --tg-card: #232e3c; --tg-text: #ffffff; --tg-hint: #708499;
+    --tg-accent: #5288c1; --tg-line: rgba(255,255,255,.10);
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 24px; background: #0b131c; color: #e8eef5;
+         font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+         display: flex; gap: 26px; align-items: flex-start; flex-wrap: wrap; }
+  .col { width: 380px; }
+  .col h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .05em;
+            color: #9fb0c2; margin: 0 0 8px; }
+  .phone { border-radius: 34px; padding: 9px; background: #000; box-shadow: 0 18px 44px rgba(0,0,0,.5); }
+  .app { border-radius: 26px; overflow: hidden; background: var(--tg-bg); color: var(--tg-text);
+         display: flex; flex-direction: column; height: 640px; }
+  .head { height: 46px; display: flex; align-items: center; justify-content: space-between;
+          padding: 0 14px; border-bottom: 1px solid var(--tg-line); }
+  .head .t { font-size: 15px; font-weight: 600; }
+  .head .x, .head .d { color: var(--tg-hint); font-size: 17px; }
+  .body { flex: 1; overflow-y: auto; padding: 12px; }
+  .card { background: var(--tg-card); border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+  .row { display: flex; justify-content: space-between; align-items: center; gap: 10px;
+         padding: 9px 0; border-bottom: 1px solid var(--tg-line); font-size: 14px; }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: var(--tg-hint); }
+  h3 { font-size: 12px; text-transform: uppercase; letter-spacing: .04em; color: var(--tg-hint);
+       margin: 14px 0 8px; }
+  label.field { display: block; font-size: 12px; color: var(--tg-hint); margin: 10px 0 4px; }
+  input[type=text], input[type=number], input[type=date], select {
+    width: 100%; padding: 10px; font: inherit; font-size: 14px; border-radius: 9px;
+    border: 1px solid var(--tg-line); background: var(--tg-bg); color: var(--tg-text); }
+  .seg { display: flex; gap: 6px; }
+  .seg button { flex: 1; border: 1px solid var(--tg-line); background: transparent;
+                color: var(--tg-text); border-radius: 9px; padding: 9px; font: inherit; font-size: 13px; }
+  .seg button.on { background: var(--tg-accent); border-color: var(--tg-accent); }
+  .foot { border-top: 1px solid var(--tg-line); padding: 10px 12px 14px; }
+  .foot button { width: 100%; border: 0; border-radius: 12px; padding: 13px;
+                 background: var(--tg-accent); color: #fff; font: inherit; font-weight: 600; }
+  .hint { font-size: 11px; color: var(--tg-hint); margin-top: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 8px 4px; border-bottom: 1px solid var(--tg-line);
+           vertical-align: top; }
+  th { color: var(--tg-hint); font-weight: 500; font-size: 11px; }
+  .ok { color: #7fd6a5; }
+  .warn { color: #f0c36d; }
+  .people { display: flex; flex-wrap: wrap; gap: 6px; }
+  .person { border: 1px solid var(--tg-line); border-radius: 999px; padding: 6px 10px;
+            font-size: 13px; }
+  .person.must { background: var(--tg-accent); border-color: var(--tg-accent); }
+  .person.opt { background: #2b5278; border-color: #2b5278; }
+  .badge { font-size: 11px; color: var(--tg-hint); }
+</style>
+</head>
+<body>
+
+<div class="col">
+  <h2>Деньги → Расход и доход</h2>
+  <div class="phone"><div class="app">
+    <div class="head"><span class="x">×</span><span class="t">Операция</span><span class="d">⋯</span></div>
+    <div class="body">
+      <div class="seg">
+        <button class="on">Расход</button><button>Доход</button>
+      </div>
+      <label class="field">Сумма, ₽</label>
+      <input type="number" value="3000">
+      <label class="field">Категория</label>
+      <select><option>Реквизит и костюмы</option><option>Аренда зала</option>
+        <option>Взносы</option><option>Билеты</option></select>
+      <label class="field">Статья (необязательно)</label>
+      <input type="text" placeholder="например, «Бунин»">
+      <label class="field">Дата учёта</label>
+      <input type="date" value="2026-10-30">
+      <label class="field">План или факт</label>
+      <div class="seg"><button>План</button><button class="on">Факт</button></div>
+      <div class="hint">Дата учёта — та, по которой операция попадает в месяц бюджета.
+        План не входит в баланс, факт входит.</div>
+    </div>
+    <div class="foot"><button>Записать</button>
+      <div class="hint">Запишется в базу и в лист бюджета. Ошибку видно сразу — лист сверится.</div></div>
+  </div></div>
+</div>
+
+<div class="col">
+  <h2>Время → Поиск окон</h2>
+  <div class="phone"><div class="app">
+    <div class="head"><span class="x">×</span><span class="t">Поиск окон</span><span class="d">⋯</span></div>
+    <div class="body">
+      <label class="field">Даты</label>
+      <div class="seg">
+        <input type="date" value="2026-11-02"><input type="date" value="2026-11-08">
+      </div>
+      <label class="field">Длительность окна</label>
+      <div class="seg"><button>1 ч</button><button class="on">2 ч</button><button>3 ч</button></div>
+      <label class="field">Кто нужен</label>
+      <div class="people">
+        <span class="person must">Дарья</span><span class="person must">Марк</span>
+        <span class="person opt">Виктор</span><span class="person opt">Алёна</span>
+        <span class="person">Людмила</span><span class="person">Света</span>
+      </div>
+      <div class="hint">Нажатие переключает: обязателен → желателен → не нужен.</div>
+      <label class="field">Строгость</label>
+      <div class="seg"><button class="on">Все обязательные</button><button>Допустимы замены</button></div>
+    </div>
+    <div class="foot"><button>Найти</button></div>
+  </div></div>
+</div>
+
+<div class="col">
+  <h2>Поиск окон → результат</h2>
+  <div class="phone"><div class="app">
+    <div class="head"><span class="x">←</span><span class="t">Найдено 4 окна</span><span class="d">⋯</span></div>
+    <div class="body">
+      <table>
+        <tr><th>Когда</th><th>Кто</th><th>Зал</th></tr>
+        <tr><td><b>Вт 3.11</b><br>18:00–20:00</td>
+            <td class="ok">все обязательные свободны</td><td class="ok">свободен</td></tr>
+        <tr><td><b>Ср 4.11</b><br>19:00–21:00</td>
+            <td class="ok">все обязательные</td><td class="warn">занят до 20:00</td></tr>
+        <tr><td><b>Пт 6.11</b><br>16:00–18:00</td>
+            <td class="warn">нет Даины — свободна с 18:30</td><td class="ok">свободен</td></tr>
+        <tr><td><b>Сб 7.11</b><br>12:00–14:00</td>
+            <td class="warn">2 из 3 обязательных</td><td class="ok">свободен</td></tr>
+      </table>
+      <p class="hint">Пояснение рядом с окном — не украшение: видно, кого не хватает и что мешает
+        по залу. Если данных по человеку нет, окно помечается «не знаю», а не «свободен».</p>
+    </div>
+    <div class="foot"><button>Назначить событие</button></div>
+  </div></div>
+</div>
+
+<div class="col">
+  <h2>Админ → Участники → профиль</h2>
+  <div class="phone"><div class="app">
+    <div class="head"><span class="x">×</span><span class="t">Смирнова Дарья</span><span class="d">⋯</span></div>
+    <div class="body">
+      <div class="card">
+        <div class="row"><span class="k">Ключ</span><span>смирнова-дарья</span></div>
+        <div class="row"><span class="k">Роли</span><span>актёр труппы</span></div>
+        <div class="row"><span class="k">Телефон</span><span>+7 917 ··· 24 18</span></div>
+        <div class="row"><span class="k">Короткие имена</span><span>Дарья, Даша</span></div>
+        <div class="row"><span class="k">Время в пути</span><span>40 мин</span></div>
+        <div class="row"><span class="k">Показы</span><span>Бунин</span></div>
+      </div>
+      <h3>Взнос</h3>
+      <div class="card">
+        <label class="field">Сумма в месяц, ₽</label>
+        <input type="number" value="1500">
+        <div class="row" style="margin-top:8px"><span class="k">Действует с</span><span>1 ноября</span></div>
+        <div class="row"><span class="k">Ноябрь</span><span class="ok">учтено</span></div>
+        <div class="row"><span class="k">Октябрь</span><span class="warn">не учтено, 1 500 ₽</span></div>
+      </div>
+      <p class="hint">Тариф меняется здесь; начисления за прошлые месяцы не пересчитываются.</p>
+    </div>
+    <div class="foot"><button>Сохранить тариф</button></div>
+  </div></div>
+</div>
+
+</body>
+</html>

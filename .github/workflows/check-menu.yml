@@ -1,0 +1,49 @@
+name: кнопка меню бота
+
+# Смотрит, чем Telegram открывает Mini App из бота: если кнопка меню не web_app,
+# initData не передаётся, и страница честно не может получить токен.
+# Токен не печатается: в лог идут только тип кнопки и адрес.
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: check-menu
+  cancel-in-progress: true
+
+jobs:
+  menu:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: скрипт
+        run: |
+          cat > /tmp/menu.py <<'PY'
+          import json, os, urllib.request
+          tok = os.environ["TELEGRAM_TOKEN"]
+          result = {}
+          for chat in (os.environ["ADMIN_CHAT_ID"],):
+              url = f"https://api.telegram.org/bot{tok}/getChatMenuButton?chat_id={chat}"
+              result[chat] = json.loads(urllib.request.urlopen(url, timeout=15).read()).get("result")
+              url2 = f"https://api.telegram.org/bot{tok}/getMe"
+              result["bot"] = json.loads(urllib.request.urlopen(url2, timeout=15).read())["result"].get("username")
+          print(json.dumps(result, ensure_ascii=False))
+          PY
+
+      - name: спросить Telegram
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" 'cat > /tmp/menu.py' < /tmp/menu.py
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            'sudo -u svoi bash -c "set -a; . /opt/svoi/.env; set +a; /opt/svoi/.venv/bin/python /tmp/menu.py"'

@@ -1,0 +1,54 @@
+name: уведомление владельцу
+
+# Отправляет текст в Telegram владельцу от имени боевого бота.
+# Локальный notify_admin.py намеренно ходит dev-ботом (правило dev-контура),
+# поэтому для сообщений владельцу используется сервер: там прод-токен.
+# Текст передаётся файлом, в журнал не печатается.
+
+on:
+  workflow_dispatch:
+    inputs:
+      text:
+        description: "Текст сообщения"
+        required: true
+      chat_id:
+        description: "Получатель (пусто — vars.ADMIN_CHAT_ID)"
+        required: false
+        default: ""
+
+concurrency:
+  group: notify-owner
+  cancel-in-progress: false
+
+jobs:
+  send:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: отправить
+        env:
+          TEXT: ${{ inputs.text }}
+          CHAT: ${{ inputs.chat_id || vars.ADMIN_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" \
+            'cat > /opt/svoi/scripts_ops_notify.py' < scripts/ops/notify_owner.py
+          printf '%s' "$TEXT" | ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" \
+            'cat > /tmp/notext && chmod 644 /tmp/notext'
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "sudo -u svoi bash -c 'set -a; . /opt/svoi/.env; set +a; /opt/svoi/.venv/bin/python /opt/svoi/scripts_ops_notify.py --chat $CHAT --text-file /tmp/notext'"
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" \
+            'rm -f /opt/svoi/scripts_ops_notify.py /tmp/notext'

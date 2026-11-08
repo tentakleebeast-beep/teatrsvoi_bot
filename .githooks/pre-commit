@@ -1,0 +1,193 @@
+#!/usr/bin/env bash
+# Хук перед коммитом: ruff по staged-файлам и проверка инвариантов проекта.
+#
+# Установка — один раз на клон (в git настройка не переносится):
+#     git config core.hooksPath .githooks
+# Обойти проверки:
+#     git commit --no-verify
+#
+# Правило и решение — docs/development/26-process-and-git.md §4.
+# Переопределения (нужны тесту tests/unit/test_precommit_hook.py):
+#     SVOI_RUFF              — путь к ruff (по умолчанию .venv/bin/ruff, иначе ruff из PATH)
+#     SVOI_INVARIANTS_SCRIPT — путь к скрипту инвариантов; переменная выставлена —
+#                              проба базы не делается, за доступность отвечает скрипт
+#     SVOI_TEST_AUDIT_SCRIPT — путь к scripts/test_audit.py (проверка обоснованности тестов)
+#
+# Вывод на успехе — ровно одна строка: pre-commit: OK (...).
+# Вывод инструментов печатается только при падении, вместе с именем проверки.
+
+set -u
+
+ROOT=$(git rev-parse --show-toplevel) || exit 0
+cd "$ROOT" || exit 0
+
+# --- защита основной ветки -----------------------------------------------------
+# Правило docs/development/26 §7a п.9: воркер не коммитит в main — её собирает
+# worker-review. Контекст воркера определяем по переменным Hermes: он их
+# выставляет при запуске карты, у человека их нет.
+#
+# Профиль worker-review проверяется первым и перебивает HERMES_KANBAN_TASK:
+# это тот, кому основную ветку собирать (§7 п.8), иначе после установки хуков
+# main некому обновлять.
+is_reviewer=0
+case "${HERMES_PROFILE:-}" in
+    worker-review) is_reviewer=1 ;;
+esac
+
+is_worker=0
+if [ "$is_reviewer" -eq 0 ]; then
+    if [ -n "${HERMES_KANBAN_TASK:-}" ]; then
+        is_worker=1
+    fi
+    case "${HERMES_PROFILE:-}" in
+        worker-*) is_worker=1 ;;
+    esac
+fi
+
+branch=$(git symbolic-ref --short -q HEAD 2>/dev/null || true)
+
+if [ "$is_worker" -eq 1 ] && [ -n "$branch" ]; then
+    case "$branch" in
+        main|master)
+            if [ -n "${HERMES_KANBAN_TASK:-}" ]; then
+                suggested="wt/${HERMES_KANBAN_TASK}"
+            else
+                suggested="wt/<task-id>"
+            fi
+            printf 'pre-commit: не пройдено — ветка %s защищена\n' "$branch"
+            printf 'Правило (docs/development/26 §7a п.9): воркер не коммитит в основную ветку, main собирает worker-review.\n'
+            printf 'Работайте в своей ветке: git switch -c %s\n' "$suggested"
+            printf 'обойти: git commit --no-verify\n'
+            exit 1
+            ;;
+        wt/*|card-*) ;;
+        *)
+            printf 'pre-commit: предупреждение — ветка %s вне схемы wt/<task-id> или card-*\n' "$branch" >&2
+            ;;
+    esac
+fi
+
+# --- staged-файлы --------------------------------------------------------------
+# ACMR обязателен: удалённый файл (D) остался бы в списке и ruff упал бы на
+# отсутствующем пути. -z + кавычки: в пути репозитория есть пробел.
+staged=()
+while IFS= read -r -d '' path; do
+    staged+=("$path")
+done < <(git diff --cached --name-only -z --diff-filter=ACMR -- '*.py')
+count=${#staged[@]}
+
+# --- ruff ----------------------------------------------------------------------
+if [ -n "${SVOI_RUFF:-}" ]; then
+    ruff=$SVOI_RUFF
+elif [ -x .venv/bin/ruff ]; then
+    ruff=.venv/bin/ruff
+elif command -v ruff >/dev/null 2>&1; then
+    ruff=ruff
+else
+    ruff=
+fi
+
+ruff_ran=0
+if [ "$count" -gt 0 ]; then
+    if [ -n "$ruff" ]; then
+        # Без аргументов ruff линтует весь каталог, поэтому пустой список не запускаем вовсе.
+        if ! out=$("$ruff" check "${staged[@]}" 2>&1); then
+            printf 'pre-commit: не пройдено — ruff (staged-файлы)\n%s\nобойти: git commit --no-verify\n' "$out"
+            exit 1
+        fi
+        ruff_ran=1
+    else
+        printf 'ruff не найден, проверка пропущена: .venv/bin/pip install -r requirements-dev.txt\n'
+    fi
+fi
+
+# --- инварианты ----------------------------------------------------------------
+inv=${SVOI_INVARIANTS_SCRIPT:-scripts/check_invariants.py}
+if [ -x .venv/bin/python ]; then
+    python=.venv/bin/python
+elif command -v python3 >/dev/null 2>&1; then
+    python=python3
+else
+    python=
+fi
+
+inv_ran=0
+if [ -z "$python" ]; then
+    printf 'python не найден, проверка инвариантов пропущена\n'
+elif [ -n "${SVOI_INVARIANTS_SCRIPT:-}" ]; then
+    # Переопределённый скрипт сам отвечает за доступность базы; проба относится
+    # только к штатному check_invariants.py.
+    if ! out=$(env -u PYTHONPATH "$python" "$inv" 2>&1); then
+        printf 'pre-commit: не пройдено — инварианты (docs/architecture/11)\n%s\nобойти: git commit --no-verify\n' "$out"
+        exit 1
+    fi
+    inv_ran=1
+else
+    # База нужна только скрипту. Строку подключения берём из самого скрипта
+    # (check_invariants.DB = _cli.dsn(): DATABASE_URL → .env → локальная база),
+    # а не отдельным вызовом _cli.dsn(): проба должна проверять ровно то
+    # подключение, которым пойдёт проверка инвариантов.
+    if db_out=$(env -u PYTHONPATH "$python" - "$inv" <<'PY' 2>&1
+import importlib.util
+import pathlib
+import sys
+
+script = pathlib.Path(sys.argv[1]).resolve()
+# Каталог скрипта в sys.path — как при `python scripts/check_invariants.py`:
+# иначе соседний `from _cli import dsn` из скрипта не найдётся.
+sys.path.insert(0, str(script.parent))
+
+spec = importlib.util.spec_from_file_location("svoi_invariants", script)
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+
+import psycopg  # noqa: E402
+
+psycopg.connect(module.DB, connect_timeout=2).close()
+PY
+    ); then
+        if ! out=$(env -u PYTHONPATH "$python" "$inv" 2>&1); then
+            printf 'pre-commit: не пройдено — инварианты (docs/architecture/11)\n%s\nобойти: git commit --no-verify\n' "$out"
+            exit 1
+        fi
+        inv_ran=1
+    else
+        printf 'проверка инвариантов пропущена: база недоступна, поднимите `docker compose up -d postgres`\n'
+    fi
+fi
+
+# --- обоснованность тестов -----------------------------------------------------
+# Правило docs/development/26 §7a: тест без ID требования/дефекта не принимается.
+# Запускаем только когда в коммите есть staged tests/**: скрипт читает весь каталог
+# и без базы, но на правке продуктового кода он ничего нового не скажет.
+audit=${SVOI_TEST_AUDIT_SCRIPT:-scripts/test_audit.py}
+audit_ran=0
+staged_tests=$(git diff --cached --name-only --diff-filter=ACMR -- tests | grep -c '\.py$' || true)
+if [ -n "$python" ] && [ "$staged_tests" -gt 0 ]; then
+    if [ ! -f "$audit" ]; then
+        printf 'test_audit.py не найден, проверка обоснованности тестов пропущена\n'
+    elif ! out=$(env -u PYTHONPATH "$python" "$audit" --strict 2>&1); then
+        printf 'pre-commit: не пройдено — тесты без ID (docs/development/26 §7a)\n%s\nобойти: git commit --no-verify\n' "$out"
+        exit 1
+    else
+        audit_ran=1
+    fi
+fi
+
+# --- итог ----------------------------------------------------------------------
+parts=
+if [ "$ruff_ran" -eq 1 ]; then
+    parts="ruff: $count файл(ов)"
+fi
+if [ "$inv_ran" -eq 1 ]; then
+    parts="${parts:+$parts, }инварианты пройдены"
+fi
+if [ "$audit_ran" -eq 1 ]; then
+    parts="${parts:+$parts, }тесты обоснованы"
+fi
+if [ -z "$parts" ]; then
+    printf 'pre-commit: OK\n'
+else
+    printf 'pre-commit: OK (%s)\n' "$parts"
+fi
+exit 0

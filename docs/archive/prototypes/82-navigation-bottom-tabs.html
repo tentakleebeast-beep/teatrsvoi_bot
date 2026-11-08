@@ -1,0 +1,345 @@
+<!doctype html>
+<!-- Архив. Заменён: docs/development/92-navigation-model.md (действующая модель — четыре нижние вкладки) и docs/development/82-ux-navigation.md §3.2 (разбор прежней модели хаба). Причина: черновой вариант A переработан в решение 92, переделка Ш-1…Ш-10 закрыта, эталон дизайн-системы — prototypes/ux2-mini-app.html. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>СВОИ — прототип навигации (вариант A: нижние вкладки)</title>
+<style>
+  :root{
+    --bg:#17212b; --card:#232e3c; --fg:#ffffff; --hint:#8f9aa6;
+    --accent:#5288c1; --line:rgba(255,255,255,.12); --ok:#4fae6a; --warn:#c9a227; --err:#c05252;
+  }
+  [data-theme="light"]{ --bg:#f4f4f5; --card:#ffffff; --fg:#1a1a1a; --hint:#707579;
+    --accent:#2f6fed; --line:rgba(0,0,0,.12); }
+  *{box-sizing:border-box}
+  body{margin:0;background:#0d1117;color:var(--fg);
+       font:15px/1.45 -apple-system,system-ui,sans-serif;display:flex;justify-content:center;padding:24px}
+  .phone{width:390px;height:780px;background:var(--bg);border-radius:28px;overflow:hidden;
+         display:flex;flex-direction:column;box-shadow:0 24px 60px rgba(0,0,0,.5);
+         border:1px solid rgba(255,255,255,.08);position:relative}
+  header{padding:14px 16px 10px;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:10px}
+  header h1{font-size:16px;margin:0;flex:1}
+  .role{font-size:12px;color:var(--hint);display:flex;gap:6px;flex-wrap:wrap}
+  .role button{background:transparent;border:1px solid var(--line);color:var(--hint);
+               border-radius:999px;padding:3px 9px;font-size:11px;cursor:pointer}
+  .role button.on{border-color:var(--accent);color:var(--fg);background:rgba(82,136,193,.18)}
+  main{flex:1;overflow-y:auto;padding:14px 16px 8px}
+  h2{font-size:12px;text-transform:uppercase;letter-spacing:.04em;color:var(--hint);margin:16px 0 8px}
+  .card{background:var(--card);border-radius:14px;padding:12px 14px;margin-bottom:10px}
+  .tile{display:flex;align-items:center;gap:12px;background:var(--card);border-radius:14px;
+        padding:14px;margin-bottom:8px;cursor:pointer;border:1px solid transparent}
+  .tile:hover{border-color:var(--accent)}
+  .tile .ico{width:34px;height:34px;border-radius:10px;background:rgba(82,136,193,.18);
+             display:grid;place-items:center;font-size:16px}
+  .tile .t{flex:1}
+  .tile .t b{display:block;font-size:14px;font-weight:600}
+  .tile .t span{font-size:12px;color:var(--hint)}
+  .row{display:flex;justify-content:space-between;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}
+  .row:last-child{border-bottom:0}
+  .row .k{color:var(--hint)}
+  .seg{display:flex;gap:8px;margin-bottom:12px}
+  .seg button{flex:1;padding:10px;border-radius:11px;border:1px solid var(--line);
+              background:transparent;color:var(--fg);font:inherit;cursor:pointer}
+  .seg button.on{background:var(--accent);border-color:var(--accent);color:#fff}
+  label{display:block;font-size:12px;color:var(--hint);margin:10px 0 4px}
+  input,select{width:100%;padding:11px;border-radius:11px;border:1px solid var(--line);
+               background:var(--bg);color:var(--fg);font:inherit}
+  .cta{width:100%;padding:14px;border:0;border-radius:13px;background:var(--accent);
+       color:#fff;font:inherit;font-weight:600;margin-top:14px;cursor:pointer}
+  .ghost{background:transparent;border:1px solid var(--line);color:var(--fg);font-weight:500}
+  nav{display:flex;border-top:1px solid var(--line);background:var(--bg)}
+  nav button{flex:1;background:transparent;border:0;color:var(--hint);padding:9px 4px 12px;
+             font:inherit;font-size:11px;cursor:pointer;display:grid;gap:3px;justify-items:center}
+  nav button .i{font-size:17px;line-height:1}
+  nav button.on{color:var(--accent)}
+  .week{display:grid;grid-template-columns:repeat(7,1fr);gap:5px;margin-top:6px}
+  .week button{aspect-ratio:1;border-radius:9px;border:1px solid var(--line);
+               background:transparent;color:var(--hint);font:inherit;font-size:11px;cursor:pointer}
+  .week button.busy{background:var(--accent);border-color:var(--accent);color:#fff}
+  .week button.free{background:rgba(79,174,106,.25);border-color:var(--ok);color:var(--fg)}
+  .sw{display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line)}
+  .sw:last-child{border-bottom:0}
+  .sw .tr{width:44px;height:26px;border-radius:999px;background:var(--line);position:relative;cursor:pointer;flex:none}
+  .sw .tr i{position:absolute;top:3px;left:3px;width:20px;height:20px;border-radius:50%;background:#fff;transition:.15s}
+  .sw.on .tr{background:var(--accent)} .sw.on .tr i{left:21px}
+  .muted{font-size:12px;color:var(--hint)}
+  .pill{font-size:11px;padding:2px 7px;border-radius:999px;background:rgba(82,136,193,.2);color:var(--fg)}
+  .note{position:absolute;left:50%;transform:translateX(-50%);bottom:78px;background:var(--card);
+        border:1px solid var(--line);border-radius:10px;padding:8px 12px;font-size:12px;opacity:0;
+        transition:.2s;pointer-events:none}
+  .note.show{opacity:1}
+  .hintbar{background:rgba(201,162,39,.15);border:1px solid rgba(201,162,39,.4);border-radius:11px;
+           padding:9px 12px;font-size:12px;margin-bottom:10px;color:var(--fg)}
+  .app{display:none} .app.on{display:block}
+</style>
+</head>
+<body>
+<div class="phone">
+  <header>
+    <h1>СВОИ</h1>
+    <div class="role">
+      <button data-role="troupe" class="on">Студиец</button>
+      <button data-role="org">Организатор</button>
+      <button data-role="admin">Админ</button>
+    </div>
+  </header>
+
+  <main>
+    <!-- ГЛАВНАЯ -->
+    <section class="app on" id="tab-home">
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div><b id="hello">Виктор</b><div class="muted" id="roleLine">студиец · активен</div></div>
+          <span class="pill" id="today">чт, 30 окт</span>
+        </div>
+      </div>
+
+      <h2>Быстро</h2>
+      <div class="tile" data-go="week"><div class="ico">🗓</div><div class="t"><b>Отметить занятость</b>
+        <span>неделя, шаблон, отметки на дни</span></div></div>
+      <div class="tile" data-go="money"><div class="ico">₽</div><div class="t"><b>Расход или доход</b>
+        <span>запись в бюджет и в лист</span></div></div>
+
+      <h2>Студия</h2>
+      <div class="tile"><div class="ico">📅</div><div class="t"><b>Расписание</b>
+        <span>ближайшие репетиции и показы</span></div></div>
+      <div class="tile"><div class="ico">🔍</div><div class="t"><b>Поиск окон</b>
+        <span>когда всем удобно</span></div></div>
+      <div class="tile"><div class="ico">💬</div><div class="t"><b>Обратная связь</b>
+        <span>вопрос или предложение</span></div></div>
+
+      <h2>Моё</h2>
+      <div class="tile"><div class="ico">💸</div><div class="t"><b>Мои взносы</b>
+        <span>начислено, оплачено, остаток</span></div></div>
+      <div class="tile" data-go="profile"><div class="ico">👤</div><div class="t"><b>Профиль</b>
+        <span>анкета и тариф</span></div></div>
+      <div class="tile" data-go="profile"><div class="ico">🔔</div><div class="t"><b>Уведомления</b>
+        <span>что и когда приходит</span></div></div>
+
+      <div class="admin-only">
+        <h2>Люди и деньги</h2>
+        <div class="tile"><div class="ico">👥</div><div class="t"><b>Участники</b>
+          <span>активные, ожидающие, архив</span></div></div>
+        <div class="tile"><div class="ico">✉️</div><div class="t"><b>Заявки и приглашения</b>
+          <span>одобрить, выдать код</span></div></div>
+      </div>
+      <div class="admin-panel-only">
+        <div class="tile"><div class="ico">📊</div><div class="t"><b>Бюджет</b>
+          <span>месяц, статьи, план и факт</span></div></div>
+        <div class="tile"><div class="ico">🛠</div><div class="t"><b>Админ-панель</b>
+          <span>права, журнал, сверка</span></div></div>
+        <div class="tile"><div class="ico">📣</div><div class="t"><b>Рассылка</b>
+          <span>сообщение всем активным</span></div></div>
+      </div>
+    </section>
+
+    <!-- ЗАНЯТОСТЬ -->
+    <section class="app" id="tab-week">
+      <h2>Занятость · 26 октября — 1 ноября</h2>
+      <div class="muted">Нажмите день: свободен → занят → не уверен → пусто</div>
+      <div class="week" id="weekGrid"></div>
+      <div class="card" style="margin-top:12px">
+        <div class="row"><span class="k">Сколько отмечено</span><b id="marked">0 из 7</b></div>
+      </div>
+      <button class="cta ghost" id="fillTpl">Заполнить по обычной неделе</button>
+      <button class="cta ghost" id="clearWeek">Очистить неделю</button>
+      <button class="cta">Сохранить неделю</button>
+      <div class="hintbar" style="margin-top:12px">
+        «Очистить» нужна перед шаблоном: иначе заполнение поверх старых отметок
+        выглядит бессмысленно.
+      </div>
+    </section>
+
+    <!-- ДЕНЬГИ -->
+    <section class="app" id="tab-money">
+      <div class="seg">
+        <button class="on" data-type="expense">Расход</button>
+        <button data-type="income">Доход</button>
+      </div>
+      <label>Сумма, ₽</label><input id="amount" inputmode="decimal" placeholder="3000">
+      <label>Категория</label><select id="category"></select>
+      <label>Статья</label><input id="purpose" placeholder="например, «Бунин»">
+      <label>Дата</label><input id="date" value="2026-10-30">
+      <div class="seg" style="margin-top:12px">
+        <button class="on" data-plan="0">Факт</button>
+        <button data-plan="1">План</button>
+      </div>
+      <button class="cta" id="saveTx">Записать</button>
+      <div class="muted" id="moneyStatus" style="margin-top:8px"></div>
+    </section>
+
+    <!-- ЛЮДИ -->
+    <section class="app" id="tab-people">
+      <h2>Участники</h2>
+      <div class="card" id="peopleList"></div>
+      <button class="cta">Пригласить по коду</button>
+      <button class="cta ghost" id="broadcast">Написать всем активным (17)</button>
+      <div class="muted" style="margin-top:10px">
+        Рассылка сначала показывает, скольким уйдёт сообщение — как и архивирование
+        называет человека по имени.
+      </div>
+    </section>
+
+    <!-- ПРОФИЛЬ -->
+    <section class="app" id="tab-profile">
+      <h2>Профиль</h2>
+      <div class="card">
+        <div class="row"><span class="k">Имя</span><b>Иванов Виктор</b></div>
+        <div class="row"><span class="k">Роль</span><b id="profRole">студиец</b></div>
+        <div class="row"><span class="k">Тариф</span><b>5 000 ₽ / месяц</b></div>
+        <div class="row"><span class="k">Telegram</span><b>привязан</b></div>
+      </div>
+
+      <h2>Уведомления</h2>
+      <div class="card">
+        <div class="sw on" data-sw="rehearsals"><span>Напоминание о репетиции<div class="muted">за 2 часа</div></span><div class="tr"><i></i></div></div>
+        <div class="sw on" data-sw="dues"><span>Взносы<div class="muted">начисление и срок</div></span><div class="tr"><i></i></div></div>
+        <div class="sw on" data-sw="schedule"><span>Изменения расписания<div class="muted">приходит даже в тихие часы</div></span><div class="tr"><i></i></div></div>
+        <div class="row" style="margin-top:6px"><span class="k">Тихие часы</span><b>21:00 — 09:00</b></div>
+      </div>
+      <button class="cta">Сохранить настройки</button>
+    </section>
+  </main>
+
+  <nav id="tabs">
+    <button class="on" data-tab="home"><span class="i">⌂</span>Главная</button>
+    <button data-tab="week"><span class="i">🗓</span>Занятость</button>
+    <button data-tab="money"><span class="i">₽</span>Деньги</button>
+    <button data-tab="people" class="admin-only"><span class="i">👥</span>Люди</button>
+    <button data-tab="profile"><span class="i">👤</span>Профиль</button>
+  </nav>
+  <div class="note" id="note"></div>
+</div>
+
+<script>
+const CATS = {
+  expense: ["Аренда помещения","Гонорары и доли","Закупки к спектаклям","Коммунальные платежи",
+            "Прочее","Расходники и хозтовары","Реквизит и костюмы","Реклама и полиграфия",
+            "Ремонт и содержание","Тренинги и занятия","Фото/видео"],
+  income: ["Взносы студийцев","Возвраты","Донат","Курсы","Подарок","Продажа билетов",
+           "Прочее (доход)","Субаренда"]
+};
+const state = { role:"troupe", tab:"home", txType:"expense", plan:0,
+                week:[null,null,"busy",null,"free","busy",null] };
+
+const note = (text) => {
+  const node = document.getElementById("note");
+  node.textContent = text; node.classList.add("show");
+  clearTimeout(note._t); note._t = setTimeout(() => node.classList.remove("show"), 1600);
+};
+
+function setRole(role){
+  state.role = role;
+  document.querySelectorAll(".role button").forEach(b => b.classList.toggle("on", b.dataset.role === role));
+  document.querySelectorAll(".admin-only").forEach(el =>
+    el.style.display = role === "troupe" ? "none" : "");
+  document.querySelectorAll(".admin-panel-only").forEach(el =>
+    el.style.display = role === "admin" ? "" : "none");
+  const label = { troupe:"студиец", org:"организатор", admin:"админ" }[role];
+  document.getElementById("roleLine").textContent = label + " · активен";
+  document.getElementById("profRole").textContent = label;
+  const peopleTab = document.querySelector('nav button[data-tab="people"]');
+  if (role === "troupe" && state.tab === "people") show("home");
+}
+
+function show(tab){
+  state.tab = tab;
+  document.querySelectorAll(".app").forEach(s => s.classList.toggle("on", s.id === "tab-" + tab));
+  document.querySelectorAll("nav button").forEach(b => b.classList.toggle("on", b.dataset.tab === tab));
+  document.querySelector("main").scrollTop = 0;
+}
+
+function fillCats(){
+  const select = document.getElementById("category");
+  select.innerHTML = "";
+  CATS[state.txType].forEach(name => {
+    const option = document.createElement("option");
+    option.textContent = name; option.value = name; select.appendChild(option);
+  });
+}
+
+function renderWeek(){
+  const grid = document.getElementById("weekGrid");
+  const days = ["ПН 26","ВТ 27","СР 28","ЧТ 29","ПТ 30","СБ 31","ВС 01"];
+  grid.innerHTML = "";
+  days.forEach((label, i) => {
+    const button = document.createElement("button");
+    button.textContent = label;
+    const value = state.week[i];
+    if (value) button.className = value;
+    button.onclick = () => {
+      const order = [null, "busy", "free"];
+      state.week[i] = order[(order.indexOf(state.week[i]) + 1) % order.length];
+      renderWeek();
+    };
+    grid.appendChild(button);
+  });
+  document.getElementById("marked").textContent =
+    state.week.filter(Boolean).length + " из 7";
+}
+
+function renderPeople(){
+  const people = [
+    ["Иванов Виктор","админ","активен"],
+    ["Лебедева Мария","организатор","активен"],
+    ["Соколов Марк","студиец","активен"],
+    ["Орлова Александра","студиец","ожидает"],
+  ];
+  const box = document.getElementById("peopleList");
+  box.innerHTML = "";
+  people.forEach(([name, role, status], i) => {
+    const row = document.createElement("div");
+    row.className = "row";
+    row.innerHTML = '<span>' + name + ' · <span class="muted">' + role + '</span></span>' +
+                    '<span><span class="pill">' + status + '</span></span>';
+    if (status === "активен" && i > 1) {
+      const archive = document.createElement("button");
+      archive.textContent = "в архив";
+      archive.style.cssText = "border:1px solid var(--line);background:transparent;color:var(--hint);" +
+                              "border-radius:9px;padding:4px 8px;font-size:11px;cursor:pointer;margin-left:8px";
+      archive.onclick = () => note("В архив: " + name + "? Подтвердите действие");
+      row.appendChild(archive);
+    }
+    box.appendChild(row);
+  });
+}
+
+document.querySelectorAll(".role button").forEach(b => b.onclick = () => setRole(b.dataset.role));
+document.querySelectorAll("nav button").forEach(b => b.onclick = () => show(b.dataset.tab));
+document.querySelectorAll(".tile[data-go]").forEach(t => t.onclick = () => show(t.dataset.go));
+
+document.querySelectorAll(".seg button[data-type]").forEach(b => b.onclick = () => {
+  state.txType = b.dataset.type;
+  document.querySelectorAll(".seg button[data-type]").forEach(x => x.classList.toggle("on", x === b));
+  fillCats();
+});
+document.querySelectorAll(".seg button[data-plan]").forEach(b => b.onclick = () => {
+  state.plan = Number(b.dataset.plan);
+  document.querySelectorAll(".seg button[data-plan]").forEach(x => x.classList.toggle("on", x === b));
+});
+
+document.getElementById("saveTx").onclick = () => {
+  const amount = document.getElementById("amount").value.replace(",", ".");
+  const status = document.getElementById("moneyStatus");
+  if (!(Number(amount) > 0)) { status.textContent = "Сумма должна быть числом больше нуля."; return; }
+  status.textContent = "Записано: " + Number(amount).toLocaleString("ru-RU") + " ₽ · " +
+    (state.plan ? "план, в баланс не входит" : "факт");
+  note("Записано — можно отменить в течение 10 минут");
+};
+
+document.getElementById("fillTpl").onclick = () => {
+  state.week = ["busy","busy",null,null,"free","busy",null];
+  renderWeek(); note("Заполнено по обычной неделе");
+};
+document.getElementById("clearWeek").onclick = () => {
+  state.week = [null,null,null,null,null,null,null];
+  renderWeek(); note("Неделя очищена");
+};
+document.getElementById("broadcast").onclick = () => note("Отправить 17 активным? Текст спросим дальше");
+document.querySelectorAll(".sw").forEach(sw => sw.onclick = () => sw.classList.toggle("on"));
+
+setRole("troupe"); fillCats(); renderWeek(); renderPeople(); show("home");
+</script>
+</body>
+</html>

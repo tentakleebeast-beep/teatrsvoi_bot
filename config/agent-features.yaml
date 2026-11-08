@@ -1,0 +1,882 @@
+# Реестр функций: экран Mini App или кнопка чата → чем это делает агент
+# (карта t_09672cea, docs/development/108 §9).
+#
+# Зачем файл. Агент предлагал действия только там, где у него был инструмент, и молчал
+# про остальное: человек не понимал, что можно посмотреть, а что — только кнопками.
+# Здесь закрытый список поверхностей: у каждой записи либо tool (инструмент агента),
+# либо capabilities (пункт «Что умею» — ответ строится из этого же реестра),
+# либо not_for_agent с причиной. Новый экран или кнопка без записи здесь роняет
+# тест tests/unit/test_agent_features.py, а не всплывает в разговоре с человеком.
+#
+# Правила:
+#   * source — ровно адрес экрана (/webapp/...) или ровно подпись кнопки;
+#   * surface — где поверхность: webapp | menu | quick | panel | chat;
+#   * tool — имя из services/tool-api/app/agently/registry.py (закрытый список);
+#   * not_for_agent — причина, почему агент этого не делает. Причина — для человека,
+#     а не отписка: «нет права» и «пишет данные» — разные ответы.
+#
+# Продуктовые формулировки кнопок не переписываются: source — это их текущий текст.
+# Экраны сверяются с pages.routes.build_router (экраны и старые адреса-редиректы);
+# кнопки — с клавиатурами бота, включая кнопки в обычных сообщениях чата
+# (/start, подсказка о вводе, фолбэк): keyboards.CHAT_BUTTONS и
+# routers.menu.CHAT_ACTION_BUTTONS.
+#
+# Кроме объявленных списков сторож читает сами routers/menu.py и keyboards.py
+# (tests/unit/button_scan.py): подпись, собранную мимо списка — литералом в обработчике,
+# вычисляемым колбэком `"form:" + kind`, строкой в списковом включении, — он тоже найдёт.
+# Если подпись приходит из данных (имя человека, тип операции), место описывается в
+# разделе `scenarios` ниже с причиной: непроверяемых кнопок быть не должно.
+
+version: 1
+
+scopes:
+  screens: routes.build_router
+  buttons:
+    - keyboards.MENU_ACTIONS
+    - keyboards.DIALOG_CONTROLS
+    - keyboards.panel_rows
+    - keyboards.CHAT_BUTTONS
+    - routers.menu.CHAT_ACTION_BUTTONS
+  # Подписи, которые нельзя сверить построчно: они приходят из данных или из общего
+  # построителя. Сторож (tests/unit/button_scan.py) читает routers/menu.py и
+  # keyboards.py и требует, чтобы каждое такое место было описано в разделе
+  # `scenarios` с причиной. Новое непроверяемое место роняет тест.
+  scanned_files:
+    - menu.py
+    - keyboards.py
+  scenarios: scenarios
+
+# Места, где подпись кнопки приходит из данных или из общего построителя.
+# Ключ — file + function + kind + expr; выражение — как оно написано в исходнике.
+scenarios:
+  - id: scenario.chat_actions_menu
+    file: menu.py
+    function: _chat_action_buttons
+    kind: row
+    expr: text
+    reason: "общий построитель строк: подписи берутся из routers.menu.CHAT_ACTION_BUTTONS"
+
+  - id: scenario.copy_code_rows
+    file: keyboards.py
+    function: copy_code_kb
+    kind: "text=InlineKeyboardButton"
+    expr: text
+    reason: "общий построитель: подписи приходят из строк вызова, они проверяются отдельно"
+
+  - id: scenario.rows_kb
+    file: keyboards.py
+    function: kb
+    kind: "text=InlineKeyboardButton"
+    expr: t
+    reason: "общий построитель клавиатуры: подписи приходят из строк вызова"
+
+  - id: scenario.candidates
+    file: keyboards.py
+    function: _candidates_kb
+    kind: row
+    expr: "c['display_name']"
+    reason: "имя человека из БД — данные, а не текст интерфейса; кнопка выбора себя"
+
+  - id: scenario.group_kb
+    file: keyboards.py
+    function: group_kb
+    kind: row
+    expr: text
+    reason: "пункты подменю из keyboards.MENU_ACTIONS: подписи проверяются поверхностью menu"
+
+entries:
+  # ---------------------------------------------------------------- экраны Mini App
+  - id: screen.home
+    kind: screen
+    surface: webapp
+    source: /webapp/home
+    title: Главная
+    tool: read_schedule
+    note: "что сегодня и что требует решения — ближайшие события"
+
+  - id: screen.nav
+    kind: screen
+    surface: webapp
+    source: /webapp/nav
+    title: Навигация
+    not_for_agent: "служебный JSON для подписи вкладки, человеку не показывается"
+
+  - id: screen.more
+    kind: screen
+    surface: webapp
+    source: /webapp/more
+    title: Ещё и Управление
+    not_for_agent: "навигационный хаб: агент не открывает экраны, а называет, где действие"
+
+  - id: screen.week
+    kind: screen
+    surface: webapp
+    source: /webapp/week
+    title: Время
+    tool: read_availability
+    note: "неделя карточками, отметки занятости по часам"
+
+  - id: screen.week_summary
+    kind: screen
+    surface: webapp
+    source: /webapp/week/summary
+    title: Сводка занятости
+    tool: read_availability
+    note: "кто сколько часов отметил и когда свободен"
+
+  - id: screen.week_month
+    kind: screen
+    surface: webapp
+    source: /webapp/week/month
+    title: Сетка месяца
+    tool: read_availability
+    note: "люди × дни из Google-таблицы, только чтение; расхождение с базой показывается"
+
+  - id: screen.money
+    kind: screen
+    surface: webapp
+    source: /webapp/money
+    title: Деньги
+    tool: read_budget
+    note: "итоги месяца и операции; взносы — read_dues"
+
+  - id: screen.profile
+    kind: screen
+    surface: webapp
+    source: /webapp
+    title: Анкета участника
+    not_for_agent: "личные данные профиля агент не читает и не меняет; анкета — действие человека"
+
+  - id: screen.tx
+    kind: screen
+    surface: webapp
+    source: /webapp/tx
+    title: Форма операции
+    tool: propose_budget_tx
+    note: "агент готовит карточку, запись — по кнопке человека"
+
+  - id: screen.dues
+    kind: screen
+    surface: webapp
+    source: /webapp/dues
+    title: Мои взносы
+    tool: read_dues
+    note: "тариф, внесено, остаток и история месяцами"
+
+  - id: screen.notifications
+    kind: screen
+    surface: webapp
+    source: /webapp/notifications
+    title: Уведомления
+    not_for_agent: "настройки доставки и тихих часов: инструмента чтения нет, менять без подтверждения нельзя"
+
+  - id: screen.feedback
+    kind: screen
+    surface: webapp
+    source: /webapp/feedback
+    title: Обратная связь
+    not_for_agent: "отправка обращения — действие человека; агент не пишет обращения от его имени"
+
+  - id: screen.slots
+    kind: screen
+    surface: webapp
+    source: /webapp/slots
+    title: Поиск окон
+    tool: find_slots
+    note: "окна по занятости людей и зала; считает код, агент пересказывает text"
+
+  - id: screen.reconcile
+    kind: screen
+    surface: webapp
+    source: /webapp/reconcile
+    title: Сверка листов
+    not_for_agent: "админ-операция применяет изменения в данных; агент только читает"
+
+  - id: screen.broadcast
+    kind: screen
+    surface: webapp
+    source: /webapp/broadcast
+    title: Рассылка
+    not_for_agent: "массовая отправка людям: агент не отправляет сообщения от имени студии"
+
+  - id: screen.ui
+    kind: screen
+    surface: webapp
+    source: /webapp/ui
+    title: Справочник компонентов
+    not_for_agent: "служебный экран разработчика, к работе студии не относится"
+
+  - id: screen.services
+    kind: screen
+    surface: webapp
+    source: /webapp/services
+    title: Сервисы
+    not_for_agent: "диагностика инфраструктуры под правом admin.panel; агент состояние сервисов не читает"
+
+  - id: screen.files
+    kind: screen
+    surface: webapp
+    source: /webapp/files
+    title: Файлы
+    tool: list_files
+    note: "имена, размеры и папки; содержимое — read_file, с цитатой и именем файла"
+
+  - id: screen.folder
+    kind: screen
+    surface: webapp
+    source: /webapp/folder
+    title: Папка
+    tool: list_files
+    note: "список треков папки; чтение текста — read_file"
+
+  - id: screen.notes
+    kind: screen
+    surface: webapp
+    source: /webapp/notes
+    title: Заметки
+    tool: propose_note
+    note: "агент готовит черновик личной или общей заметки; запись — по кнопке человека"
+
+  - id: screen.person
+    kind: screen
+    surface: webapp
+    source: /webapp/person
+    title: Карточка участника
+    not_for_agent: "чужие личные данные; агент не читает карточки людей"
+
+  - id: screen.admin_people
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/people
+    title: Люди
+    not_for_agent: "управление участниками: агент не меняет данные и права людей"
+
+  - id: screen.admin_pending
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/pending
+    title: Заявки
+    not_for_agent: "одобрение заявок — действие с подтверждением, отдельный этап"
+
+  - id: screen.admin_dues
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/dues
+    title: Взносы
+    not_for_agent: "начисление взносов и тариф — деньги студии с подтверждением, решает организатор"
+
+  - id: screen.admin_rights
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/rights
+    title: Права
+    not_for_agent: "выдача прав: агент не меняет права"
+
+  - id: screen.admin_archive
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/archive
+    title: Архив
+    not_for_agent: "архив участников, вне задач агента"
+
+  - id: screen.admin_audit
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/audit
+    title: Аудит
+    not_for_agent: "журнал аудита — служебные данные, агенту недоступны"
+
+  - id: screen.admin_invites
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/invites
+    title: Приглашения
+    not_for_agent: "выпуск инвайт-кодов: агент не выдаёт доступ"
+
+  - id: screen.admin_feedback
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/feedback
+    title: Обращения
+    not_for_agent: "очередь обращений: разбор — работа администратора"
+
+  - id: screen.admin_agent
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/agent
+    title: Разбор агента
+    not_for_agent: "журнал содержит тексты вопросов людей; право admin.panel, агент его не читает"
+
+  - id: screen.admin_notifications
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/notifications
+    title: Уведомления (общие)
+    not_for_agent: "общие тихие часы и типы уведомлений студии: право admin.panel, агент их не меняет"
+
+  # ---------------------------------------------------------------- вход из агента
+  # OPEN_SCREENS (agently/proposals.py) ведёт человека туда, где данные заполняются
+  # руками. Оба адреса — редиректы: /webapp/assign — POST-эндпоинт назначения.
+  - id: screen.open_people
+    kind: screen
+    surface: webapp
+    source: /webapp/people
+    title: Вход в «Люди» из агента
+    tool: propose_event
+    note: "редирект в «Управление → Люди»: так агент отдаёт вход, когда для события не хватает участника"
+
+  - id: screen.open_assign
+    kind: screen
+    surface: webapp
+    source: /webapp/assign
+    title: Вход в назначение из агента
+    tool: propose_event
+    note: "POST-эндпоинт назначения; GET открывает поиск окон — агент не додумывает дату и время"
+
+  # ---------------------------------------------------------------- старые адреса
+  - id: screen.legacy_admin
+    kind: screen
+    surface: webapp
+    source: /webapp/admin
+    title: Старый адрес админ-панели
+    not_for_agent: "редирект на раздел «Люди»; агент по старым адресам не ходит"
+
+  - id: screen.legacy_search
+    kind: screen
+    surface: webapp
+    source: /webapp/search
+    title: Старый адрес поиска
+    not_for_agent: "редирект в «Управление → Люди»; поиск людей — не действие агента"
+
+  - id: screen.legacy_days
+    kind: screen
+    surface: webapp
+    source: /webapp/days
+    title: Старый адрес недели
+    not_for_agent: "редирект на вкладку «Время»"
+
+  - id: screen.legacy_my_sheet
+    kind: screen
+    surface: webapp
+    source: /webapp/my/sheet
+    title: Старый адрес листа дня
+    not_for_agent: "редирект на вкладку «Время»"
+
+  - id: screen.legacy_schedule
+    kind: screen
+    surface: webapp
+    source: /webapp/schedule
+    title: Старый адрес месячной сетки
+    not_for_agent: "редирект на сводку занятости"
+
+  - id: screen.legacy_admin_budget
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/budget
+    title: Старый адрес бюджета в управлении
+    not_for_agent: "редирект на вкладку «Деньги»; админ-разделы агенту не принадлежат"
+
+  # ---------------------------------------------------------------- пункты меню бота
+  - id: menu.money
+    kind: button
+    surface: menu
+    source: Расход и доход
+    title: Расход и доход
+    tool: propose_budget_tx
+    note: "форма операции; агент готовит карточку подтверждения"
+
+  - id: menu.budget
+    kind: button
+    surface: menu
+    source: Бюджет
+    title: Бюджет
+    tool: read_budget
+
+  - id: menu.reconcile
+    kind: button
+    surface: menu
+    source: Сверка листов
+    title: Сверка листов
+    not_for_agent: "применяет изменения в данных; агент только читает"
+
+  - id: menu.dues
+    kind: button
+    surface: menu
+    source: Мои взносы
+    title: Мои взносы
+    tool: read_dues
+
+  - id: menu.availability
+    kind: button
+    surface: menu
+    source: Занятость
+    title: Занятость
+    tool: read_availability
+
+  - id: menu.schedule
+    kind: button
+    surface: menu
+    source: Расписание
+    title: Расписание
+    tool: read_schedule
+
+  - id: menu.slots
+    kind: button
+    surface: menu
+    source: Поиск окон
+    title: Поиск окон
+    tool: read_availability
+
+  - id: menu.profile
+    kind: button
+    surface: menu
+    source: Мой профиль
+    title: Мой профиль
+    not_for_agent: "личные данные; правятся в анкете Mini App"
+
+  - id: menu.admin_panel
+    kind: button
+    surface: menu
+    source: Админ-панель
+    title: Админ-панель
+    not_for_agent: "управление студией — действия администратора"
+
+  - id: menu.people
+    kind: button
+    surface: menu
+    source: Участники
+    title: Участники
+    not_for_agent: "управление людьми: агент не меняет данные и права"
+
+  - id: menu.pending
+    kind: button
+    surface: menu
+    source: Заявки
+    title: Заявки
+    not_for_agent: "одобрение заявок — отдельный этап с подтверждением"
+
+  - id: menu.invites
+    kind: button
+    surface: menu
+    source: Приглашения
+    title: Приглашения
+    not_for_agent: "выдача доступа: агент не выпускает инвайт-коды"
+
+  - id: menu.feedback
+    kind: button
+    surface: menu
+    source: Обратная связь
+    title: Обратная связь
+    not_for_agent: "отправка обращения от имени человека — не действие агента"
+
+  - id: menu.capabilities
+    kind: button
+    surface: menu
+    source: Что умею
+    title: Что умею
+    capabilities: true
+    note: "ответ строится из этого реестра и прав человека"
+
+  - id: menu.help
+    kind: button
+    surface: menu
+    source: Справка
+    title: Справка
+    not_for_agent: "статичная инструкция по интерфейсу; агент её не пересказывает"
+
+  # ------------------------------------------------- клавиатура диалога (05.11.2026)
+  # Постоянная клавиатура управляет разговором, а не доменами: у каждой кнопки один
+  # смысл — «что бот делает сейчас». Ни одна не является действием домена, поэтому
+  # все три — не для агента; сами домены живут в Mini App и в инлайн-входах.
+  - id: quick.reset
+    kind: button
+    surface: quick
+    source: Обнулить
+    title: Обнулить (клавиатура диалога)
+    not_for_agent: "управление разговором: снимает состояние и недособранные карточки, данных не читает"
+
+  - id: quick.task
+    kind: button
+    surface: quick
+    source: Озадачить
+    title: Озадачить (клавиатура диалога)
+    not_for_agent: "рамка диалога: следующий текст идёт агенту с task, права агента не меняются"
+
+  - id: quick.quota
+    kind: button
+    surface: quick
+    source: Сколько мне осталось
+    title: Сколько мне осталось (клавиатура диалога)
+    not_for_agent: "лимит AI читается маршрутом /tools/quota/me: вопрос о лимите не тратит лимит"
+
+  # ---------------------------------------------------------------- админ-панель
+  - id: panel.people
+    kind: button
+    surface: panel
+    source: Участники
+    title: Участники (панель)
+    not_for_agent: "управление людьми: агент не меняет данные и права"
+
+  - id: panel.pending
+    kind: button
+    surface: panel
+    source: Заявки
+    title: Заявки (панель)
+    not_for_agent: "одобрение заявок — отдельный этап с подтверждением"
+
+  - id: panel.rights
+    kind: button
+    surface: panel
+    source: Права
+    title: Права (панель)
+    not_for_agent: "выдача прав: агент не меняет права"
+
+  - id: panel.budget
+    kind: button
+    surface: panel
+    source: Бюджет
+    title: Бюджет
+    tool: read_budget
+
+  - id: panel.feedback
+    kind: button
+    surface: panel
+    source: Обратная связь
+    title: Обращения (панель)
+    not_for_agent: "разбор обращений — работа администратора"
+
+  - id: panel.audit
+    kind: button
+    surface: panel
+    source: Аудит
+    title: Аудит (панель)
+    not_for_agent: "журнал аудита — служебные данные, агенту недоступны"
+
+  - id: panel.services
+    kind: button
+    surface: panel
+    source: Сервисы
+    title: Сервисы (панель)
+    not_for_agent: "диагностика инфраструктуры: агент состояние сервисов не читает"
+
+  - id: panel.reconcile
+    kind: button
+    surface: panel
+    source: Сверка файл ↔ база
+    title: Сверка файл ↔ база (панель)
+    not_for_agent: "применяет изменения в данных; агент только читает"
+
+  - id: panel.sheet_retry
+    kind: button
+    surface: panel
+    source: Дописать в лист
+    title: Дописать в лист (панель)
+    not_for_agent: "пишет в Google-лист: агенту недоступно"
+
+  - id: panel.invite
+    kind: button
+    surface: panel
+    source: Выпустить инвайт-код
+    title: Выпустить инвайт-код (панель)
+    not_for_agent: "выдача доступа: агент не выпускает инвайт-коды"
+
+  - id: panel.codes
+    kind: button
+    surface: panel
+    source: Коды приглашений
+    title: Коды приглашений (панель)
+    not_for_agent: "отзыв кода закрывает доступ: агент этого не делает"
+
+  - id: panel.archive
+    kind: button
+    surface: panel
+    source: Архив
+    title: Архив людей (панель)
+    not_for_agent: "архив и возврат человека меняют статус: агенту недоступно"
+
+  # ------------------------------------------------- кнопки в обычных сообщениях чата
+  # Их видит человек в /start, в подсказке о вводе и в фолбэке, когда агент не ответил.
+  # Подписи берутся из keyboards.CHAT_BUTTONS и routers.menu.CHAT_ACTION_BUTTONS.
+  - id: chat.open_menu
+    kind: button
+    surface: chat
+    source: Открыть меню
+    title: Открыть меню
+    not_for_agent: "открывает хаб Mini App; агент экраны не открывает, а называет, где действие"
+
+  - id: chat.open_week
+    kind: button
+    surface: chat
+    source: Открыть неделю
+    title: Открыть неделю
+    not_for_agent: "открывает вкладку «Время» в Mini App; агент экраны не открывает"
+
+  - id: chat.copy_code
+    kind: button
+    surface: chat
+    source: Скопировать код
+    title: Скопировать код
+    not_for_agent: "техническая кнопка копирования кода приглашения, не действие агента"
+
+  - id: chat.record_expense
+    kind: button
+    surface: chat
+    source: Записать расход
+    title: Записать расход
+    tool: propose_budget_tx
+    note: "форма расхода; агент готовит карточку, запись — по кнопке человека"
+
+  - id: chat.record_income
+    kind: button
+    surface: chat
+    source: Записать доход
+    title: Записать доход
+    tool: propose_budget_tx
+    note: "форма дохода; агент готовит карточку, запись — по кнопке человека"
+
+  - id: chat.report_availability
+    kind: button
+    surface: chat
+    source: Сообщить занятость
+    title: Сообщить занятость
+    not_for_agent: "отметку занятости ставит человек кнопкой и формой; права писать занятость у агента нет"
+
+  # ------------------------------------- остальные кнопки сообщений чата (найдены сторожем)
+  # Их собирают обработчики menu.py и keyboards.py мимо объявленных списков: формы,
+  # сценарий знакомства, регистрация, подтверждение карточки. Подписи не переписаны.
+  - id: chat.menu_button
+    kind: button
+    surface: chat
+    source: Меню
+    title: Кнопка меню чата
+    not_for_agent: "служебная кнопка меню Telegram: открывает хаб Mini App, а не действие агента"
+
+  - id: chat.tx_form
+    kind: button
+    surface: chat
+    source: Внести операцию
+    title: Внести операцию
+    tool: propose_budget_tx
+    note: "форма операции в Mini App; агент готовит карточку, запись — по кнопке человека"
+
+  - id: chat.av_today
+    kind: button
+    surface: chat
+    source: Сегодня
+    title: Сегодня (отметка занятости)
+    not_for_agent: "выбор дня в форме занятости: отметку ставит человек"
+
+  - id: chat.av_tomorrow
+    kind: button
+    surface: chat
+    source: Завтра
+    title: Завтра (отметка занятости)
+    not_for_agent: "выбор дня в форме занятости: отметку ставит человек"
+
+  - id: chat.av_other_date
+    kind: button
+    surface: chat
+    source: Другая дата
+    title: Другая дата (отметка занятости)
+    not_for_agent: "ввод своей даты в форме занятости: действие человека"
+
+  - id: chat.fb_broken
+    kind: button
+    surface: chat
+    source: Не работает
+    title: Не работает (категория обращения)
+    not_for_agent: "категория обращения: обращение отправляет человек от своего имени"
+
+  - id: chat.fb_improve
+    kind: button
+    surface: chat
+    source: Хочу улучшить
+    title: Хочу улучшить (категория обращения)
+    not_for_agent: "категория обращения: обращение отправляет человек от своего имени"
+
+  - id: chat.fb_wish_fl
+    kind: button
+    surface: chat
+    source: Просьба о доработке
+    title: Просьба о доработке (категория обращения)
+    not_for_agent: "категория обращения: просьбу о новой функции отправляет человек; это вид обращения, а не действие агента"
+
+  - id: chat.fb_question
+    kind: button
+    surface: chat
+    source: Вопрос
+    title: Вопрос (категория обращения)
+    not_for_agent: "категория обращения: обращение отправляет человек от своего имени"
+
+  - id: chat.fb_good
+    kind: button
+    surface: chat
+    source: Хорошо работает
+    title: Хорошо работает (категория обращения)
+    not_for_agent: "категория обращения: обращение отправляет человек от своего имени"
+
+  - id: chat.open_slots
+    kind: button
+    surface: chat
+    source: Открыть поиск окон
+    title: Открыть поиск окон
+    not_for_agent: "открывает экран «Поиск окон» в Mini App; агент экраны не открывает"
+
+  - id: chat.open_profile
+    kind: button
+    surface: chat
+    source: Открыть анкету
+    title: Открыть анкету
+    not_for_agent: "открывает анкету в Mini App; личные данные агент не читает и не правит"
+
+  - id: chat.confirm
+    kind: button
+    surface: chat
+    source: Подтвердить
+    title: Подтвердить
+    not_for_agent: "подтверждение записи или заявки — решение человека кнопкой (A-3), агент не подтверждает за него"
+
+  - id: chat.reject
+    kind: button
+    surface: chat
+    source: Отклонить
+    title: Отклонить
+    not_for_agent: "отклонение заявки — действие администратора, не агента"
+
+  - id: chat.cancel
+    kind: button
+    surface: chat
+    source: Отмена
+    title: Отмена
+    not_for_agent: "отказ от черновика или карточки — решение человека"
+
+  - id: chat.save_draft
+    kind: button
+    surface: chat
+    source: Записать
+    title: Записать (черновик)
+    not_for_agent: "сохранение черновика — кнопка человека; агент только предлагает карточку (A-3)"
+
+  - id: chat.edit_draft
+    kind: button
+    surface: chat
+    source: Изменить
+    title: Изменить (черновик)
+    not_for_agent: "правка черновика в форме: агент карточку не редактирует и данные не меняет"
+
+  - id: chat.not_in_list
+    kind: button
+    surface: chat
+    source: Меня нет в списке
+    title: Меня нет в списке
+    not_for_agent: "выбор себя при регистрации: привязка аккаунта — действие человека"
+
+  - id: chat.intro_skip
+    kind: button
+    surface: chat
+    source: Пропустить
+    title: Пропустить (знакомство)
+    not_for_agent: "пропуск знакомства: решение человека, агент анкету не заполняет"
+
+  - id: chat.intro_cancel
+    kind: button
+    surface: chat
+    source: Отменить
+    title: Отменить (знакомство)
+    not_for_agent: "отмена знакомства: решение человека, агент анкету не заполняет"
+
+  # ------------- паритет чата с экраном (карта AUD-5: О3, З5, З1/З4)
+  # Кнопки ниже собраны в keyboards.py и зовут существующие пути tool-api: настройки
+  # уведомлений — `/tools/notifications/settings`, «обычная неделя» —
+  # `/tools/availability/template/*`, состояние дня — `/tools/availability/week`.
+  # Агенту они недоступны: это настройки и отметки человека, а не чтение данных.
+  - id: chat.quiet_rehearsals
+    kind: button
+    surface: chat
+    source: Репетиции
+    title: Репетиции (типы уведомлений)
+    not_for_agent: "тип уведомлений переключает человек: у агента нет инструмента настроек доставки"
+
+  - id: chat.quiet_dues
+    kind: button
+    surface: chat
+    source: Взносы
+    title: Взносы (типы уведомлений)
+    not_for_agent: "тип уведомлений переключает человек: у агента нет инструмента настроек доставки"
+
+  - id: chat.quiet_schedule
+    kind: button
+    surface: chat
+    source: Изменения расписания
+    title: Изменения расписания (типы уведомлений)
+    not_for_agent: "тип уведомлений переключает человек: у агента нет инструмента настроек доставки"
+
+  - id: chat.quiet_morning
+    kind: button
+    surface: chat
+    source: 20:00–08:00
+    title: Обычные тихие часы
+    not_for_agent: "тихие часы — личная настройка человека, агент её не меняет"
+
+  - id: chat.quiet_off
+    kind: button
+    surface: chat
+    source: Выключить тихие часы
+    title: Выключить тихие часы
+    not_for_agent: "тихие часы — личная настройка человека, агент её не меняет"
+
+  - id: chat.quiet_custom
+    kind: button
+    surface: chat
+    source: Своё время
+    title: Своё время тихих часов
+    not_for_agent: "интервал тихих часов вводит человек: у агента нет пишущего инструмента"
+
+  - id: chat.week_remember
+    kind: button
+    surface: chat
+    source: Запомнить неделю
+    title: Запомнить неделю («обычная неделя»)
+    not_for_agent: "шаблон занятости запоминает человек: агент занятость не пишет"
+
+  - id: chat.week_apply
+    kind: button
+    surface: chat
+    source: Заполнить по обычной неделе
+    title: Заполнить по обычной неделе
+    not_for_agent: "заполнение недели по шаблону пишет занятость: агент её не пишет"
+
+  - id: chat.av_status_busy
+    kind: button
+    surface: chat
+    source: Занят
+    title: Занят (состояние дня)
+    not_for_agent: "отметку занятости ставит человек: у агента нет права писать занятость"
+
+  - id: chat.av_status_free
+    kind: button
+    surface: chat
+    source: Свободен
+    title: Свободен (состояние дня)
+    not_for_agent: "отметку занятости ставит человек: у агента нет права писать занятость"
+
+  - id: chat.av_status_uncertain
+    kind: button
+    surface: chat
+    source: Не уверен
+    title: Не уверен (состояние дня)
+    not_for_agent: "отметку занятости ставит человек: у агента нет права писать занятость"
+
+  - id: chat.run_plan
+    kind: button
+    surface: chat
+    source: Выполнить план
+    title: Выполнить план
+    not_for_agent: "подтверждение уже собранного плана: нажимает человек, агент только предлагает шаги"
+
+  - id: chat.open_app
+    kind: button
+    surface: chat
+    source: Открыть приложение
+    title: Открыть приложение
+    not_for_agent: "вход в Mini App рисует gateway по kind=open; агент экраны не открывает и адрес не придумывает"

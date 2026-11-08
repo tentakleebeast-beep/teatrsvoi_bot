@@ -1,0 +1,106 @@
+# Маппинг «лист Google → таблицы БД»
+#
+# Зачем файл: разбор чистовиков раньше жил только в коде импортёров, и при каждой
+# правке листа приходилось вспоминать, какая колонка куда едет. Здесь это записано
+# один раз и используется и при импорте, и при проверке (сверка листа с БД).
+#
+# Правило проекта: лист — источник правды для человека, БД — рабочая копия для бота.
+# Расхождение показываем, а не «подкручиваем» втихую.
+
+version: 1
+updated: 2026-11-02
+
+sources:
+  schedule:
+    spreadsheet_id: 1fPIFtRBbGvhz6sgTfhBMKBMU3cZ-G30bM-EaEVe_nvI
+    title: Расписание студийцы
+    access: readonly (сервисный аккаунт /Users/viktormamlutov/secrets/google-sa.json)
+  finance:
+    spreadsheet_id: 1JdSISyD2ye3RMcg_mwwjEEqKPn_6jyr39LeL7FCq7ac
+    title: СВОИ 2025
+    access: readonly
+    target_sheet: Финансы 2026 от 07
+
+schedule:
+  sheet: студийцы
+  grid: { rows: 1032, columns: 32 }
+  layout:
+    header_row: 1
+    people_from_column: D
+    row_columns:
+      weekday: A
+      date: B
+      decision: C
+  skip_rows:
+    - "колонка A и B пусты — разделитель месяца"
+  cells:
+    meaning: "свободен / занят / занята до 19.00 / занята весь день / Свободно / пусто"
+    target_table: availability_hour
+    target_columns:
+      participant_id: "participant по имени из шапки колонки, алиасы учитываются"
+      day: "из колонки B: 08.09.26 → 2026-09-08"
+      hour: "текст разворачивается в часы 0..23"
+      is_free: "по правилам ниже"
+      kind: imported
+      source: sheet_import
+      raw_text: "исходный текст ячейки, как написал человек"
+  text_rules:
+    свободен: { free_hours: "0-23" }
+    Свободно: { free_hours: "0-23" }
+    занят: { free_hours: "нет" }
+    "занята весь день": { free_hours: "нет" }
+    "занята до HH.MM": { busy: "0..HH", free: "HH..23" }
+    "занята с HH.MM до HH2.MM": { busy: "HH..HH2", free: "остальное" }
+    пусто: { meaning: "не отмечено — строку не создаём" }
+  identity:
+    rule: "имя колонки → participant.display_name или алиас; не найдено — status=pending"
+  idempotency:
+    key: [participant_id, day, hour]
+    behaviour: "повторный импорт обновляет is_free и raw_text, вторую строку не создаёт"
+
+finance:
+  sheet: Финансы 2026 от 07
+  grid: { rows: 1012, columns: 23 }
+  layout: "месячные блоки: ИЮЛЬ 2026, шапка блоков, строки операций"
+  block_header_row: 3
+  column_set_row: 4
+  blocks:
+    dues:
+      sheet_group: Взносы студийцев
+      columns: { name: A, date: B, amount: C, article: D }
+      target: { table: budget_tx, block: dues, tx_type: income, participant: "из name" }
+    expense:
+      sheet_group: Расходы студии
+      columns: { date: E, amount: F, article: G }
+      target: { table: budget_tx, block: expense, tx_type: expense }
+    show_income:
+      sheet_group: Доходы
+      columns: { source: H, amount: I, note: J }
+      target: { table: budget_tx, block: show_income, tx_type: income, counterparty: "из source" }
+    show_invest:
+      sheet_group: Вложения
+      columns: { name: K, amount: L }
+      target: { table: budget_tx, block: show_invest, tx_type: transfer }
+  target_columns:
+    period: "YYYY-MM из заголовка месяца: ИЮЛЬ 2026 → 2026-07"
+    tx_date: "дата из колонки. В ячейке может быть НЕСКОЛЬКО дней: «1, 07» в блоке сентября — это 2026-09-01 и 2026-09-07. Каждое число даёт отдельную строку операции; месяц берётся из заголовка блока, год — из заголовка блока (ИЮЛЬ 2026)"
+    amount: "абсолютная величина; знак определяется block и tx_type"
+    article_raw: "текст статьи как в файле; category_id по справочнику, не угадывается"
+    purpose: "человеческое описание из блока и статьи"
+  multi_date_cells:
+    rule: "ячейка с несколькими датами разворачивается в N строк, по строке на дату"
+    amount: "сумма одной ячейки не делится между датами: если в файле одна сумма на несколько дней,
+      строка помечается флагом и уходит в отчёт владельцу — деление было бы выдумкой"
+  idempotency:
+    key: [period, block, tx_date, amount, "coalesce(article_raw, counterparty, '')"]
+    behaviour: "повторный импорт обновляет article_raw и purpose, дублей не создаёт"
+
+checks:
+  schedule:
+    - "строк в БД за ноябрь = числу дат в листе за ноябрь"
+    - "нет двух строк на participant_id + day + hour"
+  finance:
+    - "сумма block=dues за месяц = сумме колонки Сумма блока взносов"
+    - "сумма block=expense за месяц = сумме колонки Факт блока расходов"
+    - "нет дублей по ключу идемпотентности"
+  report: "расхождения идут в отчёт и владельцу, автоматически не исправляются"

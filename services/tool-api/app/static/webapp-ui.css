@@ -1,0 +1,538 @@
+/* Дизайн-система Mini App «СВОИ», версия 2 (docs/development/85).
+   Единственный CSS проекта: экраны не держат собственных стилей.
+   Цвета задаёт webapp-shell.js из темы Telegram, поэтому светлая и тёмная схема
+   работают без отдельного кода.
+
+   Закреплённые правила:
+   • шрифт не мельче 13 px, основной текст 16 px, поля 16 px (иначе iOS приближает);
+   • цели нажатия не меньше 44 px;
+   • горизонтального скролла нет ни у страницы, ни у контейнеров;
+   • эмодзи не используются: иконка — слово или типографский знак. */
+
+:root {
+  /* Поверхности и текст */
+  --ui-bg: var(--bg, var(--tg-theme-bg-color, #ffffff));
+  --ui-surface: var(--card, var(--tg-theme-secondary-bg-color, #f5f6f8));
+  --ui-surface-2: var(--bg, var(--tg-theme-bg-color, #ffffff));
+  --ui-fg: var(--fg, var(--tg-theme-text-color, #16181d));
+  --ui-muted: var(--hint, var(--tg-theme-hint-color, #6b7280));
+  --ui-line: var(--line, rgba(0, 0, 0, .10));
+  --ui-accent: var(--accent, var(--tg-theme-button-color, #2f6fed));
+  --ui-on-accent: var(--tg-theme-button-text-color, #ffffff);
+
+  /* Смысловые */
+  --ui-ok: #1f8f4e;
+  --ui-ok-soft: rgba(31, 143, 78, .12);
+  --ui-warn: #a86600;
+  --ui-warn-soft: rgba(168, 102, 0, .12);
+  --ui-danger: #b8382b;
+  --ui-danger-soft: rgba(184, 56, 43, .12);
+
+  /* Ритм и геометрия */
+  --ui-s1: 4px;
+  --ui-s2: 8px;
+  --ui-s3: 12px;
+  --ui-s4: 16px;
+  --ui-s5: 24px;
+  --ui-s6: 32px;
+  --ui-r: 12px;
+  --ui-r-sm: 10px;
+  --ui-tap: 44px;
+  --ui-input-h: 48px;
+  --ui-tabbar-h: 56px;
+
+  /* Типографика */
+  --ui-font: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Roboto, system-ui, sans-serif;
+  --ui-text: 16px;
+  --ui-text-sm: 13px;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Запасные значения, если Telegram не прислал тему */
+    --ui-ok: #3fb96f;
+    --ui-warn: #d39023;
+    --ui-danger: #e06a5c;
+    --ui-ok-soft: rgba(63, 185, 111, .16);
+    --ui-warn-soft: rgba(211, 144, 35, .16);
+    --ui-danger-soft: rgba(224, 106, 92, .16);
+  }
+}
+
+/* ---------- каркас ---------- */
+
+html { -webkit-text-size-adjust: 100%; }
+
+body.ui-page {
+  margin: 0;
+  background: var(--ui-bg);
+  color: var(--ui-fg);
+  font: var(--ui-text)/1.45 var(--ui-font);
+  overflow-x: clip;
+}
+
+.ui-page *, .ui-page *::before, .ui-page *::after { box-sizing: border-box; }
+
+/* Атрибут hidden должен побеждать display из классов: иначе скрытая кнопка или
+   сообщение с display:flex остаются на экране (нашли на админских экранах). */
+.ui-page [hidden] { display: none !important; }
+
+/* Шапка экрана: назад, заголовок, одно действие */
+.ui-appbar {
+  position: sticky; top: 0; z-index: 20;
+  display: flex; align-items: center; gap: var(--ui-s2);
+  min-height: 56px; padding: 0 var(--ui-s3) 0 var(--ui-s1);
+  background: var(--ui-bg);
+  border-bottom: 1px solid var(--ui-line);
+}
+.ui-appbar__back {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: var(--ui-tap); height: var(--ui-tap);
+  border: 0; background: none; color: var(--ui-accent);
+  font: inherit; font-size: 22px; line-height: 1; text-decoration: none;
+}
+.ui-appbar__title {
+  flex: 1; min-width: 0;
+  font-size: 17px; font-weight: 600;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.ui-appbar__action {
+  min-height: var(--ui-tap); padding: 0 var(--ui-s3);
+  border: 0; background: none; color: var(--ui-accent);
+  font: inherit; font-size: 15px; text-decoration: none;
+  display: inline-flex; align-items: center;
+}
+
+/* Полотно: одна колонка, 16 px поля, место под вкладки */
+.ui-screen {
+  display: flex; flex-direction: column; gap: var(--ui-s4);
+  padding: var(--ui-s4);
+  padding-bottom: calc(var(--ui-s6) + env(safe-area-inset-bottom));
+  max-width: 640px; margin: 0 auto;
+}
+.ui-screen--tabbed {
+  padding-bottom: calc(var(--ui-tabbar-h) + var(--ui-s5) + env(safe-area-inset-bottom));
+}
+
+/* Нижние вкладки: четыре пункта, только слова */
+.ui-tabbar {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 30;
+  display: flex;
+  background: var(--ui-bg);
+  border-top: 1px solid var(--ui-line);
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.ui-tabbar__item {
+  flex: 1; min-height: var(--ui-tabbar-h);
+  display: flex; align-items: center; justify-content: center;
+  padding: 0 var(--ui-s1);
+  border: 0; background: none; color: var(--ui-muted);
+  font: inherit; font-size: 13px; text-decoration: none; text-align: center;
+}
+.ui-tabbar__item--active { color: var(--ui-accent); font-weight: 600; }
+
+.ui-section { display: flex; flex-direction: column; gap: var(--ui-s2); }
+.ui-section__head {
+  display: flex; align-items: baseline; gap: var(--ui-s2);
+  padding: var(--ui-s1) var(--ui-s1) 0;
+}
+.ui-section__title { margin: 0; font-size: 17px; font-weight: 600; }
+.ui-section__meta { margin-left: auto; font-size: var(--ui-text-sm); color: var(--ui-muted); }
+
+/* ---------- типографика ---------- */
+
+.ui-title { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 600; }
+.ui-h2 { margin: 0; font-size: 17px; line-height: 1.3; font-weight: 600; }
+.ui-text { margin: 0; font-size: var(--ui-text); }
+.ui-small { font-size: var(--ui-text-sm); }
+.ui-muted { color: var(--ui-muted); }
+.ui-num, .ui-amount { font-variant-numeric: tabular-nums; }
+.ui-amount { font-size: 28px; line-height: 1.2; font-weight: 650; }
+.ui-amount--ok { color: var(--ui-ok); }
+.ui-amount--due { color: var(--ui-danger); }
+
+/* ---------- поверхности ---------- */
+
+.ui-card {
+  display: flex; flex-direction: column; gap: var(--ui-s2);
+  background: var(--ui-surface); border-radius: var(--ui-r);
+  padding: var(--ui-s4);
+}
+.ui-card--flat { background: none; border: 1px solid var(--ui-line); }
+.ui-card__label { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+
+.ui-list { background: var(--ui-surface); border-radius: var(--ui-r); overflow: hidden; }
+.ui-row {
+  display: flex; align-items: center; gap: var(--ui-s3);
+  width: 100%; min-height: 56px; padding: var(--ui-s3) var(--ui-s4);
+  border: 0; border-bottom: 1px solid var(--ui-line);
+  background: none; color: inherit; text-align: left;
+  font: inherit; text-decoration: none;
+}
+.ui-row:last-child { border-bottom: 0; }
+.ui-row:active { background: rgba(120, 128, 140, .10); }
+.ui-row__main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ui-row__title { font-size: var(--ui-text); font-weight: 500; }
+.ui-row__meta { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+.ui-row__value { font-size: var(--ui-text); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ui-row__chevron { color: var(--ui-muted); font-size: 18px; line-height: 1; }
+.ui-row--attention .ui-row__title { font-weight: 600; }
+
+/* ---------- строка дня недели: состояние видно цветом и словом ----------
+   Владелец (V-028/в, V-029/а): семь строк выглядели одинаково, состояние
+   читалось только мелким текстом. Полоса слева, мягкий фон и слово справа
+   различают «занят / свободен / не отмечено» до чтения подписи. Цвета —
+   смысловые из :root, новых палитр не вводим. */
+.ui-row.ui-day {
+  position: relative;
+  min-height: 52px;
+  padding: 6px var(--ui-s4) 6px calc(var(--ui-s4) + 6px);
+}
+.ui-row.ui-day::before {
+  content: "";
+  position: absolute; left: 0; top: 6px; bottom: 6px;
+  width: 4px; border-radius: 0 2px 2px 0;
+  background: var(--ui-line);
+}
+.ui-row.ui-day .ui-row__title { line-height: 1.3; }
+.ui-row.ui-day .ui-row__meta {
+  line-height: 1.3;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ui-day__state {
+  flex: none; font-size: var(--ui-text-sm); font-weight: 600;
+  color: var(--ui-muted); white-space: nowrap;
+}
+.ui-day__today {
+  flex: none; font-size: var(--ui-text-sm); font-weight: 600;
+  color: var(--ui-accent); white-space: nowrap;
+}
+.ui-row.ui-day[data-state="busy"] { background: var(--ui-warn-soft); }
+.ui-row.ui-day[data-state="busy"]::before { background: var(--ui-warn); }
+.ui-row.ui-day[data-state="busy"] .ui-day__state { color: var(--ui-warn); }
+.ui-row.ui-day[data-state="free"] { background: var(--ui-ok-soft); }
+.ui-row.ui-day[data-state="free"]::before { background: var(--ui-ok); }
+.ui-row.ui-day[data-state="free"] .ui-day__state { color: var(--ui-ok); }
+.ui-row.ui-day[data-state="uncertain"]::before { background: var(--ui-warn); }
+.ui-row.ui-day[data-state="uncertain"] .ui-day__state { color: var(--ui-warn); }
+.ui-row.ui-day[data-state="mixed"]::before { background: var(--ui-accent); }
+.ui-row.ui-day[data-state="mixed"] .ui-day__state { color: var(--ui-accent); }
+.ui-row.ui-day[data-state="empty"]::before { background: var(--ui-line); }
+/* Сегодняшний день: рамка поверх фона и слово «сегодня» рядом с датой. */
+.ui-row.ui-row--today { box-shadow: inset 0 0 0 2px var(--ui-accent); }
+.ui-row.ui-row--today .ui-row__title { font-weight: 700; }
+
+/* Заголовок недели и счётчик отмеченного — одна колонка в строке навигации. */
+.ui-nav__title {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; align-items: center;
+  line-height: 1.25; text-align: center;
+}
+
+/* Пары «термин — значение» вместо таблиц на телефоне */
+.ui-dl { display: flex; flex-direction: column; gap: var(--ui-s2); margin: 0; }
+.ui-dl__row { display: flex; gap: var(--ui-s3); align-items: baseline; }
+.ui-dl__term { min-width: 96px; font-size: var(--ui-text-sm); color: var(--ui-muted); }
+.ui-dl__value { flex: 1; font-size: var(--ui-text); }
+
+.ui-divider { height: 1px; margin: 0; border: 0; background: var(--ui-line); }
+
+/* ---------- действия ---------- */
+
+.ui-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: 48px; padding: 0 var(--ui-s5);
+  border: 1px solid var(--ui-line); border-radius: var(--ui-r-sm);
+  background: var(--ui-surface); color: var(--ui-fg);
+  font: inherit; font-size: var(--ui-text); font-weight: 550;
+  text-decoration: none;
+}
+.ui-btn:active { opacity: .85; }
+.ui-btn--primary { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
+.ui-btn--ghost { background: none; border-color: transparent; color: var(--ui-accent); }
+.ui-btn--danger { background: var(--ui-danger); border-color: var(--ui-danger); color: #fff; }
+.ui-btn--block { width: 100%; }
+.ui-btn--sm { min-height: var(--ui-tap); padding: 0 var(--ui-s3); font-size: 15px; }
+/* Навигационные кнопки (‹ ›, − +) — квадрат 44×44: узкий глиф не должен уменьшать цель. */
+.ui-btn--icon { min-width: var(--ui-tap); padding: 0 var(--ui-s2); }
+.ui-btn[disabled] { opacity: .5; }
+
+.ui-actions { display: flex; gap: var(--ui-s2); flex-wrap: wrap; }
+.ui-actions--bottom {
+  position: sticky; bottom: 0; z-index: 15;
+  padding: var(--ui-s3) 0 calc(var(--ui-s3) + env(safe-area-inset-bottom));
+  background: linear-gradient(to top, var(--ui-bg) 72%, transparent);
+}
+.ui-actions--bottom .ui-btn { flex: 1; }
+
+/* ---------- поля ---------- */
+
+.ui-field { display: flex; flex-direction: column; gap: var(--ui-s1); }
+.ui-field__label { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+.ui-input, .ui-select, .ui-textarea {
+  width: 100%; min-height: var(--ui-input-h);
+  padding: var(--ui-s2) var(--ui-s3);
+  border: 1px solid var(--ui-line); border-radius: var(--ui-r-sm);
+  background: var(--ui-surface-2); color: var(--ui-fg);
+  font: inherit; font-size: var(--ui-text);
+  appearance: none;
+}
+.ui-select {
+  padding-right: var(--ui-s6);
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+                    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 20px) 21px, calc(100% - 14px) 21px;
+  background-size: 6px 6px, 6px 6px;
+  background-repeat: no-repeat;
+}
+.ui-textarea { min-height: 112px; resize: vertical; }
+.ui-input--amount { font-size: 20px; font-variant-numeric: tabular-nums; }
+.ui-input:focus, .ui-select:focus, .ui-textarea:focus, .ui-datefield:focus-visible {
+  outline: 2px solid var(--ui-accent); outline-offset: 1px;
+}
+.ui-input::placeholder, .ui-textarea::placeholder { color: var(--ui-muted); opacity: 1; }
+
+.ui-field__hint { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+.ui-field__error { font-size: var(--ui-text-sm); color: var(--ui-danger); }
+
+/* ---------- дата и время ---------- */
+
+.ui-datefield {
+  position: relative; display: flex; align-items: center; gap: var(--ui-s2);
+  width: 100%; min-height: var(--ui-input-h); padding: 0 var(--ui-s3);
+  border: 1px solid var(--ui-line); border-radius: var(--ui-r-sm);
+  background: var(--ui-surface-2); color: var(--ui-fg);
+  font: inherit; font-size: var(--ui-text); text-align: left;
+}
+.ui-datefield__value { flex: 1; min-width: 0; }
+.ui-datefield__hint { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+/* Нативный выбор даты лежит поверх контрола: системный пикер остаётся системным */
+.ui-datefield input[type="date"] {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  border: 0; background: none; font-size: var(--ui-text); opacity: 0;
+}
+
+.ui-chips { display: flex; flex-wrap: wrap; gap: var(--ui-s2); }
+.ui-chip {
+  display: inline-flex; align-items: center; justify-content: center;
+  min-height: var(--ui-tap); padding: 0 var(--ui-s3);
+  border: 1px solid var(--ui-line); border-radius: 999px;
+  background: none; color: var(--ui-fg);
+  font: inherit; font-size: 14px;
+}
+.ui-chip--on { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
+
+.ui-range { display: flex; align-items: flex-end; gap: var(--ui-s2); }
+.ui-range .ui-field { flex: 1; }
+.ui-range .ui-input { text-align: center; font-variant-numeric: tabular-nums; }
+.ui-range__sep { padding-bottom: 14px; color: var(--ui-muted); font-size: var(--ui-text-sm); }
+
+.ui-stepper { display: flex; align-items: center; gap: var(--ui-s2); }
+.ui-stepper__btn {
+  width: var(--ui-tap); height: var(--ui-tap);
+  border: 1px solid var(--ui-line); border-radius: var(--ui-r-sm);
+  background: var(--ui-surface); color: var(--ui-fg);
+  font: inherit; font-size: 18px;
+}
+
+/* ---------- выбор ---------- */
+
+.ui-segmented {
+  display: flex; overflow: hidden;
+  border: 1px solid var(--ui-line); border-radius: var(--ui-r-sm);
+  background: var(--ui-surface);
+}
+.ui-segmented__item {
+  flex: 1; min-height: var(--ui-tap); padding: 0 var(--ui-s2);
+  border: 0; background: none; color: var(--ui-fg);
+  font: inherit; font-size: 15px;
+}
+.ui-segmented__item--on { background: var(--ui-accent); color: var(--ui-on-accent); font-weight: 600; }
+
+.ui-switch-row {
+  display: flex; align-items: center; gap: var(--ui-s3);
+  width: 100%; min-height: 56px; padding: var(--ui-s3) var(--ui-s4);
+  border: 0; border-bottom: 1px solid var(--ui-line);
+  background: none; color: inherit; text-align: left;
+  font: inherit;
+}
+.ui-switch-row:last-child { border-bottom: 0; }
+.ui-switch {
+  position: relative; flex: none; width: 48px; height: 28px;
+  border-radius: 999px; background: var(--ui-line); transition: background .15s;
+}
+.ui-switch::after {
+  content: ""; position: absolute; top: 3px; left: 3px;
+  width: 22px; height: 22px; border-radius: 50%; background: #fff;
+  transition: left .15s;
+}
+.ui-switch-row--on .ui-switch { background: var(--ui-accent); }
+.ui-switch-row--on .ui-switch::after { left: 23px; }
+.ui-switch-row__state { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+
+.ui-radio-row {
+  display: flex; align-items: center; gap: var(--ui-s3);
+  width: 100%; min-height: 56px; padding: 0 var(--ui-s4);
+  border: 1px solid var(--ui-line); border-radius: var(--ui-r-sm);
+  background: var(--ui-surface-2); color: var(--ui-fg);
+  font: inherit; font-size: var(--ui-text); text-align: left;
+}
+.ui-radio-row--on { border-color: var(--ui-accent); background: rgba(47, 111, 237, .08); }
+.ui-radio-row__mark { margin-left: auto; font-size: 15px; font-weight: 600; color: var(--ui-accent); }
+
+/* ---------- состояния ---------- */
+
+.ui-badge {
+  display: inline-block; min-width: 22px; padding: 0 7px;
+  border-radius: 999px; background: var(--ui-danger); color: #fff;
+  font-size: var(--ui-text-sm); line-height: 22px; text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+.ui-status { display: inline-flex; align-items: center; gap: var(--ui-s2); font-size: var(--ui-text-sm); }
+.ui-status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+.ui-status--ok { color: var(--ui-ok); }
+.ui-status--warn { color: var(--ui-warn); }
+.ui-status--danger { color: var(--ui-danger); }
+.ui-status--muted { color: var(--ui-muted); }
+
+.ui-alert {
+  padding: var(--ui-s3) var(--ui-s4); border-radius: var(--ui-r-sm);
+  background: var(--ui-danger-soft); color: var(--ui-fg);
+  font-size: 15px;
+}
+.ui-alert--ok { background: var(--ui-ok-soft); }
+.ui-alert--warn { background: var(--ui-warn-soft); }
+
+.ui-empty { padding: var(--ui-s5) var(--ui-s3); text-align: center; }
+.ui-empty__title { font-size: var(--ui-text); font-weight: 600; }
+.ui-empty__text { margin-top: var(--ui-s1); font-size: var(--ui-text-sm); color: var(--ui-muted); }
+
+.ui-skeleton {
+  height: 16px; border-radius: var(--ui-r-sm);
+  background: linear-gradient(90deg, var(--ui-surface), rgba(120, 128, 140, .18), var(--ui-surface));
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.2s linear infinite;
+}
+@keyframes ui-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .ui-skeleton { animation: none; }
+  .ui-switch::after { transition: none; }
+}
+
+/* ---------- нижний лист и сообщение ---------- */
+
+.ui-overlay {
+  position: fixed; inset: 0; z-index: 40;
+  display: flex; align-items: flex-end;
+  background: rgba(0, 0, 0, .4);
+}
+.ui-sheet {
+  width: 100%; max-height: 78vh; overflow-y: auto;
+  display: flex; flex-direction: column; gap: var(--ui-s3);
+  padding: var(--ui-s2) var(--ui-s4) calc(var(--ui-s4) + env(safe-area-inset-bottom));
+  background: var(--ui-bg); border-radius: 16px 16px 0 0;
+}
+.ui-sheet__handle {
+  width: 36px; height: 4px; margin: var(--ui-s1) auto 0;
+  border-radius: 2px; background: var(--ui-line);
+}
+.ui-sheet__title { margin: 0; font-size: 17px; font-weight: 600; }
+.ui-sheet__body { display: flex; flex-direction: column; gap: var(--ui-s3); }
+.ui-sheet__actions { display: flex; gap: var(--ui-s2); }
+.ui-sheet__actions .ui-btn { flex: 1; }
+
+.ui-toast {
+  position: fixed; left: var(--ui-s3); right: var(--ui-s3);
+  bottom: calc(var(--ui-tabbar-h) + var(--ui-s3) + env(safe-area-inset-bottom));
+  z-index: 50;
+  display: flex; align-items: center; gap: var(--ui-s3);
+  padding: var(--ui-s3) var(--ui-s4); border-radius: var(--ui-r-sm);
+  background: #1f2937; color: #f9fafb;
+  font-size: 14px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, .22);
+}
+.ui-toast__text { flex: 1; }
+.ui-toast__action {
+  min-height: var(--ui-tap); padding: 0 var(--ui-s2);
+  border: 0; background: none; color: #9ec1ff;
+  font: inherit; font-weight: 600;
+}
+
+/* ---------- сетка месяца «люди × дни» (З9, docs/development/48 §3) ----------
+   Только чтение: клетки — не кнопки и не ссылки, обработчиков у них нет.
+   Месяц листается неделями: тридцать колонок со словами «занят/свободен»
+   на 390 px не помещаются, а горизонтальный скролл запрещён (docs/development/91).
+   Слова переносятся по слогам (`hyphens`), чтобы колонка была узкой, а текст
+   в ней остался словом, а не обрезанной буквой. */
+.ui-month { background: var(--ui-surface); border-radius: var(--ui-r); overflow: hidden; }
+.ui-month__row {
+  display: grid; grid-template-columns: minmax(0, 1fr) repeat(7, minmax(0, 32px));
+  align-items: stretch; border-bottom: 1px solid var(--ui-line);
+}
+.ui-month__row:last-child { border-bottom: 0; }
+.ui-month__row--head { background: var(--ui-surface-2); }
+.ui-month__name {
+  display: flex; flex-direction: column; gap: 1px; justify-content: center;
+  padding: var(--ui-s1) var(--ui-s2); min-width: 0;
+}
+.ui-month__who { font-size: var(--ui-text-sm); }
+.ui-month__note { font-size: var(--ui-text-sm); color: var(--ui-muted); }
+.ui-month__day {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  padding: var(--ui-s1) 0; font-size: var(--ui-text-sm); color: var(--ui-muted);
+}
+.ui-mcell {
+  display: flex; align-items: center; justify-content: center; text-align: center;
+  min-height: 34px; padding: 2px 1px; font-size: var(--ui-text-sm); line-height: 1.1;
+  hyphens: auto; overflow-wrap: anywhere; border-left: 1px solid var(--ui-line);
+  color: var(--ui-muted);
+}
+.ui-mcell[data-state="free"] { background: var(--ui-ok-soft); color: var(--ui-ok); }
+.ui-mcell[data-state="busy"] { background: var(--ui-warn-soft); color: var(--ui-warn); }
+.ui-mcell[data-state="uncertain"] { color: var(--ui-warn); }
+/* Расхождение таблицы с базой: подчёркивание, а не правка (П-3). */
+.ui-mcell[data-diff="1"] { box-shadow: inset 0 -3px 0 var(--ui-danger); }
+.ui-mcell--out { background: none; }
+
+/* ---------- таблица: только широкий экран (админка, печать) ---------- */
+
+.ui-table-wrap { overflow-x: auto; }
+@media (max-width: 599px) { .ui-table-wrap { overflow-x: visible; } }
+.ui-table { width: 100%; border-collapse: collapse; font-size: var(--ui-text-sm); }
+.ui-table th {
+  padding: var(--ui-s2) var(--ui-s1);
+  border-bottom: 1px solid var(--ui-line);
+  text-align: left; font-weight: 400; color: var(--ui-muted);
+}
+.ui-table td { padding: var(--ui-s2) var(--ui-s1); border-bottom: 1px solid var(--ui-line); }
+.ui-table td.ui-num, .ui-table th.ui-num { text-align: right; font-variant-numeric: tabular-nums; }
+.ui-table tr:last-child td { border-bottom: 0; }
+
+/* --- Полоса заполнения: место в хранилище, прогресс загрузки (92 §9) --------- */
+
+.ui-meter {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--ui-line);
+  overflow: hidden;
+  margin: var(--ui-s2) 0;
+}
+
+.ui-meter__fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--ui-accent);
+  border-radius: 4px;
+  transition: width .2s ease;
+}
+
+.ui-meter__fill--warn { background: var(--ui-warn); }
+.ui-meter__fill--danger { background: var(--ui-danger); }
+
+/* Строка трека: название в две строки максимум, кнопки порядка справа. */
+.ui-track__order {
+  display: flex;
+  gap: var(--ui-s1);
+  flex: 0 0 auto;
+}

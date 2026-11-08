@@ -1,0 +1,16 @@
+[Unit]
+Description=SVOI watchdog (services, database, disk, backup)
+Documentation=file:///opt/svoi/docs/infrastructure/35-deploy-runbook.md
+After=network.target
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+Environment=ENV_FILE=/opt/svoi/.env
+ExecStart=/opt/svoi/scripts/watchdog.sh
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

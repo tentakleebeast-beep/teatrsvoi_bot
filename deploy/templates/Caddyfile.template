@@ -1,0 +1,47 @@
+# Caddy для SVOI. Подстановки (@...@) делает deploy/server-deploy.sh proxy.
+# Наружу открыты только 80 и 443; tool-api слушает 127.0.0.1.
+# Публичного адреса n8n больше нет: V-026 (01.11.2026) вывел n8n из контура,
+# роутер свободного текста живёт внутри tool-api (POST /tools/route).
+
+{
+	email @ACME_EMAIL@
+	# Автоматический TLS: сертификат Let's Encrypt выдаётся при первом запросе
+	# на домен и продлевается за 30 дней до истечения. Руками ничего не делаем.
+}
+
+# Приложение: Mini App и API.
+@DOMAIN@ {
+	encode gzip
+
+	# Mini App — те же маршруты, что отдаёт tool-api (/webapp, /webapp/admin…).
+	handle /webapp* {
+		reverse_proxy 127.0.0.1:@API_PORT@
+	}
+
+	# API под /api: префикс снимается, внутри сервиса маршруты без него.
+	handle /api/* {
+		uri strip_prefix /api
+		reverse_proxy 127.0.0.1:@API_PORT@
+	}
+
+	# Вебхука роутера наружу нет: n8n выведен из контура (V-026), а старый адрес
+	# не должен отвечать 200 — иначе чужой POST решит, что дорога жива.
+	handle /webhook/* {
+		respond 404
+	}
+
+	handle {
+		respond "SVOI" 200
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+	}
+
+	log {
+		output file /var/log/caddy/@DOMAIN@.log
+		format json
+	}
+}

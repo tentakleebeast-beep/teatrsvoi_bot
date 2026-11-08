@@ -1,0 +1,85 @@
+name: проба входа в Mini App
+
+# Проверяет серверную часть входа Mini App, не трогая прод-данные.
+# Подпись initData считается тем же алгоритмом, что у Telegram (HMAC-SHA256 от
+# "WebAppData" + bot_token), поэтому запрос выглядит как настоящий.
+#
+# Печатается только код ответа и код ошибки из тела: ни токен, ни подпись,
+# ни initData в лог не попадают.
+
+on:
+  workflow_dispatch:
+    inputs:
+      chat_id:
+        description: "chat_id участника для подписи (пусто — vars.ADMIN_CHAT_ID)"
+        required: false
+        default: ""
+
+concurrency:
+  group: probe-webapp-auth
+  cancel-in-progress: true
+
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: скрипт пробы
+        run: |
+          cat > /tmp/probe.py <<'PY'
+          import hashlib, hmac, json, os, time, urllib.parse, urllib.request
+
+          token = os.environ["TELEGRAM_TOKEN"]
+          chat = os.environ.get("CHAT_ID") or os.environ["ADMIN_CHAT_ID"]
+          user = json.dumps({"id": int(chat), "first_name": "probe"}, separators=(",", ":"))
+          fields = {"auth_date": str(int(time.time())), "query_id": "AAprobe", "user": user}
+          check = "\n".join(f"{k}={fields[k]}" for k in sorted(fields))
+          secret = hmac.new(b"WebAppData", token.encode(), hashlib.sha256).digest()
+          fields["hash"] = hmac.new(secret, check.encode(), hashlib.sha256).hexdigest()
+          init_data = urllib.parse.urlencode(fields)
+
+          req = urllib.request.Request(
+              "http://127.0.0.1:8000/webapp/auth",
+              data=json.dumps({"init_data": init_data}).encode(),
+              headers={"content-type": "application/json"})
+          try:
+              with urllib.request.urlopen(req, timeout=20) as r:
+                  body = json.loads(r.read())
+                  print("auth:", r.status, "ok:", body.get("ok"),
+                        "code:", body.get("code"), "expires_in:", body.get("expires_in"),
+                        "token_len:", len(body.get("token") or ""))
+                  tok = body.get("token") or ""
+                  if tok:
+                      req2 = urllib.request.Request(
+                          "http://127.0.0.1:8000/webapp/home/data",
+                          headers={"Authorization": "Bearer " + tok})
+                      try:
+                          with urllib.request.urlopen(req2, timeout=20) as r2:
+                              print("data:", r2.status, "bytes:", len(r2.read()))
+                      except urllib.error.HTTPError as e2:
+                          eb = json.loads(e2.read() or b"{}")
+                          print("data:", e2.code, "code:", eb.get("code"), "detail:", str(eb.get("detail"))[:90])
+          except urllib.error.HTTPError as e:
+              body = json.loads(e.read() or b"{}")
+              print("auth:", e.code, "code:", body.get("code"), "detail:", str(body.get("detail"))[:80])
+          PY
+
+      - name: выполнить пробу
+        env:
+          CHAT: ${{ inputs.chat_id || vars.ADMIN_CHAT_ID }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" 'cat > /tmp/probe.py' < /tmp/probe.py
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "sudo -u svoi bash -c 'set -a; . /opt/svoi/.env; set +a; CHAT_ID=$CHAT /opt/svoi/.venv/bin/python /tmp/probe.py'"

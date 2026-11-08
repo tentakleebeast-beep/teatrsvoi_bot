@@ -1,0 +1,15 @@
+[Unit]
+Description=SVOI files: move rarely used files to cold volume (docs/development/80, Ш-11)
+Documentation=file:///opt/svoi/docs/development/80-files-and-storage.md
+After=network.target
+
+[Service]
+Type=oneshot
+User=svoi
+Group=svoi
+WorkingDirectory=/opt/svoi
+EnvironmentFile=/opt/svoi/.env
+ExecStart=/opt/svoi/.venv/bin/python scripts/cold_rotate.py
+StandardOutput=journal
+StandardError=journal
+NoNewPrivileges=true

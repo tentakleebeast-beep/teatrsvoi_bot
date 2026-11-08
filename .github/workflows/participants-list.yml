@@ -1,0 +1,28 @@
+name: участники из базы
+
+# Только чтение: список участников для маппинга «имя в файле → запись в БД».
+
+on:
+  workflow_dispatch:
+
+jobs:
+  list:
+    runs-on: ubuntu-latest
+    steps:
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: список
+        run: |
+          set -uo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "docker exec -i svoi-postgres psql -U svoi -d svoi -A -F '|' -c \"select column_name from information_schema.columns where table_name='participant' order by ordinal_position\"" && ssh -i ~/.ssh/deploy_key -o BatchMode=yes "root@$DEPLOY_HOST" "docker exec -i svoi-postgres psql -U svoi -d svoi -A -F '|' -c \"select * from participant order by id\""

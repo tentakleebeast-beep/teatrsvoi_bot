@@ -1,0 +1,29 @@
+# Garage v2.1.0 — объектное хранилище файлов бота (docs/development/86).
+#
+# Секретов в файле нет намеренно: rpc_secret и admin_token приходят переменными
+# окружения (GARAGE_RPC_SECRET, GARAGE_ADMIN_TOKEN), поэтому файл живёт в git.
+# Значения генерирует и кладёт в .env скрипт scripts/storage_up.py.
+#
+# Почему Garage, а не MinIO: MinIO удалил образы с Docker Hub (сентябрь 2026) и закрыл
+# анонимный доступ на quay.io; комьюнити-версия осталась только исходниками.
+
+metadata_dir = "/var/lib/garage/meta"
+data_dir     = "/var/lib/garage/data"
+
+# sqlite — без внешних зависимостей и без отдельных процессов
+db_engine = "sqlite"
+
+# Один узел: файлы не дублируются. Холод — второй том (docs/development/86 §3),
+# поэтому репликация 1 честна: бэкап делает скрипт, а не кластер.
+replication_factor = 1
+
+rpc_bind_addr = "[::]:3901"
+
+[admin]
+api_bind_addr = "[::]:3903"
+
+[s3_api]
+# Регион произвольный, но должен совпадать с тем, что передаёт клиент (STORAGE_REGION)
+s3_region     = "svoi"
+api_bind_addr = "[::]:3900"
+root_domain   = ".s3.garage.localhost"

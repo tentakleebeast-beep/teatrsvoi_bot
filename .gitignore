@@ -1,0 +1,40 @@
+.venv/
+# `.venv` в worktree — симлинк на venv основного клона: шаблон с «/» его не ловит
+.venv
+__pycache__/
+*.pyc
+.env
+# локальные окружения и файлы с секретами рядом с репозиторием: `.env.example`
+# остаётся в индексе, всё остальное — нет. 01.11.2026 в корне появились
+# `creds.json` и `.env.dev`, и ни один из них не был закрыт шаблоном `.env`.
+# Окружение разработки (карта t_4aa28fe9): `.env.dev` с dev-токеном живёт только
+# на машине разработчика, шаблон `.env.dev.example` — в индексе.
+.env.*
+!.env.example
+.env.dev
+creds.json
+*.creds.json
+secrets/
+# Локальное соответствие «имя в файле → человек» и подсказки категории: в файле настоящие
+# имена участников, в индексе — только `participant-names.example.yaml` (Ш-03a плана 129).
+config/participant-names.yaml
+services/tool-api/data/
+*.sqlite
+.hermes/
+.pytest_cache/
+.coverage
+htmlcov/
+*.dump
+.DS_Store
+deploy/svoi.env
+sources_example/
+.worktrees/
+
+# артефакты браузерных тестов
+tests/webapp/screenshots/
+tests/webapp/baseline/
+
+# uv.lock — побочный файл `uv sync` в воркерских worktree: pyproject без
+# [project.dependencies] даёт вырожденный лок на 133 байта. Проект ставит
+# зависимости по requirements.txt, CI uv не использует.
+uv.lock

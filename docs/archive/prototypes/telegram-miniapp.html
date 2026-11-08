@@ -1,0 +1,452 @@
+<!doctype html>
+<!-- Архив. Заменён: docs/development/92-navigation-model.md (четыре нижние вкладки вместо меню-хаба) и docs/development/91-design-system.md. Причина: переделка Ш-1…Ш-10 закрыта, эталон дизайн-системы — prototypes/ux2-mini-app.html. -->
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>СВОИ — как это будет в Telegram</title>
+<style>
+  /* Прототип окна Mini App. Цвета — из тёмной темы Telegram, чтобы совпадало с тем,
+     что человек увидит на телефоне: страница берёт их из --tg-theme-*. */
+  :root {
+    --tg-bg: #17212b;
+    --tg-card: #232e3c;
+    --tg-text: #ffffff;
+    --tg-hint: #708499;
+    --tg-accent: #5288c1;
+    --tg-line: rgba(255,255,255,.10);
+    --tg-header: #17212b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px; background: #0e1621; color: var(--tg-text);
+    font: 15px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif;
+    display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap;
+  }
+
+  /* --- корпус телефона --- */
+  .phone {
+    width: 396px; height: 880px; border-radius: 44px; padding: 10px;
+    background: #000; box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    position: relative; flex: 0 0 auto;
+  }
+  .screen {
+    position: relative; width: 100%; height: 100%; border-radius: 36px; overflow: hidden;
+    background: #0e1621; display: flex; flex-direction: column;
+  }
+  .island {
+    position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+    width: 108px; height: 26px; background: #000; border-radius: 14px; z-index: 5;
+  }
+
+  /* --- чат за окном --- */
+  .chat { position: absolute; inset: 0; display: flex; flex-direction: column; opacity: .55; }
+  .chat-top {
+    height: 82px; padding: 34px 14px 8px; background: #17212b;
+    display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--tg-line);
+  }
+  .chat-top .back { color: #6ab2f2; font-size: 19px; }
+  .chat-top .who { font-size: 15px; font-weight: 600; }
+  .chat-top .sub { font-size: 12px; color: #708499; }
+  .chat-body { flex: 1; padding: 12px 14px 8px; display: flex; flex-direction: column;
+               gap: 8px; justify-content: flex-start; }
+  .bubble {
+    max-width: 78%; padding: 8px 11px; border-radius: 14px; font-size: 14px;
+    background: #182533; align-self: flex-start;
+  }
+  .bubble.me { background: #2b5278; align-self: flex-end; }
+  .kbd { display: flex; gap: 6px; padding: 0 14px 14px; }
+  .kbd span {
+    flex: 1; text-align: center; padding: 10px; border-radius: 10px; font-size: 14px;
+    background: #232e3c; color: #fff;
+  }
+  .kbd span.main { background: #5288c1; font-weight: 600; }
+
+  /* --- само окно Mini App --- */
+  .app {
+    position: relative; z-index: 2; margin-top: 196px; height: calc(100% - 196px);
+    background: var(--tg-bg); color: var(--tg-text);
+    border-radius: 14px 14px 36px 36px;
+    display: flex; flex-direction: column; overflow: hidden;
+    box-shadow: 0 -12px 30px rgba(0,0,0,.45);
+  }
+  .app-head {
+    height: 48px; display: flex; align-items: center; justify-content: space-between;
+    padding: 0 14px; border-bottom: 1px solid var(--tg-line); background: var(--tg-header);
+  }
+  .app-head .title { font-size: 15px; font-weight: 600; }
+  .app-head .close, .app-head .dots { color: var(--tg-hint); font-size: 17px; }
+  .app-body { flex: 1; overflow-y: auto; padding: 12px 12px 16px; }
+
+  /* --- экран недели (как в DAYS_PAGE) --- */
+  .head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
+  .head button { border: 0; background: var(--tg-card); color: var(--tg-text);
+                 border-radius: 9px; width: 38px; height: 34px; font-size: 16px; }
+  .week { text-align: center; }
+  .week b { display: block; font-size: 15px; }
+  .week span { font-size: 12px; color: var(--tg-hint); }
+  .card { background: var(--tg-card); border-radius: 12px; padding: 10px 12px; margin-bottom: 8px; }
+  .day { padding: 6px 0; border-top: 1px solid var(--tg-line); cursor: pointer; }
+  .day:first-child { border-top: 0; padding-top: 0; }
+  .dhead { display: flex; align-items: center; gap: 10px; }
+  .day .name { width: 54px; font-weight: 600; font-size: 14px; }
+  .day .name span { display: block; font-weight: 400; font-size: 11px; color: var(--tg-hint); }
+  .day .what { flex: 1; font-size: 14px; }
+  .day .what.none { color: var(--tg-hint); }
+  .day .open { color: var(--tg-hint); font-size: 18px; padding: 0 4px; }
+  .edit { display: none; padding: 6px 0 2px 64px; }
+  .day.expanded .edit { display: block; }
+  .chips { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
+  .chip { border: 1px solid var(--tg-line); border-radius: 8px; padding: 7px 10px; font-size: 13px; }
+  .chip.on { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+  .times { display: flex; align-items: center; gap: 6px; }
+  .times input { width: 92px; padding: 8px; font-size: 15px; border-radius: 9px;
+                 border: 1px dashed var(--tg-line); background: var(--tg-bg);
+                 color: var(--tg-text); font-family: inherit; }
+  .hint { font-size: 11px; color: var(--tg-hint); margin-top: 5px; line-height: 1.35; }
+  .note { width: 100%; margin-top: 8px; padding: 8px; font-size: 14px; border-radius: 9px;
+          border: 1px solid var(--tg-line); background: var(--tg-bg); color: var(--tg-text);
+          font-family: inherit; }
+  .footer { border-top: 1px solid var(--tg-line); padding: 10px 12px 14px; background: var(--tg-bg); }
+  .footer button { width: 100%; border: 0; border-radius: 12px; padding: 13px;
+                   background: var(--tg-accent); color: #fff; font: inherit; font-weight: 600; }
+  .footer .links { display: flex; gap: 6px; margin-top: 8px; }
+  .footer button.ghost { flex: 1; background: var(--tg-card); color: var(--tg-text);
+                         font-weight: 400; font-size: 12px; padding: 8px 6px; }
+  .status { font-size: 12px; color: var(--tg-hint); margin-top: 8px; min-height: 15px; }
+
+  /* --- прочие экраны --- */
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; flex-wrap: wrap; }
+  .tabs button { border: 1px solid var(--tg-line); background: transparent; color: var(--tg-text);
+                 border-radius: 999px; padding: 6px 11px; font: inherit; font-size: 12px; }
+  .tabs button.on { background: var(--tg-card); }
+  .row { display: flex; justify-content: space-between; gap: 10px; padding: 8px 0;
+         border-bottom: 1px solid var(--tg-line); font-size: 14px; }
+  .row:last-child { border-bottom: 0; }
+  .row .k { color: var(--tg-hint); }
+  .row .v { text-align: right; }
+  h3 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em;
+       color: var(--tg-hint); margin: 16px 0 8px; font-weight: 600; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 7px 3px; border-bottom: 1px solid var(--tg-line); }
+  th { color: var(--tg-hint); font-weight: 500; font-size: 12px; }
+  .pill { display: inline-block; padding: 2px 7px; border-radius: 6px; background: #2b5278;
+          font-size: 12px; }
+  .ghostbtn { border: 1px solid var(--tg-line); background: transparent; color: var(--tg-text);
+              border-radius: 8px; padding: 5px 9px; font: inherit; font-size: 12px; }
+  .primary { border: 0; background: var(--tg-accent); color: #fff; border-radius: 8px;
+             padding: 6px 10px; font: inherit; font-size: 12px; }
+  .muted { color: var(--tg-hint); font-size: 12px; }
+  .pager { display: flex; align-items: center; gap: 6px; margin-top: 10px; flex-wrap: wrap; }
+  .pager .ghostbtn.on { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+  .codepill { border: 1px dashed var(--tg-line); background: transparent; color: var(--tg-text);
+              border-radius: 7px; padding: 4px 8px; font: inherit; font-size: 13px;
+              font-family: ui-monospace, monospace; }
+  .codepill.copied { background: var(--tg-accent); border-color: var(--tg-accent); color: #fff; }
+
+  /* светлая тема Telegram: те же переменные, другие значения */
+  .app.light {
+    --tg-bg: #ffffff; --tg-card: #f4f4f5; --tg-text: #1a1a1a;
+    --tg-hint: #707579; --tg-accent: #2f6fed; --tg-line: rgba(0,0,0,.12);
+    --tg-header: #ffffff;
+  }
+
+  /* --- подписи рядом с телефоном --- */
+  .notes { flex: 1 1 300px; max-width: 380px; font-size: 14px; color: #c6d2df; }
+  .notes h2 { font-size: 16px; margin: 0 0 10px; color: #fff; }
+  .notes ul { margin: 0 0 14px; padding-left: 18px; }
+  .notes li { margin-bottom: 7px; }
+  .notes code { background: #1b2734; border-radius: 5px; padding: 1px 5px; font-size: 12px; }
+  .screen-switch { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px; }
+  .screen-switch button {
+    border: 1px solid #2b3a4a; background: #16222e; color: #c6d2df; border-radius: 9px;
+    padding: 8px 12px; font: inherit; font-size: 13px;
+  }
+  .screen-switch button.on { background: #5288c1; border-color: #5288c1; color: #fff; }
+</style>
+</head>
+<body>
+
+<div class="phone">
+  <div class="island"></div>
+  <div class="screen">
+    <div class="chat">
+      <div class="chat-top">
+        <span class="back">‹</span>
+        <div>
+          <div class="who">СВОИ · бот</div>
+          <div class="sub">бот</div>
+        </div>
+      </div>
+      <div class="chat-body">
+        <div class="bubble">Среда не отмечена — напомню в четверг утром.</div>
+        <div class="bubble me">Открыть неделю</div>
+      </div>
+      <div class="kbd">
+        <span>Меню</span><span>Занятость</span><span class="main">Неделя</span>
+      </div>
+    </div>
+
+    <div class="app">
+      <div class="app-head">
+        <span class="close">×</span>
+        <span class="title" id="appTitle">Занятость</span>
+        <span class="dots">⋯</span>
+      </div>
+      <div class="app-body" id="appBody"></div>
+      <div class="footer" id="appFooter"></div>
+    </div>
+  </div>
+</div>
+
+<div class="notes">
+  <h2>Что откроется в Telegram</h2>
+  <div class="screen-switch">
+    <button data-screen="week" class="on">Неделя</button>
+    <button data-screen="profile">Профиль</button>
+    <button data-screen="admin">Админ-панель</button>
+    <button data-theme="light">Светлая тема</button>
+  </div>
+  <ul>
+    <li>Окно — <b>Mini App</b> поверх чата, кнопка «Неделя» в меню бота и после регистрации.</li>
+    <li>Цвета берутся из темы Telegram: <code>--tg-theme-*</code>, светлая тема выглядит так же.</li>
+    <li>Нажатие на день раскрывает правку: состояние, две границы, комментарий — попробуйте.</li>
+    <li>«Отмечено 6 из 7» — не украшение: ниже 80% бот честно говорит, что свод ненадёжен.</li>
+    <li>Данные в макете — реальные отметки с копии листа, не выдумка.</li>
+  </ul>
+  <p class="muted">Это прототип разметки, а не подключённое приложение: кнопки переключают экраны,
+  сохранение ничего не пишет.</p>
+</div>
+
+<script>
+const DAYS = [
+  { name: "Пн", date: "02.11", what: "занята до 18:30", status: "busy", from: "", to: "18:30",
+    note: "" },
+  { name: "Вт", date: "03.11", what: "свободна", status: "free", from: "", to: "", note: "" },
+  { name: "Ср", date: "04.11", what: "не отмечено", status: null, from: "", to: "", none: true },
+  { name: "Чт", date: "05.11", what: "пока не понятно", status: "uncertain", from: "", to: "", note: "" },
+  { name: "Пт", date: "06.11", what: "свободна", status: "free", from: "", to: "", note: "" },
+  { name: "Сб", date: "07.11", what: "занята 16:00–20:00", status: "busy", from: "16:00", to: "20:00",
+    note: "спектакль" },
+  { name: "Вс", date: "08.11", what: "свободна", status: "free", from: "", to: "", note: "" },
+];
+
+const CHIPS = [["free", "Свободен"], ["busy", "Занят"], ["uncertain", "Не знаю"]];
+
+function dayRow(day, index) {
+  const expanded = day.open ? " expanded" : "";
+  const chips = CHIPS.map(([value, label]) =>
+    `<span class="chip${day.status === value ? " on" : ""}" data-chip="${index}:${value}">${label}</span>`).join("");
+  return `
+    <div class="day${expanded}" data-day="${index}">
+      <div class="dhead">
+        <div class="name">${day.name}<span>${day.date}</span></div>
+        <div class="what${day.none ? " none" : ""}">${day.what}</div>
+        <div class="open">${day.open ? "▾" : "›"}</div>
+      </div>
+      <div class="edit">
+        <div class="chips">${chips}</div>
+        <div class="times">
+          <input value="${day.from}" placeholder="с" aria-label="с какого часа">
+          <input value="${day.to}" placeholder="до" aria-label="до какого часа">
+        </div>
+        <div class="hint">Пустая граница — край дня: с 08:00 или до 24:00. «Занят до 19:00» = «свободен с 19:00».</div>
+        <input class="note" value="${day.note}" placeholder="комментарий к дню">
+      </div>
+    </div>`;
+}
+
+function weekScreen() {
+  const marked = DAYS.filter(d => d.status).length;
+  document.getElementById("appTitle").textContent = "Занятость";
+  document.getElementById("appBody").innerHTML = `
+    <div class="head">
+      <button>‹</button>
+      <div class="week"><b>2 – 8 ноября</b><span>отмечено ${marked} из ${DAYS.length}</span></div>
+      <button>›</button>
+    </div>
+    <div class="card" id="days">${DAYS.map(dayRow).join("")}</div>`;
+  document.getElementById("appFooter").innerHTML = `
+    <button>Сохранить неделю</button>
+    <div class="links">
+      <button class="ghost">Заполнить по обычной неделе</button>
+      <button class="ghost">Запомнить как обычную</button>
+    </div>
+    <div class="status">Сохранится в базу и в лист расписания.</div>`;
+}
+
+function profileScreen() {
+  document.getElementById("appTitle").textContent = "Профиль";
+  document.getElementById("appBody").innerHTML = `
+    <div class="card">
+      <div class="row"><span class="k">Имя</span><span class="v">Смирнова Дарья</span></div>
+      <div class="row"><span class="k">Короткие имена</span><span class="v">Дарья, Даша</span></div>
+      <div class="row"><span class="k">Ключ</span><span class="v">смирнова-дарья</span></div>
+      <div class="row"><span class="k">Телефон</span><span class="v">+7 917 ··· 24 18</span></div>
+      <div class="row"><span class="k">Роли</span><span class="v">актёр труппы</span></div>
+      <div class="row"><span class="k">Как писать о вас</span><span class="v">женский род</span></div>
+    </div>
+    <h3>Взносы</h3>
+    <div class="card">
+      <div class="row"><span class="k">Тариф</span><span class="v">1 500 ₽ в месяц</span></div>
+      <div class="row"><span class="k">Ноябрь</span><span class="v"><span class="pill">учтено</span></span></div>
+    </div>
+    <p class="muted">Взносы ведёт организатор. Здесь видно тариф и оплачен ли текущий месяц;
+    начисления по месяцам — в учёте.</p>`;
+  document.getElementById("appFooter").innerHTML =
+    `<button>Сохранить</button><div class="status">Изменения видны организатору сразу.</div>`;
+}
+
+/* --- админ-панель: разделы и таблица с постраничным листанием --- */
+const PEOPLE = [
+  ["Смирнова Дарья", "труппа", "активен"], ["Иванов Виктор", "администратор", "активен"],
+  ["Новиков Виктор", "организатор", "активен"], ["Лебедева Мария", "труппа", "активен"],
+  ["Соколов Марк", "труппа", "активен"], ["Морозова Алёна", "труппа", "активен"],
+  ["Волкова Людмила", "организатор", "активен"], ["Орлова Александра", "труппа", "активен"],
+  ["Попова Света", "труппа", "активен"], ["Антон Зайцев", "труппа", "активен"],
+  ["Оля Титова", "труппа", "активен"], ["Фомина Арина", "труппа", "активен"],
+  ["Гусева Юлия", "труппа", "заявка"], ["Тарасова Алёна", "труппа", "архив"],
+  ["Крылов Виктор", "труппа", "активен"],
+];
+const PAGE_SIZE = 10;
+let adminTab = "people";
+let peoplePage = 0;
+
+function adminTabs() {
+  const tabs = [["people", "Участники"], ["pending", "Заявки"], ["rights", "Права"],
+                ["invites", "Приглашения"], ["budget", "Бюджет"], ["feedback", "Обращения"],
+                ["audit", "Аудит"]];
+  return `<div class="tabs">${tabs.map(([key, label]) =>
+    `<button data-tab="${key}"${adminTab === key ? ' class="on"' : ""}>${label}</button>`).join("")}</div>`;
+}
+
+function pager(total, page) {
+  const pages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const chips = [];
+  for (let i = 0; i < pages; i++) {
+    chips.push(`<button class="ghostbtn${i === page ? " on" : ""}" data-page="${i}">${i + 1}</button>`);
+  }
+  return `<div class="pager"><span class="muted">страница ${page + 1} из ${pages}</span>
+    ${chips.join("")}</div>`;
+}
+
+function peopleTab() {
+  const start = peoplePage * PAGE_SIZE;
+  const slice = PEOPLE.slice(start, start + PAGE_SIZE);
+  return `<table><tr><th>Имя</th><th>Роли</th><th>Статус</th></tr>
+    ${slice.map(([name, role, status]) =>
+      `<tr><td>${name}</td><td>${role}</td><td>${
+        status === "активен" ? status : `<span class="muted">${status}</span>`}</td></tr>`).join("")}
+  </table>${pager(PEOPLE.length, peoplePage)}`;
+}
+
+function invitesTab() {
+  return `<p class="muted">Новый код действует 7 дней и на одного человека.</p>
+    <p><button class="primary" data-copy="none">Выпустить код</button></p>
+    <table>
+      <tr><th>Код</th><th>Роль</th><th>До</th><th></th></tr>
+      <tr><td><button class="codepill" data-code="ABCD2345">ABCD2345</button></td>
+          <td>труппа</td><td>02.11</td><td><button class="ghostbtn">Отозвать</button></td></tr>
+      <tr><td><button class="codepill" data-code="QWER7788">QWER7788</button></td>
+          <td>организатор</td><td>05.11</td><td><button class="ghostbtn">Отозвать</button></td></tr>
+    </table>
+    <p class="muted" id="copy-hint">Нажмите на код, чтобы скопировать.</p>`;
+}
+
+const TABS = {
+  people: peopleTab,
+  pending: () => `<table><tr><th>Имя</th><th>Роль</th><th>Когда</th><th></th></tr>
+      <tr><td>Гусева Юлия</td><td>труппа</td><td>28.10 18:40</td>
+      <td><button class="primary">Принять</button> <button class="ghostbtn">Отклонить</button></td></tr>
+    </table>`,
+  rights: () => `<table><tr><th>Роль</th><th>Возможностей</th></tr>
+      <tr><td>администратор</td><td>24</td></tr>
+      <tr><td>организатор</td><td>15</td></tr>
+      <tr><td>актёр труппы</td><td>6</td></tr>
+    </table>
+    <p class="muted">Точечная выдача — в карточке человека: «Возможности» и «Роли».</p>`,
+  invites: invitesTab,
+  budget: () => `<table><tr><th>Дата</th><th>Статья</th><th></th></tr>
+      <tr><td>27.10</td><td>реквизит</td><td class="muted">−3 000 ₽</td></tr>
+      <tr><td>26.10</td><td>аренда зала</td><td class="muted">−12 000 ₽</td></tr>
+      <tr><td>25.10</td><td>взносы</td><td class="muted">+4 500 ₽</td></tr>
+    </table>
+    <p class="muted">Баланс: −167 509 ₽ · сверка с листом: расхождений нет</p>`,
+  feedback: () => `<table><tr><th>№</th><th>Автор</th><th>Текст</th></tr>
+      <tr><td>41</td><td>Дарья</td><td>Не видно, кто занят в субботу</td></tr>
+      <tr><td>40</td><td>Марк</td><td>Хочу напоминание за день</td></tr>
+    </table>`,
+
+  audit: () => `<table><tr><th>Когда</th><th>Действие</th></tr>
+      <tr><td>29.10 10:04</td><td>invite.create</td></tr>
+      <tr><td>29.10 09:51</td><td>availability.week.save</td></tr>
+      <tr><td>28.10 21:15</td><td>budget.tx.create</td></tr>
+    </table>`,
+};
+
+function adminScreen() {
+  document.getElementById("appTitle").textContent = "Админ-панель";
+  document.getElementById("appBody").innerHTML =
+    adminTabs() + `<div id="tab-body">${TABS[adminTab]()}</div>`;
+  document.getElementById("appFooter").innerHTML =
+    `<div class="status">Действия проверяются на сервере теми же правами, что и кнопки бота.</div>`;
+}
+
+document.addEventListener("click", event => {
+  const tab = event.target.closest("[data-tab]");
+  if (tab) { adminTab = tab.dataset.tab; adminScreen(); return; }
+  const page = event.target.closest("[data-page]");
+  if (page) { peoplePage = Number(page.dataset.page); adminScreen(); return; }
+  const code = event.target.closest("[data-code]");
+  if (code) {
+    const value = code.dataset.code;
+    const done = () => {
+      const hint = document.getElementById("copy-hint");
+      if (hint) hint.textContent = "Скопировано: " + value;
+      code.classList.add("copied");
+      setTimeout(() => code.classList.remove("copied"), 900);
+    };
+    if (navigator.clipboard) navigator.clipboard.writeText(value).then(done).catch(done);
+    else done();
+  }
+});
+
+const SCREENS = { week: weekScreen, profile: profileScreen, admin: adminScreen };
+
+document.querySelectorAll(".screen-switch button").forEach(btn => {
+  btn.addEventListener("click", () => {
+    document.querySelectorAll(".screen-switch button").forEach(b => b.classList.remove("on"));
+    btn.classList.add("on");
+    SCREENS[btn.dataset.screen]();
+  });
+});
+
+// раскрытие дня и переключение состояния — как в настоящем окне
+document.addEventListener("click", event => {
+  const chip = event.target.closest("[data-chip]");
+  if (chip) {
+    const [index, value] = chip.dataset.chip.split(":");
+    DAYS[index].status = value;
+    DAYS[index].none = false;
+    weekScreen();
+    return;
+  }
+  const row = event.target.closest(".day");
+  if (row) {
+    const index = Number(row.dataset.day);
+    DAYS.forEach((day, i) => { day.open = i === index ? !day.open : false; });
+    weekScreen();
+  }
+});
+
+document.querySelector("[data-theme]").addEventListener("click", event => {
+  const app = document.querySelector(".app");
+  const on = app.classList.toggle("light");
+  event.target.classList.toggle("on", on);
+  event.target.textContent = on ? "Тёмная тема" : "Светлая тема";
+});
+
+weekScreen();
+</script>
+</body>
+</html>
