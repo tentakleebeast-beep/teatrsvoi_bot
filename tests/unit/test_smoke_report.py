@@ -11,6 +11,7 @@
 from __future__ import annotations
 
 import json
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -133,23 +134,66 @@ def test_документы_смоука_на_месте(path):
     assert "smoke" in text.lower()
 
 
-def test_два_junit_склеиваются_и_сильнейший_исход_побеждает(tmp_path):
-    """Д1: слой А принимает несколько junit; пропуск одного прогона не отменяет пройденное."""
-    smoke = _write_junit(tmp_path / "smoke.xml", [("test_ok", "skipped", "стенд не включён"),
-                                                  ("test_bad", "failed", ""),
-                                                  ("test_only_smoke", "passed", "")])
-    full = _write_junit(tmp_path / "full.xml", [("test_ok", "passed", ""),
-                                                ("test_bad", "passed", "")])
-    outcomes = smoke_report.junit_outcomes([str(full), str(smoke)])
-    # пройдено в одном прогоне сильнее пропуска в другом
+def test_слои_названы_и_пропуск_не_отменяет_исполненный_исход(tmp_path):
+    """Д1/146 §2.3: junit принимается с именем слоя; пропуск в core уступает webapp.
+
+    Три junit — не удобство: webapp-тесты в `core`-прогоне пропущены по
+    `SVOI_WEBAPP_TESTS`, и без второго слоя требование выглядело бы непроверенным.
+    """
+    core = _write_junit(tmp_path / "core.xml", [("test_ok", "skipped", "webapp не включён"),
+                                                ("test_only_core", "passed", "")])
+    webapp = _write_junit(tmp_path / "webapp.xml", [("test_ok", "passed", "")])
+    outcomes = smoke_report.junit_outcomes([f"core={core}", f"webapp={webapp}"])
     assert outcomes[("tests/smoke/test_cm01_login.py", "test_ok")]["result"] == "пройдено"
-    # провал сильнее пройденного, в каком бы файле он ни был
-    assert outcomes[("tests/smoke/test_cm01_login.py", "test_bad")]["result"] == "провал"
-    assert outcomes[("tests/smoke/test_cm01_login.py", "test_only_smoke")]["result"] == "пройдено"
-    sources = smoke_report.junit_sources([str(full), str(smoke)])
-    assert [source["tests"] for source in sources] == [2, 3]
-    assert [source["skipped"] for source in sources] == [0, 1]
-    assert [source["failed"] for source in sources] == [0, 1]
+    assert outcomes[("tests/smoke/test_cm01_login.py", "test_only_core")]["result"] == "пройдено"
+    layers = smoke_report.junit_layers([f"core={core}", f"webapp={webapp}"])
+    assert [layer["layer"] for layer in layers] == ["core", "webapp"]
+    assert [layer["tests"] for layer in layers] == [2, 1]
+    assert layers[0]["skipped"] == 1
+
+
+def test_исполненный_тест_дважды_с_разными_исходами_валит_сборку(tmp_path):
+    """146 §2.3 п.3: два исполненных исхода одного теста — разные деревья, код 2."""
+    first = _write_junit(tmp_path / "a.xml", [("test_x", "passed", "")])
+    second = _write_junit(tmp_path / "b.xml", [("test_x", "failed", "")])
+    with pytest.raises(smoke_report.InputError):
+        smoke_report.junit_outcomes([f"core={first}", f"smoke={second}"])
+
+
+def test_нет_файла_слоя_это_ошибка_входа(tmp_path):
+    """146 §2.2: пропавший junit слоя — ошибка входа (код 2), а не «ноль тестов»."""
+    missing = tmp_path / "нет.xml"
+    with pytest.raises(smoke_report.InputError):
+        smoke_report.junit_layers([f"core={missing}"])
+    with pytest.raises(smoke_report.InputError):
+        smoke_report.junit_outcomes([f"webapp={missing}"])
+    with pytest.raises(smoke_report.InputError):
+        smoke_report.junit_layers([f"unknown={missing}"])
+
+
+def test_сборка_с_несуществующим_слоем_даёт_код_2(tmp_path):
+    """146 §2.2: вход негоден — код 2 и ни .json, ни .md не пишутся."""
+    matrix = tmp_path / "matrix.json"
+    matrix.write_text(json.dumps({"FR-A1": []}), encoding="utf-8")
+    out = tmp_path / "report"
+    code = smoke_report.main(["--junit", f"core={tmp_path / 'нет.xml'}", "--matrix", str(matrix),
+                              "--out", str(out), "--no-gates", "--commit", "HEAD"])
+    assert code == 2
+    assert not out.with_suffix(".json").exists()
+    assert not out.with_suffix(".md").exists()
+
+
+def test_гейт_полноты_считает_пары_и_валит_отчёт():
+    """Д1/146 §2.4: 3 пары матрицы, 1 исход — отчёт не собирается и называет счёт."""
+    matrix = {"FR-A1": [{"file": "tests/unit/a.py", "test": "test_one"},
+                        {"file": "tests/unit/a.py", "test": "test_two"}],
+              "FR-A2": [{"file": "tests/unit/a.py", "test": "test_two"},
+                        {"file": "tests/unit/b.py", "test": "test_three"}]}
+    outcomes = {("tests/unit/a.py", "test_one"): {"result": "пройдено", "message": ""}}
+    cov = smoke_report.coverage(matrix, outcomes)
+    assert (cov["pairs"], cov["covered"], len(cov["missing"])) == (3, 1, 2)
+    problems = smoke_report.validate(_minimal_report(coverage=cov))
+    assert any("1/3 пар" in item and "пропало 2" in item for item in problems)
 
 
 def test_тест_в_матрице_без_исхода_валит_отчёт():
@@ -198,6 +242,50 @@ def test_порог_p1_27_из_34_по_к17():
     assert not_enough["value"] == "26/34"
     # порог считается из числа строк, а не из литерала в дизайне
     assert smoke_report.share_target(_p1_rows(0), smoke_report.P1_SHARE) == 27
+    # формула ⌊0.8 × N⌋ едет за знаменателем: 40 P1 → 32 (146 §3.4)
+    assert smoke_report.share_target([{}] * 40, smoke_report.P1_SHARE) == 32
+
+
+def test_источник_чисел_из_документа_19():
+    """Д3/146 §4.1: числа §7 печатаются из парсера и пересчитываются тем же парсером.
+
+    Отчёт 145 печатал «P0 47/48»: знаменатель порога и знаменатель факта были разные,
+    потому что 47 жило в дизайне прозой. Теперь числа берутся из `requirement_rows`
+    и появляются в отчёте строкой «источник», а `--check` сверяет её повторным разбором.
+    """
+    rows = test_audit.requirement_rows()
+    matrix = test_audit.matrix()
+    block = smoke_report.source_block(rows, matrix)
+    assert block["rows"] == 113
+    assert (block["p0"], block["p1"], block["p2"], block["unset"]) == (48, 34, 7, 24)
+    assert block["with_tests"] == 59
+    assert block["unique_pairs"] == len(smoke_report.test_pairs(matrix))
+    assert smoke_report.requirements_revision() == "04.11.2026"
+    report = _minimal_report(source=block)
+    assert smoke_report.source_problems(report) == []
+    report["source"]["p0"] = 47
+    assert any("p0" in item and "48" in item for item in smoke_report.source_problems(report))
+    assert smoke_report.source_problems(_minimal_report(source={}))
+
+
+def test_коммит_без_генератора_валит_сборку():
+    """Ш-06/Д4: отчёт не воспроизводится из коммита без генератора — ошибка входа."""
+    root = subprocess.run(["git", "rev-list", "--max-parents=0", "HEAD"],  # noqa: S607
+                          capture_output=True, text=True, check=False).stdout.strip()
+    assert root, "git в рабочем дереве недоступен"
+    with pytest.raises(smoke_report.InputError):
+        smoke_report.ensure_generator(root.splitlines()[0].strip())
+    with pytest.raises(smoke_report.InputError):
+        smoke_report.ensure_generator("")
+
+
+def test_слои_печатаются_строкой_на_слой():
+    """146 §2.2: в отчёте видно каждый junit — файл и объём, а не общий счётчик."""
+    md = smoke_report.render_markdown(_minimal_report())
+    assert "| А. Авто (core: tests/ без браузера и стенда) |" in md
+    assert "`junit-core.xml`: 2300 тестов" in md
+    assert "Слой А: 3/3 пар «файл::тест» матрицы имеют исход в junit." in md
+    assert "Источник чисел §7:" in md
 
 
 def test_знаменатель_p0_один_в_факте_и_пороге():
@@ -217,12 +305,18 @@ def _minimal_report(**overrides) -> dict:
     report = {
         "version": 1, "number": "145", "commit": "x", "date": "2026-11-08",
         "env": "стенд", "marker": "SMOKE-20261108-01", "dump_sha256": "x",
-        "layers": {"junit": {"passed": 1, "failed": 0, "skipped": 0},
-                   "junit_sources": [], "gates": [], "prod": {"executed": False}},
+        "source": {"document": "docs/development/19-functional-requirements.md",
+                   "revision": "04.11.2026", "rows": 113, "p0": 48, "p1": 34, "p2": 7,
+                   "unset": 24, "with_tests": 59, "test_refs": 764, "unique_pairs": 477,
+                   "command": "…"},
+        "layers": {"junit": [{"layer": "core", "file": "junit-core.xml", "tests": 2300,
+                              "passed": 2200, "failed": 0, "skipped": 100}],
+                   "gates": [], "prod": {"executed": False}},
+        "coverage": {"pairs": 3, "covered": 3, "missing": []},
         "requirements": [], "scenarios": [], "cleanup": {}, "defects": [], "risk": [],
         "delta": {"note": "первый прогон, дельты нет", "added": [], "changed": [], "removed": []},
         "thresholds": {"checks": [], "ok": True, "not_measured": []},
-        "summary": "…", "run_checks": [],
+        "summary": "…", "run_checks": [], "unmatched_tests": [],
     }
     report.update(overrides)
     return report

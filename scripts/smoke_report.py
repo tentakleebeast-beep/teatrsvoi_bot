@@ -6,10 +6,11 @@
 правка начиналась с нуля. Здесь один вход — три файла, один выход — отчёт из §3.4 дизайна
 `docs/development/143`: `.md` для человека и `.json` как источник истины для дельты.
 
-    # вход: junit полного прогона `tests/` (сценарии — своим файлом, если он есть),
-    # матрица от test_audit, журнал сценариев, данные уборки, проверки прогона (К5/К7)
+    # вход: три junit слоя А (имя слоя = какой прогон это был), матрица от test_audit,
+    # журнал сценариев, данные уборки, проверки прогона (К5/К7)
     env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py \\
-        --junit smoke-junit-full.xml [--junit smoke-junit.xml] \\
+        --junit core=smoke-junit-core.xml --junit webapp=smoke-junit-webapp.xml \\
+        --junit smoke=smoke-junit-smoke.xml \\
         --matrix smoke-matrix.json --scenarios smoke-scenarios.json \\
         --cleanup smoke-cleanup.json --checks smoke-checks.json \\
         --out docs/reports/145-smoke-2026-11-08
@@ -17,9 +18,14 @@
     # проверка готового отчёта (код 1 и список ID, если строка врёт)
     env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py --check docs/reports/145-smoke-2026-11-08.json
 
-Правила, которые держит скрипт (docs/development/143 §3.2):
-  * слой А — junit **полного** прогона `tests/`, а не только `tests/smoke`: у требования
-    с тестом в матрице обязан быть исход, иначе отчёт не собирается (Д1, урок L-031);
+Правила, которые держит скрипт (docs/development/143 §3.2, docs/plans/146 §2–§4):
+  * слой А — это три прогона, которыми гейт объявляет дерево зелёным: `core`
+    (`tests/` без браузера и стенда), `webapp` (браузер chromium), `smoke` (сценарии
+    на стенде). Слой передаётся именем: `--junit core=файл`; в JSON — `layers.junit[]`,
+    в Markdown — строка на слой (146 §2.2). Пропавший файл слоя — код 2;
+  * каждая уникальная пара `файл::тест` матрицы обязана иметь исход в сведённом junit:
+    иначе отчёт не собирается (код 1, число пропавших и имена), а строка требования
+    не получает «нет автотеста» (146 §2.4, Д1, урок L-031);
   * `пройдено` ставится только по факту прогона — статус «готово» в документе 19
     доказательством не считается и в результат не переносится;
   * `не проверено` без причины из закрытого списка — ошибка отчёта, а не пустая клетка;
@@ -46,6 +52,7 @@ import re
 import subprocess
 import sys
 import xml.etree.ElementTree as ET
+from collections import Counter
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -69,15 +76,21 @@ RESULTS = ("пройдено", "провал", "не проверено", "не 
 # выполнена (пройдено/провал), либо названа непроверенной с причиной из §3.3.
 RUN_CHECK_RESULTS = ("пройдено", "провал", "не проверено")
 SEVERITIES = ("блокер", "важно", "мелко")
-# Пороги §7 дизайна: значения по умолчанию для сценариев; P0 и P1 считаются от числа
-# строк документа 19, а не от литерала (Д3: в дизайне стояло 47, фактических P0 — 48).
-# P1 — «≥ 80 %» по К17: 34 строки → 27.
-P1_SHARE = 0.8
+# Слои слоя А: имена, под которыми junit называются на входе (`--junit core=файл`).
+# Три прогона, а не один: гейт `check_done.py` объявляет дерево зелёным именно этими
+# запусками, и отчёт обязан показывать тот же объём (docs/plans/146 §2.2).
+LAYERS = ("core", "webapp", "smoke")
+LAYER_TITLES = {
+    "core": "tests/ без браузера и стенда",
+    "webapp": "tests/webapp, браузер chromium",
+    "smoke": "сценарии СМ-1…СМ-12, стенд",
+}
+# Слой в отчёте — это про то, чем доказано требование; вход без имени слоя допустим
+# (старые вызовы), но объём и файл всё равно печатаются.
 SCENARIO_TARGET, SCENARIO_SKIP_MAX = 12, 3
-# Сильнейшее свидетельство побеждает при склейке junit'ов: провал важнее пройденного,
-# пройденное — важнее пропуска. Иначе пропуск сценария в полном наборе отменял бы факт
-# прогона сценариев, а провал терялся бы за зелёным исходом другого файла.
-RESULT_RANK = {"провал": 3, "пройдено": 2, "не проверено": 1}
+# Порог P1 — формула от числа P1 в документе 19, а не литерал (Д2/Д3, К17):
+# N строк P1 → ⌊0.8 × N⌋ доказанных; сейчас 34 → 27 (docs/plans/146 §3.2).
+P1_SHARE = 0.8
 # Причина непроверки по коду причины из окружения/фикстуры (журнал шага может не назвать её).
 SKIP_CAUSE_MAP = (
     (re.compile(r"telegram|chat_id|доставк", re.IGNORECASE), "нужен живой Telegram"),
@@ -104,35 +117,50 @@ GATE_SCRIPTS = (
 
 # --- чтение входов -------------------------------------------------------------
 
+class InputError(Exception):
+    """Вход отчёта негоден (код 2): слоя нет, слой назван дважды, исходы противоречат.
+
+    Отличие от «порог не пройден» (код 1): здесь отчёт не собирается вовсе, потому что
+    вход противоречив. Смешать это с состоянием прогона значит выдать ошибку машины
+    за факт смоука.
+    """
+
+
 def read_json(path: Path | str | None) -> dict | None:
     """JSON-объект или None, если файла нет (необязательные входы)."""
     if not path:
         return None
     file = Path(path)
     if not file.is_file():
-        raise SystemExit(f"smoke_report.py: нет файла {file}")
+        raise InputError(f"нет файла {file}")
     data = json.loads(file.read_text(encoding="utf-8"))
     if not isinstance(data, dict):
-        raise SystemExit(f"smoke_report.py: {file} — не JSON-объект")
+        raise InputError(f"{file} — не JSON-объект")
     return data
 
 
-def junit_files(source) -> list[Path]:
-    """Файлы слоя А из аргумента: путь, список путей (или строка через запятую).
+def junit_inputs(source) -> list[tuple[str, Path]]:
+    """Входы слоя А: `слой=путь` (или просто путь — тогда слой не назван).
 
-    Слой А — это junit **полного** прогона `tests/`; прогон сценариев даёт свой файл,
-    и его тоже можно передать. Возвращает все названные файлы, ничего не угадывая.
+    Слой А — не один junit, а три прогона, которыми гейт объявляет дерево зелёным
+    (docs/plans/146 §2.2): `core`, `webapp`, `smoke`. Имя слоя нужно, чтобы в отчёте было
+    видно, чем именно доказано требование и какой это был прогон.
     """
     if not source:
         return []
     items = source if isinstance(source, (list, tuple, set)) else [source]
-    files: list[Path] = []
+    inputs: list[tuple[str, Path]] = []
     for item in items:
         for part in str(item).split(","):
             part = part.strip()
-            if part:
-                files.append(Path(part))
-    return files
+            if not part:
+                continue
+            layer, sep, path = part.partition("=")
+            if sep:
+                inputs.append((layer.strip(), Path(path.strip())))
+            else:
+                inputs.append(("", Path(part)))
+    return inputs
 
 
 def parse_junit(file: Path) -> dict[tuple[str, str], dict]:
@@ -160,13 +188,6 @@ def parse_junit(file: Path) -> dict[tuple[str, str], dict]:
     return outcomes
 
 
-def _checked(file: Path) -> dict[tuple[str, str], dict]:
-    """Разбор junit с понятной ошибкой, если файла нет (вход отчёта, а не догадка)."""
-    if not file.is_file():
-        raise SystemExit(f"smoke_report.py: нет junit-файла {file}")
-    return parse_junit(file)
-
-
 def count_cases(file: Path) -> dict:
     """Сколько тестов в junit как есть: параметризованные случаи считаются по одному.
 
@@ -174,7 +195,7 @@ def count_cases(file: Path) -> dict:
     объём прогона в отчёте должен совпадать с `pytest`: 2944 случая — это 2944, а не 2357.
     """
     if not file.is_file():
-        raise SystemExit(f"smoke_report.py: нет junit-файла {file}")
+        raise InputError(f"нет junit-файла {file}")
     tree = ET.parse(file)  # noqa: S314 — локальный файл собственного прогона
     counts = {"tests": 0, "passed": 0, "failed": 0, "skipped": 0}
     for case in tree.getroot().iter("testcase"):
@@ -188,25 +209,59 @@ def count_cases(file: Path) -> dict:
     return counts
 
 
-def junit_sources(source) -> list[dict]:
-    """Объём каждого источника слоя А числом: тестов, пройдено, провал, пропуск.
+def junit_layers(source) -> list[dict]:
+    """Объём каждого слоя числом: `{layer, file, tests, passed, failed, skipped}`.
 
     Урок L-031: критерий, сшивающий два входа, называет источник каждого и его объём.
+    Пропавший файл слоя — ошибка входа, а не «ноль тестов»: иначе потерянный junit
+    выглядит как прогон без тестов (146 §2.2).
     """
-    sources = []
-    for file in junit_files(source):
-        sources.append({"path": str(file), **count_cases(file)})
-    return sources
+    layers: list[dict] = []
+    seen: set[str] = set()
+    for layer, file in junit_inputs(source):
+        if layer and layer not in LAYERS:
+            raise InputError(f"неизвестный слой {layer!r}: допустимы {', '.join(LAYERS)}")
+        if layer and layer in seen:
+            raise InputError(f"слой {layer} назван дважды: у слоя один файл")
+        seen.add(layer)
+        if not file.is_file():
+            raise InputError(f"нет junit-файла слоя {layer or '—'}: {file}")
+        layers.append({"layer": layer, "file": str(file), **count_cases(file)})
+    return layers
 
 
 def junit_outcomes(source) -> dict[tuple[str, str], dict]:
-    """Склеенные исходы всех junit'ов слоя А: побеждает сильнейшее свидетельство."""
+    """Склеенные исходы слоёв слоя А по правилу docs/plans/146 §2.3.
+
+    1. тест исполнялся один раз — берётся его исход;
+    2. в одном слое пропуск, в другом исполненный исход — побеждает исполненный
+       (webapp-тесты в `core`-прогоне пропущены по `SVOI_WEBAPP_TESTS`, это норма);
+    3. исполнялся дважды с разными исходами — ошибка входа: в junit попали разные
+       деревья, и «пройдено» из одного счёта не может доказывать прогон другого.
+    """
     merged: dict[tuple[str, str], dict] = {}
-    for file in junit_files(source):
-        for key, outcome in _checked(file).items():
+    where: dict[tuple[str, str], str] = {}
+    for layer, file in junit_inputs(source):
+        if not file.is_file():
+            raise InputError(f"нет junit-файла слоя {layer or '—'}: {file}")
+        for key, outcome in parse_junit(file).items():
             current = merged.get(key)
-            if current is None or RESULT_RANK[outcome["result"]] > RESULT_RANK[current["result"]]:
+            if current is None:
                 merged[key] = outcome
+                where[key] = layer or str(file)
+                continue
+            if current["result"] == outcome["result"]:
+                continue
+            if outcome["result"] == "не проверено":
+                continue
+            if current["result"] == "не проверено":
+                merged[key] = outcome
+                where[key] = layer or str(file)
+                continue
+            raise InputError(
+                f"тест {key[0]}::{key[1]} исполнялся дважды с разными исходами "
+                f"({where[key]}: {current['result']}, {layer or file}: {outcome['result']}) — "
+                f"в junit попали разные деревья")
     return merged
 
 
@@ -216,6 +271,31 @@ def outcome_for(outcomes: dict, entry: dict) -> dict | None:
     if found is None:
         found = outcomes.get((Path(entry["file"]).name, entry["test"]))
     return found
+
+
+def test_pairs(matrix: dict) -> list[tuple[str, str]]:
+    """Уникальные пары `файл::тест` матрицы: одна пара может доказывать несколько требований."""
+    pairs: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+    for items in matrix.values():
+        for entry in items:
+            pair = (entry["file"], entry["test"])
+            if pair not in seen:
+                seen.add(pair)
+                pairs.append(pair)
+    return pairs
+
+
+def coverage(matrix: dict, outcomes: dict) -> dict:
+    """Полнота слоя А: сколько пар матрицы имеют исход в сведённом junit (146 §2.4).
+
+    Это главное правило Д1: «тест есть, исхода нет» — не свойство требования, а дыра
+    во входе, и отчёт с такой дырой не собирается.
+    """
+    pairs = test_pairs(matrix)
+    missing = [{"file": file, "test": test} for file, test in pairs
+               if outcome_for(outcomes, {"file": file, "test": test}) is None]
+    return {"pairs": len(pairs), "covered": len(pairs) - len(missing), "missing": missing}
 
 
 def skip_cause(message: str) -> str:
@@ -479,13 +559,16 @@ def delta(current: list[dict], previous: dict | None) -> dict:
 
 
 def share_target(rows: list[dict], share: float) -> int:
-    """Порог «≥ доли от числа строк» с округлением как в дизайне 143: 34 × 0.8 = 27.2 → 27.
+    """Порог «≥ доли от числа строк» — округление вниз, как зафиксировано в 146 §3.2.
 
+    `⌊0.8 × 34⌋ = 27` — это число из К17 и из дизайна 143 §7; `⌊0.8 × 40⌋ = 32`.
+    Округление вниз выбрано явно: 27/34 = 79,4 %, и «строгие 80 %» давали бы 28 —
+    тогда напечатанный порог разошёлся бы с критерием приёмки (Д2).
     Знаменатель берётся из `test_audit.requirement_rows()`, а не из литерала в дизайне:
     иначе «Факт» и «Порог» печатают разные знаменатели (Д3), и читатель видит ошибку
     машины там, где просто устаревшее число в документе.
     """
-    return int(len(rows) * share + 0.5)
+    return int(len(rows) * share)
 
 
 def thresholds(requirements: list[dict], steps: list[dict], defects: list[dict],
@@ -540,6 +623,53 @@ def risk_section(requirements: list[dict]) -> list[dict]:
             if r["priority"] == "P0" and r["result"] == "не проверено"]
 
 
+def source_block(rows: list[dict], matrix: dict) -> dict:
+    """Числа §7 из одного парсера документа 19 (docs/plans/146 §4.1).
+
+    Печатаются вместе с командой пересчёта и сверяются `--check` повторным разбором:
+    расхождение напечатанного и посчитанного — ошибка отчёта, а не «число не понравилось».
+    """
+    by_priority = Counter(row["priority"] for row in rows)
+    pairs = test_pairs(matrix)
+    return {
+        "document": "docs/development/19-functional-requirements.md",
+        "revision": requirements_revision(),
+        "rows": len(rows),
+        "p0": by_priority["P0"],
+        "p1": by_priority["P1"],
+        "p2": by_priority["P2"],
+        "unset": by_priority["не задан"],
+        "with_tests": sum(1 for items in matrix.values() if items),
+        "test_refs": sum(len(items) for items in matrix.values()),
+        "unique_pairs": len(pairs),
+        "command": "env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json",
+    }
+
+
+def requirements_revision() -> str:
+    """Дата актуальности документа 19 из его шапки («Актуально на **04.11.2026**»)."""
+    try:
+        head = test_audit.REQUIREMENTS_DOC.read_text(encoding="utf-8")[:2000]
+    except OSError:
+        return "—"
+    match = re.search(r"Актуально на \*\*(\d{2}\.\d{2}\.\d{4})\*\*", head)
+    return match.group(1) if match else "—"
+
+
+def source_problems(report: dict) -> list[str]:
+    """`--check`: напечатанные числа §7 против повторного разбора документа 19 (146 §4.2)."""
+    stated = report.get("source") or {}
+    if not stated:
+        return ["нет ключа source: числа §7 напечатаны без источника и пересчёта"]
+    counted = source_block(test_audit.requirement_rows(), test_audit.matrix())
+    problems = []
+    for key in ("rows", "p0", "p1", "p2", "unset", "with_tests", "test_refs", "unique_pairs"):
+        if stated.get(key) != counted[key]:
+            problems.append(f"источник: {key} в отчёте {stated.get(key)!r}, "
+                            f"пересчёт по документу 19 даёт {counted[key]}")
+    return problems
+
+
 def summary(requirements: list[dict], thresholds_block: dict,
             run_checks: list[dict] | None = None) -> str:
     """Итог: три предложения по матрице и строка о проверках прогона (К5, К7)."""
@@ -577,24 +707,37 @@ def render_markdown(report: dict) -> str:
         lines.append(f"| {check['criterion']} | {check['value']} | {check['target']} | "
                      f"{'норма' if check['ok'] else 'не пройден'} |")
     lines += ["", f"Итог: {'пороги пройдены' if report['thresholds']['ok'] else 'пороги не пройдены'}.",
-              "", "## 2. Слои доказательств", "",
-              "| Слой | Что прогнано | Результат |", "|---|---|---|",
-              f"| А. Авто | junit полного прогона `tests/`: "
-              f"{sum(report['layers']['junit'].values())} тестов | "
-              f"{report['layers']['junit']['passed']} пройдено, "
-              f"{report['layers']['junit']['failed']} провал, "
-              f"{report['layers']['junit']['skipped']} пропущено |",
-              f"| Б. Сценарии | {len(report['scenarios'])} шагов в "
+              "", "## 2. Слои доказательств", ""]
+    source = report.get("source") or {}
+    if source:
+        lines += [f"Источник чисел §7: `{source['document']}` (ревизия {source['revision']}): "
+                  f"{source['rows']} строк, P0 {source['p0']}, P1 {source['p1']}, "
+                  f"P2 {source['p2']}, не задан {source['unset']}; требований с тестом "
+                  f"{source['with_tests']}; ссылок «файл::тест» {source['test_refs']} "
+                  f"({source['unique_pairs']} уникальных пар). Пересчёт: "
+                  f"`{source['command']}`.", ""]
+    coverage = report.get("coverage") or {}
+    if coverage:
+        missing = coverage.get("missing") or []
+        lines += [f"Слой А: {coverage['covered']}/{coverage['pairs']} пар «файл::тест» "
+                  f"матрицы имеют исход в junit" +
+                  (f", пропало {len(missing)}" if missing else "") + ".", ""]
+    lines += ["| Слой | Что прогнано | Результат |", "|---|---|---|"]
+    for layer in report["layers"]["junit"]:
+        title = LAYER_TITLES.get(layer["layer"], "junit")
+        lines.append(f"| А. Авто ({layer['layer'] or '—'}: {title}) | `{layer['file']}`: "
+                     f"{layer['tests']} тестов | {layer['passed']} пройдено, "
+                     f"{layer['failed']} провал, {layer['skipped']} пропущено |")
+    lines += [f"| Б. Сценарии | {len(report['scenarios'])} шагов в "
               f"{len({s['scenario'] for s in report['scenarios']})} сценариях | "
               f"{sum(1 for s in report['scenarios'] if s['result'] == 'пройдено')} пройдено, "
               f"{sum(1 for s in report['scenarios'] if s['result'] == 'провал')} провал |",
               "| В. Прод | не выполнялся | `не проверено`, причина `нужен прод` (V-042) |", ""]
-    if report["layers"].get("junit_sources"):
-        lines += ["Источники слоя А (источник и его объём — числом):", ""]
-        for source in report["layers"]["junit_sources"]:
-            lines.append(f"- `{source['path']}` — {source['tests']} тестов: "
-                         f"{source['passed']} пройдено, {source['failed']} провал, "
-                         f"{source['skipped']} пропущено")
+    if coverage and coverage.get("missing"):
+        lines += ["Пары без исхода (первая двадцатка) — прогон неполный:",
+                  ""]
+        for item in coverage["missing"][:20]:
+            lines.append(f"- `{item['file']}::{item['test']}`")
         lines.append("")
     if report["layers"].get("gates"):
         lines += ["Гейт-скрипты:", ""]
@@ -679,10 +822,10 @@ def build(args: argparse.Namespace) -> dict:
     rows = test_audit.requirement_rows()
     matrix = read_json(args.matrix) or {}
     if not matrix:
-        raise SystemExit("smoke_report.py: без --matrix отчёт не собрать "
+        raise InputError("без --matrix отчёт не собрать "
                          "(scripts/test_audit.py --matrix --json > matrix.json)")
     outcomes = junit_outcomes(args.junit)
-    sources = junit_sources(args.junit)
+    layers = junit_layers(args.junit)
     steps = flat_steps(read_json(args.scenarios))
     cleanup = read_json(args.cleanup) or {}
     previous = read_json(args.previous) or {}
@@ -691,23 +834,26 @@ def build(args: argparse.Namespace) -> dict:
     date = args.date or dt.date.today().isoformat()
     requirements, unmatched = build_requirements(rows, matrix, outcomes, steps, gates, date)
     defects = build_defects(steps, requirements, outcomes, matrix)
+    commit = args.commit or git_head()
+    # Ш-06: отчёт обязан воспроизводиться из названного коммита. Если генератора в нём
+    # нет, отчёт собран из другого дерева — это ошибка входа, а не «старый коммит».
+    ensure_generator(commit)
 
-    # Счётчики слоя А — по junit как есть (параметризация по одному случаю), а не по
-    # склеенному словарю: иначе объём прогона в отчёте не сходится с выводом pytest.
-    junit_counts = {"passed": sum(source["passed"] for source in sources),
-                    "failed": sum(source["failed"] for source in sources),
-                    "skipped": sum(source["skipped"] for source in sources)}
     report = {
         "version": REPORT_VERSION,
         "number": args.number or str(next_number(ROOT / "docs")),
-        "commit": args.commit or git_head(),
+        "commit": commit,
         "date": date,
         "env": args.env,
         "marker": args.marker or cleanup.get("marker", ""),
         "dump_sha256": args.dump_sha or cleanup.get("dump_sha256", ""),
-        "junit": ", ".join(source["path"] for source in sources),
-        "layers": {"junit": junit_counts, "junit_sources": sources, "gates": gates,
+        "junit": ", ".join(layer["file"] for layer in layers),
+        # Числа §7 — из одного парсера документа 19, вместе с командой пересчёта (146 §4).
+        "source": source_block(rows, matrix),
+        "layers": {"junit": layers, "gates": gates,
                    "prod": {"executed": False, "cause": "нужен прод"}},
+        # Полнота слоя А: сколько пар матрицы имеют исход (146 §2.4, Д1).
+        "coverage": coverage(matrix, outcomes),
         "requirements": requirements,
         # Тесты, у которых нет исхода в junit: непустой список валит отчёт (Д1).
         "unmatched_tests": unmatched,
@@ -731,8 +877,21 @@ def validate(report: dict) -> list[str]:
         if key not in report:
             problems.append(f"нет ключа {key}")
     requirements = report.get("requirements", [])
-    if len(requirements) != 113:
-        problems.append(f"строк матрицы {len(requirements)}, а требований в документе 19 — 113")
+    expected_rows = len(test_audit.requirement_rows())
+    if len(requirements) != expected_rows:
+        problems.append(f"строк матрицы {len(requirements)}, а требований в документе 19 — "
+                        f"{expected_rows}")
+    # Полнота слоя А (146 §2.4): у каждой пары «файл::тест» матрицы обязан быть исход.
+    coverage_block = report.get("coverage")
+    if coverage_block is None:
+        problems.append("нет ключа coverage: полнота слоя А не проверена — отчёт собран "
+                        "без сверки матрицы с junit")
+    elif coverage_block.get("missing"):
+        missing = coverage_block["missing"]
+        problems.append(
+            f"слой А: {coverage_block.get('covered', 0)}/{coverage_block.get('pairs', 0)} пар "
+            f"матрицы с исходом, пропало {len(missing)}: "
+            + ", ".join(f"{item.get('file')}::{item.get('test')}" for item in missing[:10]))
     # Д1: тест есть в матрице, исхода в junit нет — прогон неполный, и строка
     # «нет автотеста» у такого требования — не факт, а дыра во входе.
     for item in report.get("unmatched_tests", []):
@@ -807,12 +966,29 @@ def git_head() -> str:
         return ""
 
 
+def ensure_generator(commit: str) -> None:
+    """Ш-06: отчёт воспроизводится только из коммита, в котором есть его генератор.
+
+    Д4: отчёт 145 стоял с `commit: 1cffb24`, а `scripts/smoke_report.py` появился позже
+    (`c4c92c2`) — то есть собран из рабочего дерева, и повторить его из названного коммита
+    было нельзя. Проверка делает такой отчёт непечатаемым: нет генератора в коммите —
+    нет отчёта (код 2).
+    """
+    if not commit:
+        raise InputError("не назван коммит сборки: --commit или git HEAD")
+    proc = subprocess.run(["git", "cat-file", "-e", f"{commit}:scripts/smoke_report.py"],  # noqa: S607
+                          cwd=ROOT, capture_output=True, text=True, check=False)
+    if proc.returncode != 0:
+        raise InputError(f"в коммите {commit} нет scripts/smoke_report.py — отчёт собран "
+                         f"не из того дерева; закоммить генератор и пересобрать")
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Отчёт смоука: матрица, сценарии, дельта",
                                      formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--junit", action="append", default=None,
-                        help="junit XML от pytest; можно несколько раз (полный прогон tests/ "
-                             "обязателен, junit сценариев — по желанию)")
+                        help="junit XML слоя А как `слой=путь` (слои: core, webapp, smoke); "
+                             "можно несколько раз")
     parser.add_argument("--matrix", default=None, help="JSON от test_audit.py --matrix")
     parser.add_argument("--scenarios", default=None, help="JSON журнала сценариев")
     parser.add_argument("--cleanup", default=None, help="JSON от smoke_data.py check")
@@ -831,11 +1007,15 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.check:
-        report = read_json(args.check)
+        try:
+            report = read_json(args.check)
+        except InputError as error:
+            print(f"smoke_report.py: {error}")
+            return 1
         if report is None:
             print(f"smoke_report.py: нет отчёта {args.check}")
             return 1
-        problems = validate(report)
+        problems = validate(report) + source_problems(report)
         if problems:
             print("отчёт неверен:", *[f"  - {item}" for item in problems], sep="\n")
             return 1
@@ -845,7 +1025,11 @@ def main(argv: list[str] | None = None) -> int:
 
     if not args.out:
         parser.error("нужен --out ПРЕФИКС (docs/reports/NNN-smoke-YYYY-MM-DD) или --check ФАЙЛ")
-    report = build(args)
+    try:
+        report = build(args)
+    except InputError as error:
+        print(f"smoke_report.py: вход негоден, отчёт не собран: {error}")
+        return 2
     problems = validate(report)
     if problems:
         # К9: журнал без ожидаемого/фактического — ошибка отчёта, а не «пройдено».
