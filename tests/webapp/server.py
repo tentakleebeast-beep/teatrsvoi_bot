@@ -133,6 +133,31 @@ def _is_participant(request: Request) -> bool:
     return (request.headers.get(ROLE_HEADER) or "").strip().lower() == "participant"
 
 
+# «Файлы студии» по решению V-039 (в) видят admin, org и master; у роли без права
+# (`troupe`, `participant`) стенд отвечает 403, как tool-api, — иначе экран в тесте
+# показывал бы список там, где на проде человек читает «раздел доступен…» (Б3).
+NO_FILES_ACCESS_ROLES = {"participant", "troupe"}
+
+
+def _files_guard(request: Request):
+    """Ответ стенда для маршрутов файлов: 401 без токена, 403 без `files.access`."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    if role in NO_FILES_ACCESS_ROLES:
+        return JSONResponse({"detail": "capability required: files.access"}, status_code=403)
+    return None
+
+
+def _files_data(payload: dict):
+    """Ответ стенда для чтения файлов: тот же `_data`, но с проверкой `files.access`."""
+    async def handler(request: Request):
+        denied = _files_guard(request)
+        return denied if denied is not None else JSONResponse(payload)
+    return handler
+
+
 def _lacks_notify_send(request: Request) -> bool:
     return (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_NOTIFY_SEND_ROLES
 
@@ -661,10 +686,14 @@ async def _admin_overview(request: Request) -> JSONResponse:
         # У организатора панель есть (`participants.view`, `registration.approve`,
         # `budget.read`), а `registration.code.issue` и `participants.manage` нет
         # (`db/init/008`), поэтому разделов `invites` и `rights` не приходит ни
-        # блоком, ни в `allowed` — как в бою (карты t_343d42fe, t_eb9e0661).
+        # блоком, ни в `allowed`, а `manage_rights` в ответе ложно — как в бою
+        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет; карта
+        # t_c6a13266: без `manage_rights` нет и архива; карта t_eb9e0661: без
+        # права нет ни матрицы, ни формы выдачи).
         blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "pending", "budget")}
         actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
-                   if name not in {"issue_codes", "manage_rights"}}
+                   if name != "issue_codes"}
+        actions["manage_rights"] = False
         return JSONResponse({"ok": True, "allowed": ["people", "pending", "budget"],
                              "actions": actions, "blocks": blocks})
     if role == "troupe":
@@ -799,7 +828,7 @@ async def tx_save(request: Request):
                          "sheet": "ok", "sheet_error": None})
 
 
-app.add_api_route("/webapp/files/list", _data({
+app.add_api_route("/webapp/files/list", _files_data({
     "ok": True,
     "data": [
         {"id": 1, "name": "Репетиция 12 октября.m4a", "kind": "audio", "size_bytes": 18 * 1024 * 1024,
@@ -812,7 +841,7 @@ app.add_api_route("/webapp/files/list", _data({
     "quota": {"used": 25 * 1024 * 1024, "total": 1024 * 1024 * 1024, "left": 999 * 1024 * 1024},
 }))
 
-app.add_api_route("/webapp/folder/{folder_id}/files", _data({
+app.add_api_route("/webapp/folder/{folder_id}/files", _files_data({
     "ok": True,
     "folder": {"id": 7, "path": "Спектакль/Музыка", "scope": "folder"},
     "count": 3,

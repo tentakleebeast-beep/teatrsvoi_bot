@@ -72,6 +72,42 @@ def test_организатор_видит_людей_но_не_права(clien
     assert body["actions"]["manage_rights"] is False
 
 
+def test_архив_не_приходит_без_права_управления_людьми(client):
+    """FR-A7, отчёт 142 §3 строка 26, карта t_c6a13266: архив — не просмотр.
+
+    Блок `archive` строился под `"people" in allowed`, то есть отдавался по
+    `participants.view`. У org и master право есть на просмотр и нет на возврат:
+    данные ушедших людей уходили в браузер, хотя кнопка «Вернуть в активные»
+    ответила бы 403.
+    """
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 782007, "Архив Незримый", role="troupe", status="archived")
+        _person(conn, 782008, "Архив Панель Орг", role="org")
+        _person(conn, 782011, "Архив Панель Мастер", role="master")
+
+    for chat_id in (782008, 782011):
+        headers = _token(client, chat_id)
+        body = client.get("/webapp/admin/overview", headers=headers).json()
+        assert "archive" not in body["blocks"], "архив ушёл в браузер без права"
+        assert body["actions"]["manage_rights"] is False
+        assert all(person["status"] != "archived"
+                   for person in body["blocks"]["people"]["data"])
+
+
+def test_архив_приходит_с_правом_управления_людьми(client):
+    """Право `participants.manage` у администратора: блок и возврат на месте."""
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 782009, "Архив Видимый Админ", role="troupe", status="archived")
+        _person(conn, 782010, "Архив Панель Админ", role="admin")
+
+    body = client.get("/webapp/admin/overview", headers=_token(client, 782010)).json()
+    names = [person["display_name"] for person in body["blocks"]["archive"]["data"]]
+    assert "Архив Видимый Админ" in names
+    assert body["actions"]["manage_rights"] is True
+
+
 def test_старый_адрес_панели_редиректит(client):
     """`/webapp/admin` — бывший общий вход: разделы теперь на своих адресах (план 94, Ш-5)."""
     _api()
@@ -124,3 +160,31 @@ def test_панель_не_показывает_закрытые_обращен�
     assert all(item["id"] != created["id"] for item in data)
     assert all(item["status"] in ("new", "seen", "planned") for item in data)
     assert body["blocks"]["feedback"]["counts"].get("done", 0) >= 1
+
+
+def test_без_audit_view_журнал_не_читается(client, monkeypatch):
+    """Отчёт 142 §3 строка 28, Б3: у org и master нет `audit.view`.
+
+    Экран «Аудит» показывал этим ролям «Событий нет» — молчаливую пустоту,
+    хотя у troupe в том же месте честное «Раздел доступен организатору и
+    администратору» (403). Журнал закрыт, а не пуст: сервер не должен даже
+    читать `audit`, иначе экран получит повод нарисовать пустой список.
+    """
+    import app.api.admin as admin_api
+
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 782007, "Панель Орг Без Журнала", role="org")
+        _person(conn, 782008, "Панель Мастер Без Журнала", role="master")
+
+    def no_journal(*args, **kwargs):
+        raise AssertionError("журнал прочитан без audit.view")
+
+    monkeypatch.setattr(admin_api, "audit_recent", no_journal)
+
+    for chat_id in (782007, 782008):
+        result = client.get("/webapp/admin/overview", headers=_token(client, chat_id))
+        assert result.status_code == 200, result.text
+        body = result.json()
+        assert "audit" not in body["allowed"], chat_id
+        assert "audit" not in body["blocks"], chat_id

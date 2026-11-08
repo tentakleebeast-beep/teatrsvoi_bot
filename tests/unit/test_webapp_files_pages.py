@@ -1,10 +1,11 @@
-"""Экраны файлов на дизайн-системе v2 и доступ только администратору (92 §9).
+"""Экраны файлов на дизайн-системе v2 и право `files.access` (92 §9, V-039 (в)).
 
 Проверяем то, ради чего экраны переписаны: они собраны тем же каркасом, что и
-остальные, раздел закрыт правом `admin.panel` на сервере, а загрузка по-прежнему
-идёт мимо Telegram (`presign → commit`).
+остальные, раздел закрыт правом `files.access` на сервере (решение владельца V-039 (в):
+файлы видят admin, org и master), а загрузка по-прежнему идёт мимо Telegram
+(`presign → commit`).
 
-Правила и требования раздела: docs/development/86-files-and-storage.md.
+Обоснование: V-039 (в) `docs/reports/74-questions.md`, `docs/development/86-files-and-storage.md`.
 """
 
 import pathlib
@@ -62,14 +63,33 @@ def test_страницы_публичны_а_данные_закрыты():
     assert "def webapp_files_page(who: dict" not in ROUTES
 
 
-def test_данные_файлов_тоже_закрыты():
-    """Кнопку спрятать мало: прямой запрос к API должен получать отказ."""
-    assert MAIN.count('_webapp_require(who, "admin.panel")') >= 6
+def test_данные_файлов_закрыты_правом_files_access():
+    """Кнопку спрятать мало: прямой запрос к API должен получать отказ.
+
+    Право одно на весь дом — `files.access` (V-039 (в)). `admin.panel` здесь больше
+    не проверяется: иначе org и master, которым решение владельца раздел открыло,
+    получали бы 403 на собственном экране.
+    """
+    assert MAIN.count('_webapp_require(who, "files.access")') >= 6
+    assert '"admin.panel"' not in MAIN, "файлы снова закрыты админ-панелью"
     for endpoint in ("webapp_files_list", "webapp_files_presign", "webapp_files_commit",
                      "webapp_folder_files", "webapp_folder_order", "webapp_folder_zip"):
         start = MAIN.index(f"def {endpoint}(")
         block = MAIN[start:start + 1200]
-        assert 'admin.panel' in block, f"{endpoint} без проверки прав"
+        assert 'files.access' in block, f"{endpoint} без проверки прав"
+
+
+def test_у_админа_одна_главная_кнопка_на_экране():
+    """А9 (docs/development/141 §4): `.ui-btn--primary` на экране ровно одна.
+
+    До правки главных было три — «Открыть доступ», «Загрузить», «Выбрать файлы»;
+    осталась кнопка самой задачи экрана — «Загрузить».
+    """
+    page = files.FILES_PAGE
+    # Считаем разметку, а не строки скрипта: `el("button", "ui-btn ui-btn--sm ui-btn--primary")`
+    # рисует кнопку строки (сохранить/утвердить), и это не главная кнопка экрана.
+    assert page.count('class="ui-btn ui-btn--primary') == 1, "на экране больше одной главной кнопки"
+    assert 'id="upload"' in page and 'class="ui-btn ui-btn--primary ui-btn--block"' in page
 
 
 def test_папка_играет_подряд_и_качает_архив():

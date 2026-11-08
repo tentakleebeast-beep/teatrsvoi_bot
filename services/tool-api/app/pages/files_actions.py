@@ -32,7 +32,7 @@ BODY = """
     <span class="ui-field__hint">Вложенную папку задайте путём через «/».</span>
   </div>
   <div class="ui-actions files-actions">
-    <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="folder-create">Создать папку</button>
+    <button class="ui-btn ui-btn--block" type="button" id="folder-create">Создать папку</button>
   </div>
   <p class="ui-small ui-muted" id="folder-status"></p>
 </section>
@@ -52,7 +52,7 @@ BODY = """
            placeholder="Сверка сметы за октябрь">
   </div>
   <div class="ui-actions files-actions">
-    <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="access-grant">Открыть доступ</button>
+    <button class="ui-btn ui-btn--block" type="button" id="access-grant">Открыть доступ</button>
     <button class="ui-btn ui-btn--block" type="button" id="access-revoke">Отозвать доступ</button>
   </div>
   <p class="ui-small ui-muted" id="access-status"></p>

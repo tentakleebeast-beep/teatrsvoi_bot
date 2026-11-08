@@ -88,4 +88,4 @@ def test_check_schema_expect_head_is_cwd_independent(test_db, tmp_path) -> None:
         [sys.executable, str(ROOT / "deploy" / "check_schema.py"), "--expect-head"],
         capture_output=True, text=True, env=env, cwd=tmp_path, check=False)
     assert result.returncode == 0, result.stdout + result.stderr
-    assert "061_master_role" in result.stdout
+    assert "062_files_studio_access" in result.stdout
