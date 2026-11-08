@@ -1,7 +1,7 @@
 {
   "version": 1,
   "number": "145",
-  "commit": "7e071b7",
+  "commit": "dd14f53",
   "date": "2026-11-08",
   "env": "стенд svoi_smoke",
   "marker": "SMOKE-20261108-01",
@@ -9,17 +9,17 @@
   "junit": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-full.xml",
   "layers": {
     "junit": {
-      "passed": 2184,
+      "passed": 2523,
       "failed": 0,
-      "skipped": 173
+      "skipped": 421
     },
     "junit_sources": [
       {
         "path": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-full.xml",
-        "tests": 2357,
-        "passed": 2184,
+        "tests": 2944,
+        "passed": 2523,
         "failed": 0,
-        "skipped": 173
+        "skipped": 421
       }
     ],
     "gates": [
