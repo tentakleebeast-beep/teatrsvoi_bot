@@ -631,12 +631,15 @@ async def _admin_overview(request: Request) -> JSONResponse:
                              "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
     if role == "org":
         # У организатора панель есть (`participants.view`, `registration.approve`,
-        # `budget.read`), а `registration.code.issue` нет (`db/init/008`), поэтому
-        # раздела `invites` не приходит ни блоком, ни в `allowed` — как в бою
-        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет).
+        # `budget.read`), а `registration.code.issue` и `participants.manage` нет
+        # (`db/init/008`), поэтому раздела `invites` не приходит ни блоком, ни в
+        # `allowed`, а `manage_rights` в ответе ложно — как в бою (карта
+        # t_343d42fe: у org экран звал к кнопке, которой у него нет; карта
+        # t_c6a13266: без `manage_rights` нет и архива).
         blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "pending", "budget")}
         actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
                    if name != "issue_codes"}
+        actions["manage_rights"] = False
         return JSONResponse({"ok": True, "allowed": ["people", "pending", "budget"],
                              "actions": actions, "blocks": blocks})
     if role == "troupe":
