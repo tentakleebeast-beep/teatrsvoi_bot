@@ -7,13 +7,15 @@
 #   sudo deploy/server-deploy.sh app            # код, venv, зависимости
 #   sudo deploy/server-deploy.sh env            # .env из .env.example + случайные секреты
 #   sudo deploy/server-deploy.sh db             # postgres, схема; --restore FILE — из дампа
+#   sudo deploy/server-deploy.sh storage        # Garage: контейнер, ключи, бакеты, CORS
 #   sudo deploy/server-deploy.sh proxy          # Caddyfile из шаблона, TLS
 #   sudo deploy/server-deploy.sh units          # юниты systemd (api + таймеры; поллер — poller)
 #   sudo deploy/server-deploy.sh poller start   # включить поллер (после остановки локального!)
 #   sudo deploy/server-deploy.sh smoke          # проверки после выката
 #   sudo deploy/server-deploy.sh rollback v0.3.0
 #
-# Скрипт идемпотентен: повторный запуск не ломает уже сделанное.
+# Скрипт идемпотентен: повторный запуск не ломает уже сделанное (кроме `env`: он
+# перезаписывает .env и требует FORCE=1).
 set -euo pipefail
 
 # shellcheck source=deploy/lib.sh
@@ -198,6 +200,9 @@ cmd_env() {
       -e "s|^DATABASE_URL=.*|DATABASE_URL=postgresql://$SVOI_DB_USER:$pg_password@127.0.0.1:$SVOI_PG_PORT/$SVOI_DB_NAME|" \
       -e "s|^TOOL_API_URL=.*|TOOL_API_URL=http://127.0.0.1:$SVOI_API_PORT|" \
       -e "s|^WEBAPP_BASE_URL=.*|WEBAPP_BASE_URL=https://$SVOI_DOMAIN|" \
+      -e "s|^STORAGE_PUBLIC_ENDPOINT=.*|STORAGE_PUBLIC_ENDPOINT=https://$SVOI_STORAGE_DOMAIN|" \
+      -e "s|^STORAGE_CORS_ORIGINS=.*|STORAGE_CORS_ORIGINS=https://$SVOI_DOMAIN|" \
+      -e "s|^GARAGE_CONTAINER=.*|GARAGE_CONTAINER=$SVOI_GARAGE_CONTAINER|" \
       "$REPO_DIR/.env.example" > "$target"
   chmod 600 "$target"
   chown "$SVOI_USER:$SVOI_USER" "$target"
@@ -287,6 +292,33 @@ cmd_db() {
             (select count(*) from participant where status <> 'archived') as людей;"
 }
 
+# ------------------------------------------------------------------ storage
+# Хранилище файлов (Garage) — часть контура, а не «потом»: без него `presign`
+# отвечает 503, и Mini App не грузит файлы (Д-03, 09.11.2026; docs/development/86 §9 п.5).
+# Шаг идемпотентен: повторный запуск не трогает существующие ключи и объекты.
+cmd_storage() {
+  require_root storage
+  require_docker
+  local python="$SVOI_ROOT/.venv/bin/python"
+  [ -x "$python" ] || die "нет venv: сначала deploy/server-deploy.sh app"
+
+  # Ключи, бакеты и CORS настраивает scripts/storage_up.py. Отсюда приходят только
+  # адреса: они в deploy/svoi.env, а не в .env, и скрипт сам дописывает их в .env.
+  log "хранилище: контейнер $SVOI_GARAGE_CONTAINER, публичный адрес https://$SVOI_STORAGE_DOMAIN"
+  ( cd "$SVOI_ROOT" && env -u PYTHONPATH \
+      GARAGE_CONTAINER="$SVOI_GARAGE_CONTAINER" \
+      STORAGE_PUBLIC_ENDPOINT="https://$SVOI_STORAGE_DOMAIN" \
+      STORAGE_CORS_ORIGINS="https://$SVOI_DOMAIN" \
+      "$python" scripts/storage_up.py ) || die "хранилище не настроилось: смотрите вывод выше"
+
+  ( cd "$SVOI_ROOT" && env -u PYTHONPATH "$python" scripts/storage_smoke.py ) \
+    || die "хранилище не отвечает: put/get и presigned-ссылки — см. вывод выше"
+
+  # .env дополнился ключами и адресами; работающий процесс их ещё не видит.
+  systemctl restart svoi-tool-api
+  info "хранилище готово, tool-api перезапущен с новыми настройками"
+}
+
 # --------------------------------------------------------------------- proxy
 cmd_proxy() {
   require_root proxy
@@ -296,6 +328,8 @@ cmd_proxy() {
 
   sed -e "s|@DOMAIN@|$SVOI_DOMAIN|g" \
       -e "s|@API_PORT@|$SVOI_API_PORT|g" \
+      -e "s|@STORAGE_DOMAIN@|$SVOI_STORAGE_DOMAIN|g" \
+      -e "s|@STORAGE_PORT@|$SVOI_STORAGE_PORT|g" \
       -e "s|@ACME_EMAIL@|$SVOI_ACME_EMAIL|g" \
       "$template" > /etc/caddy/Caddyfile
   install -d -m 755 /var/log/caddy
@@ -310,17 +344,22 @@ cmd_proxy() {
   systemctl enable caddy
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
 
-  log "жду сертификат на https://$SVOI_DOMAIN"
-  local i
-  for i in $(seq 1 30); do
-    if curl -fsSI "https://$SVOI_DOMAIN" >/dev/null 2>&1; then
-      info "TLS в порядке"
-      return 0
-    fi
-    sleep 2
+  log "жду сертификаты: $SVOI_DOMAIN, $SVOI_STORAGE_DOMAIN"
+  local host i problems=0
+  for host in "$SVOI_DOMAIN" "$SVOI_STORAGE_DOMAIN"; do
+    for i in $(seq 1 30); do
+      if curl -fsSI "https://$host" >/dev/null 2>&1; then
+        info "TLS $host в порядке"
+        break
+      fi
+      if [ "$i" = "30" ]; then
+        warn "сертификат $host не выпустился: journalctl -u caddy -n 50; проверьте DNS A-запись и порт 80"
+        problems=$((problems + 1))
+      fi
+      sleep 2
+    done
   done
-  warn "сертификат не выпустился: journalctl -u caddy -n 50; проверьте DNS A-запись и порт 80"
-  return 1
+  [ "$problems" -eq 0 ]
 }
 
 # -------------------------------------------------------------------- schema
@@ -484,6 +523,15 @@ cmd_smoke() {
   fi
 
   if [ -x "$SVOI_ROOT/.venv/bin/python" ]; then
+    # Хранилище — часть контура: пустой STORAGE_ENDPOINT не должен выглядеть нормой,
+    # иначе выкат «зелёный», а Mini App отвечает 503 на presign (Д-03, 09.11.2026).
+    if (cd "$SVOI_ROOT" && env -u PYTHONPATH .venv/bin/python scripts/storage_smoke.py \
+          >/dev/null 2>&1); then
+      info "хранилище отвечает (put/get, presigned)"
+    else
+      warn "хранилище не отвечает: deploy/server-deploy.sh storage"
+      problems=$((problems + 1))
+    fi
     # DATABASE_URL берём из .env: у скриптов по умолчанию порт локального контура (5433),
     # на сервере база на 5432 — без этого инварианты молча проверяли бы не ту базу.
     local db_url tz_offset
@@ -519,7 +567,7 @@ cmd_rollback() {
   info "откат выполнен, /health ok. База не откатывается: миграции добавляют, не удаляют."
 }
 
-usage() { sed -n '2,16p' "$0"; }
+usage() { sed -n '2,18p' "$0"; }
 
 case "${1:-}" in
   check)      shift; cmd_check "$@" ;;
@@ -527,6 +575,7 @@ case "${1:-}" in
   app)        shift; cmd_app "$@" ;;
   env)        shift; cmd_env "$@" ;;
   db)         shift; cmd_db "$@" ;;
+  storage)    shift; cmd_storage "$@" ;;
   proxy)      shift; cmd_proxy "$@" ;;
   units)      shift; cmd_units "$@" ;;
   schema)     shift; cmd_schema ;;

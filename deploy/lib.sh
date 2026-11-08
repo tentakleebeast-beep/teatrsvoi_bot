@@ -30,6 +30,11 @@ load_env() {
   SVOI_REF=${SVOI_REF:-main}
   SVOI_API_PORT=${SVOI_API_PORT:-8000}
   SVOI_PG_PORT=${SVOI_PG_PORT:-5432}
+  # Хранилище файлов: контейнер без суффикса -dev, как и на проде; публичный адрес —
+  # поддомен домена приложения, если в настройках не задан другой.
+  SVOI_GARAGE_CONTAINER=${SVOI_GARAGE_CONTAINER:-svoi-garage}
+  SVOI_STORAGE_PORT=${SVOI_STORAGE_PORT:-3900}
+  SVOI_STORAGE_DOMAIN=${SVOI_STORAGE_DOMAIN:-files.$SVOI_DOMAIN}
   SVOI_PG_CONTAINER=${SVOI_PG_CONTAINER:-svoi-postgres}
   SVOI_DB_NAME=${SVOI_DB_NAME:-svoi}
   SVOI_DB_USER=${SVOI_DB_USER:-svoi}
@@ -38,6 +43,7 @@ load_env() {
   # и /root/.ssh для него не существует (docs/infrastructure/75 §6.3).
   SVOI_GIT_KEY=${SVOI_GIT_KEY:-/home/$SVOI_USER/.ssh/id_ed25519}
   export SVOI_ROOT SVOI_USER SVOI_TZ SVOI_REF SVOI_API_PORT SVOI_PG_PORT \
+         SVOI_GARAGE_CONTAINER SVOI_STORAGE_PORT SVOI_STORAGE_DOMAIN \
          SVOI_PG_CONTAINER SVOI_DB_NAME SVOI_DB_USER SVOI_BACKUP_DIR SVOI_GIT_KEY
 }
 

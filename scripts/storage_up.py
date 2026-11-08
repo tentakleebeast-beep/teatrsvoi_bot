@@ -6,8 +6,10 @@
 
 Скрипт делает ровно то, что руками делал бы человек, и не больше:
   1. если в .env нет GARAGE_RPC_SECRET / STORAGE_ACCESS_KEY / STORAGE_SECRET_KEY —
-     генерирует их и дописывает в .env (файл в .gitignore);
-  2. поднимает контейнер `svoi-garage` из docker-compose.yml и ждёт готовности;
+     генерирует их и дописывает в .env (файл в .gitignore); адреса, переданные
+     окружением (GARAGE_CONTAINER, STORAGE_PUBLIC_ENDPOINT, STORAGE_CORS_ORIGINS),
+     тоже дописывает, если их там ещё нет;
+  2. поднимает контейнер из docker-compose.yml (имя — GARAGE_CONTAINER) и ждёт готовности;
   3. назначает узлу роль (layout), если она ещё не назначена;
   4. импортирует S3-ключ бота и выдаёт ему права на бакеты `svoi-private` / `svoi-shared`.
 
@@ -33,7 +35,6 @@ from _cli import ENV_FILE
 from _cli import read_env as _read_env
 
 PROJECT = Path(__file__).resolve().parent.parent
-CONTAINER = os.getenv("GARAGE_CONTAINER", "svoi-garage")
 BINARY = "/garage"
 
 # Ёмкость узла в layout. Реальный объём задаёт диск; число нужно Garage для раскладки.
@@ -48,6 +49,15 @@ VERSION_LINE = re.compile(r"cluster layout version:\s*(?P<n>\d+)")
 
 def run(cmd: list[str], check: bool = False) -> subprocess.CompletedProcess[str]:
     return subprocess.run(cmd, capture_output=True, text=True, check=check)
+
+
+def container_name(env: dict[str, str]) -> str:
+    """Имя контейнера: окружение → .env → локальное умолчание из docker-compose.yml."""
+    return (os.getenv("GARAGE_CONTAINER") or env.get("GARAGE_CONTAINER")
+            or "svoi-garage-dev")
+
+
+CONTAINER = container_name({})
 
 
 def garage(*args: str, check: bool = False) -> subprocess.CompletedProcess[str]:
@@ -73,7 +83,12 @@ def append_env(pairs: dict[str, str]) -> None:
 
 
 def ensure_secrets() -> dict[str, str]:
-    """Вернуть настройки хранилища, догенерировав недостающее в .env."""
+    """Вернуть настройки хранилища, догенерировав недостающее в .env.
+
+    Адреса, которых скрипт не может знать сам (имя контейнера на проде, публичный
+    адрес для браузера, origin Mini App), приходят окружением от выката
+    (`deploy/server-deploy.sh storage`) и дописываются в .env рядом с ключами.
+    """
     env = read_env()
     wanted = {
         "GARAGE_RPC_SECRET": secrets.token_hex(32),
@@ -84,6 +99,10 @@ def ensure_secrets() -> dict[str, str]:
         "STORAGE_BUCKET_PRIVATE": BUCKETS[0],
         "STORAGE_BUCKET_SHARED": BUCKETS[1],
     }
+    for key in ("GARAGE_CONTAINER", "STORAGE_PUBLIC_ENDPOINT", "STORAGE_CORS_ORIGINS"):
+        value = os.getenv(key, "").strip()
+        if value:
+            wanted[key] = value
     missing = {key: value for key, value in wanted.items() if not env.get(key)}
     if missing:
         append_env(missing)
@@ -98,15 +117,15 @@ def container_running() -> bool:
 
 
 def compose_up() -> None:
-    """Поднять контейнер, если он ещё не работает: повторный запуск скрипта не должен падать."""
+    """Поднять контейнер, если он ещё не работает: повторный запуск скрипта не должен падать.
+
+    Каталог проекта задан явно: compose берёт из него `.env` при подстановке
+    `${GARAGE_CONTAINER}` в docker-compose.yml, и от текущего каталога это не зависит.
+    """
     if container_running():
         return
-    result = run(["docker", "compose", "up", "-d", "garage"], check=False)
-    if result.returncode != 0:
-        result = subprocess.run(
-            ["docker", "compose", "up", "-d", "garage"],
-            cwd=PROJECT, capture_output=True, text=True, check=False,
-        )
+    result = subprocess.run(["docker", "compose", "up", "-d", "garage"], cwd=PROJECT,
+                            capture_output=True, text=True, check=False)
     if result.returncode != 0:
         raise SystemExit(f"docker compose up garage: {result.stderr.strip() or result.stdout.strip()}")
 
@@ -220,6 +239,9 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     env = read_env()
+    # Имя контейнера из .env главнее умолчания: на проде он `svoi-garage`, локально `-dev`.
+    global CONTAINER
+    CONTAINER = container_name(env)
     if args.status:
         status = garage("status")
         print(status.stdout.strip() or status.stderr.strip())

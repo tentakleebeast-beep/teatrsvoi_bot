@@ -168,6 +168,51 @@ def test_в_caddyfile_нет_неподставленных_заглушек():
         assert f"s|{placeholder}|" in script, f"скрипт не подставляет {placeholder}"
 
 
+def test_хранилище_отдаётся_своим_хостом_и_подставляется_деплоем():
+    """Без публичного адреса хранилища presigned-ссылка ведёт на 127.0.0.1 телефона.
+
+    Д-03, 09.11.2026: Garage развернули только локально, `presign` на проде отвечал 503,
+    а в Caddy-шаблоне адреса хранилища не было вовсе.
+    """
+    template = (DEPLOY / "templates" / "Caddyfile.template").read_text(encoding="utf-8")
+    assert "@STORAGE_DOMAIN@ {" in template
+    assert "reverse_proxy 127.0.0.1:@STORAGE_PORT@" in template
+
+    script = (DEPLOY / "server-deploy.sh").read_text(encoding="utf-8")
+    for placeholder in ("@STORAGE_DOMAIN@", "@STORAGE_PORT@"):
+        assert f"s|{placeholder}|" in script, f"скрипт не подставляет {placeholder}"
+
+    lib = (DEPLOY / "lib.sh").read_text(encoding="utf-8")
+    assert "SVOI_STORAGE_DOMAIN=${SVOI_STORAGE_DOMAIN:-files.$SVOI_DOMAIN}" in lib
+    assert "SVOI_GARAGE_CONTAINER=${SVOI_GARAGE_CONTAINER:-svoi-garage}" in lib
+
+
+def test_шаг_хранилища_есть_в_деплое_и_в_проверке():
+    """Контур без хранилища — не «зелёный выкат», а неработающая загрузка файлов."""
+    script = (DEPLOY / "server-deploy.sh").read_text(encoding="utf-8")
+    assert "cmd_storage() {" in script
+    assert "  storage)    shift; cmd_storage" in script
+    assert "scripts/storage_up.py" in script and "scripts/storage_smoke.py" in script
+
+    # smoke гоняет проверку хранилища и падает, если её нет: иначе дефект повторится молча
+    smoke = script.split("cmd_smoke() {", 1)[1].split("cmd_rollback()", 1)[0]
+    assert "scripts/storage_smoke.py" in smoke and "problems=$((problems + 1))" in smoke
+
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8"))
+    run = next(step["run"] for step in workflow["jobs"]["deploy"]["steps"]
+               if step.get("name") == "выкат")
+    assert "deploy/server-deploy.sh storage" in run
+    assert run.index("server-deploy.sh verify") < run.index("server-deploy.sh storage")
+
+
+def test_env_проставляет_адрес_хранилища_и_origin():
+    script = (DEPLOY / "server-deploy.sh").read_text(encoding="utf-8")
+    assert "s|^STORAGE_PUBLIC_ENDPOINT=.*|STORAGE_PUBLIC_ENDPOINT=https://$SVOI_STORAGE_DOMAIN|" in script
+    assert "s|^STORAGE_CORS_ORIGINS=.*|STORAGE_CORS_ORIGINS=https://$SVOI_DOMAIN|" in script
+    assert "s|^GARAGE_CONTAINER=.*|GARAGE_CONTAINER=$SVOI_GARAGE_CONTAINER|" in script
+
+
 def test_публичного_адреса_n8n_в_деплое_нет():
     """V-026: маршрут n8n.*, контейнер и переменные выведены из контура целиком."""
     template = (DEPLOY / "templates" / "Caddyfile.template").read_text(encoding="utf-8")

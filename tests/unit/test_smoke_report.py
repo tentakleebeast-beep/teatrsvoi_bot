@@ -57,6 +57,25 @@ def test_строки_дополнений_без_приоритета(tmp_path)
     assert rows[1]["status"] == "готово"
 
 
+def test_строки_дополнений_с_приоритетом(tmp_path):
+    """V-044/FR-D18: строка дополнений с колонкой приоритета даёт и класс, и статус.
+
+    После V-044 третья колонка двух таблиц «Дополнения от 27.10.2026» — приоритет
+    (`ID | текст | P | статус`, 24 строки). Если парсер считает такую строку «короткой»,
+    класс молча уходит в «не задан», и требование выпадает из процентного критерия §7.
+    """
+    doc = tmp_path / "19.md"
+    doc.write_text(
+        "| ID | Требование | Приоритет | Статус |\n"
+        "|---|---|---|---|\n"
+        "| FR-D18 | Отмена события | P1 | готово |\n"
+        "| FR-H12 | Супервизор gateway | P0 | готово (systemd) |\n",
+        encoding="utf-8")
+    rows = test_audit.requirement_rows(doc)
+    assert [(row["id"], row["priority"], row["status"]) for row in rows] == [
+        ("FR-D18", "P1", "готово"), ("FR-H12", "P0", "готово")]
+
+
 def _write_junit(path: Path, cases: list[tuple[str, str, str]]) -> Path:
     """Минимальный junit: (имя, исход, сообщение)."""
     body = []
@@ -394,14 +413,14 @@ def test_источник_чисел_из_документа_19():
     matrix = test_audit.matrix()
     block = smoke_report.source_block(rows, matrix)
     assert block["rows"] == 113
-    assert (block["p0"], block["p1"], block["p2"], block["unset"]) == (48, 34, 7, 24)
+    assert (block["p0"], block["p1"], block["p2"], block["unset"]) == (50, 49, 14, 0)
     assert block["with_tests"] == 59
     assert block["unique_pairs"] == len(smoke_report.test_pairs(matrix))
     assert smoke_report.requirements_revision() == "04.11.2026"
     report = _minimal_report(source=block)
     assert smoke_report.source_problems(report) == []
-    report["source"]["p0"] = 47
-    assert any("p0" in item and "48" in item for item in smoke_report.source_problems(report))
+    report["source"]["p0"] = 49
+    assert any("p0" in item and "50" in item for item in smoke_report.source_problems(report))
     # счётчики матрицы — факт дерева прогона: новый тест в main их меняет, и исторический
     # отчёт не обязан совпадать с текущим деревом (сведение: 783 → 795 ссылок)
     report = _minimal_report(source=smoke_report.source_block(rows, matrix))

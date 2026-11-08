@@ -9,6 +9,25 @@
 	# на домен и продлевается за 30 дней до истечения. Руками ничего не делаем.
 }
 
+# Хранилище файлов (Garage). Браузер Mini App грузит файлы прямо сюда по presigned-ссылке:
+# tool-api байты не проксирует (NFR-K11). Отдельный хост, потому что у Garage свой S3 API
+# и свои пути (/бакет/ключ) — под /api он не живёт.
+@STORAGE_DOMAIN@ {
+	encode gzip
+	reverse_proxy 127.0.0.1:@STORAGE_PORT@
+
+	# Заголовки безопасности как у приложения: файлы отдаются с того же сертификата.
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+	}
+
+	log {
+		output file /var/log/caddy/@STORAGE_DOMAIN@.log
+		format json
+	}
+}
+
 # Приложение: Mini App и API.
 @DOMAIN@ {
 	encode gzip

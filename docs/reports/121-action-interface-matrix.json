@@ -2083,7 +2083,7 @@
   },
   {
    "id": "FR-D18",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Отмена события: снятие из календаря, уведомление участникам, аудит; вход из чата по карточке события",
    "source": "docs/development/19-functional-requirements.md#L209",
@@ -2094,7 +2094,7 @@
   },
   {
    "id": "FR-D19",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Перенос события: связь «было → стало», уведомление о новом времени; вход из чата по карточке события",
    "source": "docs/development/19-functional-requirements.md#L210",
@@ -2105,7 +2105,7 @@
   },
   {
    "id": "FR-D20",
-   "priority": "—",
+   "priority": "P1",
    "status": "не начато",
    "text": "Изменение состава после назначения с уведомлением",
    "source": "docs/development/19-functional-requirements.md#L211",
@@ -2116,7 +2116,7 @@
   },
   {
    "id": "FR-D21",
-   "priority": "—",
+   "priority": "P1",
    "status": "не начато",
    "text": "Проверка пересечения с уже назначенными событиями при назначении",
    "source": "docs/development/19-functional-requirements.md#L212",
@@ -2126,7 +2126,7 @@
   },
   {
    "id": "FR-D22",
-   "priority": "—",
+   "priority": "P2",
    "status": "частично",
    "text": "Фиксация присутствия режиссёра меняется после назначения",
    "source": "docs/development/19-functional-requirements.md#L213",
@@ -2136,7 +2136,7 @@
   },
   {
    "id": "FR-D23",
-   "priority": "—",
+   "priority": "P1",
    "status": "не начато",
    "text": "Замещение педагога на конкретную дату",
    "source": "docs/development/19-functional-requirements.md#L214",
@@ -2147,7 +2147,7 @@
   },
   {
    "id": "FR-D24",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Тренинг без педагога своей дисциплины — предупреждение с подтверждением",
    "source": "docs/development/19-functional-requirements.md#L215",
@@ -2158,7 +2158,7 @@
   },
   {
    "id": "FR-D25",
-   "priority": "—",
+   "priority": "P2",
    "status": "не начато",
    "text": "Отметка «педагог провёл занятие» как основание для начисления",
    "source": "docs/development/19-functional-requirements.md#L216",
@@ -2169,7 +2169,7 @@
   },
   {
    "id": "FR-G16",
-   "priority": "—",
+   "priority": "P1",
    "status": "не начато",
    "text": "Ретенция `availability_hour`: срок и архив",
    "source": "docs/development/19-functional-requirements.md#L217",
@@ -2179,7 +2179,7 @@
   },
   {
    "id": "FR-G7",
-   "priority": "—",
+   "priority": "P2",
    "status": "не начато",
    "text": "TTL непринятых заявок `slot_proposal` (7 дней)",
    "source": "docs/development/19-functional-requirements.md#L218",
@@ -2189,7 +2189,7 @@
   },
   {
    "id": "FR-G8",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Уникальность псевдонимов без учёта регистра",
    "source": "docs/development/19-functional-requirements.md#L219",
@@ -2199,7 +2199,7 @@
   },
   {
    "id": "FR-H12",
-   "priority": "—",
+   "priority": "P0",
    "status": "готово (systemd `Restart=always`, журнал journald)",
    "text": "Супервизор gateway и tool-api, ротация логов",
    "source": "docs/development/19-functional-requirements.md#L220",
@@ -2209,7 +2209,7 @@
   },
   {
    "id": "FR-H13",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь)",
    "text": "Healthcheck-агент с уведомлением админу при падении",
    "source": "docs/development/19-functional-requirements.md#L221",
@@ -2219,7 +2219,7 @@
   },
   {
    "id": "FR-H14",
-   "priority": "—",
+   "priority": "P1",
    "status": "не начато",
    "text": "Сводка «кому не удалось доставить уведомление»",
    "source": "docs/development/19-functional-requirements.md#L222",
@@ -2230,7 +2230,7 @@
   },
   {
    "id": "FR-I1",
-   "priority": "—",
+   "priority": "P2",
    "status": "готово",
    "text": "Обратная связь участников, включая просьбу о доработке: кнопка меню, форма Mini App, разбор организатором, ответ автору",
    "source": "docs/development/19-functional-requirements.md#L234",
@@ -2242,7 +2242,7 @@
   },
   {
    "id": "FR-I2",
-   "priority": "—",
+   "priority": "P2",
    "status": "готово",
    "text": "Пункт «Обратная связь» в админ-панели: кто, что и когда написал, со статусами",
    "source": "docs/development/19-functional-requirements.md#L235",
@@ -2253,7 +2253,7 @@
   },
   {
    "id": "FR-H15",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Профиль: имя, короткие имена, время в пути, манифест для AI; манифест попадает в промпт",
    "source": "docs/development/19-functional-requirements.md#L236",
@@ -2264,7 +2264,7 @@
   },
   {
    "id": "FR-G9",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Гранулярность записи в человеческий лист — настройка по разделу (`finance_granularity`)",
    "source": "docs/development/19-functional-requirements.md#L237",
@@ -2275,7 +2275,7 @@
   },
   {
    "id": "FR-G10",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово",
    "text": "Карта источников листа: «как написано» → статья и проект (`finance_source_map`)",
    "source": "docs/development/19-functional-requirements.md#L238",
@@ -2286,7 +2286,7 @@
   },
   {
    "id": "FR-G11",
-   "priority": "—",
+   "priority": "P0",
    "status": "готово",
    "text": "Идентификатор операции в скрытой колонке листа — основа идемпотентного переноса",
    "source": "docs/development/19-functional-requirements.md#L239",
@@ -2296,7 +2296,7 @@
   },
   {
    "id": "FR-D26",
-   "priority": "—",
+   "priority": "P2",
    "status": "готово",
    "text": "Расписание в чате: группировка по дням, тип мероприятия, ссылка на календарь",
    "source": "docs/development/19-functional-requirements.md#L240",
@@ -2307,7 +2307,7 @@
   },
   {
    "id": "FR-G12",
-   "priority": "—",
+   "priority": "P1",
    "status": "частично (dry-run)",
    "text": "Перенос операций базы в лист «Финансы 2026 от 07»",
    "source": "docs/development/19-functional-requirements.md#L241",
@@ -2318,7 +2318,7 @@
   },
   {
    "id": "FR-G13",
-   "priority": "—",
+   "priority": "P1",
    "status": "готово (`scripts/read_finance_sheet.py`, dry-run по умолчанию)",
    "text": "Чтение правок из человеческого листа в базу",
    "source": "docs/development/19-functional-requirements.md#L242",
@@ -2329,7 +2329,7 @@
   },
   {
    "id": "FR-G14",
-   "priority": "—",
+   "priority": "P2",
    "status": "не начато",
    "text": "Форматирование технических листов (шапки, группировка, рамки)",
    "source": "docs/development/19-functional-requirements.md#L243",

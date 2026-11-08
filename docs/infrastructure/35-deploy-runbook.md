@@ -174,6 +174,60 @@ docker exec -i svoi-postgres psql -U svoi -d svoi -c \
 
 ---
 
+## 3a. Хранилище файлов (Garage)
+
+Файлы бота и Mini App живут в S3-совместимом хранилище на этом же сервере (`docs/development/86`).
+Без него `POST /webapp/files/presign` отвечает 503, и загрузка файла из Mini App не работает —
+именно так прошёл выкат до 09.11.2026 (Д-03, `docs/development/70` O-013): Garage был
+развёрнут только локально, `STORAGE_*` в прод-`.env` не попадали.
+
+Шаг хранилища — одна команда, идемпотентная (повторный запуск не трогает ключи и объекты):
+
+```bash
+cd /opt/svoi
+sudo deploy/server-deploy.sh storage
+```
+
+Что она делает:
+
+1. поднимает контейнер `garage` из `docker-compose.yml` (имя — `GARAGE_CONTAINER` из `.env`,
+   на сервере `svoi-garage`, локально `svoi-garage-dev`);
+2. догенерирует в `/opt/svoi/.env` отсутствующие `GARAGE_RPC_SECRET`, `STORAGE_ACCESS_KEY`,
+   `STORAGE_SECRET_KEY`, `STORAGE_ENDPOINT=http://127.0.0.1:3900`, регион и имена бакетов;
+3. дописывает адреса, которые знает только выкат: `STORAGE_PUBLIC_ENDPOINT=https://<SVOI_STORAGE_DOMAIN>`
+   и `STORAGE_CORS_ORIGINS=https://<SVOI_DOMAIN>` (правило CORS — отдельное на каждый origin);
+4. назначает узлу роль (layout), создаёт бакеты `svoi-private` / `svoi-shared` и выдаёт
+   ключу права read+write+owner;
+5. прогоняет `scripts/storage_smoke.py` (put/get, presigned PUT и GET, list, delete);
+6. перезапускает `svoi-tool-api`, чтобы процесс увидел новые `STORAGE_*`.
+
+Публичный адрес. `files.<домен>` обслуживает Caddy (`deploy/server-deploy.sh proxy`,
+шаблон `deploy/templates/Caddyfile.template`), TLS выпускается сам. Нужна **A-запись**
+`files.<домен>` на IP сервера — без неё сертификат не выпустится, и `proxy` об этом
+предупредит. Другой адрес задаётся в `deploy/svoi.env`: `SVOI_STORAGE_DOMAIN="..."`.
+
+Проверка фактом (после шага, в любой момент):
+
+```bash
+cd /opt/svoi
+.venv/bin/python scripts/storage_smoke.py      # put/get, presigned, list, delete — «ок»
+.venv/bin/python scripts/storage_up.py --status   # узел, бакеты, endpoint
+docker ps --filter name=svoi-garage            # контейнер Up (healthy)
+curl -sI https://files.<домен>/svoi-private/   # 403 и заголовок сертификата: хост живой
+curl -s -o /dev/null -w '%{http_code}\n' -H 'Origin: https://<домен>' \
+  -X OPTIONS https://files.<домен>/svoi-private/_cors \
+  -H 'Access-Control-Request-Method: PUT'      # 200 и Access-Control-Allow-Origin: https://<домен>
+journalctl -u svoi-tool-api -n 50 --no-pager | grep presign   # после загрузки — 200, не 503
+```
+
+`deploy/server-deploy.sh smoke` тоже проверяет хранилище и валит выкат, если оно не отвечает:
+зелёный выкат без работающей загрузки файлов больше не считается успехом.
+
+Бакет закрыт: анонимных ссылок нет, только presigned с TTL 15 минут (`files_store.PRESIGN_TTL`).
+Ключи хранятся в `/opt/svoi/.env` (600, владелец `svoi`) и в git не попадают.
+
+---
+
 ## 4. n8n
 
 ```bash
@@ -774,6 +828,7 @@ sudo systemctl restart svoi-tool-api svoi-gateway
 sleep 5 && curl -s http://127.0.0.1:8000/health
 .venv/bin/python scripts/health_agent.py     # git_sha должен совпасть с HEAD
 bash scripts/deploy-check.sh                 # весь контур: /health, версия, gateway, юниты (§10a)
+sudo deploy/server-deploy.sh storage         # хранилище файлов: контейнер, ключи, бакеты, CORS (§3a)
 ```
 
 Почему не `psql < db/init/*.sql`: такой прогон меняет структуру, но не трогает

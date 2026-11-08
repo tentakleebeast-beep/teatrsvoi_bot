@@ -136,8 +136,9 @@ def _status(cell: str) -> str:
 def requirement_rows(path: Path | None = None) -> list[dict]:
     """Строки требований из документа 19: id, текст, приоритет, статус, подтверждение.
 
-    Читаются только строки таблиц, начинающиеся с `| FR-…`. Строки дополнений 27.10
-    короче (нет колонки приоритета) — у них `priority = "не задан"`, колонка статуса
+    Читаются только строки таблиц, начинающиеся с `| FR-…`. Строки дополнений 27.10 бывают
+    двух схем: с колонкой приоритета (`ID | текст | P | статус`, после V-044) и без неё
+    (`ID | текст | статус`) — во втором случае `priority = "не задан"`, а колонка статуса
     берётся по номеру ячейки, а не по угадыванию текста.
     """
     doc = Path(path) if path is not None else REQUIREMENTS_DOC
@@ -156,8 +157,13 @@ def requirement_rows(path: Path | None = None) -> list[dict]:
         title = body[0] if body else ""
         if len(body) >= 4:                  # полная таблица: ID | текст | P | статус | подтверждение
             priority, status, confirm = _priority(body[1]), _status(body[2]), body[3]
-        elif len(body) == 3:                # дополнения: ID | текст | статус
+        elif len(body) == 3 and body[1] in PRIORITIES:
+            # дополнения с колонкой приоритета: ID | текст | P | статус
+            priority, status, confirm = _priority(body[1]), _status(body[2]), ""
+        elif len(body) == 3:                # дополнения без приоритета, с подтверждением
             priority, status, confirm = "не задан", _status(body[1]), body[2]
+        elif len(body) == 2:                # дополнения без приоритета: ID | текст | статус
+            priority, status, confirm = "не задан", _status(body[1]), ""
         else:
             priority, status, confirm = "не задан", "", ""
         rows.append({"id": req_id, "text": title, "priority": priority,

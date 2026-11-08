@@ -112,6 +112,9 @@ jobs:
             sudo -u svoi /opt/svoi/.venv/bin/pip install -q -r /opt/svoi/requirements.txt
             # схема проверяется до перезапуска: иначе сервис поднимается на старой схеме
             deploy/server-deploy.sh verify
+            # Хранилище файлов: без него presign отвечает 503, а Mini App не грузит файлы
+            # (Д-03, 09.11.2026). Шаг идемпотентен и сам дописывает STORAGE_* в .env.
+            deploy/server-deploy.sh storage
             deploy/server-deploy.sh units
             systemctl restart svoi-tool-api
             systemctl restart svoi-gateway 2>/dev/null || echo "svoi-gateway не запущен — пропускаю"
