@@ -341,6 +341,41 @@ SCRIPT = r"""
     });
   }
 
+  // --- удаление файла: кнопка в списке и подтверждение в листе (V-045) --------
+
+  function askDeleteFile(file) {
+    var body = el("div", "files-confirm");
+    body.appendChild(el("p", "ui-text",
+      file.name + " исчезнет из списка, из папок и из архива. Вернуть кнопкой нельзя."));
+    sheet("Удалить файл?", body, [
+      { label: "Отмена" },
+      { label: "Удалить", primary: true, onTap: function () { deleteFile(file); } }
+    ]);
+  }
+
+  function deleteFile(file) {
+    api("/webapp/files/" + file.id, { method: "DELETE" })
+      .then(function (res) {
+        if (res.status !== 200) { toast(problem(res)); return; }
+        closeSheet();
+        status("Файл удалён: " + file.name, false);
+        refresh();
+      });
+  }
+
+  function deleteFileButton(file, holder) {
+    var remove = el("button", "ui-btn ui-btn--sm", "Удалить");
+    remove.type = "button";
+    remove.setAttribute("aria-label", "Удалить файл");
+    remove.addEventListener("click", function (event) {
+      // Строка файла в папке открывает папку по нажатию — удаление кликом не должно
+      // уводить на другой экран.
+      event.stopPropagation();
+      askDeleteFile(file);
+    });
+    holder.appendChild(remove);
+  }
+
   $("folder-create").addEventListener("click", createFolder);
   $("access-grant").addEventListener("click", grantAccess);
   $("access-revoke").addEventListener("click", revokeAccess);

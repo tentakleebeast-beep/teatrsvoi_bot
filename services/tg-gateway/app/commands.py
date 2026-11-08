@@ -60,6 +60,7 @@ COMMANDS: tuple[Command, ...] = (
     Command("folders", "папки: общие и личные", in_menu=False),
     Command("mkdir", "создать папку", in_menu=False),
     Command("rename", "переименовать папку", in_menu=False),
+    Command("rm", "удалить свой файл", in_menu=False),
     Command("rmfolder", "закрыть папку", in_menu=False),
     Command("order", "порядок файлов в папке", in_menu=False),
     Command("zip", "архив папки", in_menu=False),

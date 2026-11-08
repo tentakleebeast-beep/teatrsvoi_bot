@@ -303,3 +303,31 @@ def test_потолок_архива_сто_мегабайт_по_умолчан
     assert DEFAULT_ZIP_MAX_BYTES == 100 * 1024 * 1024
     assert Settings().zip_max_bytes == DEFAULT_ZIP_MAX_BYTES
     assert Settings.from_env({"ZIP_MAX_BYTES": "5"}).zip_max_bytes == 5
+
+
+def test_мягкое_удаление_помечает_строку_и_снимает_папки():
+    """FR-M8, FR-L8: удаление файла — метка `deleted_at` и снятые связи, а не `delete from`."""
+    conn = _ScriptedConn([
+        ("from file_object f", [{"id": 5, "name": "смета.pdf", "participant_id": 7}]),
+        ("delete from file_folder", [{"folder_id": 3}, {"folder_id": 4}]),
+        ("update file_object set deleted_at", []),
+    ])
+
+    result = STORE.remove(conn, {"id": 7}, 5)
+
+    assert result == {"id": 5, "name": "смета.pdf", "folders_detached": 2}
+    update = [sql for sql in conn.sql if "update file_object" in sql][0]
+    assert "deleted_at = now()" in update and "deleted_at is null" in update
+    assert not any("delete from file_object" in sql for sql in conn.sql), \
+        "файл стирают, а не помечают: мягкое удаление обратимо"
+
+
+def test_чужой_файл_в_store_не_удаляется():
+    """FR-K8: чужой файл неотличим от несуществующего — 404 и ни одной записи."""
+    conn = _ScriptedConn([("from file_object f", [])])
+
+    with pytest.raises(STORE.FileRejected) as caught:
+        STORE.remove(conn, {"id": 7}, 5)
+
+    assert caught.value.code == "file_not_found" and caught.value.status == 404
+    assert not any("update file_object" in sql for sql in conn.sql)
