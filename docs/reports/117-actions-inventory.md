@@ -246,7 +246,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/my` | `services/tool-api/app/api/people.py:381` | — | сессия Mini App | server.py, test_admin_people_actions.py, test_smoke_api_fixes.py (+1) | никто не зовёт |
 | GET `/webapp/my/dues` | `services/tool-api/app/api/finance.py:17` | Mini App: misc_dues, money_script | сессия Mini App | server.py, test_dues_admin_ui.py, test_dues_tariff.py | — |
 | GET `/webapp/my/sheet` | `services/tool-api/app/pages/routes.py:207` | Mini App: routes | — | test_miniapp_system.py, test_webapp_merge_deps.py | — |
-| GET `/webapp/nav` | `services/tool-api/app/pages/routes.py:58` | Mini App: layout, routes, webapp-shell.js, week_template | сессия Mini App | server.py, test_miniapp_net_guard.py, test_miniapp_week_rights.py (+3) | — |
+| GET `/webapp/nav` | `services/tool-api/app/pages/routes.py:58` | Mini App: layout, misc_reconcile, routes, webapp-shell.js, week_template | сессия Mini App | server.py, test_miniapp_net_guard.py, test_miniapp_reconcile_rights.py (+5) | — |
 | GET `/webapp/notes` | `services/tool-api/app/pages/routes.py:152` | Mini App: routes; чат: cmd_notes, note_start, notes | — | server.py, test_agent_task.py, test_miniapp_notes.py (+2) | экран Mini App: HTML без данных |
 | GET `/webapp/notes/list` | `services/tool-api/app/api/notes.py:263` | Mini App: notes | сессия Mini App + notes.write | server.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
 | POST `/webapp/notes/save` | `services/tool-api/app/api/notes.py:272` | Mini App: notes | сессия Mini App + notes.write | server.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
@@ -260,7 +260,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/webapp/preview` | `services/tool-api/app/api/events.py:887` | Mini App: misc_slots | сессия Mini App | server.py, test_miniapp_slots.py, test_webapp_search.py | — |
 | GET `/webapp/profile` | `services/tool-api/app/api/people.py:427` | Mini App: misc_profile | сессия Mini App | server.py, test_webapp_profile.py | — |
 | POST `/webapp/profile` | `services/tool-api/app/api/people.py:458` | Mini App: misc_profile | сессия Mini App | server.py, test_webapp_profile.py | — |
-| GET `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | Mini App: routes; скрипты: ux_audit | — | server.py, test_webapp_sections.py | экран Mini App: HTML без данных |
+| GET `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | Mini App: layout, routes; скрипты: ux_audit | — | server.py, test_miniapp_reconcile_rights.py, test_webapp_layout.py (+1) | экран Mini App: HTML без данных |
 | GET `/webapp/schedule` | `services/tool-api/app/pages/routes.py:222` | Mini App: routes | — | test_miniapp_system.py | — |
 | GET `/webapp/search` | `services/tool-api/app/pages/routes.py:197` | Mini App: routes | — | test_miniapp_system.py, test_webapp_search.py | — |
 | GET `/webapp/services` | `services/tool-api/app/pages/routes.py:142` | Mini App: routes; скрипты: ux_audit | — | server.py, test_webapp_sections.py, test_webapp_services_page.py | экран Mini App: HTML без данных |
@@ -308,7 +308,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | `/webapp/notes` | `services/tool-api/app/pages/routes.py:152` | `notes.NOTES_PAGE` | `/webapp/admin/overview`, `/webapp/more`, `/webapp/notes/list`, `/webapp/notes/save` | нет |
 | `/webapp/notifications` | `services/tool-api/app/pages/routes.py:112` | `misc.NOTIFICATIONS_PAGE` | `/webapp/more`, `/webapp/notifications/settings` | нет |
 | `/webapp/person` | `services/tool-api/app/pages/routes.py:162` | `person.PERSON_PAGE` | `/webapp/home`, `/webapp/person/info`, `/webapp/person/tariff` | нет |
-| `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | `misc.RECONCILE_PAGE` | `/webapp/admin/reconcile`, `/webapp/more` | нет |
+| `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | `misc.RECONCILE_PAGE` | `/webapp/admin/reconcile`, `/webapp/more`, `/webapp/nav` | нет |
 | `/webapp/services` | `services/tool-api/app/pages/routes.py:142` | `services.SERVICES_PAGE` | `/webapp/admin/services`, `/webapp/more` | нет |
 | `/webapp/slots` | `services/tool-api/app/pages/routes.py:122` | `misc.SLOTS_PAGE` | `/webapp/assign`, `/webapp/preview`, `/webapp/slots/find`, `/webapp/slots/people`, `/webapp/week` | нет |
 | `/webapp/tx` | `services/tool-api/app/pages/routes.py:102` | `money.TX_PAGE` | `/webapp/categories`, `/webapp/money`, `/webapp/tx/save` | нет |
@@ -522,7 +522,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/notifications` | `services/tool-api/app/pages/routes.py:112` | Mini App: admin_notifications, home, routes; чат: quiet_text; скрипты: ux_audit | — | server.py, test_gateway_quiet.py, test_miniapp_hub.py | экран Mini App: HTML без данных |
 | GET `/webapp/people` | `services/tool-api/app/pages/routes.py:212` | Mini App: routes | — | test_agent_task.py | — |
 | GET `/webapp/person` | `services/tool-api/app/pages/routes.py:162` | Mini App: person, routes; чат: panel_person | — | server.py, test_miniapp_js_behavior.py, test_miniapp_system.py (+2) | экран Mini App: HTML без данных |
-| GET `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | Mini App: routes; скрипты: ux_audit | — | server.py, test_webapp_sections.py | экран Mini App: HTML без данных |
+| GET `/webapp/reconcile` | `services/tool-api/app/pages/routes.py:127` | Mini App: layout, routes; скрипты: ux_audit | — | server.py, test_miniapp_reconcile_rights.py, test_webapp_layout.py (+1) | экран Mini App: HTML без данных |
 | GET `/webapp/schedule` | `services/tool-api/app/pages/routes.py:222` | Mini App: routes | — | test_miniapp_system.py | — |
 | GET `/webapp/search` | `services/tool-api/app/pages/routes.py:197` | Mini App: routes | — | test_miniapp_system.py, test_webapp_search.py | — |
 | GET `/webapp/services` | `services/tool-api/app/pages/routes.py:142` | Mini App: routes; скрипты: ux_audit | — | server.py, test_webapp_sections.py, test_webapp_services_page.py | экран Mini App: HTML без данных |

@@ -108,6 +108,20 @@ def test_страница_одна_для_любых_прав():
     assert more == home.MORE_PAGE
 
 
+def test_nav_знает_о_праве_на_сверку_листов():
+    """`/webapp/nav` отдаёт признак `reconcile` — право `budget.import` (отчёт 142 §3 строка 10).
+
+    Сверка пишет в лист, поэтому кнопка «Проверить» на `/webapp/reconcile` без
+    права упрётся в 403. Право есть у админа и организатора, у `troupe` и `master`
+    его нет: страница узнаёт это признаком с сервера (карта t_01784cc4,
+    docs/architecture/25 §9.2).
+    """
+    assert layout.nav_payload(["budget.import"])["reconcile"] is True
+    assert layout.nav_payload(["*"])["reconcile"] is True
+    assert layout.nav_payload(["budget.write", "budget.read.self"])["reconcile"] is False
+    assert layout.nav_payload([])["reconcile"] is False
+
+
 def test_страницы_не_живут_в_маршрутах():
     """Маршруты отдают экраны из `pages/*`, а не держат свои HTML-константы.
 

@@ -79,18 +79,24 @@ def is_staff(caps: list[str] | tuple[str, ...] | set[str] | None) -> bool:
 def nav_payload(caps: list[str] | tuple[str, ...] | set[str] | None) -> dict:
     """Что оболочка показывает по правам: `/webapp/nav` отдаёт это как есть.
 
-    `staff`   — подпись четвёртой вкладки;
-    `summary` — строка «Сводка занятости» на экране недели: сводка читает
-                `GET /webapp/grid`, а он закрыт правом `schedule.read.all`
-                (FR-H9, docs/development/92 §7). Без права ссылка вела бы на 403
-                (карта t_70a6d8e5, docs/architecture/25 §9.2).
+    `staff`     — подпись четвёртой вкладки;
+    `summary`   — строка «Сводка занятости» на экране недели: сводка читает
+                  `GET /webapp/grid`, а он закрыт правом `schedule.read.all`
+                  (FR-H9, docs/development/92 §7). Без права ссылка вела бы на 403
+                  (карта t_70a6d8e5, docs/architecture/25 §9.2).
+    `reconcile` — кнопка «Проверить» на `/webapp/reconcile`: сверка пишет в лист
+                  и закрыта правом `budget.import`, которого нет у `troupe` и
+                  `master`. Без права экран показывает словами, что сверку ведёт
+                  организатор, вместо кнопки, упирающейся в 403
+                  (карта t_01784cc4, отчёт 142 §3 строка 10).
 
     Решение принимает сервер: страницы — публичные константы, поэтому страница
     лишь прячет строку по этому признаку и ничего не решает сама.
     """
     return {"ok": True,
             "staff": is_staff(caps),
-            "summary": has(caps, "schedule.read.all")}
+            "summary": has(caps, "schedule.read.all"),
+            "reconcile": has(caps, "budget.import")}
 
 
 def tab_label(key: str, caps: list[str] | tuple[str, ...] | set[str] | None) -> str:

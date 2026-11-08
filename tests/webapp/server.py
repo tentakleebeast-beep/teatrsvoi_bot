@@ -370,9 +370,10 @@ app.add_api_route("/webapp/admin/agent", _data({
 
 @app.get("/webapp/nav")
 def nav(request: Request) -> JSONResponse:
-    """Признаки оболочки по правам: подпись вкладки и строка сводки (FR-H9)."""
+    """Признаки оболочки по правам: подпись вкладки, строка сводки, кнопка сверки."""
     participant = _is_participant(request)
-    return JSONResponse({"ok": True, "staff": not participant, "summary": not participant})
+    return JSONResponse({"ok": True, "staff": not participant,
+                         "summary": not participant, "reconcile": not participant})
 
 app.add_api_route("/webapp/home/data", _data({
     "ok": True, "name": "Тестовый Админ", "role": "admin", "role_label": "администратор",
@@ -404,6 +405,9 @@ async def reconcile(request: Request):
     denied = _guard(request)
     if denied is not None:
         return denied
+    # Ведёт сверку организатор: у участника права `budget.import` нет, как и на живом API.
+    if _is_participant(request):
+        return JSONResponse({"detail": "capability required: budget.import"}, status_code=403)
     body = await request.json()
     text = ("Расхождений нет." if body.get("apply")
             else "База: 96 операций, лист: 96 строк.\nРасхождений нет.")
