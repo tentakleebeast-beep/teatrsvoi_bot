@@ -191,6 +191,7 @@ Google Drive остаётся **редактором офисных докуме
 | Ф1. Загрузить файл | `presign → PUT → commit` (`/webapp/files/*`) | присланный документ/фото/аудио → `/files/upload` | экран — `files.access`, чат — `admin.panel` | `files_store.upload_stream` → `save_committed` (один путь) |
 | Ф2. Выдать доступ к личному файлу | блок «Доступ к файлу» (`/webapp/files/{id}/access`) | `/access <номер> <причина>` | вход `files.access`; выдаёт только `admin` — решает `file_access.request` | `file_access.request` |
 | Ф2. Отозвать доступ | тот же блок (`.../access/revoke`) | `/revoke <номер>` | владелец файла или `admin` — решает `file_access.revoke` | `file_access.revoke` |
+| Ф2. Кто открывал доступ | блок «Доступ к файлу» (`GET /webapp/files/{id}/access`) | `GET /files/{id}/access` | владелец файла или `admin` — общий `file_access.file_for_grants`; чужой закрытый файл — 404 | `file_access.grants_of` |
 | Ф3. Утвердить тег | блок «Теги на утверждение» (`/webapp/tags/{id}/approve`) | `/tag-ok <номер>` | вход `files.access`; утверждает только `admin` — решает `tags.approve_tag` | `tags.approve_tag` |
 | Ф4. Создать папку | «Папки» → «Создать папку» (путь через `/`) | `/mkdir Имя` или `/mkdir Спектакли/Пурга/шумы` | вход `files.access`; общие папки — `admin` и `org` (решает `folders.create`) | `folders.create` |
 | Ф4. Переименовать папку | «Папки» → «Имя» | `/rename <номер> <имя>` | как у «Создать папку» | `folders.rename` |

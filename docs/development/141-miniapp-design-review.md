@@ -66,7 +66,7 @@
 | 13 | Уведомления | `/webapp/notifications` | строка «Ещё» | всем (свои настройки) | З, О, Р |
 | 14 | Обратная связь | `/webapp/feedback` | строка «Ещё» | `feedback.send`: admin, org, troupe; у master права нет | О, Р |
 | 15 | Заметки | `/webapp/notes` | строка «Ещё» | `notes.write`: все четыре роли | П, З, О, Р |
-| 16 | Файлы студии | `/webapp/files` | строка «Ещё» | `admin.panel`: только admin | П, З, О, Н |
+| 16 | Файлы студии | `/webapp/files` | строка «Ещё» | `files.access`: admin, org, master | П, З, О, Н |
 | 17 | Папка | `/webapp/folder` | строка в «Файлах» | как «Файлы» | П, З, О |
 | 18 | Карточка участника | `/webapp/person` | строка в «Люди» | `participants.view`: admin, org, master | З, О, Н |
 | 19 | Сервисы | `/webapp/services` | строка «Управление» | `admin.panel`: только admin | З, О, Н, Р |

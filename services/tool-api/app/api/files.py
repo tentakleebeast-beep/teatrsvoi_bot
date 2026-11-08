@@ -242,12 +242,7 @@ def file_access_revoke(file_id: int, who: dict = Depends(core.current)) -> dict:
 def file_access_list(file_id: int, who: dict = Depends(core.current)) -> dict:
     """Кто и зачем открывал доступ к файлу — видит владелец и админ."""
     with core.pool.connection() as conn:
-        row, as_admin = files_store.file_for_viewer(conn, file_id, who)
-        if row is None:
-            raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.", code="file_not_found")
-        if int(row["participant_id"] or 0) != int(who.get("id") or 0) and not as_admin:
-            if "admin" not in file_access.roles_of(who):
-                raise ApiError(status.HTTP_403_FORBIDDEN, "Нет доступа к этому файлу.", code="access_forbidden")
+        file_access.file_for_grants(conn, who, file_id)
         grants = file_access.grants_of(conn, file_id)
     return {"ok": True, "data": grants, "count": len(grants)}
 
@@ -693,9 +688,16 @@ def webapp_file_access_revoke(file_id: int, who: dict = Depends(core.webapp_acto
 
 @router.get("/webapp/files/{file_id}/access")
 def webapp_file_access_list(file_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
-    """Кто открывал доступ к файлу — на экране, как и в чате."""
-    core._webapp_require(who, "files.access")
+    """Кто открывал доступ к файлу — на экране, по тем же правилам, что в чате.
+
+    История доступов — не «данные раздела»: её читает владелец и админ, а не всякий,
+    кому открыт раздел. Проверка та же, что у `GET /files/{id}/access` — общий
+    `file_access.file_for_grants`; иначе org и master перебором `file_id` читали бы
+    причину и срок доступа к чужим личным файлам (OWASP API1:2023).
+    """
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
+        file_access.file_for_grants(conn, viewer, file_id)
         grants = file_access.grants_of(conn, file_id)
     return {"ok": True, "data": grants, "count": len(grants)}
 

@@ -19,10 +19,15 @@ import psycopg
 import pytest
 
 from tests.conftest import _test_dsn
-from tests.integration.test_files_actions_screen import _webapp_headers
+from tests.integration.test_files_actions_screen import _file, _webapp_headers
 from tests.integration.test_webapp_profile import init_data
 
 ROLES = ("admin", "org", "master", "troupe")
+
+
+def _chat_headers(chat_id: int) -> dict:
+    """Вход в чат: тем же человеком, что и в Mini App, — чтобы сравнить два входа."""
+    return {"Authorization": "Bearer test-token", "X-Actor-Chat-Id": str(chat_id)}
 
 
 def _person(chat_id: int, role: str) -> None:
@@ -81,3 +86,61 @@ def test_строка_на_ещё_приходит_тем_же_трём_роля
             assert "/webapp/files" not in urls, f"{role}: строка файлов без права"
             continue
         assert "/webapp/files" in urls, f"{role}: строки файлов нет"
+
+
+def test_история_доступов_видна_владельцу_и_админу_но_не_мастеру(client, people):
+    """Право на раздел не открывает историю доступов к чужому личному файлу (FR-K9).
+
+    Экранный маршрут обязан повторять канон `GET /files/{id}/access`: владелец — 200,
+    админ с открытым доступом — 200, чужой закрытый файл — 404 (не 403, иначе перебором
+    `file_id` видно, какие файлы существуют — OWASP API1:2023). Иначе org и master
+    читали бы имя администратора, причину и срок доступа к личной смете.
+    """
+    owner_chat = people["org"]
+    admin_chat = people["admin"]
+    file_id = _file(owner_chat, "смета организатора.pdf")
+    assert client.post(f"/admin/files/{file_id}/access",
+                       json={"reason": "сверка сметы"}, headers=_chat_headers(admin_chat)
+                       ).status_code == 200
+
+    owner = client.get(f"/webapp/files/{file_id}/access",
+                       headers=_webapp_headers(client, owner_chat))
+    assert owner.status_code == 200 and owner.json()["count"] == 1
+
+    admin = client.get(f"/webapp/files/{file_id}/access",
+                       headers=_webapp_headers(client, admin_chat))
+    assert admin.status_code == 200 and admin.json()["count"] == 1
+
+    master = client.get(f"/webapp/files/{file_id}/access",
+                        headers=_webapp_headers(client, people["master"]))
+    assert master.status_code == 404, f"мастер прочитал историю чужого файла: {master.text}"
+    assert master.json()["code"] == "file_not_found"
+
+    missing = client.get("/webapp/files/99999999/access",
+                         headers=_webapp_headers(client, people["master"]))
+    assert missing.status_code == 404, "чужой и несуществующий файл отвечают по-разному"
+
+    troupe = client.get(f"/webapp/files/{file_id}/access",
+                        headers=_webapp_headers(client, people["troupe"]))
+    assert troupe.status_code == 403, "у студийца нет даже раздела — маршрут обязан отказать"
+
+
+def test_история_доступов_к_общему_файлу_только_у_владельца_и_админа(client, people):
+    """Общий файл виден всем с правом раздела, а история его доступов — нет: 403 (FR-K9)."""
+    owner_chat, master_chat = people["org"], people["master"]
+    file_id = _file(owner_chat, "общая афиша.pdf")
+    with psycopg.connect(_test_dsn()) as conn:
+        conn.execute("update file_object set scope = 'shared' where id = %s", (file_id,))
+        conn.commit()
+
+    master = client.get(f"/webapp/files/{file_id}/access",
+                        headers=_webapp_headers(client, master_chat))
+    assert master.status_code == 403, f"мастер прочитал историю общего файла: {master.text}"
+    assert master.json()["code"] == "access_forbidden"
+
+    chat = client.get(f"/files/{file_id}/access", headers=_chat_headers(master_chat))
+    assert chat.status_code == 403, "экран и чат отвечают по-разному"
+
+    owner = client.get(f"/webapp/files/{file_id}/access",
+                       headers=_webapp_headers(client, owner_chat))
+    assert owner.status_code == 200
