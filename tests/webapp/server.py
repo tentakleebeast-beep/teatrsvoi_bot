@@ -610,6 +610,34 @@ ADMIN_OVERVIEW = {
         "feedback": {"data": []},
         "audit": {"data": []},
         "invites": {"data": []},
+        # Матрица роль → возможности: в бою её отдаёт `capability_catalog` только с
+        # правом `participants.manage` (`app/webapp.py:ADMIN_BLOCKS`). Без блока
+        # стенд не воспроизводил ни дефект экрана 25, ни поведение с правом
+        # (карта t_eb9e0661).
+        "rights": {"matrix": [
+            {"role": "admin", "caps": [
+                "admin.panel", "audit.view", "budget.approve", "budget.import",
+                "budget.read", "budget.read.self", "budget.write", "calendar.write",
+                "feedback.send", "feedback.triage", "files.access", "howto.read",
+                "notes.write", "notify.send", "participants.contact",
+                "participants.manage", "participants.view", "quota.manage",
+                "registration.approve", "registration.code.issue",
+                "schedule.availability.self", "schedule.read.all", "schedule.slots",
+                "schedule.write", "system.health"]},
+            {"role": "org", "caps": [
+                "budget.approve", "budget.import", "budget.read", "budget.read.self",
+                "budget.write", "calendar.write", "feedback.send", "files.access",
+                "notes.write", "participants.contact", "participants.view",
+                "registration.approve", "schedule.availability.self",
+                "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]},
+            {"role": "master", "caps": [
+                "files.access", "notes.write", "participants.view",
+                "schedule.availability.self", "schedule.read.all", "schedule.slots",
+                "schedule.write"]},
+            {"role": "troupe", "caps": [
+                "budget.read.self", "feedback.send", "files.access", "notes.write",
+                "schedule.availability.self", "system.health"]},
+        ]},
     },
 }
 
@@ -631,12 +659,12 @@ async def _admin_overview(request: Request) -> JSONResponse:
                              "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
     if role == "org":
         # У организатора панель есть (`participants.view`, `registration.approve`,
-        # `budget.read`), а `registration.code.issue` нет (`db/init/008`), поэтому
-        # раздела `invites` не приходит ни блоком, ни в `allowed` — как в бою
-        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет).
+        # `budget.read`), а `registration.code.issue` и `participants.manage` нет
+        # (`db/init/008`), поэтому разделов `invites` и `rights` не приходит ни
+        # блоком, ни в `allowed` — как в бою (карты t_343d42fe, t_eb9e0661).
         blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "pending", "budget")}
         actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
-                   if name != "issue_codes"}
+                   if name not in {"issue_codes", "manage_rights"}}
         return JSONResponse({"ok": True, "allowed": ["people", "pending", "budget"],
                              "actions": actions, "blocks": blocks})
     if role == "troupe":
