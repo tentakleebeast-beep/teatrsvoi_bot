@@ -141,6 +141,36 @@ def test_обращение_из_mini_app(client):
     assert any(item["id"] == created["id"] for item in mine["data"])
 
 
+def test_master_без_права_обратной_связи(client):
+    """Экран 14: у мастера нет `feedback.send` — право приходит данными, отправка 403.
+
+    Обоснование: db/init/031 (`feedback.send` только у admin/org/troupe),
+    db/init/061 (у мастера права нет), docs/development/141 §3, карта t_4f0c64d6.
+    """
+    from tests.integration.test_webapp_profile import _api, init_data
+
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 250364906, "Мастер Обратной Связи", role="master")
+        _person(conn, 250364907, "Труппа Обратной Связи")
+    master = client.post("/webapp/auth", json={"init_data": init_data(250364906)}).json()["token"]
+    troupe = client.post("/webapp/auth", json={"init_data": init_data(250364907)}).json()["token"]
+    as_master = {"Authorization": f"Bearer {master}"}
+    as_troupe = {"Authorization": f"Bearer {troupe}"}
+
+    mine = client.get("/webapp/feedback/mine", headers=as_master).json()
+    assert mine["ok"] is True
+    assert mine["can_send"] is False, "мастеру обещано право отправки"
+
+    denied = client.post("/webapp/feedback", headers=as_master,
+                         json={"kind": "question", "text": "Можно отправить?"})
+    assert denied.status_code == 403, denied.text
+    assert "feedback.send" in denied.text
+
+    allowed = client.get("/webapp/feedback/mine", headers=as_troupe).json()
+    assert allowed["can_send"] is True, "у труппы право отправки есть (db/init/031)"
+
+
 def test_очередь_без_закрытых_по_флагу(client):
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 250364904, "Автор Закрытого")

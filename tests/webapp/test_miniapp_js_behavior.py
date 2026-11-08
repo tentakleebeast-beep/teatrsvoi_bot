@@ -100,6 +100,39 @@ def test_без_права_на_запись_формы_нет(app_page):
     assert "Записать" not in body, body
 
 
+def test_без_права_обратной_связи_формы_нет(app_page):
+    """У мастера нет `feedback.send`: формы, поля комментария и «Отправить» нет.
+
+    Стенд отдаёт `can_send: false` в данных (`X-SVOI-Role: master`), как прод
+    после карты t_4f0c64d6. Обоснование: db/init/031 и docs/development/141 §3
+    (`feedback.send` только у admin/org/troupe), docs/development/91 принципы 9 и Б3.
+    """
+    page = app_page("/webapp/feedback", headers={"X-SVOI-Role": "master"})
+    page.wait_for_selector("#feedback-denied:not([hidden])", timeout=10_000)
+
+    assert not page.is_visible("#feedback-form"), "форма видна роли без права"
+    assert not page.is_visible("#text"), "поле комментария видно без права"
+    assert not page.is_visible("#send"), "кнопка «Отправить» видна без права"
+    body = page.inner_text("body")
+    assert "Обращения принимает организатор" in body, body
+    assert "Отправить" not in body, body
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_с_правом_обратной_связи_форма_на_месте(app_page):
+    """У труппы `feedback.send` есть: форма и поле комментария показываются.
+
+    Обоснование: db/init/031 (право у admin/org/troupe), карта t_4f0c64d6.
+    """
+    page = app_page("/webapp/feedback")
+    page.wait_for_selector("#feedback-form:not([hidden])", timeout=10_000)
+
+    assert page.is_visible("#text"), "поле комментария скрыто у роли с правом"
+    assert page.is_visible("#send"), "кнопка «Отправить» скрыта у роли с правом"
+    assert not page.is_visible("#feedback-denied"), "форма и «нет права» одновременно"
+    assert not page.svoi_errors, page.svoi_errors
+
+
 def test_панель_люди_рисует_строки_и_ищет(app_page):
     """Панель не падает молча: строки из overview рисуются, поиск сужает список."""
     page = app_page("/webapp/admin/t/people")
