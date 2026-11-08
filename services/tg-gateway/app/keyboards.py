@@ -167,9 +167,13 @@ MENU_GROUPS: tuple[tuple[str, tuple[tuple[str, tuple[str, ...]], ...]], ...] = (
                (texts.TITLE_SCHEDULE, ("schedule.read.all",)),
                (texts.TITLE_SLOTS, ("schedule.slots",)))),
     ("Профиль", ((texts.TITLE_PROFILE, ()),)),
-    # Админ: у организатора — участники, заявки и приглашения; панель только у админа.
+    # «Люди» — чтение состава по `participants.view`. Отдельная группа, а не пункт
+    # «Админ»: это право есть и у педагога (master), а группа «Админ» рисовалась бы
+    # ему целиком и вела в отказ (140 §4.1). У администратора и организатора пункт
+    # «Участники» переехал сюда же — набор пунктов не изменился, изменилась группа.
+    (texts.TITLE_PEOPLE_GROUP, ((texts.TITLE_PEOPLE, ("participants.view",)),)),
+    # Админ: у организатора — заявки и приглашения; панель только у админа.
     ("Админ", ((texts.TITLE_ADMIN, PANEL_ENTRY_CAPS),
-               (texts.TITLE_PEOPLE, ("participants.view",)),
                (texts.TITLE_REQUESTS, ("registration.approve",)),
                (texts.TITLE_INVITES, ("registration.code.issue",)))),
     # Ш-49, V-010: «Справка» — отдельный раздел под правом howto.read, пока только у админа.

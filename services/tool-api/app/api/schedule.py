@@ -1023,13 +1023,21 @@ def _webapp_self(who: dict) -> dict:
 
 @router.get("/webapp/slots/people")
 def webapp_slots_people(who: dict = Depends(core.webapp_actor)) -> dict:
-    """Кого можно выбрать в критериях: труппа и организаторы без архива."""
-    core._webapp_require(who, "schedule.slots")
+    """Кого можно выбрать в критериях: труппа и организаторы без архива.
+
+    Рядом — `my_disciplines`: дисциплины самого актора. Экран «Поиск окон» показывает
+    выбор дисциплины для тренинга, и без этого списка тренинг мастера всегда уходил бы
+    в ветку «дисциплина не указана — добавлены все педагоги» (140 §4.2). У администратора
+    и организатора список пуст — селектор не рисуется, поведение прежнее.
+    """
+    viewer = core._webapp_require(who, "schedule.slots")
     with core.pool.connection() as conn:
         rows = conn.execute(
             "select id, display_name from participant "
             "where status <> 'archived' order by display_name").fetchall()
-    return {"ok": True, "people": [dict(row) for row in rows]}
+        disciplines = core.disciplines_out(conn, viewer["id"])
+    return {"ok": True, "people": [dict(row) for row in rows],
+            "my_disciplines": disciplines}
 
 
 

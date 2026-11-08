@@ -7,6 +7,7 @@
 from __future__ import annotations
 
 from app.pages.admin_core import screen
+from app.pages.admin_disciplines import DISCIPLINES_SCRIPT
 
 _SCRIPT_PEOPLE = r"""
   var people = [];
@@ -106,10 +107,12 @@ _SCRIPT_PEOPLE = r"""
     enrich(slice);
   }
 
-  function changeRole(person, role, enabled) {
-    api("/webapp/admin/grant", {
-      participant_id: person.id, role: role, enabled: enabled
-    }).then(function (res) {
+  function changeRole(person, role, enabled, disciplines) {
+    var payload = { participant_id: person.id, role: role, enabled: enabled };
+    // Дисциплины передаются только при выдаче педагога: без них сервер отвечает
+    // `master_discipline_required` — отказ придёт словами, но лучше не отправлять
+    if (disciplines && disciplines.length) { payload.disciplines = disciplines; }
+    api("/webapp/admin/grant", payload).then(function (res) {
       if (res.status >= 200 && res.status < 300) {
         closeSheet();
         toast((enabled ? "Роль выдана: " : "Роль отозвана: ")
@@ -208,6 +211,9 @@ _SCRIPT_PEOPLE = r"""
       var dl = el("dl", "ui-dl");
       pair(dl, "Роли", rolesText(person.roles));
       pair(dl, "Статус", statusWord(person.status));
+      // Дисциплины видны всем, кто открыл карточку: это чтение, а не управление
+      pair(dl, "Дисциплины",
+           disciplineNames(card.disciplines) || "нет ни одной");
       pair(dl, "Тариф", tariff[person.id] === null || tariff[person.id] === undefined
         ? "не назначен" : money(tariff[person.id]) + " в месяц");
       if (card.phone) pair(dl, "Телефон", card.phone);
@@ -225,11 +231,23 @@ _SCRIPT_PEOPLE = r"""
         button.type = "button";
         button.onclick = function () {
           if (!has && role === "admin") { confirmAdmin(person); return; }
+          // Педагог выдаётся только с дисциплиной: сначала выбор, потом запрос (Г16)
+          if (!has && role === "master") { confirmMaster(person, card); return; }
           changeRole(person, role, !has);
         };
         actions.appendChild(button);
       });
       rolesBox.appendChild(actions);
+      if (card) {
+        var subjects = el("button", "ui-btn ui-btn--sm ui-btn--block",
+                          "Дисциплины педагога");
+        subjects.type = "button";
+        subjects.onclick = function () {
+          sheet(person.display_name + ": дисциплины",
+                disciplineSheet(person, card), [{ label: "Закрыть" }]);
+        };
+        rolesBox.appendChild(subjects);
+      }
       body.appendChild(rolesBox);
     }
 
@@ -330,4 +348,4 @@ _BODY_PEOPLE = """
 <div class="ui-small ui-muted" id="status" role="status"></div>
 """
 
-PEOPLE_PAGE = screen("Люди", _BODY_PEOPLE, _SCRIPT_PEOPLE)
+PEOPLE_PAGE = screen("Люди", _BODY_PEOPLE, _SCRIPT_PEOPLE + DISCIPLINES_SCRIPT)

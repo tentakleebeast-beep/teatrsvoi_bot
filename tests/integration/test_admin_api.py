@@ -41,5 +41,5 @@ def test_роли_в_базе_только_три(client, auth):
 
     with psycopg.connect(_test_dsn()) as conn:
         roles = {r[0] for r in conn.execute("select distinct role from rbac_role_capability")}
-    assert roles <= {"admin", "org", "troupe"}
+    assert roles <= {"admin", "org", "troupe", "master"}
     assert "student" not in roles

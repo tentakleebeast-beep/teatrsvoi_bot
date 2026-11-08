@@ -92,7 +92,7 @@ def compose(role: str, person_key: str | None) -> tuple[str, dict]:
 
 def build_parser() -> argparse.ArgumentParser:
     ap = argparse.ArgumentParser()
-    ap.add_argument("--role", required=True, choices=["admin", "org", "troupe"])
+    ap.add_argument("--role", required=True, choices=["admin", "org", "troupe", "master"])
     ap.add_argument("--participant", help="person_key, например иванов")
     ap.add_argument("--json", action="store_true")
     return ap

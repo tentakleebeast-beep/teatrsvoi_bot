@@ -322,6 +322,10 @@ async def panel_person_roles(cb: CallbackQuery) -> None:
     rows = [[(f"{'✓ ' if role in current else '· '}{texts.ROLE_TITLES.get(role, role)}",
               f"panel:role:{participant_id}:{role}:{0 if role in current else 1}")]
             for role in ("admin", "org", "troupe")]
+    # Педагог выдаётся только с дисциплиной, поэтому ведёт не прямое переключение,
+    # а экран дисциплин: роль без дисциплины сервер всё равно отклонит (140 §2.2).
+    rows.append([(f"{'✓ ' if 'master' in current else '· '}{texts.ROLE_TITLES['master']}",
+                  f"panel:mroles:{participant_id}")])
     await cb.message.edit_text(
         f"{card.get('display_name')}: роли. Нажатие выдаёт или снимает роль.",
         parse_mode=None,
@@ -352,6 +356,96 @@ def _pid_of(data: str | None) -> int | None:
         return int((data or "").split(":")[2])
     except (IndexError, ValueError):
         return None
+
+
+async def _card_of(cb: CallbackQuery, participant_id: int) -> dict | None:
+    """Карточка человека для экранов дисциплин: одно чтение, один набор прав."""
+    res = await core.api(f"/tools/participants/{participant_id}/card", None,
+                         cb.message.chat.id, method="GET")
+    return res["data"] if res.get("ok") else None
+
+
+@router.callback_query(F.data.startswith("panel:mroles:"))
+async def panel_person_master(cb: CallbackQuery) -> None:
+    """Дисциплины педагога: отметить предмет, выдать или снять роль (140 §4.1–4.3).
+
+    Кнопка «Педагог» ведёт сюда, а не прямо в выдачу роли: у роли нет смысла без
+    дисциплины, и сервер отклонил бы выдачу без неё (`master_discipline_required`).
+    Здесь же снимается предметная связь — роль при этом не отзывается (140 §1).
+    """
+    participant_id = _pid_of(cb.data)
+    if participant_id is None:
+        await cb.answer("Непонятный человек", show_alert=True)
+        return
+    card = await _card_of(cb, participant_id)
+    catalog = await core.api("/tools/disciplines", None, cb.message.chat.id, method="GET")
+    if card is None or not catalog.get("ok"):
+        await cb.answer("Нет доступа", show_alert=True)
+        return
+    have = {item["code"]: item["name"] for item in (card.get("disciplines") or [])}
+    is_master = "master" in (card.get("roles") or [])
+    rows = [[(f"{'✓ ' if item['code'] in have else '· '}{texts._fit(item['name'], 28)}",
+              f"panel:mrel:{participant_id}:{item['code']}:{0 if item['code'] in have else 1}")]
+            for item in catalog.get("disciplines", [])]
+    if have and not is_master:
+        rows.append([("Выдать роль педагога", f"panel:mgrant:{participant_id}")])
+    if is_master:
+        rows.append([("Снять роль педагога",
+                      f"panel:role:{participant_id}:master:0")])
+    lines = [f"{card.get('display_name')}: дисциплины педагога. "
+             "Нажатие отмечает или снимает предмет.", ""]
+    lines.append("Отмечено: " + ", ".join(have.values()) if have
+                 else "Дисциплин нет: без них роль педагога не выдаётся.")
+    await cb.message.edit_text(
+        "\n".join(lines), parse_mode=None,
+        reply_markup=keyboards.kb(rows + [[("К ролям", f"panel:proles:{participant_id}")],
+                                [(texts.BTN_BACK, "panel:root")]]))
+    await cb.answer()
+
+
+@router.callback_query(F.data.startswith("panel:mrel:"))
+async def panel_person_master_link(cb: CallbackQuery) -> None:
+    """Отметить или снять дисциплину: путь записи — `/admin/participant/discipline`."""
+    parts = (cb.data or "").split(":")
+    if len(parts) != 5:
+        await cb.answer("Непонятное действие", show_alert=True)
+        return
+    _, _, participant_id, code, flag = parts
+    res = await core.api("/admin/participant/discipline",
+                         {"participant_id": int(participant_id), "discipline": code,
+                          "enabled": flag == "1"}, cb.message.chat.id)
+    if not res.get("ok"):
+        # 409 master_without_discipline приходит здесь: последнюю дисциплину у
+        # педагога снять нельзя — человек видит причину, а данные не меняются.
+        await cb.answer("Не удалось: " + errors.error_text(res), show_alert=True)
+        return
+    await cb.answer("Дисциплина отмечена" if flag == "1" else "Дисциплина снята")
+    await panel_person_master(cb)
+
+
+@router.callback_query(F.data.startswith("panel:mgrant:"))
+async def panel_person_master_grant(cb: CallbackQuery) -> None:
+    """Роль педагога выдаётся с уже отмеченными дисциплинами, а не пустой."""
+    participant_id = _pid_of(cb.data)
+    if participant_id is None:
+        await cb.answer("Непонятный человек", show_alert=True)
+        return
+    card = await _card_of(cb, participant_id)
+    if card is None:
+        await cb.answer("Карточка недоступна", show_alert=True)
+        return
+    codes = [item["code"] for item in (card.get("disciplines") or [])]
+    if not codes:
+        await cb.answer("Сначала отметьте дисциплину", show_alert=True)
+        return
+    res = await core.api("/admin/grant",
+                         {"participant_id": participant_id, "role": "master",
+                          "enabled": True, "disciplines": codes}, cb.message.chat.id)
+    if not res.get("ok"):
+        await cb.answer("Не удалось: " + errors.error_text(res), show_alert=True)
+        return
+    await cb.answer("Роль педагога выдана")
+    await panel_person_roles(cb)
 
 
 @router.callback_query(F.data.startswith("panel:caps:"))

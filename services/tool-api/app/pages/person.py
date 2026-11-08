@@ -112,6 +112,10 @@ _SCRIPT_PERSON = ("<script>\n(function () {\n  \"use strict\";\n"
     facts.textContent = "";
     facts.appendChild(pair("Ключ", data.person_key));
     facts.appendChild(pair("Роли", (data.roles || []).join(", ")));
+    if ((data.disciplines || []).length) {
+      facts.appendChild(pair("Дисциплины", data.disciplines
+        .map(function (item) { return item.name; }).join(", ")));
+    }
     facts.appendChild(pair("Телефон", data.phone));
     facts.appendChild(pair("Короткие имена",
                            (data.aliases || []).map(function (item) { return item.alias; })

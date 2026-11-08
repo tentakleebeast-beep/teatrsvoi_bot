@@ -28,6 +28,7 @@ TITLE_RECONCILE = "Сверка листов"
 TITLE_HELP = "Справка"
 MENU_BUTTON = "Меню"          # кнопка Mini App в чате (routers/menu.py и main.py)
 TITLE_PEOPLE = "Участники"
+TITLE_PEOPLE_GROUP = "Люди"
 TITLE_CAPABILITIES = "Что умею"
 TITLE_INVITES = "Приглашения"
 TITLE_ARCHIVE = "Архив"
@@ -109,6 +110,7 @@ AGENT_NOTE_WRITTEN = "Заметка создана."
 PREFIX_QUERY = "По запросу «"
 PER_MONTH = "в месяц"
 PREFIX_ROLES = "Роли: "
+PREFIX_DISCIPLINES = "Дисциплины: "
 PREFIX_TARIFF = "Тариф: "
 SCHEDULE_HEADER = "Расписание на 7 дней:"
 SERVICE_UNAVAILABLE = "Сервис данных временно недоступен, попробуйте через минуту."
@@ -137,7 +139,8 @@ NOTE_SAVE_FAILED = "Не удалось сохранить заметку. По�
 NOTE_NO_WRITE = "Заметки доступны участнику студии с правом notes.write."
 NOTE_STALE = "Черновик заметки устарел — начните заново."
 
-ROLE_TITLES = {"admin": "администратор", "org": "организатор", "troupe": "актёр труппы"}
+ROLE_TITLES = {"admin": "администратор", "org": "организатор", "troupe": "актёр труппы",
+               "master": "педагог"}
 
 
 CAP_TITLES = {
@@ -213,6 +216,9 @@ def person_card_text(card: dict) -> str:
         lines.append("Короткие имена: " + ", ".join(aliases))
     lines.append("Роли: " + ", ".join(ROLE_TITLES.get(r, r)
                                         for r in (card.get("roles") or [])))
+    disciplines = [item.get("name") for item in (card.get("disciplines") or [])]
+    if disciplines:
+        lines.append(PREFIX_DISCIPLINES + ", ".join(str(name) for name in disciplines))
     if card.get("status"):
         lines.append("Статус: " + STATUS_TITLES.get(str(card["status"]), str(card["status"])))
     caps = card.get("capabilities") or []

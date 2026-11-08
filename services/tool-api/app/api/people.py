@@ -116,7 +116,10 @@ def register(body: RegisterIn) -> dict:
 
 @router.get("/tools/participants/me")
 def me(who: dict = Depends(core.current)) -> dict:
-    return {"ok": True, "data": core._participant_out(who)}
+    """Своя запись: роли, возможности и дисциплины, которые человек ведёт (140 §4.1)."""
+    with core.pool.connection() as conn:
+        disciplines = core.disciplines_out(conn, who["id"])
+    return {"ok": True, "data": core._participant_out(who, disciplines=disciplines)}
 
 
 
@@ -141,8 +144,21 @@ def participants(include_archived: bool = False,
                 "select participant_id, capability from v_participant_capabilities "
                 "where participant_id = any(%s)", (ids,)).fetchall():
             caps.setdefault(r["participant_id"], []).append(r["capability"])
+        # дисциплины педагогов — одним запросом на список, а не по человеку:
+        # иначе «Люди» из 30 человек давала бы 30 лишних запросов (140 §4.1)
+        teaching: dict[int, list[dict]] = {}
+        for r in conn.execute(
+                "select participant_id, teacher_disciplines, teacher_titles "
+                "from v_participant_disciplines where participant_id = any(%s)",
+                (ids,)).fetchall():
+            codes = list(r["teacher_disciplines"] or [])
+            titles = list(r["teacher_titles"] or [])
+            teaching[r["participant_id"]] = [
+                {"code": code, "name": titles[i] if i < len(titles) else code}
+                for i, code in enumerate(codes)]
     return {"ok": True, "data": [
-        core._participant_out(r, roles.get(r["id"]) or [r["role"]], sorted(caps.get(r["id"], [])))
+        core._participant_out(r, roles.get(r["id"]) or [r["role"]],
+                              sorted(caps.get(r["id"], [])), teaching.get(r["id"], []))
         for r in rows]}
 
 

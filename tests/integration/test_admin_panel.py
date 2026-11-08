@@ -95,7 +95,7 @@ def test_capabilities_содержит_справочник_и_матрицу(cl
     codes = {c["code"] for c in body["capabilities"]}
     assert {"budget.read", "participants.view", "audit.view"} <= codes
     roles = {m["role"] for m in body["matrix"]}
-    assert roles == {"admin", "org", "troupe"}
+    assert roles == {"admin", "org", "troupe", "master"}
 
 
 def test_capabilities_без_прав(client, auth):

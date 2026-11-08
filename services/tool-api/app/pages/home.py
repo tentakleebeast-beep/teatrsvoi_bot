@@ -110,7 +110,12 @@ _SCRIPT_HOME = """
 
   function render(data) {
     $("name").textContent = data.name || "СВОИ";
-    $("role").textContent = data.role_label || "";
+    // Подпись роли и дисциплины одной строкой: педагог видит, что он ведёт
+    // (140 §4.2). Данные приходят в ответе, страница их не вычисляет.
+    var role = data.role_label || "";
+    var subjects = (data.disciplines || []).map(function (item) { return item.name; });
+    if (subjects.length) { role += " · " + subjects.join(", "); }
+    $("role").textContent = role;
 
     var attention = data.attention || [];
     if (attention.length) {

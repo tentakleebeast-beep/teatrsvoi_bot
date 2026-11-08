@@ -156,12 +156,15 @@ def webapp_form_data(who: dict = Depends(core.webapp_actor)) -> dict:
                                    "order by sort_order, name").fetchall()
         venues = conn.execute("select code, name from venue where is_active "
                               "order by sort_order").fetchall()
+        mine = core.disciplines_out(conn, who["id"])
     return {"ok": True,
             "people": [{"id": r["id"], "name": r["display_name"],
                         "roles": list(r["roles"] or [])} for r in people],
             "projects": [dict(r) for r in projects],
             "disciplines": [dict(r) for r in disciplines],
             "venues": [dict(r) for r in venues],
+            # дисциплины самого человека: у мастера — его предметы, у остальных пусто
+            "my_disciplines": mine,
             "defaults": {"kind": "rehearsal", "min_hours": 2, "days": 7,
                          "venue": core.default_venue_code()}}
 
@@ -284,6 +287,8 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
     with core.pool.connection() as conn:
         caps = core._caps_for(conn, who["id"])
         row = conn.execute("select role from participant where id = %s", (who["id"],)).fetchone()
+        roles = core.resolve_roles(conn, who["id"])
+        disciplines = core.disciplines_out(conn, who["id"])
         if page_layout.has(caps, "registration.approve"):
             counts["pending"] = conn.execute(
                 "select count(*) as n from participant where status = 'pending'").fetchone()["n"]
@@ -309,12 +314,18 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
         debt = None
 
     role = (row["role"] if row else "") or "troupe"
+    # Педагог показывается своей ролью, а не старой витриной `participant.role`:
+    # выдача `master` не переписывает основную роль человека (140 §2.1), и без
+    # этой строки мастер видел бы на главной «студиец».
+    if "master" in roles and not {"admin", "org"} & set(roles):
+        role = "master"
     staff = bool(management)
     return {
         "ok": True,
         "name": who.get("display_name") or "",
         "role": role,
         "role_label": core.ROLE_LABELS.get(role, role),
+        "disciplines": disciplines,
         "staff": staff,
         "can_record": page_layout.has(caps, "budget.write"),
         "attention": attention,

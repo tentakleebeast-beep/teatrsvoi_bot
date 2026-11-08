@@ -1,8 +1,13 @@
 """
-Роли проекта: admin, org, troupe. Роль student удалена 26.10.2026 (docs/architecture/02).
+Роли проекта: admin, org, troupe, master. Роль student удалена 26.10.2026 (docs/architecture/02).
 
 Тест держит инвариант: если кто-то вернёт студента в код или манифесты
-без миграции и решения — упадёт здесь.
+без миграции и решения — упадёт здесь. Роль `master` («педагог») добавлена картой Э1
+(db/init/061, docs/architecture/140): у неё есть манифест `roles/master.md`, иначе
+промпт педагога собирался бы без слоя роли.
+
+Обоснование: FR-A1 (роли и доступ), docs/architecture/02-access-control.md,
+docs/architecture/140-master-role.md.
 """
 
 import pathlib
@@ -11,7 +16,7 @@ import sys
 import gateway_modules
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-ALLOWED = {"admin", "org", "troupe"}
+ALLOWED = {"admin", "org", "troupe", "master"}
 
 
 def gateway():
@@ -19,7 +24,7 @@ def gateway():
     return gateway_modules.load("texts")
 
 
-def test_в_gateway_только_три_роли():
+def test_в_gateway_только_четыре_роли():
     assert set(gateway().ROLE_TITLES) == ALLOWED
 
 
@@ -35,7 +40,7 @@ def test_нет_упоминания_студента_в_манифестах():
         assert "студент курсов" not in text, f"«студент курсов» остался в {path.name}"
 
 
-def test_compose_manifest_знает_три_роли():
+def test_compose_manifest_знает_четыре_роли():
     sys.path.insert(0, str(ROOT / "scripts"))
     import compose_manifest
 
@@ -44,6 +49,14 @@ def test_compose_manifest_знает_три_роли():
         if action.dest == "role":
             parser_choices = set(action.choices)
     assert parser_choices == ALLOWED
+
+
+def test_манифест_педагога_описывает_запреты():
+    """Слой роли мастера говорит, чего у него нет: деньги, люди, панель (140 §3.2)."""
+    text = (ROOT / "bot" / "manifests" / "roles" / "master.md").read_text(encoding="utf-8")
+    assert "педагог" in text.lower()
+    for forbidden in ("Бюджет", "блокир", "коды приглашений"):
+        assert forbidden.lower() in text.lower(), f"нет запрета про «{forbidden}»"
 
 
 def test_инвайт_и_роль_не_предлагают_студента():

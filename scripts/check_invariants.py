@@ -165,6 +165,32 @@ def check_cron_no_deploy(root: pathlib.Path | None = None) -> int:
     return len(offenders)
 
 
+def check_master_disciplines() -> int:
+    """Мастер без дисциплины — нарушение, а не предупреждение (140 §2.2, V-037 вариант а).
+
+    `CHECK` этого не поймает: роль живёт в `participant_role`, связь — в
+    `participant_discipline`. Поэтому нарушители собираются view
+    `v_master_without_discipline` (db/init/061), а здесь читается только счётчик:
+    определение `v_invariant_checks` остаётся в `005`/`006`, копия в 150 строк — лишний
+    риск для проверки из трёх строк.
+    """
+    try:
+        with psycopg.connect(DB, row_factory=dict_row) as conn:
+            rows = conn.execute("select participant_id, display_name "
+                                "from v_master_without_discipline order by display_name").fetchall()
+    except psycopg.Error as exc:
+        # Миграция 061 ещё не накатана (старая база) — это не «инвариант выполнен»:
+        # молчать здесь значило бы показывать зелёный гейт без проверки вовсе.
+        print(f"FAIL M1  {'мастер без дисциплины':52} view нет: {str(exc).splitlines()[0][:60]}")
+        return 1
+    for row in rows:
+        print(f"FAIL M1  {'мастер без дисциплины':52} "
+              f"№{row['participant_id']} {row['display_name']}")
+    if not rows:
+        print(f"OK   M1  {'у каждого мастера есть дисциплина':52} проверено: view пуст")
+    return len(rows)
+
+
 def static_checks(root: pathlib.Path | None = None) -> int:
     """Проверки без базы: триггеры деплоя и планировщик."""
     root = root or PROJECT
@@ -211,6 +237,9 @@ def main(argv: list[str] | None = None) -> int:
             failed += 1
         print(f"{mark} {r['code']:3} {r['name'][:52]:52} {r['detail']}")
     print("-" * 78)
+
+    # Роль «педагог» (Э1, docs/architecture/140 §2.2): у мастера есть дисциплина.
+    failed += check_master_disciplines()
 
     print("\nФайлы и папки (docs/development/86):")
     for r in file_rows:

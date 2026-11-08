@@ -19,6 +19,11 @@ _BODY_SLOTS = """
   </div>
 </section>
 
+<section class="ui-section" id="discipline-section" hidden>
+  <div class="ui-section__head"><h2 class="ui-section__title">Дисциплина</h2></div>
+  <div class="ui-chips" id="disciplines"></div>
+</section>
+
 <section class="ui-section">
   <div class="ui-section__head"><h2 class="ui-section__title">Когда</h2></div>
   <div class="ui-field">
@@ -73,6 +78,10 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
   var hours = 2;
   var found = [];
   var kind = "rehearsal";
+  // Дисциплины мастера из `/webapp/slots/people`: у администратора и организатора
+  // список пуст, тогда выбор не рисуется (140 §4.2).
+  var myDisciplines = [];
+  var discipline = "";
   tgBoot();
 
   /* Две области одного действия (С6, docs/architecture/40 §4): у событий студии
@@ -89,6 +98,24 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
     $("people-hint").textContent = isRental()
       ? "Аренда считается по залу: занятость труппы не важна."
       : "Нажатие: обязателен → желателен → не нужен.";
+    drawDiscipline();
+  }
+
+  /* Дисциплина тренинга: без неё состав подтягивал бы всех педагогов и мастер
+     назначал бы чужой предмет. Одна дисциплина — выбрана заранее. */
+  function drawDiscipline() {
+    var section = $("discipline-section");
+    section.hidden = !(kind === "training" && myDisciplines.length);
+    if (section.hidden) { return; }
+    var host = $("disciplines");
+    host.textContent = "";
+    myDisciplines.forEach(function (item) {
+      var chip = make("button", "ui-chip" + (item.code === discipline ? " ui-chip--on" : ""),
+                      item.name);
+      chip.type = "button";
+      chip.addEventListener("click", function () { discipline = item.code; drawDiscipline(); });
+      host.appendChild(chip);
+    });
   }
 
   function showError(text) {
@@ -223,6 +250,9 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
       from_hour: Number(item.from_hour != null ? item.from_hour : item.from || 0),
       to_hour: Number(item.to_hour != null ? item.to_hour : item.to || 0),
       participants: participants,
+      // Тренинг несёт дисциплину мастера: без неё сервер добавлял бы всех педагогов
+      // и не мог проверить «вы ведёте этот предмет» (140 §4.3).
+      discipline: kind === "training" && discipline ? discipline : null,
       persist: true,
     });
     if (!preview.body.ok || !preview.body.proposal_id) {
@@ -341,6 +371,9 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
     people = (result.body.people || []).map(function (person) {
       return { id: Number(person.id), display_name: person.display_name };
     });
+    myDisciplines = result.body.my_disciplines || [];
+    if (myDisciplines.length === 1) { discipline = myDisciplines[0].code; }
+    drawDiscipline();
     drawPeople();
   }
 
