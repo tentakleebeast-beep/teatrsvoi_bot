@@ -160,6 +160,27 @@ def _checked(file: Path) -> dict[tuple[str, str], dict]:
     return parse_junit(file)
 
 
+def count_cases(file: Path) -> dict:
+    """Сколько тестов в junit как есть: параметризованные случаи считаются по одному.
+
+    Склейка для сверки с матрицей режет параметризацию (одна функция — одна строка), но
+    объём прогона в отчёте должен совпадать с `pytest`: 2944 случая — это 2944, а не 2357.
+    """
+    if not file.is_file():
+        raise SystemExit(f"smoke_report.py: нет junit-файла {file}")
+    tree = ET.parse(file)  # noqa: S314 — локальный файл собственного прогона
+    counts = {"tests": 0, "passed": 0, "failed": 0, "skipped": 0}
+    for case in tree.getroot().iter("testcase"):
+        counts["tests"] += 1
+        if case.find("failure") is not None or case.find("error") is not None:
+            counts["failed"] += 1
+        elif case.find("skipped") is not None:
+            counts["skipped"] += 1
+        else:
+            counts["passed"] += 1
+    return counts
+
+
 def junit_sources(source) -> list[dict]:
     """Объём каждого источника слоя А числом: тестов, пройдено, провал, пропуск.
 
@@ -167,14 +188,7 @@ def junit_sources(source) -> list[dict]:
     """
     sources = []
     for file in junit_files(source):
-        outcomes = _checked(file)
-        sources.append({
-            "path": str(file),
-            "tests": len(outcomes),
-            "passed": sum(1 for o in outcomes.values() if o["result"] == "пройдено"),
-            "failed": sum(1 for o in outcomes.values() if o["result"] == "провал"),
-            "skipped": sum(1 for o in outcomes.values() if o["result"] == "не проверено"),
-        })
+        sources.append({"path": str(file), **count_cases(file)})
     return sources
 
 
@@ -283,20 +297,25 @@ def build_requirements(rows: list[dict], matrix: dict, outcomes: dict,
         failed = False
         passed = False
         entries = matrix.get(row["id"], [])
+        considered = 0
         measured = 0
 
         for entry in entries:
-            # Сценарий сам себя доказывает шагами: его падение в junit — следствие провала
-            # одного шага, и переносить это на все FR файла значит красить красным то, что
-            # проверено и прошло (первый прогон дал 8 «провалов» из двух дефектов).
-            if by_scenario.get(row["id"]) and entry["file"].startswith("tests/smoke/"):
-                continue
+            considered += 1
             outcome = outcome_for(outcomes, entry)
             label = f"тест:{entry['file']}::{entry['test']}"
             if outcome is None:
                 unmatched.append({"id": row["id"], "file": entry["file"], "test": entry["test"]})
                 continue
             measured += 1
+            # Сценарий доказывает требование шагами: провал его junit-теста — следствие
+            # провала одного шага, и переносить это на все FR файла значит красить красным
+            # то, что проверено и прошло (первый прогон дал 8 «провалов» из двух дефектов).
+            # Зелёный или пропущенный исход теста сценарию не мешает и в доказательство идёт.
+            scenario_proven = (by_scenario.get(row["id"])
+                               and entry["file"].startswith("tests/smoke/"))
+            if scenario_proven and outcome["result"] == "провал":
+                continue
             if outcome["result"] == "пройдено":
                 evidence.append(f"{label} ({date})")
                 passed = True
@@ -346,9 +365,9 @@ def build_requirements(rows: list[dict], matrix: dict, outcomes: dict,
             "evidence": evidence,
             "result": result,
             "cause": cause,
-            # Объём входа слоя А по этой строке: сколько тестов в матрице и у скольких
-            # есть исход в junit. Без этих чисел «нет автотеста» неотличимо от «не прогоняли».
-            "matrix_tests": len(entries),
+            # Объём входа слоя А по этой строке: сколько тестов матрицы ждут исхода в junit
+            # и у скольких он есть. Тесты, доказанные шагами сценария, сюда не входят.
+            "matrix_tests": considered,
             "matrix_measured": measured,
             # слой В до ответа на V-042 не выполняется (К12): колонка всегда «нужен прод».
             "prod": "не проверено",
@@ -608,9 +627,11 @@ def build(args: argparse.Namespace) -> dict:
     requirements, unmatched = build_requirements(rows, matrix, outcomes, steps, gates, date)
     defects = build_defects(steps, requirements, outcomes, matrix)
 
-    junit_counts = {"passed": sum(1 for o in outcomes.values() if o["result"] == "пройдено"),
-                    "failed": sum(1 for o in outcomes.values() if o["result"] == "провал"),
-                    "skipped": sum(1 for o in outcomes.values() if o["result"] == "не проверено")}
+    # Счётчики слоя А — по junit как есть (параметризация по одному случаю), а не по
+    # склеенному словарю: иначе объём прогона в отчёте не сходится с выводом pytest.
+    junit_counts = {"passed": sum(source["passed"] for source in sources),
+                    "failed": sum(source["failed"] for source in sources),
+                    "skipped": sum(source["skipped"] for source in sources)}
     report = {
         "version": REPORT_VERSION,
         "number": args.number or str(next_number(ROOT / "docs")),
