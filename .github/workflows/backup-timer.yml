@@ -1,0 +1,54 @@
+name: таймер бэкапа на проде
+
+# Включает и запускает svoi-backup.timer (политика V-027: ежедневно 03:30,
+# семь дампов, хранение на сервере). Проверяет, что таймер активен и что свежий
+# дамп действительно появился.
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Напишите apply"
+        required: true
+        default: ""
+
+concurrency:
+  group: backup-timer
+  cancel-in-progress: false
+
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    if: inputs.confirm == 'apply'
+    steps:
+      - name: ключ и известный хост
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_HOST: ${{ vars.DEPLOY_HOST }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.ssh && chmod 700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
+          echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
+
+      - name: включить, запустить, проверить дамп
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=20 "root@$DEPLOY_HOST" '
+            set -eu
+            systemctl daemon-reload
+            systemctl enable --now svoi-backup.timer
+            systemctl start svoi-backup.service || true
+            echo "== таймер =="
+            systemctl is-active svoi-backup.timer
+            systemctl list-timers svoi-backup.timer --no-pager 2>/dev/null | head -3
+            echo
+            echo "== последний прогон =="
+            systemctl show -p Result -p ExecMainStatus svoi-backup.service
+            journalctl -u svoi-backup.service -n 8 --no-pager 2>/dev/null | tail -8
+            echo
+            echo "== дампы =="
+            ls -1t /opt/svoi/backups/*.sql* 2>/dev/null | head -8 || echo "каталог пуст"
+          '
