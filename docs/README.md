@@ -10,10 +10,10 @@
 | Группа | Что внутри | Документов |
 |---|---|---|
 | [Архитектура](architecture/) | модель данных, правила, алгоритмы, границы систем | 20 |
-| [Инфраструктура](infrastructure/) | Google, календари, уведомления, развёртывание | 9 |
+| [Инфраструктура](infrastructure/) | Google, календари, уведомления, развёртывание | 10 |
 | [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 35 |
 | [Планы](plans/) | роадмап, планы развития | 8 |
-| [Отчёты](reports/) | датированные срезы: чекпойнты, аудиты, покрытие, смоук-тесты | 54 |
+| [Отчёты](reports/) | датированные срезы: чекпойнты, аудиты, покрытие, смоук-тесты | 55 |
 | [Архив](archive/) | устаревшее и историческое; не правило, а запись | 7 |
 
 ## Архитектура
@@ -58,6 +58,7 @@
 | 75 | [75-hosting-and-migration.md](infrastructure/75-hosting-and-migration.md) | 75. Найти домик для Бота Театра: от покупки сервера до прода |
 | 110 | [110-backups-and-restore.md](infrastructure/110-backups-and-restore.md) | 110. Бэкапы БД: где лежат, сколько живут, как восстановить |
 | 118 | [118-vk-chat-bot-or-screens.md](infrastructure/118-vk-chat-bot-or-screens.md) | 118. VK: аналог бота, чат или экраны — что говорит документация |
+| 139 | [139-release-checklist-v0.7.0.md](infrastructure/139-release-checklist-v0.7.0.md) | 139. Чек-лист выката v0.7.0 |
 
 ## Разработка
 
@@ -176,6 +177,7 @@
 | 135 | [135-dev-transfer-data-loss.md](reports/135-dev-transfer-data-loss.md) | Перенос dev-базы 05.11.2026: что потерялось и чем починено |
 | 136 | [136-gitleaks-inventory.md](reports/136-gitleaks-inventory.md) | Секреты в индексе и истории: прогон gitleaks |
 | 137 | [137-public-repo-file-decisions.md](reports/137-public-repo-file-decisions.md) | Публичный репозиторий: файл → решение |
+| 138 | [138-prod-history-provenance.md](reports/138-prod-history-provenance.md) | Прод и происхождение checkout: разрыва истории приватного репозитория нет |
 
 ---
 
