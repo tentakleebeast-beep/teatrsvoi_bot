@@ -61,6 +61,23 @@ def test_одна_главная_кнопка_на_экране():
         assert body.count("ui-btn--primary") == expected, f"{name}: главных кнопок не {expected}"
 
 
+def test_сверка_спрашивает_право_и_объясняет_отказ():
+    """Без `budget.import` кнопки нет, а слова называют адресата (отчёт 142 §3 строка 10).
+
+    Право решает сервер: страница спрашивает признак `reconcile` у `/webapp/nav`
+    и прячет кнопку, иначе нажатие упирается в 403 без объяснения. Убирается
+    только по явному ответу — сломанный nav не должен отнимать сверку у
+    организатора (карта t_01784cc4, docs/architecture/25 §9.2).
+    """
+    html = misc.RECONCILE_PAGE
+    assert 'api("/webapp/nav")' in html, "экран не спрашивает право у сервера"
+    assert 'id="denied"' in html and 'id="check"' in html and 'id="intro"' in html
+    assert "Сверку ведёт организатор" in html, "нет объяснения, кто ведёт сверку"
+    assert "у вашей роли сверки нет" in html
+    # Кнопка остаётся в разметке: прячет её только ответ сервера.
+    assert "body.reconcile" in html
+
+
 def test_компоненты_вместо_самодельных_полей():
     assert 'class="ui-switch-row' in misc.NOTIFICATIONS_PAGE
     assert misc.NOTIFICATIONS_PAGE.count('<button class="ui-switch-row') == 3
