@@ -327,12 +327,15 @@ def test_источник_чисел_из_документа_19():
 
 
 def test_коммит_без_генератора_валит_сборку():
-    """Ш-06/Д4: отчёт не воспроизводится из коммита без генератора — ошибка входа."""
-    root = subprocess.run(["git", "rev-list", "--max-parents=0", "HEAD"],  # noqa: S607
-                          capture_output=True, text=True, check=False).stdout.strip()
-    assert root, "git в рабочем дереве недоступен"
+    """Ш-06/Д4: отчёт не воспроизводится из коммита без генератора — ошибка входа.
+
+    Коммит без генератора — пустое дерево git (id постоянен и есть в любом репозитории).
+    Корневой коммит для этого не годится: в CI клон поверхностный, корень = HEAD, а в нём
+    генератор уже есть, и проверка не срабатывала (`DID NOT RAISE InputError` в job tests).
+    """
+    empty_tree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904"
     with pytest.raises(smoke_report.InputError):
-        smoke_report.ensure_generator(root.splitlines()[0].strip())
+        smoke_report.ensure_generator(empty_tree)
     with pytest.raises(smoke_report.InputError):
         smoke_report.ensure_generator("")
 
