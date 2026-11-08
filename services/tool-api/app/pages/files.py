@@ -2,9 +2,9 @@
 
 Что здесь важнее всего:
 
-* **Только администратор.** Раздел открыт по `admin.panel`; правило проверяется на
-  сервере (страница и данные), а не спрятанной кнопкой. Когда файлы понадобятся
-  актёрам, снимется одна проверка в маршруте и в эндпоинтах `main.py`.
+* **Кому открыто.** Решение V-039 (в): «Файлы студии» видят admin, org и master (право
+  `files.access`, проверка на сервере); без права экран говорит словами (Б3). Кого
+  пускает действие, решает домен: `folders` — admin и org, `tags`/`file_access` — admin.
 * **Действия — на экране, а не только в чате.** Папки, доступ к личному файлу и
   утверждение тега живут в `files_actions.py`: экран и чат зовут один обработчик.
   Загрузка одна на оба входа — `presign → PUT → commit` (Ш-08).
@@ -22,14 +22,6 @@ from __future__ import annotations
 
 from app.pages import files_actions, layout
 from app.pages.admin_core import CORE
-
-# Единственное своё правило: подсказка под полосой места не должна отрываться
-# от неё лишним отступом раздела.
-_STYLE = """<style>
-  .files-hint { margin: 0; }
-  .files-actions { margin-top: var(--ui-s2); }
-</style>
-"""
 
 _BODY_FILES = """
 <section class="ui-section">
@@ -138,10 +130,10 @@ _SCRIPT_FILES = r"""
         denied = true;
         $("upload").disabled = true;
         $("pick").disabled = true;
-        status("Раздел доступен администратору.", true);
+        status("Раздел доступен администратору, организатору и мастеру.", true);
         clear($("list"));
-        $("list").appendChild(empty("Раздел для администратора",
-          "Файлы студии открыты администратору. Здесь будут ваши записи и фонограммы."));
+        $("list").appendChild(empty("Раздел не для вас",
+          "Файлы студии открыты администратору, организатору и мастеру."));
         $("count").textContent = "";
         return null;
       }
@@ -241,13 +233,13 @@ _SCRIPT_FILES = r"""
 """
 
 FILES_PAGE = layout.page(
-    "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=_STYLE,
+    "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=files_actions.STYLE,
     scripts="<script>\n" + CORE + _SCRIPT_FILES + files_actions.SCRIPT + "\n})();\n</script>")
 
 
 # --- Папка -------------------------------------------------------------------
 
-_BODY_FOLDER = """
+_BODY_FOLDER = files_actions.EMPTY_FOLDER + """
 <p class="ui-small ui-muted" id="subtitle">считаю</p>
 <p class="ui-small ui-muted" id="now" hidden></p>
 <div class="ui-list" id="tracks"></div>
@@ -383,9 +375,14 @@ _SCRIPT_FOLDER = r"""
     // Имя не `problem`: ниже вызывается помощник `problem(res)` — параметр
     // с тем же именем его бы затенил.
     if (denied) { status(denied, true); return; }
-    if (!folderId) { $("subtitle").textContent = "Папка не выбрана."; return; }
+    if (!folderId) {
+      // Без `?id=` экран не тупик: сказано, откуда папки берутся, и есть путь в «Файлы».
+      $("subtitle").hidden = true;
+      $("no-folder").hidden = false;
+      return;
+    }
     api("/webapp/folder/" + folderId + "/files").then(function (res) {
-      if (res.status === 403) { $("subtitle").textContent = "Раздел доступен администратору."; return; }
+      if (res.status === 403) { $("subtitle").textContent = "Раздел доступен администратору, организатору и мастеру."; return; }
       if (res.status !== 200) { $("subtitle").textContent = problem(res); return; }
       var folder = res.body.folder || {};
       tracks = res.body.data || [];
@@ -396,5 +393,5 @@ _SCRIPT_FOLDER = r"""
   });
 """
 
-FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files",
+FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files", head=files_actions.STYLE,
                           scripts="<script>\n" + CORE + _SCRIPT_FOLDER + "\n})();\n</script>")

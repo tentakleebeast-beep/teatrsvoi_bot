@@ -75,11 +75,27 @@ _SCRIPT_AUDIT = r"""
     more.textContent = "Показать ещё " + rest;
   }
 
+  // Отказ по праву: журнала нет вовсе — ни строк, ни подписи «без записей».
+  function noAccess() {
+    clear(document.getElementById("audit-list"));
+    toggle(document.getElementById("audit-more"), false);
+    status(ERRORS.admin_panel_forbidden, true);
+  }
+
   function refresh() {
     return auth().then(function (denied) {
       if (denied) { status(denied, true); return null; }
       return loadOverview().then(function (data) {
         if (!data) return null;
+        // Право проверяется до чтения журнала: `audit.view` есть только у
+        // администратора, и у org/master блок `audit` в ответе панели не приходит.
+        // Экран читал отсутствующий блок как пустой список и писал «Событий нет» —
+        // как будто журнал пуст, а не закрыт (принцип 9, Б3 docs/development/91).
+        // Слова — из общего словаря ядра: те же, что у troupe при 403.
+        if ((data.allowed || []).indexOf("audit") === -1) {
+          noAccess();
+          return data;
+        }
         // overview отдаёт раздел как { data: [...] } — раньше страница падала
         // с «events.slice is not a function», когда приходил объект.
         var audit = BLOCKS.audit;

@@ -240,11 +240,15 @@ STYLE = _STYLE
 CORE = _CORE
 
 
-def screen(title: str, body: str, script: str) -> str:
+def screen(title: str, body: str, script: str, head: str = "") -> str:
     """Экран раздела: вложенный (шапка и «‹»), возврат — в «Управление».
 
     `window.SVOI_BACK` ставится в ядре страницы, поэтому кнопка «назад» в Telegram
     ведёт в «/webapp/more», а не в «Главную» (docs/development/86 §6).
+
+    `head` — дополнительная разметка для `<head>` (свои правила `[hidden]` у экрана,
+    которому мало скрыть элемент: `.ui-section` — флекс, и атрибут `hidden` его не
+    прячет, см. `pages/money_tx.py`).
     """
-    return layout.page(title, body, back="/webapp/more", head=_STYLE,
+    return layout.page(title, body, back="/webapp/more", head=_STYLE + head,
                        scripts="<script>\n" + _CORE + script + "\n})();\n</script>")

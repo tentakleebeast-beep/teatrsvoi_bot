@@ -133,6 +133,31 @@ def _is_participant(request: Request) -> bool:
     return (request.headers.get(ROLE_HEADER) or "").strip().lower() == "participant"
 
 
+# «Файлы студии» по решению V-039 (в) видят admin, org и master; у роли без права
+# (`troupe`, `participant`) стенд отвечает 403, как tool-api, — иначе экран в тесте
+# показывал бы список там, где на проде человек читает «раздел доступен…» (Б3).
+NO_FILES_ACCESS_ROLES = {"participant", "troupe"}
+
+
+def _files_guard(request: Request):
+    """Ответ стенда для маршрутов файлов: 401 без токена, 403 без `files.access`."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    if role in NO_FILES_ACCESS_ROLES:
+        return JSONResponse({"detail": "capability required: files.access"}, status_code=403)
+    return None
+
+
+def _files_data(payload: dict):
+    """Ответ стенда для чтения файлов: тот же `_data`, но с проверкой `files.access`."""
+    async def handler(request: Request):
+        denied = _files_guard(request)
+        return denied if denied is not None else JSONResponse(payload)
+    return handler
+
+
 def _lacks_notify_send(request: Request) -> bool:
     return (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_NOTIFY_SEND_ROLES
 
@@ -262,6 +287,7 @@ def reset_events() -> dict:
     """Сброс журнала стенда перед браузерным сценарием."""
     WEEK_EVENTS.clear()
     SLOTS_EVENTS.clear()
+    FEEDBACK_EVENTS.clear()
     return {"ok": True}
 
 
@@ -508,12 +534,26 @@ async def notifications_save(request: Request):
     return JSONResponse({"ok": True, "settings": body})
 
 
-app.add_api_route("/webapp/admin/notifications/settings", _data({
-    "ok": True,
+# Право `admin.panel` есть только у администратора, поэтому заголовок с другой
+# ролью стенд считает «без права»: экран общих значений не должен рисовать форму
+# тому, кому сохранять нельзя (142 §3 строка 30, карта t_5b401a86).
+NO_ADMIN_PANEL_ROLES = {"participant", "org", "master", "troupe"}
+
+
+@app.get("/webapp/admin/notifications/settings")
+async def admin_notifications_get(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_ADMIN_PANEL_ROLES:
+        return JSONResponse({"ok": False, "code": "capability_required",
+                             "detail": "capability required: admin.panel"},
+                            status_code=403)
     # Общие значения студии — те же 20:00–08:00 (FR-G3, FR-G17).
-    "settings": {"rehearsals": True, "dues": True, "schedule_changes": True,
-                 "quiet_from": "20:00", "quiet_to": "08:00"},
-}), methods=["GET"])
+    return JSONResponse({"ok": True,
+                         "settings": {"rehearsals": True, "dues": True,
+                                      "schedule_changes": True,
+                                      "quiet_from": "20:00", "quiet_to": "08:00"}})
 
 
 @app.post("/webapp/admin/notifications/settings")
@@ -610,6 +650,34 @@ ADMIN_OVERVIEW = {
         "feedback": {"data": []},
         "audit": {"data": []},
         "invites": {"data": []},
+        # Матрица роль → возможности: в бою её отдаёт `capability_catalog` только с
+        # правом `participants.manage` (`app/webapp.py:ADMIN_BLOCKS`). Без блока
+        # стенд не воспроизводил ни дефект экрана 25, ни поведение с правом
+        # (карта t_eb9e0661).
+        "rights": {"matrix": [
+            {"role": "admin", "caps": [
+                "admin.panel", "audit.view", "budget.approve", "budget.import",
+                "budget.read", "budget.read.self", "budget.write", "calendar.write",
+                "feedback.send", "feedback.triage", "files.access", "howto.read",
+                "notes.write", "notify.send", "participants.contact",
+                "participants.manage", "participants.view", "quota.manage",
+                "registration.approve", "registration.code.issue",
+                "schedule.availability.self", "schedule.read.all", "schedule.slots",
+                "schedule.write", "system.health"]},
+            {"role": "org", "caps": [
+                "budget.approve", "budget.import", "budget.read", "budget.read.self",
+                "budget.write", "calendar.write", "feedback.send", "files.access",
+                "notes.write", "participants.contact", "participants.view",
+                "registration.approve", "schedule.availability.self",
+                "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]},
+            {"role": "master", "caps": [
+                "files.access", "notes.write", "participants.view",
+                "schedule.availability.self", "schedule.read.all", "schedule.slots",
+                "schedule.write"]},
+            {"role": "troupe", "caps": [
+                "budget.read.self", "feedback.send", "files.access", "notes.write",
+                "schedule.availability.self", "system.health"]},
+        ]},
     },
 }
 
@@ -631,12 +699,16 @@ async def _admin_overview(request: Request) -> JSONResponse:
                              "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
     if role == "org":
         # У организатора панель есть (`participants.view`, `registration.approve`,
-        # `budget.read`), а `registration.code.issue` нет (`db/init/008`), поэтому
-        # раздела `invites` не приходит ни блоком, ни в `allowed` — как в бою
-        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет).
+        # `budget.read`), а `registration.code.issue` и `participants.manage` нет
+        # (`db/init/008`), поэтому разделов `invites` и `rights` не приходит ни
+        # блоком, ни в `allowed`, а `manage_rights` в ответе ложно — как в бою
+        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет; карта
+        # t_c6a13266: без `manage_rights` нет и архива; карта t_eb9e0661: без
+        # права нет ни матрицы, ни формы выдачи).
         blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "pending", "budget")}
         actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
                    if name != "issue_codes"}
+        actions["manage_rights"] = False
         return JSONResponse({"ok": True, "allowed": ["people", "pending", "budget"],
                              "actions": actions, "blocks": blocks})
     if role == "troupe":
@@ -645,6 +717,31 @@ async def _admin_overview(request: Request) -> JSONResponse:
 
 
 app.add_api_route("/webapp/admin/overview", _admin_overview, methods=["GET"])
+
+
+# Очередь обращений: право `feedback.triage` есть только у администратора (V-005:
+# обращения идут ему дайджестом), поэтому org, master и troupe получают 403 — как
+# в `api/admin.py` (`core._webapp_require`). Журнал нужен браузерному тесту, чтобы
+# проверить главное: без права очередь не запрашивается вовсе, а не приходит
+# пустой (карта t_83a64c1f).
+FEEDBACK_EVENTS: list[str] = []
+
+NO_FEEDBACK_TRIAGE_ROLES = {"participant", "org", "master", "troupe"}
+
+
+@app.get("/webapp/admin/feedback")
+def admin_feedback_queue(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    FEEDBACK_EVENTS.append(role or "admin")
+    if role in NO_FEEDBACK_TRIAGE_ROLES:
+        return JSONResponse({"detail": "capability required: feedback.triage"},
+                            status_code=403)
+    return JSONResponse({"ok": True, "data": [],
+                         "counts": {"new": 0, "seen": 0, "planned": 0,
+                                    "done": 0, "rejected": 0}})
 
 
 app.add_api_route("/webapp/admin/dues", _data({
@@ -771,7 +868,7 @@ async def tx_save(request: Request):
                          "sheet": "ok", "sheet_error": None})
 
 
-app.add_api_route("/webapp/files/list", _data({
+app.add_api_route("/webapp/files/list", _files_data({
     "ok": True,
     "data": [
         {"id": 1, "name": "Репетиция 12 октября.m4a", "kind": "audio", "size_bytes": 18 * 1024 * 1024,
@@ -784,7 +881,7 @@ app.add_api_route("/webapp/files/list", _data({
     "quota": {"used": 25 * 1024 * 1024, "total": 1024 * 1024 * 1024, "left": 999 * 1024 * 1024},
 }))
 
-app.add_api_route("/webapp/folder/{folder_id}/files", _data({
+app.add_api_route("/webapp/folder/{folder_id}/files", _files_data({
     "ok": True,
     "folder": {"id": 7, "path": "Спектакль/Музыка", "scope": "folder"},
     "count": 3,

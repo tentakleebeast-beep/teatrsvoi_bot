@@ -81,7 +81,7 @@ def test_хаб_отдаёт_блоки_и_счётчики(client):
     assert body["staff"] is True
 
     # «Личное»: строки едут данными, потому что страница — публичная константа.
-    # Заметки — личный раздел у всех (FR-F7), файлы — только админу.
+    # Заметки — личный раздел у всех (FR-F7), файлы — по `files.access` (V-039 (в)).
     personal = body["more"]["personal"]
     assert [row["url"] for row in personal] == ["/webapp/files", "/webapp/notes"], personal
     assert personal[0]["title"] == "Файлы студии"
@@ -90,7 +90,11 @@ def test_хаб_отдаёт_блоки_и_счётчики(client):
 
 
 def test_у_студийца_личное_без_файлов(client):
-    """Файлы открыты по `admin.panel`, заметки — по `notes.write` (FR-F7)."""
+    """Файлы открыты по `files.access` (V-039 (в)), заметки — по `notes.write` (FR-F7).
+
+    У студийца `files.access` снят миграцией 062: решение владельца — раздел видят
+    admin, org и master, и «нет права» студиец читает словами, а не пустым списком.
+    """
     _api()
     with psycopg.connect(_test_dsn(), row_factory=psycopg.rows.dict_row) as conn:
         pid = conn.execute(

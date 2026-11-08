@@ -352,7 +352,10 @@ def test_Г13_главная_мастера_без_взносов(client):
     assert data["role_label"] == "педагог"
     assert data["disciplines"] == [{"code": "music", "name": "Музыка"}]
     titles = {row["title"] for row in data["more"]["personal"]}
-    assert "Мои взносы" not in titles and "Файлы студии" not in titles
+    # «Файлы студии» мастеру открыты решением V-039 (в) — право `files.access` (061),
+    # а «Мои взносы» — нет: взносы не задача педагога (140 §4).
+    assert "Мои взносы" not in titles
+    assert "Файлы студии" in titles, f"файлы мастеру не открыты: {titles}"
     assert any("Заметк" in title for title in titles), f"заметок нет: {titles}"
 
 

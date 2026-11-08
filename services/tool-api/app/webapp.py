@@ -268,8 +268,9 @@ SECTIONS: tuple[WebappSection, ...] = (
     WebappSection("notifications", ("admin.panel",), "Уведомления",
                   "/webapp/admin/t/notifications", "тихие часы по умолчанию",
                   page="NOTIFICATION_DEFAULTS_PAGE"),
-    # Личный раздел на «Ещё»: пока открыт администратору (92 §9.1).
-    WebappSection("files", ("admin.panel",), "Файлы студии",
+    # Личный раздел на «Ещё»: решение V-039 (в) — файлы видят admin, org и master.
+    # Право — `files.access`; у troupe его сняла миграция 062, и он читает отказ словами.
+    WebappSection("files", ("files.access",), "Файлы студии",
                   "/webapp/files", "записи, фонограммы, тексты", group=PERSONAL),
     # Заметки — личное у всех: право `notes.write` есть у каждой действующей роли,
     # поэтому строка видна и актёру, а не только администратору (FR-F7).

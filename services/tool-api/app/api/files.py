@@ -242,12 +242,7 @@ def file_access_revoke(file_id: int, who: dict = Depends(core.current)) -> dict:
 def file_access_list(file_id: int, who: dict = Depends(core.current)) -> dict:
     """Кто и зачем открывал доступ к файлу — видит владелец и админ."""
     with core.pool.connection() as conn:
-        row, as_admin = files_store.file_for_viewer(conn, file_id, who)
-        if row is None:
-            raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.", code="file_not_found")
-        if int(row["participant_id"] or 0) != int(who.get("id") or 0) and not as_admin:
-            if "admin" not in file_access.roles_of(who):
-                raise ApiError(status.HTTP_403_FORBIDDEN, "Нет доступа к этому файлу.", code="access_forbidden")
+        file_access.file_for_grants(conn, who, file_id)
         grants = file_access.grants_of(conn, file_id)
     return {"ok": True, "data": grants, "count": len(grants)}
 
@@ -270,7 +265,7 @@ class WebAppCommitIn(core.ApiIn):
 
 @router.get("/webapp/files/list")
 def webapp_files_list(who: dict = Depends(core.webapp_actor)) -> dict:
-    core._webapp_require(who, "admin.panel")  # файлы пока только админу (92 §9)
+    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     participant_id = int(who["id"])
     with core.pool.connection() as conn:
         rows = files_store.list_files(conn, participant_id, 100)
@@ -289,7 +284,7 @@ def webapp_files_presign(body: WebAppPresignIn,
     Тип проверяем сразу, до загрузки мегабайтов: если это видео или архив, человек узнает
     об этом мгновенно, а не после того, как телефон потратит трафик.
     """
-    core._webapp_require(who, "admin.panel")  # файлы пока только админу (92 §9)
+    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     participant_id = int(who["id"])
     try:
         files_store.detect_kind(body.name, body.mime, b"")
@@ -320,7 +315,7 @@ def webapp_files_commit(body: WebAppCommitIn,
     Ключ обязан принадлежать человеку: иначе presigned-ссылка станет способом перезаписать
     чужой файл, подставив чужой ключ.
     """
-    core._webapp_require(who, "admin.panel")  # файлы пока только админу (92 §9)
+    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     participant_id = int(who["id"])
     prefix = f"p{participant_id}/"
     if not body.object_key.startswith(prefix) or "/" in body.object_key[len(prefix):]:
@@ -474,7 +469,7 @@ def _webapp_folder(conn, folder_id: int, who: dict) -> dict:
 @router.get("/webapp/folder/{folder_id}/files")
 def webapp_folder_files(folder_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
     """Треки папки с готовыми ссылками на прослушивание (по 15 минут каждая)."""
-    core._webapp_require(who, "admin.panel")  # файлы пока только админу (92 §9)
+    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     with core.pool.connection() as conn:
         folder = _webapp_folder(conn, folder_id, who)
         items = files_store.folder_files(conn, folder_id)
@@ -491,7 +486,7 @@ def webapp_folder_files(folder_id: int, who: dict = Depends(core.webapp_actor)) 
 def webapp_folder_order(folder_id: int, body: FolderOrderIn,
                         who: dict = Depends(core.webapp_actor)) -> dict:
     """Порядок задаёт владелец папки; доска объявлений для всех остальных — только чтение."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         result = folders.set_order(conn, viewer, folder_id, body.file_ids)
         core.audit(conn, "human", viewer.get("id"), "folder.order", "folder", str(folder_id),
@@ -503,7 +498,7 @@ def webapp_folder_order(folder_id: int, body: FolderOrderIn,
 @router.get("/webapp/folder/{folder_id}/zip")
 def webapp_folder_zip(folder_id: int, who: dict = Depends(core.webapp_actor)):
     """Архив папки для скачивания из Mini App."""
-    core._webapp_require(who, "admin.panel")  # файлы пока только админу (92 §9)
+    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     with core.pool.connection() as conn:
         folder = _webapp_folder(conn, folder_id, who)
         handle, skipped = files_store.stream_folder_zip(conn, folder,
@@ -610,7 +605,9 @@ def file_tags_set(file_id: int, body: FileTagsIn, who: dict = Depends(core.curre
 # Ф2, Ф3 и Ф4 жили только в чате: у доступа и тега экран не имел входа, а rename,
 # delete и order вызывал лишь тест — то есть маршруты были сиротами. Здесь у каждого
 # действия появляется вход на экране, и он идёт в тот же обработчик, что и чат:
-# `file_access`, `tags` и `folders`. Право одно на весь дом — `admin.panel` (П-7).
+# `file_access`, `tags` и `folders`. Право на вход — `files.access` (V-039 (в)): экран
+# открыт admin, org и master, а кого именно пускает действие, решает сам домен
+# (`folders` — admin и org, `tags` и `file_access` — только admin) и отвечает словами.
 
 class WebAppAccessIn(core.ApiIn):
     """Причина обязательна: доступ без причины — это «админ видит всё» с лишним шагом."""
@@ -623,7 +620,7 @@ class WebAppAccessIn(core.ApiIn):
 def webapp_folders_tree(scope: Literal["shared", "personal"] = Query(default="shared"),
                         who: dict = Depends(core.webapp_actor)) -> dict:
     """Дерево папок на экране — тот же `folders.tree`, что отдаёт чат."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         rows = folders.tree(conn, scope, int(viewer.get("id") or 0))
     return {"ok": True, "data": rows, "count": len(rows)}
@@ -632,7 +629,7 @@ def webapp_folders_tree(scope: Literal["shared", "personal"] = Query(default="sh
 @router.post("/webapp/folders")
 def webapp_folders_create(body: FolderIn, who: dict = Depends(core.webapp_actor)) -> dict:
     """Создать папку с экрана: обработчик тот же, что у `/folders` в чате."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         row = folders.create(conn, viewer, body.name, body.scope, body.parent_id)
         core.audit(conn, "human", viewer.get("id"), "folder.create", "folder", str(row["id"]),
@@ -645,7 +642,7 @@ def webapp_folders_create(body: FolderIn, who: dict = Depends(core.webapp_actor)
 def webapp_folders_rename(folder_id: int, body: FolderRenameIn,
                           who: dict = Depends(core.webapp_actor)) -> dict:
     """Переименовать папку с экрана; поддерево пересчитывается тем же кодом, что в чате."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         result = folders.rename(conn, viewer, folder_id, body.name)
         core.audit(conn, "human", viewer.get("id"), "folder.rename", "folder", str(folder_id),
@@ -656,7 +653,7 @@ def webapp_folders_rename(folder_id: int, body: FolderRenameIn,
 @router.post("/webapp/folders/{folder_id}/delete")
 def webapp_folders_delete(folder_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
     """Закрыть папку с экрана. Файлы остаются в «Без папки» (FR-M8)."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         result = folders.remove(conn, viewer, folder_id)
         core.audit(conn, "human", viewer.get("id"), "folder.delete", "folder", str(folder_id),
@@ -668,7 +665,7 @@ def webapp_folders_delete(folder_id: int, who: dict = Depends(core.webapp_actor)
 def webapp_file_access_grant(file_id: int, body: WebAppAccessIn,
                              who: dict = Depends(core.webapp_actor)) -> dict:
     """Открыть доступ к личному файлу с экрана — тот же `file_access.request`, что у `/access`."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         result = file_access.request(conn, viewer, file_id, body.reason, body.ttl_hours)
         core.audit(conn, "human", viewer.get("id"), "file.access.grant", "file_object",
@@ -681,7 +678,7 @@ def webapp_file_access_grant(file_id: int, body: WebAppAccessIn,
 @router.post("/webapp/files/{file_id}/access/revoke")
 def webapp_file_access_revoke(file_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
     """Отозвать доступ с экрана — тот же `file_access.revoke`, что у `/revoke` в чате."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         result = file_access.revoke(conn, viewer, file_id)
         core.audit(conn, "human", viewer.get("id"), "file.access.revoke", "file_object",
@@ -691,9 +688,16 @@ def webapp_file_access_revoke(file_id: int, who: dict = Depends(core.webapp_acto
 
 @router.get("/webapp/files/{file_id}/access")
 def webapp_file_access_list(file_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
-    """Кто открывал доступ к файлу — на экране, как и в чате."""
-    core._webapp_require(who, "admin.panel")
+    """Кто открывал доступ к файлу — на экране, по тем же правилам, что в чате.
+
+    История доступов — не «данные раздела»: её читает владелец и админ, а не всякий,
+    кому открыт раздел. Проверка та же, что у `GET /files/{id}/access` — общий
+    `file_access.file_for_grants`; иначе org и master перебором `file_id` читали бы
+    причину и срок доступа к чужим личным файлам (OWASP API1:2023).
+    """
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
+        file_access.file_for_grants(conn, viewer, file_id)
         grants = file_access.grants_of(conn, file_id)
     return {"ok": True, "data": grants, "count": len(grants)}
 
@@ -701,7 +705,7 @@ def webapp_file_access_list(file_id: int, who: dict = Depends(core.webapp_actor)
 @router.get("/webapp/tags/pending")
 def webapp_tags_pending(who: dict = Depends(core.webapp_actor)) -> dict:
     """Черновики тегов, ждущие утверждения: словарь экрана — тот же, что в чате."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         rows = [row for row in tags.list_tags(conn, viewer) if row["status"] != "approved"]
     return {"ok": True, "data": rows, "count": len(rows)}
@@ -710,7 +714,7 @@ def webapp_tags_pending(who: dict = Depends(core.webapp_actor)) -> dict:
 @router.post("/webapp/tags/{tag_id}/approve")
 def webapp_tags_approve(tag_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
     """Утвердить тег с экрана. Право то же, что у `/тег-ок`: только администратор."""
-    viewer = core._webapp_require(who, "admin.panel")
+    viewer = core._webapp_require(who, "files.access")
     with core.pool.connection() as conn:
         row = tags.approve_tag(conn, viewer, tag_id)
         core.audit(conn, "human", viewer.get("id"), "tag.approve", "tag", str(tag_id),
