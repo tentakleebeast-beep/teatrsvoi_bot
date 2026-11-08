@@ -8,8 +8,11 @@ from __future__ import annotations
 
 from app.pages import layout
 from app.pages.misc_common import JS_COMMON as _JS_COMMON
+from app.pages.misc_slots_denied import DENIED_BODY as _DENIED_BODY
+from app.pages.misc_slots_denied import DENIED_SCRIPT as _DENIED_SCRIPT
 
-_BODY_SLOTS = """
+_BODY_SLOTS = _DENIED_BODY + """
+<div id="search-form">
 <section class="ui-section">
   <div class="ui-section__head"><h2 class="ui-section__title">Что ищем</h2></div>
   <div class="ui-chips" id="kinds">
@@ -69,9 +72,10 @@ _BODY_SLOTS = """
   <div class="ui-section__head"><h2 class="ui-section__title">Окна</h2></div>
   <div class="ui-section" id="windows"></div>
 </section>
+</div>
 """
 
-_SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/week\";\n" + _JS_COMMON + r"""
+_SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/week\";\n" + _JS_COMMON + _DENIED_SCRIPT + r"""
   var $ = function (id) { return document.getElementById(id); };
   var state = {};
   var people = [];
@@ -331,7 +335,11 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
     button.disabled = false;
     button.textContent = "Найти окна";
     if (!result.body.ok) {
-      showError("Не удалось найти окна. Проверьте даты и повторите.");
+      /* 403 на сам поиск — тот же закрытый `schedule.slots`: говорим о праве,
+         а не «проверьте даты» (карта t_f802d135). */
+      showError(result.status === 403
+        ? deniedText()
+        : "Не удалось найти окна. Проверьте даты и повторите.");
       return;
     }
     found = result.body.windows || [];
@@ -368,6 +376,13 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
     drawKind();
 
     var result = await api("/webapp/slots/people");
+    /* 403 от списка людей — не сбой сети, а закрытое право `schedule.slots`
+       (FR-D5, docs/architecture/25 §9.2 С6). Труппа попадает сюда по ссылке или
+       закладке, поэтому экран говорит, у кого поиск есть (карта t_f802d135). */
+    if (result.status === 403) {
+      drawDenied();
+      return;
+    }
     people = (result.body.people || []).map(function (person) {
       return { id: Number(person.id), display_name: person.display_name };
     });
