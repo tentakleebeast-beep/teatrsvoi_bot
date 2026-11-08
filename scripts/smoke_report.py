@@ -436,6 +436,11 @@ def build_requirements(rows: list[dict], matrix: dict, outcomes: dict,
             scenario_proven = (by_scenario.get(row["id"])
                                and entry["file"].startswith("tests/smoke/"))
             if scenario_proven and outcome["result"] == "провал":
+                # Провал теста-сценария виден в доказательстве, но строку не красит:
+                # отнести его ко всем FR файла значит пометить провалом то, что прошло
+                # (первый прогон дал 8 мнимых провалов из двух дефектов). Сам провал
+                # уходит дефектом шага сценария — с требованием и картой держателя.
+                evidence.append(f"{label} ({date}, провал сценария — отнесён к дефекту шага)")
                 continue
             if outcome["result"] == "пройдено":
                 evidence.append(f"{label} ({date})")

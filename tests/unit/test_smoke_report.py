@@ -215,6 +215,28 @@ def test_тест_в_матрице_без_исхода_валит_отчёт():
     assert any("«нет автотеста» при наличии теста" in item for item in problems)
 
 
+def test_провал_теста_сценария_не_красит_строку_но_виден():
+    """146 §2.5/§5: провал теста сценария виден в доказательстве, строка остаётся доказанной.
+
+    Тест `tests/smoke/test_cm02_availability.py` падает на шаге разбора даты (дефект FR-C2,
+    карта `t_fd553b1b`), но требования файла проверены шагами сценария. Если выкинуть
+    доказательство `тест:` совсем, требование с тестом в матрице выглядит как «нет теста».
+    """
+    rows = [{"id": "FR-C4", "text": "Перезапись с аудитом", "priority": "P1",
+             "status": "частично", "confirm": "код", "line": 70}]
+    matrix = {"FR-C4": [{"file": "tests/smoke/test_cm02_availability.py",
+                         "test": "test_cm02_availability"}]}
+    outcomes = {("tests/smoke/test_cm02_availability.py", "test_cm02_availability"):
+                {"result": "провал", "message": "boom"}}
+    steps = [{"scenario": "СМ-2", "title": "", "roles": [], "domain": "", "step": "4. commit",
+              "expected": "200", "actual": "200", "evidence": "x", "result": "пройдено",
+              "cause": "", "requirements": ["FR-C4"], "severity": "важно"}]
+    requirements, _ = smoke_report.build_requirements(rows, matrix, outcomes, steps, [],
+                                                      "2026-11-08")
+    assert requirements[0]["result"] == "пройдено"
+    assert any("провал сценария" in item for item in requirements[0]["evidence"])
+
+
 def _p1_rows(passed: int) -> list[dict]:
     """34 строки P1: `passed` из них с доказательством, остальные — без автотеста."""
     return [{"id": f"FR-P{i}", "priority": "P1",

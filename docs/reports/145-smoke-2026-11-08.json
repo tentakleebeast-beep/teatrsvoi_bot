@@ -1,25 +1,50 @@
 {
   "version": 1,
   "number": "145",
-  "commit": "ab01ad6",
+  "commit": "e9e58d5",
   "date": "2026-11-08",
   "env": "стенд svoi_smoke",
   "marker": "SMOKE-20261108-01",
   "dump_sha256": "df59bf07fc8be79ca420354d249539a51c83c5bf5c415b8c6c3aff1676cdeed1",
-  "junit": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-full.xml",
+  "junit": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-core.xml, /Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-webapp.xml, /Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit.xml",
+  "source": {
+    "document": "docs/development/19-functional-requirements.md",
+    "revision": "04.11.2026",
+    "rows": 113,
+    "p0": 48,
+    "p1": 34,
+    "p2": 7,
+    "unset": 24,
+    "with_tests": 59,
+    "test_refs": 764,
+    "unique_pairs": 477,
+    "command": "env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json"
+  },
   "layers": {
-    "junit": {
-      "passed": 2523,
-      "failed": 0,
-      "skipped": 421
-    },
-    "junit_sources": [
+    "junit": [
       {
-        "path": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-full.xml",
-        "tests": 2944,
-        "passed": 2523,
+        "layer": "core",
+        "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-core.xml",
+        "tests": 2954,
+        "passed": 2533,
         "failed": 0,
         "skipped": 421
+      },
+      {
+        "layer": "webapp",
+        "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-webapp.xml",
+        "tests": 356,
+        "passed": 330,
+        "failed": 0,
+        "skipped": 26
+      },
+      {
+        "layer": "smoke",
+        "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit.xml",
+        "tests": 12,
+        "passed": 10,
+        "failed": 2,
+        "skipped": 0
       }
     ],
     "gates": [
@@ -53,6 +78,11 @@
       "cause": "нужен прод"
     }
   },
+  "coverage": {
+    "pairs": 477,
+    "covered": 477,
+    "missing": []
+  },
   "requirements": [
     {
       "id": "FR-A1",
@@ -76,7 +106,7 @@
         "тест:tests/integration/test_master_role.py::test_Г13_главная_мастера_без_взносов (2026-11-08)",
         "тест:tests/integration/test_master_role.py::test_Г14_экран_поиска_окон_знает_дисциплины (2026-11-08)",
         "тест:tests/integration/test_master_role.py::test_Г18_телефон_чужого_человека_мастеру_не_виден (2026-11-08)",
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Э1_меню_педагога_без_денег_и_админа (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Э1_кто_я_показывает_дисциплины (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Э1_меню_педагога_печатает_дисциплины (2026-11-08)",
@@ -106,7 +136,7 @@
       "line": 32,
       "evidence": [
         "тест:tests/integration/test_admin_archive_chat.py::test_отзыв_кода_отказывает_без_права (2026-11-08)",
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_виден_по_manage_а_не_по_просмотру (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_показывает_людей_и_кнопку_вернуть (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_возврат_зовёт_путь_записи (2026-11-08)",
@@ -151,7 +181,7 @@
       "status19": "готово",
       "line": 33,
       "evidence": [
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "сценарий:СМ-1/5. GET /tools/participants (фильтр по маркеру) (2026-11-08)"
       ],
       "result": "пройдено",
@@ -182,8 +212,8 @@
       "status19": "готово",
       "line": 35,
       "evidence": [
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
+        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08)",
         "сценарий:СМ-1/6. GET /tools/me/capabilities (master) (2026-11-08)",
         "сценарий:СМ-1/7. GET /tools/participants (troupe) (2026-11-08)",
         "сценарий:СМ-11/5. GET /tools/profile/me с чужим chat_id (2026-11-08)",
@@ -225,7 +255,7 @@
         "тест:tests/integration/test_master_role.py::test_Г14_экран_поиска_окон_знает_дисциплины (2026-11-08)",
         "тест:tests/integration/test_master_role.py::test_Г18_телефон_чужого_человека_мастеру_не_виден (2026-11-08)",
         "тест:tests/integration/test_webapp_admin.py::test_организатор_видит_людей_но_не_права (2026-11-08)",
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_виден_по_manage_а_не_по_просмотру (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_показывает_людей_и_кнопку_вернуть (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_возврат_зовёт_путь_записи (2026-11-08)",
@@ -263,10 +293,10 @@
         "тест:tests/unit/test_webapp_admin_blocks.py::test_права_не_видны_по_просмотру_людей (2026-11-08)",
         "тест:tests/unit/test_webapp_admin_blocks.py::test_действия_по_правам (2026-11-08)",
         "тест:tests/unit/test_webapp_admin_blocks.py::test_действия_не_шире_разделов (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_rights_screen.py::test_org_без_права_не_видит_ни_матрицы_ни_формы (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_rights_screen.py::test_master_без_права_не_видит_ни_матрицы_ни_формы (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_rights_screen.py::test_troupe_не_видит_ни_матрицы_ни_формы (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_rights_screen.py::test_admin_видит_матрицу_и_форму (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_rights_screen.py::test_org_без_права_не_видит_ни_матрицы_ни_формы (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_rights_screen.py::test_master_без_права_не_видит_ни_матрицы_ни_формы (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_rights_screen.py::test_troupe_не_видит_ни_матрицы_ни_формы (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_rights_screen.py::test_admin_видит_матрицу_и_форму (2026-11-08)",
         "сценарий:СМ-1/6. GET /tools/me/capabilities (master) (2026-11-08)"
       ],
       "result": "пройдено",
@@ -296,7 +326,7 @@
         "тест:tests/integration/test_admin_people_actions.py::test_архив_из_чата_и_с_экрана_дают_один_результат (2026-11-08)",
         "тест:tests/integration/test_admin_people_actions.py::test_отозванный_админ_не_получает_алерты (2026-11-08)",
         "тест:tests/integration/test_webapp_admin.py::test_архив_не_приходит_без_права_управления_людьми (2026-11-08)",
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_виден_по_manage_а_не_по_просмотру (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_показывает_людей_и_кнопку_вернуть (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_возврат_зовёт_путь_записи (2026-11-08)",
@@ -324,11 +354,11 @@
         "тест:tests/unit/test_gateway_chat_parity.py::test_Э1_роли_педагога_открываются_через_дисциплины (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Э1_выдача_педагога_уходит_с_дисциплинами (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Э1_снятие_последней_дисциплины_показано_словами (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_archive_rights.py::test_org_без_права_не_видит_архива (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_archive_rights.py::test_master_без_права_не_видит_архива (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_archive_rights.py::test_troupe_видит_то_же_сообщение (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_archive_rights.py::test_admin_видит_архив_и_кнопку_возврата (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_archive_rights.py::test_роль_не_решает_право_решает_ответ_сервера (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_archive_rights.py::test_org_без_права_не_видит_архива (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_archive_rights.py::test_master_без_права_не_видит_архива (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_archive_rights.py::test_troupe_видит_то_же_сообщение (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_archive_rights.py::test_admin_видит_архив_и_кнопку_возврата (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_archive_rights.py::test_роль_не_решает_право_решает_ответ_сервера (2026-11-08)",
         "сценарий:СМ-1/10. POST /admin/archive → /tools/participants → /admin/unarchive (2026-11-08)"
       ],
       "result": "пройдено",
@@ -345,10 +375,9 @@
       "status19": "готово",
       "line": 38,
       "evidence": [
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm12_audit_cleanup.py::test_cm12_audit_cleanup (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
+        "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08)",
+        "тест:tests/smoke/test_cm12_audit_cleanup.py::test_cm12_audit_cleanup (2026-11-08)",
         "сценарий:СМ-1/8. GET /tools/audit/recent (org, admin) (2026-11-08)",
         "сценарий:СМ-1/9. аудит содержит access.denied для труппы (2026-11-08)",
         "сценарий:СМ-12/1. POST /tools/notes → audit_event (2026-11-08)",
@@ -384,7 +413,7 @@
         "тест:tests/integration/test_admin_people_actions.py::test_разблокировать_незаблокированного_нельзя (2026-11-08)",
         "тест:tests/integration/test_admin_people_actions.py::test_архив_из_чата_и_с_экрана_дают_один_результат (2026-11-08)",
         "тест:tests/integration/test_admin_people_actions.py::test_отозванный_админ_не_получает_алерты (2026-11-08)",
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л7_карточка_даёт_кнопку_блокировки (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л7_заблокированному_показана_кнопка_разблокировки (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л7_кнопка_зовёт_путь_записи (2026-11-08)",
@@ -420,7 +449,7 @@
       "status19": "готово",
       "line": 41,
       "evidence": [
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "сценарий:СМ-1/8. GET /tools/audit/recent (org, admin) (2026-11-08)"
       ],
       "result": "пройдено",
@@ -437,7 +466,7 @@
       "status19": "готово",
       "line": 47,
       "evidence": [
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
         "сценарий:СМ-4/1. POST /tools/budget/parse (2026-11-08)",
         "сценарий:СМ-9/2. POST /tools/budget/parse (правила) (2026-11-08)"
       ],
@@ -469,7 +498,7 @@
       "status19": "готово",
       "line": 49,
       "evidence": [
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
         "сценарий:СМ-10/1. POST /tools/budget/commit (сумма для сверки) (2026-11-08)",
         "сценарий:СМ-4/2. POST /tools/budget/commit (2026-11-08)",
         "сценарий:СМ-4/8. строка в листе и сверка лист–БД (не проверено: нужен Google Sheets/Calendar)",
@@ -560,7 +589,7 @@
         "тест:tests/integration/test_dues_tariff.py::test_без_права_на_бюджет_403 (2026-11-08)",
         "тест:tests/integration/test_dues_tariff.py::test_неизвестный_участник_404 (2026-11-08)",
         "тест:tests/integration/test_dues_tariff.py::test_заявки_об_оплате_взноса_нет_и_взносы_сами_не_двигаются (2026-11-08)",
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_виден_по_manage_а_не_по_просмотру (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_показывает_людей_и_кнопку_вернуть (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_возврат_зовёт_путь_записи (2026-11-08)",
@@ -654,7 +683,7 @@
       "status19": "готово",
       "line": 57,
       "evidence": [
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
         "сценарий:СМ-4/3. повторный commit с тем же idempotency_key (2026-11-08)"
       ],
       "result": "пройдено",
@@ -671,8 +700,8 @@
       "status19": "частично",
       "line": 58,
       "evidence": [
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
+        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08)",
         "сценарий:СМ-4/4. GET /tools/budget/summary = сумма budget_tx (2026-11-08)"
       ],
       "result": "пройдено",
@@ -689,11 +718,11 @@
       "status19": "готово",
       "line": 59,
       "evidence": [
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
         "сценарий:СМ-4/8. строка в листе и сверка лист–БД (не проверено: нужен Google Sheets/Calendar)"
       ],
-      "result": "не проверено",
-      "cause": "нет данных в копии",
+      "result": "пройдено",
+      "cause": "",
       "matrix_tests": 1,
       "matrix_measured": 1,
       "prod": "не проверено",
@@ -706,8 +735,8 @@
       "status19": "готово",
       "line": 60,
       "evidence": [
-        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm04_money.py::test_cm04_money (2026-11-08)",
+        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08)",
         "сценарий:СМ-10/2. GET /tools/budget/summary = база (2026-11-08)",
         "сценарий:СМ-4/4. GET /tools/budget/summary = сумма budget_tx (2026-11-08)"
       ],
@@ -755,7 +784,6 @@
       "status19": "готово",
       "line": 68,
       "evidence": [
-        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, не проверено: нет данных в копии)",
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_фраза_про_занятость_даёт_карточку_а_не_подсказку (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_запись_только_после_подтверждения (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_исправить_возвращает_в_форму (2026-11-08)",
@@ -805,7 +833,6 @@
       "status19": "частично",
       "line": 70,
       "evidence": [
-        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, не проверено: нет данных в копии)",
         "сценарий:СМ-2/4. повторный commit того же интервала (свободен) (2026-11-08)",
         "сценарий:СМ-2/5. audit_event: availability.set (2026-11-08)",
         "сценарий:СМ-2/9. импорт часовой матрицы не затирает ручную отметку (не проверено: нужен Google Sheets/Calendar)"
@@ -837,7 +864,6 @@
         "тест:tests/integration/test_webapp_grid.py::test_сверка_открыта_по_праву_а_не_по_роли (2026-11-08)",
         "тест:tests/integration/test_webapp_grid.py::test_своя_отметка_не_попадает_чужому (2026-11-08)",
         "тест:tests/integration/test_webapp_grid.py::test_импорт_из_файла_не_перезаписывает_отметку_бота (2026-11-08)",
-        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, не проверено: нет данных в копии)",
         "тест:tests/unit/test_gateway_schedule_text.py::test_день_с_отметками_показывает_часы_и_людей (2026-11-08)",
         "тест:tests/unit/test_gateway_schedule_text.py::test_день_без_отметок_не_пропадает (2026-11-08)",
         "тест:tests/unit/test_gateway_schedule_text.py::test_часы_вне_рабочего_дня_показаны_отдельно (2026-11-08)",
@@ -921,7 +947,6 @@
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_день_из_чата_читается_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_свободен_до_часа_из_чата_виден_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c10_обычная_неделя_запомненная_из_чата_видна_экрану (2026-11-08)",
-        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, не проверено: нет данных в копии)",
         "тест:tests/unit/test_availability_template.py::test_fr_c10_неделя_становится_шаблоном_по_дням_недели (2026-11-08)",
         "тест:tests/unit/test_availability_template.py::test_fr_c10_шаблон_разворачивается_в_конкретные_даты (2026-11-08)",
         "тест:tests/unit/test_availability_template.py::test_fr_c10_заполнение_не_затирает_уже_отмеченные_дни (2026-11-08)",
@@ -944,13 +969,13 @@
         "тест:tests/unit/test_gateway_avail_parity.py::test_fr_c9_комментарий_из_фразы_команды (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_parity.py::test_fr_c9_карточка_дня_говорит_языком_канона (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_parity.py::test_fr_c9_форма_дня_пишет_через_путь_экрана (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_закрытие_листа_сохраняет_без_кнопки (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_готово_сохраняет_тем_же_путём (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_без_правок_лист_ничего_не_пишет (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_смена_недели_не_сбрасывает_несохранённое (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_вернуть_живёт_десять_секунд (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_шаблон_сохраняется_отдельной_кнопкой (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_заполнить_по_шаблону_показывает_предпросмотр (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_закрытие_листа_сохраняет_без_кнопки (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_готово_сохраняет_тем_же_путём (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_без_правок_лист_ничего_не_пишет (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_смена_недели_не_сбрасывает_несохранённое (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_вернуть_живёт_десять_секунд (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_шаблон_сохраняется_отдельной_кнопкой (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_заполнить_по_шаблону_показывает_предпросмотр (2026-11-08)",
         "сценарий:СМ-2/10. POST /tools/availability/template/from-week (2026-11-08)"
       ],
       "result": "пройдено",
@@ -990,7 +1015,6 @@
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_свободен_до_часа_из_чата_виден_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c10_обычная_неделя_запомненная_из_чата_видна_экрану (2026-11-08)",
         "тест:tests/integration/test_webapp_grid.py::test_импорт_из_файла_не_перезаписывает_отметку_бота (2026-11-08)",
-        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, не проверено: нет данных в копии)",
         "тест:tests/unit/test_availability_card.py::test_fr_c9_канон_для_всех_форм_записи (2026-11-08)",
         "тест:tests/unit/test_availability_card.py::test_fr_c9_женский_род_не_теряется_при_записи (2026-11-08)",
         "тест:tests/unit/test_availability_card.py::test_fr_c9_корпус_листа_переживает_перезапись (2026-11-08)",
@@ -1044,13 +1068,13 @@
         "тест:tests/unit/test_schedule_sheet.py::test_fr_c9_правка_человека_видна_по_снимку (2026-11-08)",
         "тест:tests/unit/test_schedule_sheet.py::test_fr_c9_сверка_сравнивает_смысл_а_не_буквы (2026-11-08)",
         "тест:tests/unit/test_schedule_sheet.py::test_fr_c9_сверка_видит_настоящую_разницу (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_закрытие_листа_сохраняет_без_кнопки (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_готово_сохраняет_тем_же_путём (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_без_правок_лист_ничего_не_пишет (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_смена_недели_не_сбрасывает_несохранённое (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_вернуть_живёт_десять_секунд (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_шаблон_сохраняется_отдельной_кнопкой (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_заполнить_по_шаблону_показывает_предпросмотр (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_закрытие_листа_сохраняет_без_кнопки (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_готово_сохраняет_тем_же_путём (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_без_правок_лист_ничего_не_пишет (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_смена_недели_не_сбрасывает_несохранённое (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_вернуть_живёт_десять_секунд (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_шаблон_сохраняется_отдельной_кнопкой (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_заполнить_по_шаблону_показывает_предпросмотр (2026-11-08)",
         "сценарий:СМ-2/3. POST /tools/availability/commit (занят 10–12) (2026-11-08)",
         "сценарий:СМ-2/6. GET /tools/availability/week (2026-11-08)"
       ],
@@ -1117,20 +1141,20 @@
       "status19": "готово",
       "line": 85,
       "evidence": [
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "тест:tests/unit/test_gateway_slots_entry.py::test_окна_без_типа_считаются_как_репетиция (2026-11-08)",
         "тест:tests/unit/test_gateway_slots_entry.py::test_тип_из_фразы_важнее_умолчания (2026-11-08)",
         "тест:tests/unit/test_gateway_slots_entry.py::test_ответ_ведёт_в_дом (2026-11-08)",
         "тест:tests/unit/test_gateway_slots_entry.py::test_больше_всего_свободных_остаётся_режимом (2026-11-08)",
         "тест:tests/unit/test_gateway_slots_entry.py::test_занятость_зала_неизвестна_говорим_прямо (2026-11-08)",
         "тест:tests/unit/test_gateway_slots_entry.py::test_без_адреса_приложения_кнопки_нет (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_экран_знает_обе_области (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_аренда_прячет_людей_и_показывает_зал (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_репетиция_показывает_людей_и_назначение (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_вход_со_сводки_передаёт_даты_недели (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_вход_из_чата_открывает_экран_на_нужных_критериях (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_назначение_с_экрана_передаёт_выбранный_тип (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_slots.py::test_без_права_экран_говорит_о_праве_а_не_о_сети (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_экран_знает_обе_области (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_аренда_прячет_людей_и_показывает_зал (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_репетиция_показывает_людей_и_назначение (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_вход_со_сводки_передаёт_даты_недели (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_вход_из_чата_открывает_экран_на_нужных_критериях (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_назначение_с_экрана_передаёт_выбранный_тип (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_slots.py::test_без_права_экран_говорит_о_праве_а_не_о_сети (2026-11-08)",
         "сценарий:СМ-3/1. POST /tools/availability/commit (свободен 10–13) (2026-11-08)",
         "сценарий:СМ-3/2. POST /tools/schedule/slots (2026-11-08)"
       ],
@@ -1148,7 +1172,7 @@
       "status19": "готово",
       "line": 86,
       "evidence": [
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_parity.py::test_fr_c10_week_показывает_обычную_неделю_с_сервера (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_parity.py::test_fr_c10_пустой_шаблон_объясняет_что_делать (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_parity.py::test_fr_c10_запомнить_зовёт_путь_экрана_с_понедельником (2026-11-08)",
@@ -1302,7 +1326,7 @@
       "status19": "готово",
       "line": 95,
       "evidence": [
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "сценарий:СМ-3/3. POST /tools/events/assign (2026-11-08)",
         "сценарий:СМ-3/4. состав события = смоук-участник (2026-11-08)"
       ],
@@ -1320,7 +1344,7 @@
       "status19": "готово",
       "line": 96,
       "evidence": [
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "сценарий:СМ-3/8. POST /tools/schedule/slots (block_events=true) (2026-11-08)"
       ],
       "result": "пройдено",
@@ -1372,7 +1396,7 @@
       "status19": "готово",
       "line": 104,
       "evidence": [
-        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08)",
         "тест:tests/unit/test_llm_config.py::test_по_умолчанию_openrouter (2026-11-08)",
         "тест:tests/unit/test_llm_config.py::test_ключ_берётся_из_нового_имени (2026-11-08)",
         "тест:tests/unit/test_llm_config.py::test_старое_имя_работает_как_алиас (2026-11-08)",
@@ -1419,7 +1443,7 @@
       "status19": "готово",
       "line": 106,
       "evidence": [
-        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08)",
         "сценарий:СМ-4/1. POST /tools/budget/parse (2026-11-08)",
         "сценарий:СМ-9/1. GET /tools/budget/summary (детерминированный ответ) (2026-11-08)"
       ],
@@ -1437,8 +1461,8 @@
       "status19": "частично",
       "line": 107,
       "evidence": [
-        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08)",
+        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08)",
         "сценарий:СМ-11/7. POST /tools/route при выключенном LLM (2026-11-08)",
         "сценарий:СМ-9/3. POST /tools/route (LLM недоступен) (2026-11-08)",
         "сценарий:СМ-9/4. POST /tools/assistant/ask (LLM недоступен) (2026-11-08)",
@@ -1492,7 +1516,7 @@
       "status19": "готово",
       "line": 110,
       "evidence": [
-        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08)",
         "сценарий:СМ-9/2. POST /tools/budget/parse (правила) (2026-11-08)",
         "сценарий:СМ-9/6. порог 0.7 при разборе моделью (не проверено: нужен LLM (недетерминизм))"
       ],
@@ -1523,7 +1547,7 @@
         "тест:tests/integration/test_agent_observability.py::test_неизвестная_модель_это_нет_цены_а_не_ноль (2026-11-08)",
         "тест:tests/integration/test_agent_observability.py::test_деградация_с_потраченными_токенами_тоже_стоит_денег (2026-11-08)",
         "тест:tests/integration/test_agent_observability.py::test_рамка_задачи_помечается_в_ответе_и_в_расходе (2026-11-08)",
-        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm09_assistant.py::test_cm09_assistant (2026-11-08)",
         "тест:tests/unit/test_agent_budget.py::test_начало_суток_по_самаре (2026-11-08)",
         "тест:tests/unit/test_agent_budget.py::test_граница_суток_не_уезжает_в_utc (2026-11-08)",
         "тест:tests/unit/test_agent_budget.py::test_область_счёта_чат_старше_человека (2026-11-08)",
@@ -1568,7 +1592,7 @@
       "status19": "готово",
       "line": 118,
       "evidence": [
-        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08)",
         "сценарий:СМ-10/3. GET /webapp/money (org) (2026-11-08)"
       ],
       "result": "пройдено",
@@ -1617,7 +1641,7 @@
       "status19": "готово",
       "line": 121,
       "evidence": [
-        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08)",
         "сценарий:СМ-10/2. GET /tools/budget/summary = база (2026-11-08)"
       ],
       "result": "пройдено",
@@ -1641,7 +1665,6 @@
         "тест:tests/integration/test_files_actions_screen.py::test_порядок_папок_сохраняется_и_одинаков_на_экране_и_в_чате (2026-11-08)",
         "тест:tests/integration/test_files_actions_screen.py::test_папку_создают_переименовывают_и_закрывают_с_экрана (2026-11-08)",
         "тест:tests/integration/test_files_actions_screen.py::test_участник_не_правит_папки_с_экрана (2026-11-08)",
-        "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, не проверено: нет данных в копии)",
         "тест:tests/unit/test_files_one_upload_path.py::test_второго_пути_записи_нет (2026-11-08)",
         "тест:tests/unit/test_files_one_upload_path.py::test_поток_бота_идёт_общим_коммитом (2026-11-08)",
         "тест:tests/unit/test_files_one_upload_path.py::test_маршрут_загрузки_зовёт_общий_путь (2026-11-08)",
@@ -1693,7 +1716,6 @@
         "тест:tests/integration/test_notes_api.py::test_пустая_заметка_отклоняется (2026-11-08)",
         "тест:tests/integration/test_notes_api.py::test_экран_mini_app_читает_и_создаёт_ту_же_заметку (2026-11-08)",
         "тест:tests/integration/test_webapp_home.py::test_у_студийца_личное_без_файлов (2026-11-08)",
-        "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, не проверено: нет данных в копии)",
         "тест:tests/unit/test_gateway_assign_dialog.py::test_живой_диалог_собирает_карточку_за_три_реплики (2026-11-08)",
         "тест:tests/unit/test_gateway_assign_dialog.py::test_карточка_собирается_и_одной_фразой (2026-11-08)",
         "тест:tests/unit/test_gateway_assign_dialog.py::test_интервал_времени_без_назначения_не_становится_расходом (2026-11-08)",
@@ -1715,11 +1737,11 @@
         "тест:tests/unit/test_gateway_notes.py::test_отмена_ничего_не_пишет (2026-11-08)",
         "тест:tests/unit/test_gateway_notes.py::test_устаревший_черновик_объясняется_словами (2026-11-08)",
         "тест:tests/unit/test_gateway_notes.py::test_фраза_заметки_перехватывается_до_бюджета (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_notes.py::test_экран_заметок_без_js_ошибок (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_notes.py::test_лист_своей_заметки_показывает_текст_и_правится (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_notes.py::test_чужая_общая_заметка_без_кнопки_изменить (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_notes.py::test_новая_заметка_сохраняется (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_notes.py::test_пустой_текст_не_сохраняется (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_notes.py::test_экран_заметок_без_js_ошибок (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_notes.py::test_лист_своей_заметки_показывает_текст_и_правится (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_notes.py::test_чужая_общая_заметка_без_кнопки_изменить (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_notes.py::test_новая_заметка_сохраняется (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_notes.py::test_пустой_текст_не_сохраняется (2026-11-08)",
         "сценарий:СМ-7/1. POST /tools/notes (2026-11-08)",
         "сценарий:СМ-7/2. GET /tools/notes (свои и чужие) (2026-11-08)",
         "сценарий:СМ-8/3. POST /webapp/notes/save (2026-11-08)"
@@ -1784,10 +1806,10 @@
       "evidence": [
         "тест:tests/integration/test_broadcast_rights.py::test_организатору_рассылка_закрыта (2026-11-08)",
         "тест:tests/integration/test_broadcast_rights.py::test_админу_рассылка_доступна (2026-11-08)",
-        "тест:tests/smoke/test_cm05_notifications.py::test_cm05_notifications (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm05_notifications.py::test_cm05_notifications (2026-11-08)",
         "тест:tests/unit/test_webapp_misc_pages.py::test_рассылка_отличает_право_от_сети (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_broadcast.py::test_без_права_экран_говорит_о_праве_а_не_о_сети (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_broadcast.py::test_админ_видит_охват_и_не_видит_отказа (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_broadcast.py::test_без_права_экран_говорит_о_праве_а_не_о_сети (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_broadcast.py::test_админ_видит_охват_и_не_видит_отказа (2026-11-08)",
         "сценарий:СМ-5/3. GET /webapp/admin/broadcast/preview (2026-11-08)",
         "сценарий:СМ-5/4. POST /webapp/admin/broadcast (dry_run) (2026-11-08)",
         "сценарий:СМ-5/5. GET /webapp/admin/broadcast/preview (org) (2026-11-08)"
@@ -1812,7 +1834,7 @@
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_день_из_чата_читается_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_свободен_до_часа_из_чата_виден_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c10_обычная_неделя_запомненная_из_чата_видна_экрану (2026-11-08)",
-        "тест:tests/smoke/test_cm05_notifications.py::test_cm05_notifications (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm05_notifications.py::test_cm05_notifications (2026-11-08)",
         "тест:tests/unit/test_gateway_quiet.py::test_fr_g3_тихие_часы_показываются_из_сервера (2026-11-08)",
         "тест:tests/unit/test_gateway_quiet.py::test_fr_g3_русская_команда_тоже_работает (2026-11-08)",
         "тест:tests/unit/test_gateway_quiet.py::test_fr_g3_разбор_интервала_тихих_часов (2026-11-08)",
@@ -1878,14 +1900,14 @@
         "тест:tests/integration/test_notification_defaults.py::test_частный_экран_наследует_общие_значения (2026-11-08)",
         "тест:tests/integration/test_notification_defaults.py::test_очередь_читает_частные_тихие_часы_вместо_общих (2026-11-08)",
         "тест:tests/integration/test_notification_defaults.py::test_очередь_без_частных_применяет_общие_тихие_часы (2026-11-08)",
-        "тест:tests/smoke/test_cm05_notifications.py::test_cm05_notifications (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm05_notifications.py::test_cm05_notifications (2026-11-08)",
         "тест:tests/unit/test_notifications.py::test_интервал_внутри_суток_кончается_сегодня (2026-11-08)",
         "тест:tests/unit/test_notifications.py::test_fr_g17_частные_тихие_часы_перекрывают_общие (2026-11-08)",
         "тест:tests/unit/test_notifications.py::test_fr_g17_без_частных_применяются_общие (2026-11-08)",
         "тест:tests/unit/test_notifications.py::test_fr_g17_частная_запись_перекрывает_и_типы_и_часы (2026-11-08)",
         "тест:tests/unit/test_webapp_admin_pages.py::test_общие_настройки_уведомлений_это_те_же_три_типа_и_тихие_часы (2026-11-08)",
         "тест:tests/webapp/test_miniapp_hub.py::test_общие_настройки_уведомлений_переключаются_и_сохраняются (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_hub.py::test_общие_настройки_без_права_admin_panel_не_показывают_форму (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_hub.py::test_общие_настройки_без_права_admin_panel_не_показывают_форму (2026-11-08)",
         "сценарий:СМ-5/2. POST /tools/notifications/settings (2026-11-08)"
       ],
       "result": "пройдено",
@@ -1902,8 +1924,8 @@
       "status19": "готово",
       "line": 146,
       "evidence": [
-        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
+        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08)",
         "сценарий:СМ-1/1. GET /health (2026-11-08)",
         "сценарий:СМ-11/1. GET /health без токена (2026-11-08)"
       ],
@@ -1921,7 +1943,7 @@
       "status19": "готово",
       "line": 147,
       "evidence": [
-        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08)",
         "скрипт:scripts/check_invariants.py (2026-11-08)"
       ],
       "result": "пройдено",
@@ -1970,10 +1992,10 @@
       "status19": "частично",
       "line": 150,
       "evidence": [
-        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08, не проверено: нет данных в копии)"
+        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08)"
       ],
-      "result": "не проверено",
-      "cause": "нет данных в копии",
+      "result": "пройдено",
+      "cause": "",
       "matrix_tests": 1,
       "matrix_measured": 1,
       "prod": "не проверено",
@@ -1986,7 +2008,7 @@
       "status19": "частично",
       "line": 151,
       "evidence": [
-        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08)",
         "сценарий:СМ-11/6. GET /webapp/ui.css без токена (2026-11-08)",
         "сценарий:СМ-8/1. POST /webapp/auth (admin) (2026-11-08)",
         "сценарий:СМ-8/2. GET /webapp/home/data (три роли) (2026-11-08)",
@@ -2021,7 +2043,7 @@
       "status19": "готово",
       "line": 153,
       "evidence": [
-        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08)",
         "тест:tests/unit/test_availability_store.py::test_з1_в_живом_коде_нет_второго_пути_записи (2026-11-08)",
         "тест:tests/unit/test_availability_store.py::test_з1_входы_занятости_зовут_общий_модуль (2026-11-08)",
         "тест:tests/unit/test_availability_store.py::test_свобода_выводится_из_состояния_в_одном_месте (2026-11-08)",
@@ -2029,13 +2051,13 @@
         "тест:tests/unit/test_availability_store.py::test_интервал_и_день_это_один_и_тот_же_путь (2026-11-08)",
         "тест:tests/unit/test_availability_store.py::test_удаление_часов_и_недели_уважает_источник (2026-11-08)",
         "тест:tests/unit/test_availability_store.py::test_счёт_дней_недели_отдельный_от_часов (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_закрытие_листа_сохраняет_без_кнопки (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_готово_сохраняет_тем_же_путём (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_без_правок_лист_ничего_не_пишет (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_смена_недели_не_сбрасывает_несохранённое (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_вернуть_живёт_десять_секунд (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_шаблон_сохраняется_отдельной_кнопкой (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_autosave.py::test_заполнить_по_шаблону_показывает_предпросмотр (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_закрытие_листа_сохраняет_без_кнопки (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_готово_сохраняет_тем_же_путём (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_без_правок_лист_ничего_не_пишет (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_смена_недели_не_сбрасывает_несохранённое (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_вернуть_живёт_десять_секунд (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_шаблон_сохраняется_отдельной_кнопкой (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_autosave.py::test_заполнить_по_шаблону_показывает_предпросмотр (2026-11-08)",
         "сценарий:СМ-8/3. POST /webapp/notes/save (2026-11-08)",
         "сценарий:СМ-8/6. GET /webapp/week, /webapp/week/month, /webapp/money (org) (2026-11-08)"
       ],
@@ -2067,8 +2089,8 @@
         "тест:tests/integration/test_webapp_month_grid.py::test_участник_без_права_месяц_не_видит (2026-11-08)",
         "тест:tests/integration/test_webapp_month_grid.py::test_лист_недоступен_показываем_базу (2026-11-08)",
         "тест:tests/integration/test_webapp_month_grid.py::test_плохой_месяц_это_400 (2026-11-08)",
-        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08)",
+        "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08)",
         "тест:tests/unit/test_month_grid.py::test_состояния_называются_словами (2026-11-08)",
         "тест:tests/unit/test_month_grid.py::test_расхождение_показывается_а_не_правится (2026-11-08)",
         "тест:tests/unit/test_month_grid.py::test_совпадение_не_считается_расхождением (2026-11-08)",
@@ -2078,13 +2100,13 @@
         "тест:tests/unit/test_month_grid.py::test_клетка_листа_разбирается_как_в_импорте (2026-11-08)",
         "тест:tests/unit/test_webapp_week_page.py::test_fr_h9_отказ_на_сводке_назван_а_не_списан_на_сеть (2026-11-08)",
         "тест:tests/unit/test_webapp_week_page.py::test_сетка_месяца_только_читается (2026-11-08)",
-        "тест:tests/webapp/test_miniapp_month_grid.py::test_организатор_видит_месяц_словами (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_month_grid.py::test_клетка_не_реагирует_на_нажатие (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_month_grid.py::test_месяц_ведёт_со_сводки (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_month_grid.py::test_участнику_без_права_месяц_не_показан (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_rights.py::test_fr_h9_участник_не_видит_строку_сводки (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_rights.py::test_fr_h9_организатор_видит_строку_сводки (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/webapp/test_miniapp_week_rights.py::test_fr_h9_страница_сводки_у_участника_говорит_о_праве (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/webapp/test_miniapp_month_grid.py::test_организатор_видит_месяц_словами (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_month_grid.py::test_клетка_не_реагирует_на_нажатие (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_month_grid.py::test_месяц_ведёт_со_сводки (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_month_grid.py::test_участнику_без_права_месяц_не_показан (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_rights.py::test_fr_h9_участник_не_видит_строку_сводки (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_rights.py::test_fr_h9_организатор_видит_строку_сводки (2026-11-08)",
+        "тест:tests/webapp/test_miniapp_week_rights.py::test_fr_h9_страница_сводки_у_участника_говорит_о_праве (2026-11-08)",
         "сценарий:СМ-10/4. GET /webapp/week/month (org) (2026-11-08)",
         "сценарий:СМ-10/5. POST /webapp/grid (2026-11-08)",
         "сценарий:СМ-8/6. GET /webapp/week, /webapp/week/month, /webapp/money (org) (2026-11-08)"
@@ -2103,8 +2125,8 @@
       "status19": "частично",
       "line": 155,
       "evidence": [
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
-        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
+        "тест:tests/smoke/test_cm11_degradation.py::test_cm11_degradation (2026-11-08)",
         "сценарий:СМ-3/3. POST /tools/events/assign (2026-11-08)"
       ],
       "result": "пройдено",
@@ -2121,11 +2143,11 @@
       "status19": "не начато",
       "line": 156,
       "evidence": [
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "сценарий:СМ-3/5. участнику пришло уведомление о назначении (не проверено: нужен живой Telegram)"
       ],
-      "result": "не проверено",
-      "cause": "нет данных в копии",
+      "result": "пройдено",
+      "cause": "",
       "matrix_tests": 1,
       "matrix_measured": 1,
       "prod": "не проверено",
@@ -2138,7 +2160,7 @@
       "status19": "готово",
       "line": 157,
       "evidence": [
-        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08)",
         "сценарий:СМ-11/9. GET /webapp/admin/services (admin) (2026-11-08)",
         "сценарий:СМ-8/7. GET /webapp/admin/services (admin и troupe) (2026-11-08)"
       ],
@@ -2164,7 +2186,7 @@
         "тест:tests/integration/test_event_cancel.py::test_несуществующее_событие (2026-11-08)",
         "тест:tests/integration/test_event_chat_card.py::test_отмена_из_карточки_снимает_событие_и_пишет_аудит (2026-11-08)",
         "тест:tests/integration/test_event_chat_card.py::test_перенос_из_карточки_сохраняет_связь_было_стало (2026-11-08)",
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "тест:tests/unit/test_event_chat_card.py::test_дата_и_время_цифрами (2026-11-08)",
         "тест:tests/unit/test_event_chat_card.py::test_дата_словом (2026-11-08)",
         "тест:tests/unit/test_event_chat_card.py::test_относительный_день (2026-11-08)",
@@ -2205,7 +2227,7 @@
         "тест:tests/integration/test_event_move.py::test_перенос_за_рабочий_день_отклоняется (2026-11-08)",
         "тест:tests/integration/test_event_move.py::test_перенос_на_то_же_время_ничего_не_меняет (2026-11-08)",
         "тест:tests/integration/test_event_move.py::test_несуществующее_событие (2026-11-08)",
-        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm03_slots.py::test_cm03_slots (2026-11-08)",
         "тест:tests/unit/test_event_chat_card.py::test_дата_и_время_цифрами (2026-11-08)",
         "тест:tests/unit/test_event_chat_card.py::test_дата_словом (2026-11-08)",
         "тест:tests/unit/test_event_chat_card.py::test_относительный_день (2026-11-08)",
@@ -2420,7 +2442,7 @@
       "line": 228,
       "evidence": [
         "тест:tests/integration/test_feedback.py::test_просьба_о_доработке_сохраняется_видом_wish_fl (2026-11-08)",
-        "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08)",
         "тест:tests/unit/test_gateway_free_text.py::test_свободный_текст_без_команды_идёт_в_агент_и_каскад (2026-11-08)",
         "тест:tests/unit/test_gateway_free_text.py::test_ответ_агента_не_зовёт_каскад_второй_раз (2026-11-08)",
         "тест:tests/unit/test_gateway_free_text.py::test_нераспознанное_дает_честный_ответ_и_вход_в_дом (2026-11-08)",
@@ -2446,7 +2468,7 @@
       "status19": "",
       "line": 229,
       "evidence": [
-        "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08, не проверено: нет данных в копии)",
+        "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08)",
         "сценарий:СМ-6/2. GET /tools/feedback?status=new (admin) (2026-11-08)",
         "сценарий:СМ-6/3. POST /tools/feedback/decide (2026-11-08)"
       ],
@@ -4524,7 +4546,7 @@
       },
       {
         "criterion": "P1 с доказательством",
-        "value": "17/34",
+        "value": "18/34",
         "target": ">= 27/34",
         "ok": false
       },
@@ -4606,12 +4628,6 @@
       "text": "Человеческие отчёты: месяц — отдельный лист, блоки рядом, цвета, итоги"
     },
     {
-      "id": "FR-B13",
-      "cause": "нет данных в копии",
-      "cost": "добавить данные в набор §6.2 или шаг в сценарий, 30 мин",
-      "text": "Двусторонняя сверка: ручные правки листов подхватываются, удалённые строки → `rejected`, отчёт на лист"
-    },
-    {
       "id": "FR-C1",
       "cause": "нужен Google Sheets/Calendar",
       "cost": "тестовые файлы Google и прогон вручную, 1 ч",
@@ -4646,13 +4662,7 @@
       "cause": "нет автотеста",
       "cost": "тест или шаг сценария, 10–20 мин",
       "text": "Миграции только вперёд, идемпотентные"
-    },
-    {
-      "id": "FR-H11",
-      "cause": "нет данных в копии",
-      "cost": "добавить данные в набор §6.2 или шаг в сценарий, 30 мин",
-      "text": "Бот уведомляет участников назначенного события"
     }
   ],
-  "summary": "Проверено 57 из 113 требований, не проверено 52, провалов 2 (FR-C2, FR-F5). Пороги §7 не пройдены: P0 с доказательством или причиной 47/48 (нужно 48/48); P1 с доказательством 17/34 (нужно >= 27/34); пропуски сценариев 8 (нужно <= 3). Проверки прогона: К5 пройдено; К7 провал. Слой В (прод) не выполнялся: нет ответа на V-042."
+  "summary": "Проверено 60 из 113 требований, не проверено 49, провалов 2 (FR-C2, FR-F5). Пороги §7 не пройдены: P0 с доказательством или причиной 47/48 (нужно 48/48); P1 с доказательством 18/34 (нужно >= 27/34); пропуски сценариев 8 (нужно <= 3). Проверки прогона: К5 пройдено; К7 провал. Слой В (прод) не выполнялся: нет ответа на V-042."
 }
