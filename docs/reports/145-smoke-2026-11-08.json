@@ -1,7 +1,7 @@
 {
   "version": 1,
   "number": "145",
-  "commit": "d157d0c",
+  "commit": "0fe07e9",
   "date": "2026-11-08",
   "env": "стенд svoi_smoke",
   "marker": "SMOKE-20261108-01",
@@ -16,8 +16,8 @@
     "p2": 7,
     "unset": 24,
     "with_tests": 59,
-    "test_refs": 766,
-    "unique_pairs": 479,
+    "test_refs": 783,
+    "unique_pairs": 491,
     "command": "env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json"
   },
   "layers": {
@@ -25,16 +25,16 @@
       {
         "layer": "core",
         "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-core.xml",
-        "tests": 2956,
-        "passed": 2535,
+        "tests": 3055,
+        "passed": 2564,
         "failed": 0,
-        "skipped": 421
+        "skipped": 491
       },
       {
         "layer": "webapp",
         "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-webapp.xml",
-        "tests": 356,
-        "passed": 330,
+        "tests": 426,
+        "passed": 400,
         "failed": 0,
         "skipped": 26
       },
@@ -79,8 +79,8 @@
     }
   },
   "coverage": {
-    "pairs": 479,
-    "covered": 479,
+    "pairs": 491,
+    "covered": 491,
     "missing": []
   },
   "requirements": [
@@ -255,6 +255,11 @@
         "тест:tests/integration/test_master_role.py::test_Г14_экран_поиска_окон_знает_дисциплины (2026-11-08)",
         "тест:tests/integration/test_master_role.py::test_Г18_телефон_чужого_человека_мастеру_не_виден (2026-11-08)",
         "тест:tests/integration/test_webapp_admin.py::test_организатор_видит_людей_но_не_права (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_без_токена_страницы_остаются_публичными (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_прямой_адрес_без_права_уводит_на_главную (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_признак_экранов_в_nav_совпадает_с_правами_из_базы (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_хаб_и_управление_не_шире_прав (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_право_сверки_и_сервисов_только_у_тех_у_кого_есть (2026-11-08)",
         "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_виден_по_manage_а_не_по_просмотру (2026-11-08)",
         "тест:tests/unit/test_gateway_chat_parity.py::test_Л6_архив_показывает_людей_и_кнопку_вернуть (2026-11-08)",
@@ -301,8 +306,8 @@
       ],
       "result": "пройдено",
       "cause": "",
-      "matrix_tests": 62,
-      "matrix_measured": 62,
+      "matrix_tests": 67,
+      "matrix_measured": 67,
       "prod": "не проверено",
       "prod_cause": "нужен прод"
     },
@@ -2099,6 +2104,11 @@
         "тест:tests/integration/test_webapp_month_grid.py::test_участник_без_права_месяц_не_видит (2026-11-08)",
         "тест:tests/integration/test_webapp_month_grid.py::test_лист_недоступен_показываем_базу (2026-11-08)",
         "тест:tests/integration/test_webapp_month_grid.py::test_плохой_месяц_это_400 (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_без_токена_страницы_остаются_публичными (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_прямой_адрес_без_права_уводит_на_главную (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_признак_экранов_в_nav_совпадает_с_правами_из_базы (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_хаб_и_управление_не_шире_прав (2026-11-08)",
+        "тест:tests/integration/test_webapp_screen_rights.py::test_право_сверки_и_сервисов_только_у_тех_у_кого_есть (2026-11-08)",
         "тест:tests/smoke/test_cm08_miniapp.py::test_cm08_miniapp (2026-11-08)",
         "тест:tests/smoke/test_cm10_reports.py::test_cm10_reports (2026-11-08)",
         "тест:tests/unit/test_month_grid.py::test_состояния_называются_словами (2026-11-08)",
@@ -2108,6 +2118,13 @@
         "тест:tests/unit/test_month_grid.py::test_месяца_нет_в_таблице_отдельный_случай (2026-11-08)",
         "тест:tests/unit/test_month_grid.py::test_человека_нет_в_таблице_видно_по_строке (2026-11-08)",
         "тест:tests/unit/test_month_grid.py::test_клетка_листа_разбирается_как_в_импорте (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_словарь_покрывает_ровно_экраны_маршрутов (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_разделы_хаба_и_экраны_совпадают_по_правам (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_плитки_хаба_не_шире_прав_роли (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_признак_экранов_в_nav_отвечает_по_правам (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_кнопки_закрытых_экранов_помечены_правом (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_меню_чата_без_доменных_действий (2026-11-08)",
+        "тест:tests/unit/test_webapp_screen_rights.py::test_оболочка_прячет_по_праву_и_уводит_с_чужого_экрана (2026-11-08)",
         "тест:tests/unit/test_webapp_week_page.py::test_fr_h9_отказ_на_сводке_назван_а_не_списан_на_сеть (2026-11-08)",
         "тест:tests/unit/test_webapp_week_page.py::test_сетка_месяца_только_читается (2026-11-08)",
         "тест:tests/webapp/test_miniapp_month_grid.py::test_организатор_видит_месяц_словами (2026-11-08)",
@@ -2123,8 +2140,8 @@
       ],
       "result": "пройдено",
       "cause": "",
-      "matrix_tests": 32,
-      "matrix_measured": 32,
+      "matrix_tests": 44,
+      "matrix_measured": 44,
       "prod": "не проверено",
       "prod_cause": "нужен прод"
     },
