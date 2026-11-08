@@ -2,6 +2,12 @@
 
 Модуль — только своя разметка и скрипт: общее ядро (токен, запросы, строки,
 листы) и каркас лежат в `admin_core.py`. Границы и права — как в `docs/development/73`.
+
+Право `feedback.triage` есть только у администратора (V-005: обращения идут ему
+дайджестом). Без него экран говорит «Обращения разбирает администратор» и очередь
+не запрашивает: пустое «Открытых обращений нет» человек читал как «разбирать
+нечего» и ждал обращений, которых никогда не увидит (отчёт 142 §3 строка 27,
+принципы 91: 9, Б3; карта t_83a64c1f).
 """
 
 from __future__ import annotations
@@ -69,24 +75,67 @@ _SCRIPT_FEEDBACK_QUEUE = r"""
     return row;
   }
 
+  /* Без права `feedback.triage` очередь не запрашивается, а экран говорит, кто
+     разбирает обращения. Право приходит данными: раздел `feedback` в списке
+     `allowed` ответа `/webapp/admin/overview`. Роль на странице его не выводит:
+     у org и master панель открыта, а раздела нет; у troupe панель закрыта вовсе
+     (403), и это тоже «нет права», а не «очередь пуста». До правки любой отказ
+     превращался в пустой список с «Открытых обращений нет» — человек ждал
+     обращений, которых никогда не увидит (отчёт 142 §3 строка 27, принципы
+     91: 9, Б3; карта t_83a64c1f). */
+  var DENIED_TITLE = "Обращения разбирает администратор";
+  var DENIED_TEXT = "Очередь обращений видит только администратор: право "
+    + "feedback.triage есть у него одного. Новое обращение приходит ему "
+    + "дайджестом из бота.";
+
+  function showDenied() {
+    var list = $("feedback-list");
+    clear(list);
+    list.appendChild(empty(DENIED_TITLE, DENIED_TEXT));
+    $("feedback-count").textContent = "";
+    status("");
+  }
+
+  function renderQueue(data) {
+    var rows = data.data || [];
+    var list = $("feedback-list");
+    clear(list);
+    if (!rows.length) {
+      list.appendChild(empty("Открытых обращений нет",
+        "Новое обращение появится здесь, когда кто-то напишет из бота."));
+    } else {
+      rows.forEach(function (item) { list.appendChild(itemRow(item)); });
+    }
+    $("feedback-count").textContent = rows.length
+      ? rows.length + " " + plural(rows.length, "обращение", "обращения", "обращений")
+      : "";
+  }
+
+  function loadQueue() {
+    return api("/webapp/admin/feedback").then(function (res) {
+      /* 403 и здесь — не пустая очередь, а закрытое право (человек мог потерять
+         его с открытой сессией): слова те же, что у роли без раздела. */
+      if (res.status === 403) { showDenied(); return null; }
+      var data = (res.body && res.body.ok) ? res.body : { data: [] };
+      renderQueue(data);
+      return data;
+    });
+  }
+
   function refresh() {
     return auth().then(function (denied) {
       if (denied) { status(denied, true); return null; }
-      return api("/webapp/admin/feedback").then(function (res) {
-        var data = (res.body && res.body.ok) ? res.body : { data: [] };
-        var rows = data.data || [];
-        var list = $("feedback-list");
-        clear(list);
-        if (!rows.length) {
-          list.appendChild(empty("Открытых обращений нет",
-            "Новое обращение появится здесь, когда кто-то напишет из бота."));
-        } else {
-          rows.forEach(function (item) { list.appendChild(itemRow(item)); });
+      /* Панель спрашиваем сами, а не через `loadOverview()`: нужен код ответа,
+         чтобы отличить 403 (права нет) от сетевого сбоя, где «разбирает
+         администратор» было бы неправдой. */
+      return api("/webapp/admin/overview").then(function (res) {
+        var allowed = (res.status === 200 && res.body && res.body.allowed) || [];
+        if (res.status === 403 || (res.status === 200 && allowed.indexOf("feedback") === -1)) {
+          showDenied();
+          return null;
         }
-        $("feedback-count").textContent = rows.length
-          ? rows.length + " " + plural(rows.length, "обращение", "обращения", "обращений")
-          : "";
-        return data;
+        if (res.status !== 200) { status(problem(res), true); return null; }
+        return loadQueue();
       });
     });
   }

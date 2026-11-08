@@ -287,6 +287,7 @@ def reset_events() -> dict:
     """Сброс журнала стенда перед браузерным сценарием."""
     WEEK_EVENTS.clear()
     SLOTS_EVENTS.clear()
+    FEEDBACK_EVENTS.clear()
     return {"ok": True}
 
 
@@ -670,6 +671,31 @@ async def _admin_overview(request: Request) -> JSONResponse:
 
 
 app.add_api_route("/webapp/admin/overview", _admin_overview, methods=["GET"])
+
+
+# Очередь обращений: право `feedback.triage` есть только у администратора (V-005:
+# обращения идут ему дайджестом), поэтому org, master и troupe получают 403 — как
+# в `api/admin.py` (`core._webapp_require`). Журнал нужен браузерному тесту, чтобы
+# проверить главное: без права очередь не запрашивается вовсе, а не приходит
+# пустой (карта t_83a64c1f).
+FEEDBACK_EVENTS: list[str] = []
+
+NO_FEEDBACK_TRIAGE_ROLES = {"participant", "org", "master", "troupe"}
+
+
+@app.get("/webapp/admin/feedback")
+def admin_feedback_queue(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    FEEDBACK_EVENTS.append(role or "admin")
+    if role in NO_FEEDBACK_TRIAGE_ROLES:
+        return JSONResponse({"detail": "capability required: feedback.triage"},
+                            status_code=403)
+    return JSONResponse({"ok": True, "data": [],
+                         "counts": {"new": 0, "seen": 0, "planned": 0,
+                                    "done": 0, "rejected": 0}})
 
 
 app.add_api_route("/webapp/admin/dues", _data({
