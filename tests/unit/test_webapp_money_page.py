@@ -35,7 +35,10 @@ def test_деньги_это_вкладка_а_операция_вложенны
 def test_три_сегмента_денег_и_одно_главное_действие():
     for label in ("Операции", "Бюджет", "Мои взносы"):
         assert label in money.MONEY_PAGE
-    assert 'href="/webapp/tx">Записать операцию' in money.MONEY_PAGE
+    assert 'href="/webapp/tx"' in money.MONEY_PAGE
+    assert "Записать операцию" in money.MONEY_PAGE
+    # Вход в форму помечен правом: без `budget.write` оболочка его прячет.
+    assert 'data-svoi-cap="budget.write"' in money.MONEY_PAGE
     # Права прячут сегменты, а не показывают недоступное: по умолчанию видны только взносы.
     assert 'id="money-seg"' in money.MONEY_PAGE and "hidden" in money.MONEY_PAGE
     assert money.MONEY_PAGE.count("ui-btn--primary") == 1

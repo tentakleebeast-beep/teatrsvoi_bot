@@ -543,3 +543,79 @@
     start();
   }
 })();
+
+
+/* Права на экран и на действие: решает сервер, оболочка только исполняет.
+   Правило владельца 08.11.2026 — «не показываем вход туда, куда действие
+   недоступно». Плитки хаба отбирает `sections_for()`, а прямой адрес экрана и
+   кнопки внутри него открывались всем: страница — публичная константа, и право
+   всплывало отказом 403 после нажатия.
+
+   `/webapp/nav` отдаёт два признака: `screens` — можно ли открыть этот адрес, и
+   `caps` — возможности человека. Первый уводит с чужого экрана на «Главную»
+   (там всё уже отобрано по правам), второй прячет элементы, помеченные
+   `data-svoi-cap` (кнопка, строка, ссылка). Ничего не решаем на странице: без
+   ответа сервера не прячем и не уводим — сломанный nav не должен отнимать
+   у человека его же экран (так же решены строка сводки и кнопка сверки). */
+(function screenRights() {
+  function path() {
+    var value = location.pathname || "";
+    return value.length > 1 && value.charAt(value.length - 1) === "/"
+      ? value.slice(0, -1) : value;
+  }
+
+  /* Чужие вкладки не показываем: у педагога нет денег, у студийца — управления.
+     Оболочка прячет вкладку, на которую сервер не пустит, — вход без права не
+     должен рисоваться (правило владельца 08.11.2026). */
+  function hideDeniedScreens(screens) {
+    if (!screens) { return; }
+    var links = document.querySelectorAll(".ui-tabbar a[href]");
+    for (var i = 0; i < links.length; i += 1) {
+      var href = links[i].getAttribute("href");
+      if (screens[href] === false) {
+        links[i].hidden = true;
+        links[i].setAttribute("data-svoi-denied", "1");
+      }
+    }
+  }
+
+  function hideByCaps(caps) {
+    // Список возможностей бывает и пустым (роль без прав), но отсутствовать он
+    // не должен: ответ без `caps` — старый или урезанный nav, и прятать по нему
+    // нельзя, иначе у человека исчезнут его же кнопки.
+    if (!caps || typeof caps.length !== "number") { return; }
+    var have = {};
+    (caps || []).forEach(function (code) { have[code] = true; });
+    if (have["*"]) { return; }              // сервисный токен видит всё
+    var nodes = document.querySelectorAll("[data-svoi-cap]");
+    for (var i = 0; i < nodes.length; i += 1) {
+      var need = (nodes[i].getAttribute("data-svoi-cap") || "").split(/\s+/);
+      var allowed = need.some(function (code) { return code && have[code]; });
+      if (!allowed) {
+        nodes[i].hidden = true;
+        nodes[i].setAttribute("data-svoi-denied", "1");
+      }
+    }
+  }
+
+  function start() {
+    var appTg = window.Telegram && window.Telegram.WebApp;
+    if (!appTg && !(window.SVOI && window.SVOI.token)) { return; }
+    fetch("/webapp/nav").then(function (r) { return r.json(); }).then(function (body) {
+      if (!body || body.ok !== true) { return; }
+      var here = path();
+      if (body.screens && body.screens[here] === false) {
+        location.replace("/webapp/home");
+        return;
+      }
+      hideDeniedScreens(body.screens);
+      hideByCaps(body.caps);
+    }).catch(function () { /* nav не ответил — ничего не прячем */ });
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", start, { once: true });
+  } else {
+    start();
+  }
+})();
