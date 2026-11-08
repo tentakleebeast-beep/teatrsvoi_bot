@@ -525,7 +525,10 @@
 (function navLabel() {
   function start() {
     var appTg = window.Telegram && window.Telegram.WebApp;
-    var link = document.querySelector('a[href="/webapp/more"]');
+    // Только вкладка: `a[href="/webapp/more"]` без области цепляет ещё и «‹» в шапке
+    // вложенного экрана — её ссылка ведёт туда же, и подпись перетирала стрелку
+    // («авлениеАудит» в шапке, 08.11.2026).
+    var link = document.querySelector('.ui-tabbar a[href="/webapp/more"]');
     if (!appTg || !link) { return; }
     function relabel() {
       fetch("/webapp/nav").then(function (r) { return r.json(); }).then(function (body) {
