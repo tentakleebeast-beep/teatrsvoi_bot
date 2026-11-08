@@ -30,7 +30,7 @@ create table participant (
   tg_username     text,
   display_name    text not null,
   person_key      text unique,                      -- человекочитаемый ключ: "антон-зайцев"
-  role            text not null check (role in ('admin','org','troupe','student')),
+  role            text not null check (role in ('admin','org','troupe','master')),
   status          text not null default 'pending'
                     check (status in ('pending','active','blocked','archived')),
   drive_folder_id text,                             -- /TG_<chat_id>
@@ -45,7 +45,7 @@ create table participant (
 create table invite_code (
   id          bigserial primary key,
   code        text not null unique,                 -- 8 символов, без похожих 0/O/1/I
-  role        text not null check (role in ('org','troupe','student')),
+  role        text not null check (role in ('admin','org','troupe')),
   created_by  bigint not null references participant(id),
   created_at  timestamptz not null default now(),
   expires_at  timestamptz not null,
@@ -80,6 +80,10 @@ create table session (
 
 Инварианты:
 - `admin` — ровно один, задаётся `ADMIN_CHAT_ID` в окружении при первом старте.
+- Набор ролей в этих `CHECK` — фактический: `student` убран миграциями `017` и `030`,
+  `master` добавлен картой Э1 (`db/init/061_master_role.sql`) в `participant` и
+  `participant_role`; в `invite_code` набора без `master` не менялось — роль педагога
+  кодом не выдаётся (`docs/architecture/140-master-role.md` §2.1).
 - `status='pending'` не имеет прав ни на что, кроме регистрации.
 - `person_key` — человекочитаемый идентификатор вида «иванов-виктор» (`app/person_key.py`, миграция `041`): строчные буквы, `ё → е`, слова через дефис, без пробелов и скобок. Он же имя файла личных настроек `bot/manifests/participants/<key>.md`. Ключ не меняется при переименовании: это идентификатор, а не подпись.
 - Поиск человека по имени — один на все интерфейсы (`app/person_match.py`, `GET /tools/participants/find`): псевдоним, полное имя, только имя, только фамилия, кусок слова или ключ. Ответы только три: найден, не найден, нужно выбрать. Если под запрос подходят двое, интерфейс показывает кандидатов, а не берёт первого.

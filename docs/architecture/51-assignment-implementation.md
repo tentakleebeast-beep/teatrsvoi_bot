@@ -180,6 +180,9 @@ POST /tools/events/assign {"proposal_id": 42}
 
 Появилось `schedule.write` (миграция `026`): у `admin` и `org`, у `troupe` нет.
 Труппа назначать события не может — только смотреть окна и свою занятость.
+С карты Э1 (`db/init/061_master_role.sql`) `schedule.write` есть и у `master`: педагог
+назначает тренинг по своей дисциплине (`docs/architecture/140-master-role.md` §3);
+у `troupe` права по-прежнему нет.
 
 ---
 
