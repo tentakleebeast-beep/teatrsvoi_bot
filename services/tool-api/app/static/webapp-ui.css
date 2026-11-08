@@ -74,6 +74,32 @@
   }
 }
 
+/* Тёмные значения переключаются по тому же сигналу, что и поверхности.
+   Оболочка (`webapp-shell.js`) ставит `color-scheme` на корень от темы Telegram
+   (`isDark(bg_color)`), а системная схема в WebView может быть другой: светлая
+   тема при тёмной ОС — обычная настройка Telegram Desktop/Web. `light-dark()`
+   резолвится по используемому `color-scheme`, то есть по теме, а медиазапрос
+   выше — по ОС, и в расхождении он уводил текст не в ту сторону: `--ui-muted`
+   давал 2.07 на карточке #f4f4f5, `--ui-accent-ink` — 2.26 (t_089e70a5, раунд 2).
+   Блок `@media` оставлен фолбэком для движков без `light-dark()`: там тема и
+   системная схема не различаются, но и поверхности исторически от темы.
+   Порядок важен: этот блок идёт после `@media` и при равной специфичности
+   побеждает, поэтому значения здесь — источник истины. */
+@supports (color: light-dark(#000, #fff)) {
+  :root {
+    --ui-muted: light-dark(#616569, #a4adb7);
+    --ui-accent: light-dark(#2f6fed, #3d73ae);
+    --ui-accent-ink: light-dark(#1459e3, #8cb0d6);
+    --ui-ok: light-dark(#19733f, #4ac179);
+    --ui-ok-soft: light-dark(rgba(31, 143, 78, .12), rgba(63, 185, 111, .16));
+    --ui-warn: light-dark(#915800, #de9d35);
+    --ui-warn-soft: light-dark(rgba(168, 102, 0, .12), rgba(211, 144, 35, .16));
+    --ui-danger: light-dark(#b2362a, #e78e83);
+    --ui-danger-strong: light-dark(#b2362a, #b8382b);
+    --ui-danger-soft: light-dark(rgba(184, 56, 43, .12), rgba(224, 106, 92, .16));
+  }
+}
+
 /* ---------- каркас ---------- */
 
 html { -webkit-text-size-adjust: 100%; }

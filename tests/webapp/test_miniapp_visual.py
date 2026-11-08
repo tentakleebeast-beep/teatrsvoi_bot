@@ -167,6 +167,55 @@ def test_контраст_текста_на_всех_экранах(app_page, sc
         f"{item['fg']} на {item['bg']})" for item in violations[:8])
 
 
+# Тема приходит из themeParams, а системная схема — из ОС, и они расходятся: так
+# ведёт себя Telegram Desktop/Web, когда тема выбрана светлая, а ОС тёмная.
+# Оболочка ставит color-scheme от темы (`isDark(bg)`), поэтому текстовые токены
+# обязаны переключаться по теме, а не по медиазапросу. Именно этот вход не был
+# проверен в первом раунде карты t_089e70a5: на стенде themeParams пустые, и
+# регрессия «светлая тема + тёмная ОС» проходила зелёной, давая 2.07 у .ui-muted.
+THEME_PARAMS = {
+    "light": {"bg_color": "#ffffff", "secondary_bg_color": "#f4f4f5",
+              "text_color": "#1a1a1a", "hint_color": "#707579",
+              "button_color": "#2f6fed"},
+    "dark": {"bg_color": "#17212b", "secondary_bg_color": "#232e3c",
+             "text_color": "#ffffff", "hint_color": "#8f9aa6",
+             "button_color": "#5288c1"},
+}
+
+
+@pytest.mark.parametrize("scheme,theme", [("dark", "light"), ("light", "dark")])
+@pytest.mark.parametrize("screen", list(PAGES))
+def test_контраст_при_расхождении_темы_и_системной_схемы(app_page, screen, scheme, theme):
+    """А7 при расхождении темы и системной схемы: цвета текста идут за темой.
+
+    Проверяются оба направления расхождения: светлая тема на тёмной ОС и тёмная
+    на светлой. Схема задаётся контексту браузера (как в системе), тема — через
+    `applyTheme`, потому что themeParams в SDK только для чтения.
+    """
+    page = app_page(PAGES[screen], color_scheme=scheme)
+    page.evaluate("(params) => window.SVOI.applyTheme(params)", THEME_PARAMS[theme])
+    page.wait_for_timeout(300)
+
+    state = page.evaluate(
+        "() => ({scheme: getComputedStyle(document.documentElement).colorScheme,"
+        " mediaDark: matchMedia('(prefers-color-scheme: dark)').matches,"
+        " bg: getComputedStyle(document.body).backgroundColor})")
+    if theme == "light":
+        assert state["bg"] == "rgb(255, 255, 255)", f"{screen}: тема не применилась — {state}"
+        assert state["scheme"] == "light", f"{screen}: color-scheme не от темы — {state}"
+    else:
+        assert state["bg"] == "rgb(23, 33, 43)", f"{screen}: тема не применилась — {state}"
+        assert state["scheme"] == "dark", f"{screen}: color-scheme не от темы — {state}"
+    assert state["mediaDark"] != (state["scheme"] == "dark"), (
+        f"{screen}/{theme}: случай не расходящийся, проверка ничего не меряет — {state}")
+
+    violations = page.evaluate(CONTRAST_PROBE)
+    assert not violations, (
+        f"{screen}: тема {theme}, системная схема {scheme}: контраст ниже порога — " + "; ".join(
+            f"{item['ratio']} < {item['need']} ({item['selector']} «{item['text']}»: "
+            f"{item['fg']} на {item['bg']})" for item in violations[:8]))
+
+
 def test_тёмный_фон_без_цвета_текста(app_page):
     """iOS присылает bg_color, но не text_color — текст обязан остаться светлым.
 
