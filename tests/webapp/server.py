@@ -565,6 +565,30 @@ def broadcast_preview(request: Request) -> JSONResponse:
     })
 
 
+# Право `feedback.send` есть у admin/org/troupe, у мастера его нет
+# (`db/init/031`, docs/141 §3). Стенд отвечает как прод после карты t_4f0c64d6:
+# право приходит полем `can_send` в данных, а POST без права — 403.
+@app.get("/webapp/feedback/mine")
+async def feedback_mine(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    allowed = (request.headers.get(ROLE_HEADER) or "").strip().lower() != "master"
+    return JSONResponse({"ok": True, "data": [], "can_send": allowed})
+
+
+@app.post("/webapp/feedback")
+async def feedback_send(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() == "master":
+        return JSONResponse({"detail": "capability required: feedback.send"},
+                            status_code=403)
+    return JSONResponse({"ok": True, "id": 1, "status": "new",
+                         "kind_title": "Вопрос", "notified": 0})
+
+
 app.add_api_route("/webapp/admin/overview", _data({
     "ok": True,
     "actions": {"manage_rights": True, "set_tariff": True, "accrue_dues": True},

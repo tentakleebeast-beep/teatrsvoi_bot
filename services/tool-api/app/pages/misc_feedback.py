@@ -2,6 +2,12 @@
 
 Вложенный экран с шапкой и «‹»; возврат ведёт в `/webapp/more` (`window.SVOI_BACK`),
 а не всегда на «Главную» (docs/86 §6). Общий JS — `misc_common.py`.
+
+Форма отправки закрыта правом `feedback.send`: у мастера его нет
+(`db/init/031`, `docs/development/141` §3). Право приходит полем `can_send`
+в ответе `/webapp/feedback/mine` и берётся оттуда — страница не выводит его
+из роли сама (принципы 91: 9, Б3; карта t_4f0c64d6). Без права формы и поля
+комментария нет, состояние сказано словами: «Обращения принимает организатор».
 """
 
 from __future__ import annotations
@@ -13,7 +19,7 @@ _BODY_FEEDBACK = """
 <p class="ui-small ui-muted">Что не работает, чего не хватает или что наоборот удобно.
 Ответ придёт в чат.</p>
 
-<section class="ui-section">
+<section class="ui-section" id="feedback-form" hidden>
   <div class="ui-section__head"><h2 class="ui-section__title">Тема</h2></div>
   <div class="ui-section" id="kinds" role="radiogroup" aria-label="Тема обращения">
     <button class="ui-radio-row ui-radio-row--on" type="button" role="radio"
@@ -37,17 +43,27 @@ _BODY_FEEDBACK = """
       <span>Хорошо работает</span><span class="ui-radio-row__mark" hidden></span>
     </button>
   </div>
+
+  <div class="ui-field">
+    <label class="ui-field__label" for="text">Комментарий</label>
+    <textarea class="ui-textarea" id="text" maxlength="4000"
+              placeholder="Что делали и что пошло не так"></textarea>
+    <span class="ui-field__error" id="text-error" hidden></span>
+  </div>
+
+  <button class="ui-btn ui-btn--primary ui-btn--block" id="send" type="button">Отправить</button>
+  <div class="ui-alert" id="error" hidden></div>
 </section>
 
-<div class="ui-field">
-  <label class="ui-field__label" for="text">Комментарий</label>
-  <textarea class="ui-textarea" id="text" maxlength="4000"
-            placeholder="Что делали и что пошло не так"></textarea>
-  <span class="ui-field__error" id="text-error" hidden></span>
-</div>
+<section class="ui-section" id="feedback-denied" hidden>
+  <div class="ui-empty">
+    <div class="ui-empty__title">Обращения принимает организатор</div>
+    <div class="ui-empty__text">Сообщить о проблеме или попросить доработку может
+      организатор студии — здесь их не отправить.</div>
+  </div>
+</section>
 
-<button class="ui-btn ui-btn--primary ui-btn--block" id="send" type="button">Отправить</button>
-<div class="ui-alert" id="error" hidden></div>
+<p class="ui-small ui-muted" id="feedback-status" hidden></p>
 
 <section class="ui-section">
   <div class="ui-section__head"><h2 class="ui-section__title">Мои сообщения</h2></div>
@@ -64,6 +80,7 @@ _SCRIPT_FEEDBACK = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_B
     done: "сделано", rejected: "отклонено",
   };
   var kind = "bug";
+  var canSend = false;
   tgBoot();
 
   function setKind(next) {
@@ -83,6 +100,22 @@ _SCRIPT_FEEDBACK = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_B
     var button = event.target.closest(".ui-radio-row");
     if (button) { setKind(button.getAttribute("data-kind")); }
   });
+
+  /* Право `feedback.send` приходит полем `can_send` в ответе данных: у мастера
+     его нет (db/init/031, docs/141 §3). Форма отдаётся скрытой и показывается
+     только по явному «да» сервера — человек без права не заполняет обращение,
+     которое сервер отклонит (принципы 91: 9, Б3; карта t_4f0c64d6). */
+  function applyRights(allowed) {
+    canSend = allowed === true;
+    $("feedback-form").hidden = !canSend;
+    $("feedback-denied").hidden = canSend;
+    $("feedback-status").hidden = true;
+  }
+
+  function showStatus(text) {
+    $("feedback-status").textContent = text;
+    $("feedback-status").hidden = false;
+  }
 
   function itemCard(item) {
     var card = make("div", "ui-card");
@@ -113,12 +146,24 @@ _SCRIPT_FEEDBACK = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_B
 
   async function load() {
     var result = await api("/webapp/feedback/mine");
-    if (result.status === 200) { renderList(result.body.data || []); }
+    var body = result.body || {};
+    if (result.status === 200 && body.ok) {
+      renderList(body.data || []);
+      if (typeof body.can_send === "boolean") { applyRights(body.can_send); }
+      else { showStatus("Не удалось проверить, можно ли отправить обращение. Потяните экран вниз, чтобы повторить."); }
+      return;
+    }
+    if (result.status === 401) {
+      showStatus("Откройте приложение из бота — сессия не подтверждена.");
+      return;
+    }
+    showStatus("Не удалось проверить доступ. Потяните экран вниз, чтобы повторить.");
   }
 
   $("send").addEventListener("click", async function () {
     var field = $("text");
     var error = $("text-error");
+    if (!canSend) { return; }
     var text = field.value.trim();
     error.hidden = true;
     $("error").hidden = true;
@@ -143,6 +188,8 @@ _SCRIPT_FEEDBACK = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_B
       load();
       return;
     }
+    /* 403 — это право, а не сеть: права могли снять после открытия экрана. */
+    if (result.status === 403) { applyRights(false); return; }
     var box = $("error");
     box.textContent = "Не отправилось. Проверьте сеть и повторите.";
     box.hidden = false;
