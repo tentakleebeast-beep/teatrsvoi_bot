@@ -92,7 +92,8 @@ _BODY_MONEY = """
 </section>
 
 <div class="ui-actions ui-actions--bottom money-actions" id="money-actions" hidden>
-  <a class="ui-btn ui-btn--primary ui-btn--block" href="/webapp/tx">Записать операцию</a>
+  <a class="ui-btn ui-btn--primary ui-btn--block" href="/webapp/tx"
+     data-svoi-cap="budget.write">Записать операцию</a>
 </div>
 """
 

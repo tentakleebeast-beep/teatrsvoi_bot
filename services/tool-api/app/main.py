@@ -34,9 +34,39 @@ from .api import (
 from .errors import new_request_id, problem_response, request_id_of, valid_request_id
 from .pages.routes import build_router as build_webapp_routes
 from .version import uptime_seconds
-from .webapp import check_secrets
+from .webapp import SCREEN_CAPS, check_secrets, screen_visible
 
 app = FastAPI(title="SVOI tool-api", version="0.2.0-postgres")
+
+
+@app.middleware("http")
+async def screen_rights_middleware(request: Request, call_next):
+    """Чужой экран прямым адресом — `302` на «Главную», а не 200 с пустышкой.
+
+    Правило владельца 08.11.2026: если действие недоступно, вход в него не
+    показываем. Плитки хаба отбирает `sections_for()`, а прямой адрес раньше
+    открывал любой экран: HTML-страницы — публичные константы без сессии
+    (`docs/reports/117`), и права всплывали только отказом 403 после нажатия.
+
+    Страница остаётся публичной: запрос без заголовка `Authorization` получает
+    HTML как раньше, а оболочка решает по `/webapp/nav` (страницы кэшируют один
+    HTML на всех). Если человек пришёл со своим токеном — решает сервер и уводит
+    на домашний экран своей роли (`/webapp/home`): и хаб, и вкладки там уже
+    отобраны по его правам. Права на данные по-прежнему проверяются в эндпоинтах.
+    """
+    path = request.url.path
+    if request.method == "GET" and path in SCREEN_CAPS:
+        authorization = request.headers.get("authorization")
+        if authorization:
+            try:
+                who = core.webapp_actor(authorization)
+            except StarletteHTTPException:
+                who = None          # плохой токен — отдаём страницу как публичную
+            if who is not None and not screen_visible(path, core._who_caps(who)):
+                from fastapi.responses import RedirectResponse  # noqa: PLC0415
+
+                return RedirectResponse("/webapp/home", status_code=302)
+    return await call_next(request)
 
 
 

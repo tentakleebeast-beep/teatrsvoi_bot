@@ -23,14 +23,6 @@ from __future__ import annotations
 from app.pages import files_actions, layout
 from app.pages.admin_core import CORE
 
-# Единственное своё правило: подсказка под полосой места не должна отрываться
-# от неё лишним отступом раздела.
-_STYLE = """<style>
-  .files-hint { margin: 0; }
-  .files-actions { margin-top: var(--ui-s2); }
-</style>
-"""
-
 _BODY_FILES = """
 <section class="ui-section">
   <div class="ui-section__head">
@@ -241,13 +233,13 @@ _SCRIPT_FILES = r"""
 """
 
 FILES_PAGE = layout.page(
-    "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=_STYLE,
+    "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=files_actions.STYLE,
     scripts="<script>\n" + CORE + _SCRIPT_FILES + files_actions.SCRIPT + "\n})();\n</script>")
 
 
 # --- Папка -------------------------------------------------------------------
 
-_BODY_FOLDER = """
+_BODY_FOLDER = files_actions.EMPTY_FOLDER + """
 <p class="ui-small ui-muted" id="subtitle">считаю</p>
 <p class="ui-small ui-muted" id="now" hidden></p>
 <div class="ui-list" id="tracks"></div>
@@ -383,7 +375,12 @@ _SCRIPT_FOLDER = r"""
     // Имя не `problem`: ниже вызывается помощник `problem(res)` — параметр
     // с тем же именем его бы затенил.
     if (denied) { status(denied, true); return; }
-    if (!folderId) { $("subtitle").textContent = "Папка не выбрана."; return; }
+    if (!folderId) {
+      // Без `?id=` экран не тупик: сказано, откуда папки берутся, и есть путь в «Файлы».
+      $("subtitle").hidden = true;
+      $("no-folder").hidden = false;
+      return;
+    }
     api("/webapp/folder/" + folderId + "/files").then(function (res) {
       if (res.status === 403) { $("subtitle").textContent = "Раздел доступен администратору, организатору и мастеру."; return; }
       if (res.status !== 200) { $("subtitle").textContent = problem(res); return; }
@@ -396,5 +393,5 @@ _SCRIPT_FOLDER = r"""
   });
 """
 
-FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files",
+FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files", head=files_actions.STYLE,
                           scripts="<script>\n" + CORE + _SCRIPT_FOLDER + "\n})();\n</script>")

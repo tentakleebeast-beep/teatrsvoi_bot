@@ -288,3 +288,32 @@ def test_ошибка_валидации_читаема(app_page):
     assert "[object Object]" not in status + field_error, "сырой объект в тексте ошибки"
     assert "сумма" in field_error.lower() or "сумма" in status.lower(), \
         f"нет имени поля в тексте ошибки: {status!r} / {field_error!r}"
+
+
+def test_экран_папки_без_номера_не_тупик(app_page):
+    """Пусто — не тупик (docs/development/91 §1 п.9, отчёт 142 §3 строка 17).
+
+    `/webapp/folder` без `?id=` показывал только «Папка не выбрана» — человек
+    не понимал, откуда в папку попасть. Пустое состояние обязано назвать
+    источник и дать живой путь в «Файлы»; адрес при этом остаётся открывающимся
+    (редиректа нет, 141 §2.4).
+    """
+    page = app_page("/webapp/folder")
+    page.wait_for_selector("#no-folder:not([hidden])")
+
+    text = page.inner_text("#no-folder")
+    assert "Папки открываются из «Файлов»" in text, f"нет пути: {text!r}"
+
+    link = page.locator('#no-folder a[href="/webapp/files"]')
+    assert link.count() == 1, "в пустом состоянии нет ссылки на «Файлы»"
+    assert link.is_visible()
+
+    # Снимок состояния — для разбора карты и сравнения с 142 §3 строка 17.
+    browser = page.context.browser.browser_type.name
+    target = SCREENS / browser / "folder-empty-light.png"
+    target.parent.mkdir(parents=True, exist_ok=True)
+    page.screenshot(path=str(target), full_page=True)
+
+    link.click()
+    page.wait_for_url("**/webapp/files")
+    assert page.title() == "Файлы"
