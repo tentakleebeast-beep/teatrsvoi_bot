@@ -123,9 +123,18 @@ def _guard(request: Request):
 # проверяет оба пути, когда роль определяется правами (FR-H9, карта t_70a6d8e5).
 ROLE_HEADER = "x-svoi-role"
 
+# Право `notify.send` есть только у администратора (`db/init/057`, FR-G2), поэтому
+# заголовок с любой другой ролью стенд считает «без права на рассылку»
+# (карта t_41a4ef6d).
+NO_NOTIFY_SEND_ROLES = {"participant", "org", "master", "troupe"}
+
 
 def _is_participant(request: Request) -> bool:
     return (request.headers.get(ROLE_HEADER) or "").strip().lower() == "participant"
+
+
+def _lacks_notify_send(request: Request) -> bool:
+    return (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_NOTIFY_SEND_ROLES
 
 
 for path, html in PAGE_ROUTES.items():
@@ -530,13 +539,30 @@ async def broadcast_send(request: Request):
     denied = _guard(request)
     if denied is not None:
         return denied
+    # Прод закрывает отправку правом `notify.send` (`api/admin.py`): стенд отвечает
+    # так же, иначе роль без права «успешно» рассылала бы на тестах (карта t_41a4ef6d).
+    if _lacks_notify_send(request):
+        return JSONResponse({"detail": "capability required: notify.send"}, status_code=403)
     body = await request.json()
     return JSONResponse({"ok": True, "recipients": 14 if not body.get("dry_run") else 0})
 
 
-app.add_api_route("/webapp/admin/broadcast/preview", _data({
-    "ok": True, "total": 17, "reachable": 14, "no_telegram": 3, "self": 1,
-}), methods=["GET"])
+@app.get("/webapp/admin/broadcast/preview")
+def broadcast_preview(request: Request) -> JSONResponse:
+    """Кого затронет рассылка.
+
+    Не администратору стенд отвечает 403, как продакшен роли без `notify.send`
+    (`core._webapp_require` в `api/admin.py`): один стенд проверяет оба пути
+    экрана — с правом и без (FR-G2, карта t_41a4ef6d).
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _lacks_notify_send(request):
+        return JSONResponse({"detail": "capability required: notify.send"}, status_code=403)
+    return JSONResponse({
+        "ok": True, "total": 17, "reachable": 14, "no_telegram": 3, "self": 1,
+    })
 
 
 # Право `feedback.send` есть у admin/org/troupe, у мастера его нет
