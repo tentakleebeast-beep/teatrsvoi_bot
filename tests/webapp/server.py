@@ -261,11 +261,25 @@ def reset_events() -> dict:
 # аренда — свободный зал, и никаких людей в карточке.
 SLOTS_EVENTS: list[tuple[str, dict]] = []
 
-app.add_api_route("/webapp/slots/people", _data({
-    "ok": True,
-    "people": [{"id": 30, "display_name": "Тестовый Участник", "self": True},
-               {"id": 31, "display_name": "Второй Участник", "self": False}],
-}), methods=["GET"])
+@app.get("/webapp/slots/people")
+def slots_people(request: Request) -> JSONResponse:
+    """Кого можно выбрать в критериях.
+
+    Участнику стенд отвечает 403, как продакшен роли без `schedule.slots`
+    (`core._webapp_require` в `api/schedule.py`): один стенд проверяет оба пути
+    экрана — с правом и без (карта t_f802d135).
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _is_participant(request):
+        return JSONResponse({"detail": "capability required: schedule.slots"},
+                            status_code=403)
+    return JSONResponse({
+        "ok": True,
+        "people": [{"id": 30, "display_name": "Тестовый Участник", "self": True},
+                   {"id": 31, "display_name": "Второй Участник", "self": False}],
+    })
 
 
 @app.post("/webapp/slots/find")

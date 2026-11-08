@@ -111,3 +111,29 @@ def test_назначение_с_экрана_передаёт_выбранны�
     assert previews[0]["kind"] == "training", "выбранный тип подменён репетицией"
     assert previews[0]["participants"], "состав окна не передан"
     assert not page.svoi_errors, page.svoi_errors
+
+
+# Роль без права `schedule.slots` (труппа) — заголовок стенда, как в
+# `test_miniapp_week_rights.py`: один стенд проверяет оба пути прав.
+PARTICIPANT = {"X-SVOI-Role": "participant"}
+
+
+def test_без_права_экран_говорит_о_праве_а_не_о_сети(app_page) -> None:
+    """403 на список людей — «раздел не для вашей роли», а не «люди не загрузились».
+
+    Карта t_f802d135: экран писал «Люди не загрузились. Потяните экран вниз» в ответ
+    на 403, и человек тянул экран бесконечно. Принципы 91: 8 (ошибка говорит, что
+    делать), 9 (пусто — не тупик), Б3 (роль видна словами); право `schedule.slots`
+    у труппы отсутствует (docs/architecture/25 §9.2, С6).
+    """
+    page = app_page("/webapp/slots", headers=PARTICIPANT)
+    page.wait_for_selector("#denied:not([hidden])", timeout=10_000)
+
+    text = page.locator("#denied").inner_text()
+    assert "организатор" in text.lower(), text
+    assert "администратор" in text.lower(), text
+    assert "Потяните экран вниз" not in page.inner_text("body"), \
+        "403 подан как сбой сети: человек будет тянуть экран вниз бесконечно"
+    assert "Люди не загрузились" not in page.inner_text("body")
+    assert page.locator("#search-form").is_hidden(), "форма поиска без права — тупик"
+    assert not page.svoi_errors, page.svoi_errors
