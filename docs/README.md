@@ -11,9 +11,9 @@
 |---|---|---|
 | [Архитектура](architecture/) | модель данных, правила, алгоритмы, границы систем | 21 |
 | [Инфраструктура](infrastructure/) | Google, календари, уведомления, развёртывание | 10 |
-| [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 35 |
+| [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 36 |
 | [Планы](plans/) | роадмап, планы развития | 8 |
-| [Отчёты](reports/) | датированные срезы: чекпойнты, аудиты, покрытие, смоук-тесты | 55 |
+| [Отчёты](reports/) | датированные срезы: чекпойнты, аудиты, покрытие, смоук-тесты | 56 |
 | [Архив](archive/) | устаревшее и историческое; не правило, а запись | 7 |
 
 ## Архитектура
@@ -102,6 +102,7 @@
 | 107 | [107-kanban-risk-routing.md](development/107-kanban-risk-routing.md) | 107. Проверка по риску: когда карту смотрит worker-test |
 | 108 | [108-agent-mode.md](development/108-agent-mode.md) | 108. Агентный режим свободного текста: `/tools/agent/ask` |
 | 125 | [125-kanban-backoff.md](development/125-kanban-backoff.md) | 125. Отступление после лимита провайдера и потолок прогонов |
+| 141 | [141-miniapp-design-review.md](development/141-miniapp-design-review.md) | 141. Дизайн-ревью экранов Mini App: экраны, роли, критерии, стенд |
 
 ## Планы
 
@@ -179,6 +180,7 @@
 | 136 | [136-gitleaks-inventory.md](reports/136-gitleaks-inventory.md) | Секреты в индексе и истории: прогон gitleaks |
 | 137 | [137-public-repo-file-decisions.md](reports/137-public-repo-file-decisions.md) | Публичный репозиторий: файл → решение |
 | 138 | [138-prod-history-provenance.md](reports/138-prod-history-provenance.md) | Прод и происхождение checkout: разрыва истории приватного репозитория нет |
+| 142 | [142-design-review-2026-11-08.md](reports/142-design-review-2026-11-08.md) | 142. Дизайн-ревью экранов Mini App: замер, приговоры, дефекты |
 
 ---
 
