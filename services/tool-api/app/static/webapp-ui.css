@@ -577,3 +577,49 @@ body.ui-page {
   gap: var(--ui-s1);
   flex: 0 0 auto;
 }
+
+/* ---------- Главная: загрузка (docs/development/148) ----------
+
+   Знак «СВОИ» постоянный: он не подменяется именем человека, поэтому у него
+   своя типографика и своё место в разметке. Имя и роль занимают отдельные строки,
+   на их месте стоит скелет — часть типографики, а не картинка: высота полосы
+   равна высоте будущей строки (1.45em), поэтому подмена содержимого не двигает
+   соседей. Карточка недели настоящая с первого кадра. */
+
+.ui-logo { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 700; }
+
+/* Текст только для скринридера: объявление о загрузке не занимает места. */
+.ui-sr-only {
+  position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0;
+  overflow: hidden; clip: rect(0 0 0 0); clip-path: inset(50%);
+  white-space: nowrap; border: 0;
+}
+
+.ui-skeleton--line-title,
+.ui-skeleton--line-text { display: block; height: 1.45em; border-radius: 6px; }
+
+#home-loading, .ui-home { display: flex; flex-direction: column; gap: var(--ui-s4); }
+/* Экран не «схлопывается» до ответа: высота считается от вкладок, вторая строка —
+   фолбэк для старого WebKit без dvh. */
+#home-loading {
+  min-height: calc(100vh - var(--ui-tabbar-h) - var(--ui-s6) - env(safe-area-inset-bottom));
+  min-height: calc(100dvh - var(--ui-tabbar-h) - var(--ui-s6) - env(safe-area-inset-bottom));
+}
+/* Имя и подпись роли — один заголовочный блок: 8 px между строками. */
+.ui-home > #name, #home-loading > #name { margin: 0 0 calc(-1 * var(--ui-s2)); }
+
+/* Пустая строка счётчика держит свою высоту: иначе при marked = 0 карточка
+   сжимается на 19 px уже после подмены. */
+#week-meta { display: block; min-height: 1.45em; }
+
+/* Появление готового содержимого и ответ на «Повторить»: одна короткая заливка
+   вместо резкой смены кадра. Порог — 120 мс, меньше заметного мигания. */
+.ui-fade-in { animation: ui-fade-in 120ms ease-out; }
+@keyframes ui-fade-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* Кнопка «Повторить» внутри сообщения об ошибке на месте скелета. */
+.ui-alert .ui-btn { margin-top: var(--ui-s2); }
+
+@media (prefers-reduced-motion: reduce) {
+  .ui-fade-in { animation: none; }
+}
