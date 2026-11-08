@@ -268,6 +268,90 @@ def test_дефект_по_тесту_не_размножается_на_стр�
     assert [defect["requirement"] for defect in defects] == ["FR-A1"]
 
 
+def _cm07_rows() -> list[dict]:
+    """Строка FR-F5 документа 19: удаление в ней есть, но правила — документа 86."""
+    return [{"id": "FR-F5", "text": "Файлы студии: загрузка, удаление, доступ по праву",
+             "priority": "P1", "status": "частично", "confirm": "код", "line": 122}]
+
+
+def _cm07_steps(result: str = "провал") -> list[dict]:
+    """Шаги СМ-7: загрузка и доступ по праву доказаны, удаление — требование документа 86."""
+    base = {"scenario": "СМ-7", "title": "", "roles": [], "domain": "", "cause": "",
+            "severity": "важно"}
+    return [
+        {**base, "step": "3. POST /files/upload", "expected": "200", "actual": "200",
+         "evidence": "x", "result": "пройдено", "requirements": ["FR-F5"]},
+        {**base, "step": "6. удаление файла (DELETE /files/{id})",
+         "expected": "код 200 и файл больше не отдаётся",
+         "actual": "удаление 405, повторное чтение 200", "evidence": "x", "result": result,
+         "requirements": ["FR-M8", "FR-K5", "FR-L8"]},
+    ]
+
+
+def _cm07_report(**overrides) -> dict:
+    """Отчёт по СМ-7: провал удаления — требование документа 86, а не строка FR-F5."""
+    rows = _cm07_rows()
+    matrix = {"FR-F5": [{"file": "tests/smoke/test_cm07_files.py",
+                         "test": "test_cm07_files"}]}
+    outcomes = {("tests/smoke/test_cm07_files.py", "test_cm07_files"):
+                {"result": "провал", "message": "boom"}}
+    steps = _cm07_steps()
+    requirements, _ = smoke_report.build_requirements(rows, matrix, outcomes, steps, [],
+                                                      "2026-11-08")
+    defects = smoke_report.build_defects(steps, requirements, outcomes, matrix)
+    return _minimal_report(requirements=requirements, scenarios=steps, defects=defects,
+                           **overrides)
+
+
+def test_провал_требования_документа_86_не_красит_строку_19():
+    """146 §5/Д-02: провал удаления (FR-M8/FR-K5/FR-L8, `docs/86`) — дефект с картой.
+
+    Строка `FR-F5` документа 19 больше не провал: удаление — правило документа 86, в силе
+    по ответу V-045, и закрывается картой `t_d4350819`. Провал по чужому документу в
+    `defects[]` называет полный ID, документ-источник и карту, а не красит строку 19.
+    """
+    report = _cm07_report()
+    assert [row["result"] for row in report["requirements"]] == ["пройдено"]
+    assert len(report["defects"]) == 1, "один проваленный шаг — один дефект, а не три"
+    defect = report["defects"][0]
+    assert defect["requirement"] == "FR-M8, FR-K5, FR-L8"
+    assert defect["document"] == "docs/development/86"
+    assert defect["card"] == "t_d4350819"
+    assert defect["scenario"] == "СМ-7"
+    problems = smoke_report.validate(report)
+    assert not any("карты-держателя" in item for item in problems)
+    md = smoke_report.render_markdown(report)
+    assert (f"| {defect['id']} | FR-M8, FR-K5, FR-L8 | docs/development/86 | СМ-7 |"
+            in md)
+    assert "закрывается картой `t_d4350819`" in md
+    assert "требование в силе (V-045, ответ владельца 08.11.2026)" in md
+
+
+def test_дефект_вне_документа_19_без_карты_валит_проверку():
+    """146 §5/Д-02: `--check` на дефекте вне документа 19 без карты — код 1.
+
+    Дефект по требованию другого документа без карты-держателя повисает без ответственного,
+    поэтому это ошибка отчёта, а не свободная строка. Неперечисленное требование вне
+    документа 19 — такая же ошибка: у него нет ни источника, ни карты.
+    """
+    defect = {"id": "Д-02", "requirement": "FR-M8", "requirement_ids": ["FR-M8"],
+              "document": "docs/development/86", "card": "", "scenario": "СМ-7",
+              "step": "6. удаление файла", "expected": "код 200", "actual": "405",
+              "evidence": "x", "severity": "важно", "decision": ""}
+    problems = smoke_report.validate(_minimal_report(defects=[defect]))
+    assert any("Д-02: требование FR-M8 вне документа 19 без карты-держателя" in item
+               for item in problems)
+    undeclared = {**defect, "requirement": "FR-Z9", "requirement_ids": ["FR-Z9"],
+                  "card": "t_x", "document": ""}
+    problems = smoke_report.validate(_minimal_report(defects=[undeclared]))
+    assert any("FR-Z9 нет ни в документе 19" in item for item in problems)
+    # требование документа 19 карты не требует: его держит строка матрицы
+    inside = {**defect, "requirement": "FR-C2", "requirement_ids": ["FR-C2"],
+              "document": "docs/development/19-functional-requirements.md"}
+    problems = smoke_report.validate(_minimal_report(defects=[inside]))
+    assert not any("карты-держателя" in item for item in problems)
+
+
 def _p1_rows(passed: int) -> list[dict]:
     """34 строки P1: `passed` из них с доказательством, остальные — без автотеста."""
     return [{"id": f"FR-P{i}", "priority": "P1",

@@ -1,0 +1,1392 @@
+{
+  "run": {
+    "marker": "SMOKE-20261108-01",
+    "date": "2026-11-08",
+    "commit": "",
+    "env": "стенд svoi_smoke"
+  },
+  "scenarios": [
+    {
+      "id": "СМ-1",
+      "title": "Вход, регистрация по коду, права и отказы",
+      "roles": [
+        "admin",
+        "org",
+        "master",
+        "troupe"
+      ],
+      "domain": "A1–A11",
+      "steps": [
+        {
+          "id": "СМ-1",
+          "step": "1. GET /health",
+          "expected": "код 200, поля ok/db/participants",
+          "actual": "код 200, поля ['archived', 'db', 'env', 'git_sha', 'ok', 'participants', 'started_at', 'time', 'tz_offset', 'uptime']",
+          "evidence": "GET /health → 200 {\"ok\":true,\"time\":\"2026-11-08T19:21:23+04:00\",\"tz_offset\":4.0,\"db\":\"postgres\",\"participants\":15,\"archived\":12,\"env\":\"dev\",\"git_sha\":\"unknown\",\"started_at\":\"2026",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "2. GET /tools/profile/me (admin)",
+          "expected": "код 200, имя владельца и права админа",
+          "actual": "код 200, имя Мамлютов Виктор, actions 24",
+          "evidence": "GET /tools/profile/me → 200 {\"ok\":true,\"name\":\"Мамлютов Виктор\",\"travel_minutes\":60,\"phone\":\"\",\"birth_date\":; GET /tools/me/capabilities → 200 {\"ok\":true,\"roles\":[\"admin\",\"org\",\"troupe\"],\"capabilities\":[\"admin.panel\",\"audit",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "3. POST /admin/invite + /tools/participants/register",
+          "expected": "код приглашения выдан, регистрация дала участника",
+          "actual": "код 200, статус registered, participant_id=47",
+          "evidence": "POST /admin/invite → 200 {\"ok\":true,\"code\":\"GR23YQ8J\",\"role\":\"troupe\",\"expires_at\":\"2026-11-09T19:21:23+0; POST /tools/participants/register → 200 {\"ok\":true,\"status\":\"registered\",\"participant\":{\"id\":47,\"chat_id\":900000015,\"display_name\":\"Смоук Приглашённый SMOKE-20261108-01\",\"person_key\":\"смоук-приглашенн",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "4. повторная регистрация того же chat_id",
+          "expected": "участник тот же (already_registered), дубля нет",
+          "actual": "код 200, статус already_registered, id=47",
+          "evidence": "POST /tools/participants/register → 200 {\"ok\":true,\"status\":\"already_registered\",\"participant\":{\"id\":47,\"chat_id\":900000015,\"display_name\":\"Смоук Приглашённый SMOKE-20261108-01\",\"person_key\":\"смоук-пр",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "5. GET /tools/participants (фильтр по маркеру)",
+          "expected": "один участник с маркером, без дубля",
+          "actual": "код 200, найдено 1",
+          "evidence": "GET /tools/participants → 200 {\"ok\":true,\"data\":[{\"id\":15,\"chat_id\":null,\"display_name\":\"Гагарина Александра\",; id=[47]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A3"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "6. GET /tools/me/capabilities (master)",
+          "expected": "роль master и возможности пакетом (>0)",
+          "actual": "код 200, роли ['master', 'troupe'], прав 10",
+          "evidence": "GET /tools/me/capabilities → 200 {\"ok\":true,\"roles\":[\"master\",\"troupe\"],\"capabilities\":[\"budget.read.self\",\"feedback.send\",\"files.access\",\"notes.write\",\"participants.view\",\"schedule.availabilit",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A5",
+            "FR-A6"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "7. GET /tools/participants (troupe)",
+          "expected": "403, причина названа кодом ошибки",
+          "actual": "код 403, code=capability_required",
+          "evidence": "GET /tools/participants → 403 {\"type\":\"https://svoi.local/errors/capability_required\",\"title\":\"Доступ запрещён\",\"status\":403,\"detail\":\"capability required: participants.view\",\"instance\":\"/to",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "8. GET /tools/audit/recent (org, admin)",
+          "expected": "org — 403, admin — 200 с записями",
+          "actual": "org 403, admin 200, действий 13",
+          "evidence": "GET /tools/audit/recent → 403 {\"type\":\"https://svoi.local/errors/capability_required\",\"title\":\"Доступ запрещён; GET /tools/audit/recent → 200 {\"ok\":true,\"data\":[{\"id\":322,\"ts\":\"2026-11-08T15:21:23.453744Z\",\"actor_type\":\"hu",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8",
+            "FR-A11"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "9. аудит содержит access.denied для труппы",
+          "expected": "есть запись access.denied от человека с чатом труппы",
+          "actual": "access.denied в списке: True",
+          "evidence": "audit actions: ['access.denied', 'admin.reconcile', 'agent.ask', 'availability.clear', 'availability.week', 'dues.tariff.set', 'feedback.decide', 'invite.create', 'note.create', 'participant.approve', 'participant.register', 'profile.updated']",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "10. POST /admin/archive → /tools/participants → /admin/unarchive",
+          "expected": "архив убирает из списка, возврат добавляет обратно",
+          "actual": "архив 200, в активных после архива 0, возврат 200, после возврата 1",
+          "evidence": "POST /admin/archive → 200 {\"ok\":true,\"participant_id\":47,\"name\":\"Смоук Приглашённый SMOKE-20261108-01\"}; GET /tools/participants → 200 {\"ok\":true,\"data\":[{\"id\":15,\"chat_id\":null,\"display_name\":\"Гагарина Александра\",; POST /admin/unarchive → 200 {\"ok\":true,\"participant_id\":47,\"name\":\"Смоук Приглашённый SMOKE-20261108-01\",\"st",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A7"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-1",
+          "step": "11. POST /admin/block → GET /tools/profile/me",
+          "expected": "блокировка: 403; возврат доступа: 200",
+          "actual": "блокировка 200, доступ 403, возврат 200",
+          "evidence": "POST /admin/block → 200 {\"ok\":true,\"participant_id\":47,\"name\":\"Смоук Приглашённый SMOKE-20261108-01\",\"st; GET /tools/profile/me → 403 {\"type\":\"https://svoi.local/errors/participant_inactive\",\"title\":\"Доступ запрещё; POST /admin/block → 200 {\"ok\":true,\"participant_id\":47,\"name\":\"Смоук Приглашённый SMOKE-20261108-01\",\"st",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A9"
+          ],
+          "severity": "важно",
+          "cause": ""
+        }
+      ]
+    },
+    {
+      "id": "СМ-10",
+      "title": "Отчёты и сводки: бюджет, занятость, сверка",
+      "roles": [
+        "admin",
+        "org"
+      ],
+      "domain": "G, F",
+      "steps": [
+        {
+          "id": "СМ-10",
+          "step": "1. POST /tools/budget/commit (сумма для сверки)",
+          "expected": "код 200",
+          "actual": "код 200, id=None",
+          "evidence": "POST /tools/budget/commit → 200 {\"ok\":true,\"tx\":{\"id\":565,\"period\":\"2026-11\",\"amount\":777.0,\"category\":\"Прочее\"},\"sheet\":\"ok\",\"sheet",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B3"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-10",
+          "step": "2. GET /tools/budget/summary = база",
+          "expected": "расход 2026-11: 832.0 = база",
+          "actual": "код 200, сводка 832.0, база 832.0",
+          "evidence": "GET /tools/budget/summary → 200 {\"ok\":true,\"project\":null,\"periods\":[{\"period\":\"2026-07\",\"income\":123700.0,\"expense\":189337.0,\"result\":-65637.0,\"ops\":18; select sum(amount) → 832.0",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B14",
+            "FR-F4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-10",
+          "step": "3. GET /webapp/money (org)",
+          "expected": "код 200, экран отдаёт данные бюджета",
+          "actual": "код 200",
+          "evidence": "GET /webapp/money → 200 <!doctype html> <html lang=\"ru\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=",
+          "result": "пройдено",
+          "requirements": [
+            "FR-F1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-10",
+          "step": "4. GET /webapp/week/month (org)",
+          "expected": "код 200, сетка месяца",
+          "actual": "код 200",
+          "evidence": "GET /webapp/week/month → 200 <!doctype html> <html lang=\"ru\"> <head> <meta charset=\"utf-8\"> <meta name=\"viewport\" content=\"width=",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H9"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-10",
+          "step": "5. POST /webapp/grid",
+          "expected": "405: записи в сетку нет",
+          "actual": "код 405",
+          "evidence": "POST /webapp/grid → 405 {\"type\":\"https://svoi.local/errors/method_not_allowed\",\"title\":\"Метод не поддерж",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H9"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-10",
+          "step": "6. листы «Журнал бота» и «Проверки»",
+          "expected": "в листе появились строки журнала и статус инвариантов",
+          "actual": "не проверено: нужен Google Sheets/Calendar (листа бюджета на стенде нет)",
+          "evidence": "строит scripts/build_reports.py через Google API; *_SPREADSHEET_ID в .env.smoke пуст",
+          "result": "пропущено",
+          "requirements": [
+            "FR-F3",
+            "FR-F2"
+          ],
+          "severity": "мелко",
+          "cause": "нужен Google Sheets/Calendar"
+        }
+      ]
+    },
+    {
+      "id": "СМ-11",
+      "title": "Деградация и публичные маршруты",
+      "roles": [
+        "без роли",
+        "admin"
+      ],
+      "domain": "H4–H10",
+      "steps": [
+        {
+          "id": "СМ-11",
+          "step": "1. GET /health без токена",
+          "expected": "код 200 и поля ok/db/participants",
+          "actual": "код 200, поля ['archived', 'db', 'env', 'git_sha', 'ok', 'participants', 'started_at', 'time', 'tz_offset', 'uptime']",
+          "evidence": "GET /health → 200 {\"ok\":true,\"time\":\"2026-11-08T19:21:23+04:00\",\"tz_offset\":4.0,\"db\":\"postgres\",\"participants\":16,\"archived\":12,\"env\":\"dev\",\"git_sha\":\"unknown\",\"started_at\":\"2026",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "2. GET /tools/participants без токена и автора",
+          "expected": "отказ 400 (actor_chat_id_required), данных нет",
+          "actual": "код 400, code=actor_chat_id_required",
+          "evidence": "GET /tools/participants → 400 {\"type\":\"https://svoi.local/errors/actor_chat_id_required\",\"title\":\"Некорректный запрос\",\"status\":400,\"detail\":\"Нужен заголовок X-Actor-Chat-Id\",\"instance\":\"/to",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "3. GET /tools/profile/me без токена",
+          "expected": "401 unauthorized",
+          "actual": "код 401, code=bad_service_token",
+          "evidence": "GET /tools/profile/me → 401 {\"type\":\"https://svoi.local/errors/bad_service_token\",\"title\":\"Требуется авторизация\",\"status\":401,\"detail\":\"Неверный сервисный токен\",\"instance\":\"/tools/profil",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "4. GET /tools/profile/me с неверным токеном",
+          "expected": "401",
+          "actual": "код 401",
+          "evidence": "GET /tools/profile/me → 401 {\"type\":\"https://svoi.local/errors/bad_service_token\",\"title\":\"Требуется авториз",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "5. GET /tools/profile/me с чужим chat_id",
+          "expected": "403 unknown_participant",
+          "actual": "код 403, code=unknown_participant",
+          "evidence": "GET /tools/profile/me → 403 {\"type\":\"https://svoi.local/errors/unknown_participant\",\"title\":\"Доступ запрещён\",\"status\":403,\"detail\":\"Участник не найден\",\"instance\":\"/tools/profile/me\",\"cod",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "6. GET /webapp/ui.css без токена",
+          "expected": "код 200: статика публична",
+          "actual": "код 200",
+          "evidence": "GET /webapp/ui.css → 200 /* Дизайн-система Mini App «СВОИ», версия 2 (docs/developmen",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H6"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "7. POST /tools/route при выключенном LLM",
+          "expected": "код 200 и error=llm_unavailable",
+          "actual": "код 200, error=llm_unavailable, engine=tool-api-fallback",
+          "evidence": "POST /tools/route → 200 {\"ok\":false,\"intent\":null,\"scenario\":null,\"category\":null,\"answer\":\"\",\"confidence\":null,\"error\":\"llm_unavailable\",\"detail\":\"LLM_API_KEY не задан\",\"engine\":\"tool",
+          "result": "пройдено",
+          "requirements": [
+            "FR-E5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "8. GET /tools/calendar/events без Google",
+          "expected": "честный отказ (5xx/503) или пустой список, сервис не падает",
+          "actual": "код 200, code=None",
+          "evidence": "GET /tools/calendar/events → 200 {\"ok\":false,\"error\":\"calendar_id_missing\",\"message\":\"CALENDAR_ID_READ/CALENDAR_ID_DRAFT не заданы в .env\"}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-11",
+          "step": "9. GET /webapp/admin/services (admin)",
+          "expected": "код 200, список сервисов с состоянием",
+          "actual": "код 200, сервисов 0",
+          "evidence": "GET /webapp/admin/services → 200 {\"ok\":true,\"overall\":\"warn\",\"rows\":[{\"key\":\"api\",\"title\":\"Мини-приложение\",\"meta\":\"ответ за 1 мс · сборка unknown · рабо",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H16"
+          ],
+          "severity": "важно",
+          "cause": ""
+        }
+      ]
+    },
+    {
+      "id": "СМ-12",
+      "title": "Аудит и уборка данных",
+      "roles": [
+        "admin"
+      ],
+      "domain": "A8",
+      "steps": [
+        {
+          "id": "СМ-12",
+          "step": "1. POST /tools/notes → audit_event",
+          "expected": "запись human с actor_id автора",
+          "actual": "код 200, аудит [['human', 45, 'note.create']]",
+          "evidence": "POST /tools/notes → 200 {\"ok\":true,\"note\":{\"id\":4,\"title\":\"Аудит-заметка SMOKE-20261108-01\",\"body\":\"смоук SMOKE-20261108-01\"; audit_event=[['human', 45, 'note.create']]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-12",
+          "step": "2. hash-цепочка аудита",
+          "expected": "записи с prev_hash длиной 64",
+          "actual": "записей с prev_hash: 348",
+          "evidence": "select count(*) from audit_event where length(prev_hash)=64 → 348",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-12",
+          "step": "3. объекты прогона помечены маркером",
+          "expected": "люди, заметки и расходы с маркером",
+          "actual": "объектов с маркером: 10",
+          "evidence": "participant+note+budget_tx с «SMOKE-20261108-01» → 10",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-12",
+          "step": "4. scripts/smoke_data.py cleanup",
+          "expected": "код 0, остатков по маркеру 0",
+          "actual": "код 0, вывод: ['остатков по маркеру: 0']",
+          "evidence": "cleanup --marker SMOKE-20261108-01 → 0; ['остатков по маркеру: 0']",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-12",
+          "step": "5. scripts/smoke_data.py check",
+          "expected": "код 0 и 0 в каждой таблице",
+          "actual": "код 0, остатки 0, итог месяца как до прогона: True",
+          "evidence": "check --marker SMOKE-20261108-01 --json → 0; counts={'feedback_answer': 0, 'feedback': 0, 'event_plan': 0, 'availability_hour': 0, 'note': 0, 'file_object': 0, 'budget_tx': 0, 'participant_discipline': 0, 'participant_capability_override': 0, 'participant_role': 0, 'participant': 0}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        }
+      ]
+    },
+    {
+      "id": "СМ-2",
+      "title": "Занятость: отметка, перезапись, импорт не затирает бота",
+      "roles": [
+        "troupe",
+        "org"
+      ],
+      "domain": "C1–C10",
+      "steps": [
+        {
+          "id": "СМ-2",
+          "step": "1. POST /tools/availability/parse («занят в среду с 10 до 12»)",
+          "expected": "интервал 10–12, день — ближайшая среда",
+          "actual": "код 200, day=2026-11-11, start=10, end=12",
+          "evidence": "POST /tools/availability/parse → 200 {\"ok\":true,\"day\":\"2026-11-11\",\"start\":10,\"end\":12,\"kind\":\"busy\",\"outside_work_day\":false,\"label\":\"2026-11-11 10:00–12:00, занят\"}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "2. POST /tools/availability/parse (дата с годом)",
+          "expected": "day=2027-01-07 — год из текста сохраняется",
+          "actual": "day=2026-01-07",
+          "evidence": "POST /tools/availability/parse → 200 {\"ok\":true,\"day\":\"2026-01-07\",\"start\":10,\"end\":12,\"kind\":\"busy\",\"outside_work_day\":false,\"label\":\"2026-01-07 10:00–12:00, занят\"}",
+          "result": "провал",
+          "requirements": [
+            "FR-C2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "3. POST /tools/availability/commit (занят 10–12)",
+          "expected": "2 строки availability_hour, is_free=false, source=bot",
+          "actual": "код 200, строк 2: [{'hour': 10, 'is_free': False, 'kind': 'busy', 'source': 'bot'}, {'hour': 11, 'is_free': False, 'kind': 'busy', 'source': 'bot'}]",
+          "evidence": "POST /tools/availability/commit → 200 {\"ok\":true,\"day\":\"2027-01-07\",\"hours\":\"10–12\"}; availability_hour=[{'hour': 10, 'is_free': False, 'kind': 'busy', 'source': 'bot'}, {'hour': 11, 'is_free': False, 'kind': 'busy', 'source': 'bot'}]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C2",
+            "FR-C9"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "4. повторный commit того же интервала (свободен)",
+          "expected": "те же 2 строки, is_free=true",
+          "actual": "код 200, строк 2, свободны 2",
+          "evidence": "POST /tools/availability/commit → 200 {\"ok\":true,\"day\":\"2027-01-07\",\"hours\":\"10–12\"}; availability_hour=[{'hour': 10, 'is_free': True, 'kind': 'free', 'source': 'bot'}, {'hour': 11, 'is_free': True, 'kind': 'free', 'source': 'bot'}]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "5. audit_event: availability.set",
+          "expected": "две записи об изменении",
+          "actual": "записей 2",
+          "evidence": "select count(*) from audit_event where action='availability.set' and actor_id=44 → 2",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C4",
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "6. GET /tools/availability/week",
+          "expected": "день отмечен и назван свободным",
+          "actual": "код 200, status=free, marked=True",
+          "evidence": "GET /tools/availability/week → 200 {\"ok\":true,\"start\":\"2027-01-04\",\"title\":\"04 — 10 января\",\"participant_id\":44,\"female\":false,\"days\":[{\"day\":\"2027-01-04\",\"marked\":false,\"status\":null,\"from\":null",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C9"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "7. GET /tools/availability/summary (org)",
+          "expected": "день в сводке, известных > 0",
+          "actual": "код 200, дней 90, known_cnt=2",
+          "evidence": "GET /tools/availability/summary → 200 {\"ok\":true,\"days\":90,\"data\":[{\"day\":\"2026-11-08\",\"free_cnt\":57,\"known_cnt\":112,\"people_cnt\":7,\"outside_hours\":0},{\"day\":\"2026-11-09\",\"free_cnt\":75,\"known_cnt\":1",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "8. GET /tools/availability/week?participant_id=чужой (troupe)",
+          "expected": "403: чужая неделя закрыта без schedule.read.all",
+          "actual": "код 403, code=capability_required",
+          "evidence": "GET /tools/availability/week → 403 {\"type\":\"https://svoi.local/errors/capability_required\",\"title\":\"Доступ запрещён\",\"status\":403,\"detail\":\"capability required: schedule.read.all\",\"instance\":\"/to",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-2",
+          "step": "9. импорт часовой матрицы не затирает ручную отметку",
+          "expected": "после импорта source='bot' строки сохраняют значение",
+          "actual": "не проверено: нужен Google Sheets/Calendar (импорт пишет в боевую таблицу расписания)",
+          "evidence": "scripts/import_schedule.py требует GOOGLE_SA_* и боевой таблицы; в .env.smoke их нет",
+          "result": "пропущено",
+          "requirements": [
+            "FR-C1",
+            "FR-C4"
+          ],
+          "severity": "мелко",
+          "cause": "нужен Google Sheets/Calendar"
+        },
+        {
+          "id": "СМ-2",
+          "step": "10. POST /tools/availability/template/from-week",
+          "expected": "шаблон сохранён из текущей недели",
+          "actual": "код 200, ok=True",
+          "evidence": "POST /tools/availability/template/from-week → 200 {\"ok\":true,\"filled\":1,\"days\":[{\"weekday\":3,\"status\":\"free\",\"from\":null,\"to\":null,\"note\":\"\",\"text\":\"свободен\"}]}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-C10"
+          ],
+          "severity": "важно",
+          "cause": ""
+        }
+      ]
+    },
+    {
+      "id": "СМ-3",
+      "title": "Окна → назначение → уведомление → отмена/перенос",
+      "roles": [
+        "org",
+        "master"
+      ],
+      "domain": "D1–D9, D18–D22",
+      "steps": [
+        {
+          "id": "СМ-3",
+          "step": "1. POST /tools/availability/commit (свободен 10–13)",
+          "expected": "код 200: часы для окна отмечены",
+          "actual": "код 200, hours=10–13",
+          "evidence": "POST /tools/availability/commit → 200 {\"ok\":true,\"day\":\"2027-01-07\",\"hours\":\"10–13\"}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "2. POST /tools/schedule/slots",
+          "expected": "хотя бы одно окно на отмеченный день",
+          "actual": "код 200, окон 1: [{'date': None, 'from_hour': 10, 'to_hour': 13}]",
+          "evidence": "POST /tools/schedule/slots → 200 {\"ok\":true,\"windows\":[{\"day\":\"2027-01-07\",\"from_hour\":10,\"to_hour\":13,\"hours\":3,\"unknown\":[]}],\"text\":[\"четверг 07.01 10:00–13:00 (3 ч)\"],\"people\":{\"44\":\"Смоук ",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D5",
+            "FR-D6"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "3. POST /tools/events/assign",
+          "expected": "событие создано, строка event_plan есть",
+          "actual": "код 200, event_id=1, календарь=нет",
+          "evidence": "POST /tools/events/assign → 200 {\"ok\":true,\"event_id\":1,\"gcal_event_id\":null,\"in_calendar\":false,\"notified\":1,\"card\":{\"kind\":\"rehear; event_plan={'id': 1, 'title': 'Смоук репетиция SMOKE-20261108-01', 'starts_at': datetime.datetime(2027, 1, 7, 6, 0, tzinfo=zoneinfo.ZoneInfo(key='Etc/UTC')), 'ends_at': datetime.datetime(2027, 1, 7, 8, 0, tzinfo=zoneinfo.ZoneInfo(key='Etc/UTC')), 'participant_ids': [44], 'location': 'stage'}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D15",
+            "FR-H10"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "4. состав события = смоук-участник",
+          "expected": "participant_ids содержит 44",
+          "actual": "participant_ids=[44]",
+          "evidence": "select participant_ids from event_plan where id=1",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D15"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "5. участнику пришло уведомление о назначении",
+          "expected": "сообщение в чат участника с датой и местом",
+          "actual": "не проверено: нужен живой Telegram (доставку видно только в Telegram)",
+          "evidence": "стенд не отправляет сообщения живым людям; FR-H11 в документе 19 — «не начато»",
+          "result": "пропущено",
+          "requirements": [
+            "FR-H11"
+          ],
+          "severity": "мелко",
+          "cause": "нужен живой Telegram"
+        },
+        {
+          "id": "СМ-3",
+          "step": "6. POST /tools/events/cancel",
+          "expected": "код 200 и запись в аудите",
+          "actual": "код 200, событие=1, аудит event.*=2",
+          "evidence": "POST /tools/events/cancel → 200 {\"ok\":true,\"event_id\":1,\"already_cancelled\":false,\"status\":\"cancelled\",\"in_calendar\":false,\"calendar; audit_event event.*=2",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D18",
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "7. POST /tools/events/move",
+          "expected": "код 200, новое время в ответе",
+          "actual": "код 200, ответ {\"ok\":true,\"event_id\":2,\"changed\":true,\"starts_at\":\"2027-01-07T14:00:00+04:00\",\"ends_at\":\"2027-01-07T16:00:00+04:00\",\"in",
+          "evidence": "POST /tools/events/move → 200 {\"ok\":true,\"event_id\":2,\"changed\":true,\"starts_at\":\"2027-01-07T14:00:00+04:00\",\"ends_at\":\"2027-01-07T16:00:00+04:00\",\"in_calendar\":false,\"calendar_error\":null,\"",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D19"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "8. POST /tools/schedule/slots (block_events=true)",
+          "expected": "код 200: занятое событием время не предлагается",
+          "actual": "код 200, окон 1",
+          "evidence": "POST /tools/schedule/slots → 200 {\"ok\":true,\"windows\":[{\"day\":\"2027-01-07\",\"from_hour\":10,\"to_hour\":13,\"hours\":3,\"unknown\":[]}],\"text\":[\"четверг 07.01 10:00–13:00 (3 ч)\"],\"people\":{\"44\":\"Смоук ",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D16"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-3",
+          "step": "9. POST /tools/schedule/slots (master)",
+          "expected": "код 200: педагог ищет окна в рамках своей роли",
+          "actual": "код 200",
+          "evidence": "POST /tools/schedule/slots → 200 {\"ok\":true,\"windows\":[{\"day\":\"2027-01-07\",\"from_hour\":10,\"to_hour\":13,\"hours\":3,\"unknown\":[]}],\"text\":[\"четверг 07.01 10:00–13:00 (3 ч)\"],\"people\":{\"44\":\"Смоук ",
+          "result": "пройдено",
+          "requirements": [
+            "FR-D8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        }
+      ]
+    },
+    {
+      "id": "СМ-4",
+      "title": "Деньги: расход текстом, идемпотентность, сверка лист–БД, взносы",
+      "roles": [
+        "org",
+        "admin"
+      ],
+      "domain": "B1–B16",
+      "steps": [
+        {
+          "id": "СМ-4",
+          "step": "1. POST /tools/budget/parse",
+          "expected": "сумма 123 и тип expense, движок rules-py",
+          "actual": "код 200, amount=123, tx_type=expense, engine=rules-py",
+          "evidence": "POST /tools/budget/parse → 200 {\"ok\":true,\"draft\":{\"amount\":123,\"tx_type\":\"expense\",\"category\":\"Реквизит и костюмы\",\"tx_date\":\"2026-11-08\",\"purpose\":\"потратил 123 руб на реквизит\",\"project\":n",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B1",
+            "FR-E4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "2. POST /tools/budget/commit",
+          "expected": "код 200 и одна строка budget_tx на 123",
+          "actual": "код 200, строк 1, сумма 123.00",
+          "evidence": "POST /tools/budget/commit → 200 {\"ok\":true,\"tx\":{\"id\":563,\"period\":\"2027-01\",\"amount\":123.0,\"category\":\"Прочее\"},\"sheet\":\"ok\",\"sheet; budget_tx=[[563, Decimal('123.00'), 'expense', '2027-01']]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B3"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "3. повторный commit с тем же idempotency_key",
+          "expected": "та же операция, дубля нет",
+          "actual": "код 200, строк 1",
+          "evidence": "POST /tools/budget/commit → 200 {\"ok\":true,\"deduped\":true,\"tx\":{\"id\":563,\"period\":\"2027-01\",\"amount\":123.0,\"category\":\"Прочее\"},\"she; count=1",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B11"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "4. GET /tools/budget/summary = сумма budget_tx",
+          "expected": "расход за 2027-01: сводка 123.0 = база",
+          "actual": "код 200, сводка 123.0, база 123.0",
+          "evidence": "GET /tools/budget/summary → 200 {\"ok\":true,\"project\":null,\"periods\":[{\"period\":\"2026-07\",\"income\":123700.0,\"expense\":189337.0,\"result\":-65637.0,\"ops\":18; select sum(amount) → 123.0",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B14",
+            "FR-B12"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "5. audit_event: budget.* с автором",
+          "expected": "есть записи об операции организатора",
+          "actual": "записей 1",
+          "evidence": "select count(*) from audit_event where action like 'budget.%' and actor_id=45 → 1",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "6. POST /tools/dues/accrue дважды",
+          "expected": "начисление без дублей",
+          "actual": "первый 200, второй 200, строк за 2027-01: 1",
+          "evidence": "POST /tools/dues/accrue → 200 {\"ok\":true,\"period\":\"2027-01\",\"created\":1,\"skipped\":0,\"amount_total\":10000.0,\"rows\":[{\"participant_i; POST /tools/dues/accrue → 200 {\"ok\":true,\"period\":\"2027-01\",\"created\":0,\"skipped\":1,\"amount_total\":0.0,\"rows\":",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B7"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "7. GET /tools/dues/me (org)",
+          "expected": "код 200, только свои начисления",
+          "actual": "код 200, периодов 0",
+          "evidence": "GET /tools/dues/me → 200 {\"ok\":true,\"data\":[],\"current\":{\"period\":\"2026-11\",\"due\":0.0,\"paid\":0.0,\"settled\":false,\"charged\":false},\"debt\":0,\"tariff\":{\"tariff\":null,\"tariff_from\":null,\"am",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B7"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-4",
+          "step": "8. строка в листе и сверка лист–БД",
+          "expected": "операция появилась в листе «Транзакции», сверка без расхождений",
+          "actual": "не проверено: нужен Google Sheets/Calendar (запись в лист идёт через Google API)",
+          "evidence": "GOOGLE_SA_* и *_SPREADSHEET_ID в .env.smoke пусты: листа бюджета на стенде нет",
+          "result": "пропущено",
+          "requirements": [
+            "FR-B3",
+            "FR-B13"
+          ],
+          "severity": "мелко",
+          "cause": "нужен Google Sheets/Calendar"
+        }
+      ]
+    },
+    {
+      "id": "СМ-5",
+      "title": "Уведомления и рассылка: заголовок, «уйдёт N из M», дайджест",
+      "roles": [
+        "admin",
+        "org"
+      ],
+      "domain": "G1–G17",
+      "steps": [
+        {
+          "id": "СМ-5",
+          "step": "1. GET /tools/notifications/settings",
+          "expected": "код 200, тихие часы 20:00–08:00",
+          "actual": "код 200, quiet=20:00–08:00, source=defaults",
+          "evidence": "GET /tools/notifications/settings → 200 {\"ok\":true,\"settings\":{\"rehearsals\":true,\"dues\":true,\"schedule_changes\":true,\"quiet_from\":\"20:00\",\"quiet_to\":\"08:00\",\"source\":\"defaults\"}}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-G3"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-5",
+          "step": "2. POST /tools/notifications/settings",
+          "expected": "dues=false и тихие часы 21:00–07:00",
+          "actual": "код 200, dues=False, quiet=21:00–07:00, source=personal",
+          "evidence": "POST /tools/notifications/settings → 200 {\"ok\":true,\"settings\":{\"rehearsals\":true,\"dues\":false,\"schedule_changes\":true,\"quiet_from\":\"21:00\",\"quiet_to\":\"07:00\",\"source\":\"personal\"}}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-G17"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-5",
+          "step": "3. GET /webapp/admin/broadcast/preview",
+          "expected": "код 200, total и reachable посчитаны, reachable ≤ total",
+          "actual": "код 200, total=12, reachable=6, без Telegram 5",
+          "evidence": "GET /webapp/admin/broadcast/preview → 200 {\"ok\":true,\"total\":12,\"reachable\":6,\"no_telegram\":5,\"self\":1}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-G2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-5",
+          "step": "4. POST /webapp/admin/broadcast (dry_run)",
+          "expected": "код 200, отправки нет",
+          "actual": "код 200, получателей 0",
+          "evidence": "POST /webapp/admin/broadcast → 200 {\"ok\":true,\"dry_run\":true,\"recipients\":6}",
+          "result": "пройдено",
+          "requirements": [
+            "FR-G2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-5",
+          "step": "5. GET /webapp/admin/broadcast/preview (org)",
+          "expected": "403 по праву notify.send",
+          "actual": "код 403, code=capability_required",
+          "evidence": "GET /webapp/admin/broadcast/preview → 403 {\"type\":\"https://svoi.local/errors/capability_required\",\"title\":\"Доступ запрещён\",\"status\":403,\"detail\":\"capability required: notify.send\",\"instance\":\"/webapp/a",
+          "result": "пройдено",
+          "requirements": [
+            "FR-G2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-5",
+          "step": "6. доставка сообщения и недельный дайджест",
+          "expected": "сообщение в чате адресата, дайджест организатору в понедельник",
+          "actual": "не проверено: нужен живой Telegram (отправку видно только в живом чате)",
+          "evidence": "адресаты стенда — тестовые chat_id 900000011…; FR-G15 в документе 19 — «не начато»",
+          "result": "пропущено",
+          "requirements": [
+            "FR-G5",
+            "FR-G15"
+          ],
+          "severity": "мелко",
+          "cause": "нужен живой Telegram"
+        }
+      ]
+    },
+    {
+      "id": "СМ-6",
+      "title": "Обратная связь: обращение → очередь → ответ → автор получил",
+      "roles": [
+        "troupe",
+        "admin"
+      ],
+      "domain": "F, E",
+      "steps": [
+        {
+          "id": "СМ-6",
+          "step": "1. POST /tools/feedback",
+          "expected": "код 200, одна строка feedback от автора",
+          "actual": "код 200, id=42, строк 1",
+          "evidence": "POST /tools/feedback → 200 {\"ok\":true,\"id\":42,\"status\":\"new\",\"kind_title\":\"Проблема\",\"notified\":0}; feedback=[[42, 44, 'new']]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-I1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-6",
+          "step": "2. GET /tools/feedback?status=new (admin)",
+          "expected": "обращение в очереди с автором и временем",
+          "actual": "код 200, в очереди 1, наше: True",
+          "evidence": "GET /tools/feedback → 200 {\"ok\":true,\"data\":[{\"id\":42,\"kind\":\"bug\",\"text\":\"Смоук обращение SMOKE-20261108-01: кнопка не отвечает\",\"status\":\"new\",\"resolution\":null,\"created_at\":\"2026-11-0",
+          "result": "пройдено",
+          "requirements": [
+            "FR-I2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-6",
+          "step": "3. POST /tools/feedback/decide",
+          "expected": "статус done и текст решения в базе",
+          "actual": "код 200, статус=done, решение=True",
+          "evidence": "POST /tools/feedback/decide → 200 {\"ok\":true,\"id\":42,\"status\":\"done\",\"notified\":1,\"answer_id\":46}; feedback.status=done",
+          "result": "пройдено",
+          "requirements": [
+            "FR-I2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-6",
+          "step": "4. GET /tools/feedback/mine (автор)",
+          "expected": "своё обращение со статусом и ответом",
+          "actual": "код 200, найдено=True, статус=done, ответ=True",
+          "evidence": "GET /tools/feedback/mine → 200 {\"ok\":true,\"data\":[{\"id\":42,\"kind\":\"bug\",\"text\":\"Смоук обращение SMOKE-20261108-01: кнопка не отвечает\",\"status\":\"done\",\"resolution\":\"Смоук: проверено SMOKE-202",
+          "result": "пройдено",
+          "requirements": [
+            "FR-I1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-6",
+          "step": "5. feedback_answer связан с обращением",
+          "expected": "одна запись ответа",
+          "actual": "записей 1",
+          "evidence": "select count(*) from feedback_answer where feedback_id=42 → 1",
+          "result": "пройдено",
+          "requirements": [
+            "FR-I1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-6",
+          "step": "6. audit_event: feedback.* с автором",
+          "expected": "есть запись с автором",
+          "actual": "записей 86",
+          "evidence": "audit_event action like feedback.% → 86",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-6",
+          "step": "7. автору пришло сообщение с ответом",
+          "expected": "сообщение в чате автора с текстом ответа",
+          "actual": "не проверено: нужен живой Telegram (доставку видно только в живом чате)",
+          "evidence": "стенд не отправляет сообщения: адресаты — тестовые chat_id",
+          "result": "пропущено",
+          "requirements": [
+            "FR-I1"
+          ],
+          "severity": "мелко",
+          "cause": "нужен живой Telegram"
+        }
+      ]
+    },
+    {
+      "id": "СМ-7",
+      "title": "Файлы и заметки: загрузка, квота, доступ по праву, удаление",
+      "roles": [
+        "admin",
+        "org",
+        "master"
+      ],
+      "domain": "F1–F7, H",
+      "steps": [
+        {
+          "id": "СМ-7",
+          "step": "1. POST /tools/notes",
+          "expected": "код 200, строка note у автора",
+          "actual": "код 200, id=2, строка=[2, 44, 'personal']",
+          "evidence": "POST /tools/notes → 200 {\"ok\":true,\"note\":{\"id\":2,\"title\":\"Смоук заметка SMOKE-20261108-01\",\"body\":\"текст заметки SMOKE-2026; note=[2, 44, 'personal']",
+          "result": "пройдено",
+          "requirements": [
+            "FR-F7"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "2. GET /tools/notes (свои и чужие)",
+          "expected": "автор видит заметку, организатор — нет",
+          "actual": "свои: True, у организатора: False",
+          "evidence": "GET /tools/notes → 200 {\"ok\":true,\"count\":2,\"notes\":[{\"id\":2,\"title\":\"Смоук заметка SMOKE-20261108-01\",; GET /tools/notes → 200 {\"ok\":true,\"count\":1,\"notes\":[{\"id\":1,\"title\":\"Этика пространства\",\"body\":\"Взял ",
+          "result": "пройдено",
+          "requirements": [
+            "FR-F7"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "3. POST /files/upload",
+          "expected": "код 200, файл в базе и в хранилище стенда",
+          "actual": "код 200, id=1, квота 2048 МБ, строка=[1, 'SMOKE-20261108-01.txt', 'svoi-private', 'p30/dedbc3fe41c442a794b433ddfd3bf3d4.txt', 1036]",
+          "evidence": "POST /files/upload → 200 {\"ok\":true,\"id\":1,\"name\":\"SMOKE-20261108-01.txt\",\"kind\":\"text\",\"size_bytes\":1036,\"folder\":\"Личное/Мои документы\",\"duplic; file_object=[1, 'SMOKE-20261108-01.txt', 'svoi-private', 'p30/dedbc3fe41c442a794b433ddfd3bf3d4.txt', 1036]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-F5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "4. GET /files/{id}/content",
+          "expected": "код 200, те же байты",
+          "actual": "код 200, получено 1036 символов",
+          "evidence": "GET /files/1/content → 200 smoke file: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "result": "пройдено",
+          "requirements": [
+            "FR-F5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "5. GET /files/{id}/content (чужой)",
+          "expected": "403 или 404: доступ по праву",
+          "actual": "код 404, code=file_not_found",
+          "evidence": "GET /files/1/content → 404 {\"type\":\"https://svoi.local/errors/file_not_found\",\"title\":\"Не найдено\",\"status\":404,\"detail\":\"Файл не найден.\",\"instance\":\"/files/1/content\",\"code\":\"file_not_f",
+          "result": "пройдено",
+          "requirements": [
+            "FR-F5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "6. удаление файла (DELETE /files/{id})",
+          "expected": "код 200 и файл больше не отдаётся",
+          "actual": "удаление 405 (method_not_allowed), повторное чтение 200",
+          "evidence": "DELETE /files/1 → 405 {\"type\":\"https://svoi.local/errors/method_not_allowed\",\"title\":\"Метод не поддерживается\",\"status\":40; GET /files/1/content → 200 smoke file: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+          "result": "провал",
+          "requirements": [
+            "FR-M8",
+            "FR-K5",
+            "FR-L8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "7. audit_event: file.*",
+          "expected": "есть записи о загрузке и удалении",
+          "actual": "записей 3",
+          "evidence": "audit_event action like file.% → 3",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A8"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-7",
+          "step": "8. загрузка файла из чата Telegram",
+          "expected": "файл из чата попадает в file_object с uploaded_via=human_telegram",
+          "actual": "не проверено: нужен живой Telegram (файл приходит от Bot API)",
+          "evidence": "для этого нужен живой бот и чат; адресат стенда — 900000011",
+          "result": "пропущено",
+          "requirements": [
+            "FR-F5"
+          ],
+          "severity": "мелко",
+          "cause": "нужен живой Telegram"
+        }
+      ]
+    },
+    {
+      "id": "СМ-8",
+      "title": "Mini App: формы пишут, права отказывают, состояния экранов",
+      "roles": [
+        "admin",
+        "org",
+        "master",
+        "troupe"
+      ],
+      "domain": "H1–H16",
+      "steps": [
+        {
+          "id": "СМ-8",
+          "step": "1. POST /webapp/auth (admin)",
+          "expected": "код 200 и токен Mini App",
+          "actual": "токен получен: True",
+          "evidence": "POST /webapp/auth с initData, подписанным DEV_BOT_TOKEN → 200 (токен выдан)",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H6"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "2. GET /webapp/home/data (три роли)",
+          "expected": "200 у всех, разделов управления: admin > org > troupe = 0",
+          "actual": "коды 200/200/200, разделы 12/3/0",
+          "evidence": "GET /webapp/home/data → 200 {\"ok\":true,\"name\":\"Мамлютов Виктор\",\"role\":\"admin\",\"role_label\":\"администратор\",; GET /webapp/home/data → 200 {\"ok\":true,\"name\":\"Смоук Организатор SMOKE-20261108-01\",\"role\":\"org\",\"role_label; GET /webapp/home/data → 200 {\"ok\":true,\"name\":\"Смоук Актёр SMOKE-20261108-01\",\"role\":\"troupe\",\"role_label\":\"",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H6",
+            "FR-A5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "3. POST /webapp/notes/save",
+          "expected": "код 200 и строка note в базе",
+          "actual": "код 200, id=3, строка=[3, 44]",
+          "evidence": "POST /webapp/notes/save → 200 {\"ok\":true,\"note\":{\"id\":3,\"title\":\"Заметка из Mini App SMOKE-20261108-01\",\"body\":\"форма пишет SMOKE-; note=[3, 44]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H8",
+            "FR-F7"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "4. POST /webapp/tx/save (troupe)",
+          "expected": "403 по праву budget.write",
+          "actual": "код 403, code=capability_required",
+          "evidence": "POST /webapp/tx/save → 403 {\"type\":\"https://svoi.local/errors/capability_required\",\"title\":\"Доступ запрещён\",\"status\":403,\"detail\":\"capability required: budget.write\",\"instance\":\"/webapp/",
+          "result": "пройдено",
+          "requirements": [
+            "FR-A5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "5. POST /webapp/tx/save (org)",
+          "expected": "код 200 и строка budget_tx на 55",
+          "actual": "код 200, строк 1",
+          "evidence": "POST /webapp/tx/save → 200 {\"ok\":true,\"tx\":{\"id\":564,\"period\":\"2026-11\",\"amount\":55.0,\"category\":\"Прочее\"},\"sheet\":\"ok\",\"sheet_; budget_tx=[[564, Decimal('55.00')]]",
+          "result": "пройдено",
+          "requirements": [
+            "FR-B3",
+            "FR-H6"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "6. GET /webapp/week, /webapp/week/month, /webapp/money (org)",
+          "expected": "все три экрана отвечают 200",
+          "actual": "week 200, week/month 200, money 200",
+          "evidence": "GET /webapp/week → 200 <!doctype html> <html lang=\"ru\"> <head> <meta charset=\"utf-8; GET /webapp/week/month → 200 <!doctype html> <html lang=\"ru\"> <head> <meta charset=\"utf-8; GET /webapp/money → 200 <!doctype html> <html lang=\"ru\"> <head> <meta charset=\"utf-8",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H8",
+            "FR-H9"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "7. GET /webapp/admin/services (admin и troupe)",
+          "expected": "admin — 200 со списком сервисов, troupe — 403",
+          "actual": "admin 200, troupe 403",
+          "evidence": "GET /webapp/admin/services → 200 {\"ok\":true,\"overall\":\"warn\",\"rows\":[{\"key\":\"api\",\"title\":\"Мини-приложение\",\"meta\":\"ответ за 1 мс · с; GET /webapp/admin/services → 403 {\"type\":\"https://svoi.local/errors/capability_required\",\"tit",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H16",
+            "FR-A5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-8",
+          "step": "8. GET /webapp/tg.js",
+          "expected": "код 200 и Cache-Control с max-age",
+          "actual": "код 200",
+          "evidence": "GET /webapp/tg.js → 200 // WebView (function () { var eventHandlers = {}; var locationHash = ''; try { l",
+          "result": "пройдено",
+          "requirements": [
+            "FR-H6"
+          ],
+          "severity": "важно",
+          "cause": ""
+        }
+      ]
+    },
+    {
+      "id": "СМ-9",
+      "title": "Ассистент: каскад правил → модель → человек, «не понял» формой",
+      "roles": [
+        "org",
+        "troupe"
+      ],
+      "domain": "E1–E11, I1–I2",
+      "steps": [
+        {
+          "id": "СМ-9",
+          "step": "1. GET /tools/budget/summary (детерминированный ответ)",
+          "expected": "код 200",
+          "actual": "код 200, периодов 6",
+          "evidence": "GET /tools/budget/summary → 200 {\"ok\":true,\"project\":null,\"periods\":[{\"period\":\"2026-07\",\"income\":123700.0,\"expense\":189337.0,\"resul",
+          "result": "пройдено",
+          "requirements": [
+            "FR-E4"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-9",
+          "step": "2. POST /tools/budget/parse (правила)",
+          "expected": "движок rules-py, сумма 300",
+          "actual": "код 200, engine=rules-py, amount=300, category=Реквизит и костюмы",
+          "evidence": "POST /tools/budget/parse → 200 {\"ok\":true,\"draft\":{\"amount\":300,\"tx_type\":\"expense\",\"category\":\"Реквизит и костюмы\",\"tx_date\":\"2026-11-08\",\"purpose\":\"потратил 300 на реквизит\",\"project\":null,",
+          "result": "пройдено",
+          "requirements": [
+            "FR-E9",
+            "FR-B1"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-9",
+          "step": "3. POST /tools/route (LLM недоступен)",
+          "expected": "код 200, error=llm_unavailable, engine=tool-api-fallback",
+          "actual": "код 200, error=llm_unavailable, engine=tool-api-fallback, answer=False",
+          "evidence": "POST /tools/route → 200 {\"ok\":false,\"intent\":null,\"scenario\":null,\"category\":null,\"answer\":\"\",\"confidence\":null,\"error\":\"llm_unavailable\",\"detail\":\"LLM_API_KEY не задан\",\"engine\":\"tool",
+          "result": "пройдено",
+          "requirements": [
+            "FR-E5",
+            "FR-E2"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-9",
+          "step": "4. POST /tools/assistant/ask (LLM недоступен)",
+          "expected": "код 200 или 503 с честной причиной, без выдуманного числа",
+          "actual": "код 503, error=None",
+          "evidence": "POST /tools/assistant/ask → 503 {\"type\":\"https://svoi.local/errors/llm_unavailable\",\"title\":\"Сервис временно недоступен\",\"status\":503,\"detail\":\"AI-помощник не подключён: обратитесь к администр",
+          "result": "пройдено",
+          "requirements": [
+            "FR-E5"
+          ],
+          "severity": "важно",
+          "cause": ""
+        },
+        {
+          "id": "СМ-9",
+          "step": "5. запись в intent_log после разбора реплики",
+          "expected": "строка intent_log с фразой, намерением и уверенностью",
+          "actual": "не проверено: нужен LLM (недетерминизм) (разбор реплики без модели не исполняется)",
+          "evidence": "разбор реплики делает ветка роутера/ассистента, которой нужен LLM; на стенде LLM_API_KEY пуст",
+          "result": "пропущено",
+          "requirements": [
+            "FR-E10"
+          ],
+          "severity": "мелко",
+          "cause": "нужен LLM (недетерминизм)"
+        },
+        {
+          "id": "СМ-9",
+          "step": "6. порог 0.7 при разборе моделью",
+          "expected": "ответ с уверенностью ниже 0.7 превращается в форму",
+          "actual": "не проверено: нужен LLM (недетерминизм) (ответ модели на стенде недоступен)",
+          "evidence": "на стенде модель не настроена: ветка каскада с моделью не исполняется",
+          "result": "пропущено",
+          "requirements": [
+            "FR-E9",
+            "FR-E6"
+          ],
+          "severity": "мелко",
+          "cause": "нужен LLM (недетерминизм)"
+        },
+        {
+          "id": "СМ-9",
+          "step": "7. ответ «не понял» формой в чате",
+          "expected": "бот присылает форму вместо выдуманного ответа",
+          "actual": "не проверено: нужен живой Telegram (форма живёт в чате)",
+          "evidence": "форму рисует gateway в живом Telegram-чате",
+          "result": "пропущено",
+          "requirements": [
+            "FR-E5"
+          ],
+          "severity": "мелко",
+          "cause": "нужен живой Telegram"
+        }
+      ]
+    }
+  ]
+}

@@ -31,6 +31,10 @@
   * `не проверено` без причины из закрытого списка — ошибка отчёта, а не пустая клетка;
   * шаг сценария без `expected` или `actual` не засчитывается: разбор падает с кодом 1,
     а не пишет «пройдено» (К9);
+  * провал шага по требованию вне документа 19 (сейчас `docs/development/86`: FR-K5,
+    FR-M8, FR-L8) не ставит `провал` строке документа 19: он идёт дефектом с полным ID,
+    документом-источником и картой-держателем, а дефект без карты валит отчёт
+    (`docs/plans/146` §5, Д-02);
   * проверки прогона (К5 — `prepare` при остатках, К7 — два прогона в один день) —
     обязательный вход `--checks`: проверка без строки в отчёте не «молчит», а валит сборку
     (`run_checks` пуст или исход вне списка — ошибка, а не пустая клетка);
@@ -113,6 +117,21 @@ GATE_SCRIPTS = (
     ("scripts/check_registers.py", ("check_registers",)),
     ("scripts/check_deadcode.py", ("check_deadcode",)),
 )
+DOCUMENT_19 = "docs/development/19-functional-requirements.md"
+# Требования вне документа 19 (docs/plans/146 §5): провал шага по такому требованию не ставит
+# `провал` ни одной строке документа 19 — у него своя строка в другом документе. Дефект
+# получает полный ID, документ-источник и карту-держатель: без карты он повисает без
+# ответственного, поэтому неперечисленное здесь требование вне документа 19 валит отчёт
+# (код 1), а не печатается «просто дефектом». Запись здесь — единственное место, где
+# сказано, чем держится требование; шаг сценария называет только ID (Д-02, ответ V-045).
+OUTSIDE_REQUIREMENTS = {
+    "FR-M8": {"document": "docs/development/86", "card": "t_d4350819",
+              "decision": "V-045, ответ владельца 08.11.2026"},
+    "FR-K5": {"document": "docs/development/86", "card": "t_d4350819",
+              "decision": "V-045, ответ владельца 08.11.2026"},
+    "FR-L8": {"document": "docs/development/86", "card": "t_d4350819",
+              "decision": "V-045, ответ владельца 08.11.2026"},
+}
 
 
 # --- чтение входов -------------------------------------------------------------
@@ -502,23 +521,60 @@ def build_requirements(rows: list[dict], matrix: dict, outcomes: dict,
     return requirements, unmatched
 
 
+def requirement_attribution(ids: list[str], known: set[str]) -> dict:
+    """Документ-источник, карта-держатель и решение по требованию шага (146 §5).
+
+    Требование документа 19 — своя строка матрицы; требование другого документа (сейчас
+    `docs/development/86`) в матрице отсутствует, и провал по нему не красит ни одну строку
+    19. Карта-держатель берётся из `OUTSIDE_REQUIREMENTS`; её отсутствие — ошибка отчёта,
+    а не пустая клетка (`validate`).
+    """
+    documents, cards, decisions = [], [], []
+    for req_id in ids:
+        if req_id in known:
+            document, card, decision = DOCUMENT_19, "", ""
+        else:
+            source = OUTSIDE_REQUIREMENTS.get(req_id) or {}
+            document = source.get("document", "")
+            card = source.get("card", "")
+            decision = source.get("decision", "")
+        for bucket, value in ((documents, document), (cards, card), (decisions, decision)):
+            if value and value not in bucket:
+                bucket.append(value)
+    return {
+        "requirement_ids": list(ids),
+        "document": ", ".join(documents),
+        "card": ", ".join(cards),
+        "decision": "; ".join(decisions),
+    }
+
+
 def build_defects(steps: list[dict], requirements: list[dict], outcomes: dict,
                   matrix: dict) -> list[dict]:
-    """Дефекты: провал шага сценария и провал теста — с требованием, шагом и доказательством."""
+    """Дефекты: провал шага сценария и провал теста — с требованием, шагом и доказательством.
+
+    У проваленного шага один дефект, даже если он называет несколько требований: это один
+    факт («маршрута нет»), а не три. Требования печатаются полными ID, с документом-источником
+    и картой-держателем (146 §5): провал по документу 86 не красит строку FR-F5 документа 19
+    и не повисает без ответственного (Д-02).
+    """
+    known = {row["id"] for row in requirements}
     defects: list[dict] = []
     for step in steps:
         if step["result"] != "провал":
             continue
-        for req_id in step["requirements"] or ["—"]:
-            defects.append({
-                "requirement": req_id,
-                "scenario": step["scenario"],
-                "step": step["step"],
-                "expected": step["expected"],
-                "actual": step["actual"],
-                "evidence": step["evidence"],
-                "severity": step["severity"] if step["severity"] in SEVERITIES else "важно",
-            })
+        ids = list(step["requirements"])
+        defect = {
+            "requirement": ", ".join(ids) if ids else "—",
+            "scenario": step["scenario"],
+            "step": step["step"],
+            "expected": step["expected"],
+            "actual": step["actual"],
+            "evidence": step["evidence"],
+            "severity": step["severity"] if step["severity"] in SEVERITIES else "важно",
+        }
+        defect.update(requirement_attribution(ids, known))
+        defects.append(defect)
     failed_tests = [req_id for req_id, entries in matrix.items()
                     if any((outcome_for(outcomes, entry) or {}).get("result") == "провал"
                            for entry in entries)]
@@ -547,6 +603,7 @@ def build_defects(steps: list[dict], requirements: list[dict], outcomes: dict,
             "actual": "тест упал в junit",
             "evidence": evidence,
             "severity": "важно",
+            **requirement_attribution([requirement["id"]], known),
         })
     for number, defect in enumerate(defects, start=1):
         defect["id"] = f"Д-{number:02d}"
@@ -784,15 +841,29 @@ def render_markdown(report: dict) -> str:
                          f"{item['now']} ({item['now_cause']})")
     lines += ["", "## 4. Дефекты", ""]
     if report["defects"]:
-        lines += ["| ID | Требование | Сценарий | Шаг | Ожидалось | Факт | Серьёзность |",
-                  "|---|---|---|---|---|---|---|"]
+        lines += ["| ID | Требование | Документ | Сценарий | Шаг | Ожидалось | Факт | Серьёзность "
+                  "| Карта |",
+                  "|---|---|---|---|---|---|---|---|---|"]
         for defect in report["defects"]:
             lines.append(f"| {defect['id']} | {defect['requirement']} | "
+                         f"{defect.get('document') or '—'} | "
                          f"{defect['scenario'] or '—'} | {defect['step']} | "
-                         f"{defect['expected']} | {defect['actual']} | {defect['severity']} |")
+                         f"{defect['expected']} | {defect['actual']} | {defect['severity']} | "
+                         f"{defect.get('card') or '—'} |")
         lines += ["", "Доказательства:", ""]
         for defect in report["defects"]:
             lines.append(f"- {defect['id']}: `{defect['evidence']}`")
+        outside = [defect for defect in report["defects"] if defect.get("card")]
+        if outside:
+            # 146 §5: провал по требованию другого документа не красит строку 19 —
+            # он называет документ-источник и карту, где дефект закрывается (Д-02).
+            lines += ["", "Атрибуция дефектов вне документа 19 (`docs/plans/146` §5):", ""]
+            for defect in outside:
+                decision = (f"требование в силе ({defect['decision']}), "
+                            if defect.get("decision") else "")
+                lines.append(f"- {defect['id']}: {defect['requirement']} — "
+                             f"`{defect.get('document') or '—'}`, {decision}"
+                             f"закрывается картой `{defect['card']}`")
     else:
         lines.append("Дефектов не найдено: провалов шагов и тестов нет.")
     lines += ["", "## 5. Проверки прогона (К5, К7)", ""]
@@ -900,7 +971,8 @@ def validate(report: dict) -> list[str]:
         if key not in report:
             problems.append(f"нет ключа {key}")
     requirements = report.get("requirements", [])
-    expected_rows = len(test_audit.requirement_rows())
+    known_rows = {row["id"] for row in test_audit.requirement_rows()}
+    expected_rows = len(known_rows)
     if len(requirements) != expected_rows:
         problems.append(f"строк матрицы {len(requirements)}, а требований в документе 19 — "
                         f"{expected_rows}")
@@ -957,6 +1029,23 @@ def validate(report: dict) -> list[str]:
         for field in ("requirement", "step", "expected", "actual", "evidence"):
             if not str(defect.get(field) or "").strip():
                 problems.append(f"{defect.get('id')}: пустое поле {field}")
+        # 146 §5: дефект по требованию вне документа 19 обязан назвать документ-источник
+        # и карту-держателя. Без карты он повисает без ответственного, и «дефект заведён»
+        # становится неправдой.
+        ids = defect.get("requirement_ids") or [
+            part.strip() for part in str(defect.get("requirement") or "").split(",")
+            if part.strip()]
+        for req_id in ids:
+            if req_id in known_rows:
+                continue
+            if req_id not in OUTSIDE_REQUIREMENTS:
+                problems.append(
+                    f"{defect.get('id')}: требование {req_id} нет ни в документе 19, ни среди "
+                    f"объявленных источников — дефект без документа и карты")
+            elif not str(defect.get("card") or "").strip():
+                problems.append(
+                    f"{defect.get('id')}: требование {req_id} вне документа 19 без "
+                    f"карты-держателя (docs/plans/146 §5)")
     # К5/К7: молчание недопустимо. Отчёт без раздела проверок прогона — такой же дефект,
     # как строка «нет автотеста» при наличии теста: критерий есть, а доказательства нет.
     if "run_checks" not in report:

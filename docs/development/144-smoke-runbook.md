@@ -149,7 +149,7 @@ env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py \
    "result": "пройдено"},
   {"id": "К7", "title": "два прогона в один день", "expected": "оба зелены",
    "actual": "1 failed, 11 passed; итоги совпали", "evidence": "marker-02/pytest.log",
-   "result": "провал", "defect": "FR-F5, карта t_61ec7e55"}]}
+   "result": "провал", "defect": "FR-M8/FR-K5 (удаление файла), карта t_d4350819"}]}
 ```
 
 Правила раздела: пустой `run_checks` или отсутствие ключа — отчёт не собирается (молчать

@@ -77,7 +77,8 @@ def test_cm07_files(journal, stand, people, admin, troupe, org, db):
         evidence=foreign.evidence(), ok=foreign.code in (403, 404),
         requirements=["FR-F5"])
 
-    # 6. Удаление файла: маршрута нет — это дефект, а не свойство стенда (FR-F5).
+    # 6. Удаление файла: маршрута нет — невыполненное требование FR-M8/FR-K5
+    # (`docs/development/86:359,394`), в силе по V-045, карта `t_d4350819`.
     deleted = admin.delete(f"/files/{file_id}")
     after = admin.request("GET", f"/files/{file_id}/content")
     journal.check(
@@ -86,7 +87,7 @@ def test_cm07_files(journal, stand, people, admin, troupe, org, db):
         actual=f"удаление {deleted.code} ({deleted.field('code')}), повторное чтение {after.code}",
         evidence=f"{deleted.evidence(100)}; {after.evidence(80)}",
         ok=deleted.ok and after.code in (404, 410, 403),
-        requirements=["FR-F5"])
+        requirements=["FR-M8", "FR-K5", "FR-L8"])
 
     # 7. Действие загрузки/удаления попало в аудит (FR-A8).
     audit = db.execute(
