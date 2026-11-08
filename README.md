@@ -197,7 +197,7 @@ python scripts/compose_manifest.py --role org --participant иванов   # ч�
 | [`ARCHITECTURE.md`](ARCHITECTURE.md) | границы, ADR, деградация, безопасность |
 | [`docs/architecture/11-business-rules.md`](docs/architecture/11-business-rules.md) | правила и инварианты — контракт с театром |
 | [`docs/development/12-bot-behavior.md`](docs/development/12-bot-behavior.md) | манифесты, формы, квоты, что где настраивается |
-| [`docs/development/13-registration.md`](docs/development/13-registration.md) | вход admin / org / студиец |
+| [`docs/development/13-registration.md`](docs/development/13-registration.md) | вход admin / org / студиец; педагог — в карточке |
 | [`docs/development/14-files-and-routing.md`](docs/development/14-files-and-routing.md) | файлы, БД, маршрутизация |
 | [`docs/archive/15-checkpoint.md`](docs/archive/15-checkpoint.md) | план / факт / остаток |
 | [`docs/development/16-test-strategy.md`](docs/development/16-test-strategy.md) | стратегия и требования к тестированию |

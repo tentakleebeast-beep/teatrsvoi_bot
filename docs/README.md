@@ -68,7 +68,7 @@
 | № | Документ | О чём |
 |---|---|---|
 | 12 | [12-bot-behavior.md](development/12-bot-behavior.md) | 12. Поведение бота: манифесты, формы, квоты, границы настройки |
-| 13 | [13-registration.md](development/13-registration.md) | 13. Регистрация: admin, организатор, студиец |
+| 13 | [13-registration.md](development/13-registration.md) | 13. Регистрация: admin, организатор, студиец, педагог |
 | 14 | [14-files-and-routing.md](development/14-files-and-routing.md) | 14. Файлы, БД и маршрутизация запросов |
 | 16 | [16-test-strategy.md](development/16-test-strategy.md) | 16. Требования к тестированию и стратегия покрытия |
 | 19 | [19-functional-requirements.md](development/19-functional-requirements.md) | 19. Функциональные требования |
