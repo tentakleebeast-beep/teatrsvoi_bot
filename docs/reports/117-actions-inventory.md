@@ -302,9 +302,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | `/webapp/broadcast` | `services/tool-api/app/pages/routes.py:132` | `misc.BROADCAST_PAGE` | `/webapp/admin/broadcast`, `/webapp/admin/broadcast/preview`, `/webapp/more` | нет |
 | `/webapp/dues` | `services/tool-api/app/pages/routes.py:107` | `misc.DUES_PAGE` | `/webapp/money`, `/webapp/my/dues` | нет |
 | `/webapp/feedback` | `services/tool-api/app/pages/routes.py:117` | `misc.FEEDBACK_PAGE` | `/webapp/feedback`, `/webapp/feedback/mine`, `/webapp/more` | нет |
-| `/webapp/files` | `services/tool-api/app/pages/routes.py:147` | `files.FILES_PAGE` | `/webapp/admin/overview`, `/webapp/files/commit`, `/webapp/files/list`, `/webapp/files/presign`, `/webapp/more` | нет |
-| `/webapp/folder` | `services/tool-api/app/pages/routes.py:157` | `files.FOLDER_PAGE` | — | нет |
-| `/webapp/home` | `services/tool-api/app/pages/routes.py:65` | `home.HOME_PAGE` | — | нет |
+| `/webapp/files` | `services/tool-api/app/pages/routes.py:147` | `files.FILES_PAGE` | `/webapp/admin/overview`, `/webapp/files/commit`, `/webapp/files/list`, `/webapp/files/presign`, `/webapp/files/{}/access`, `/webapp/files/{}/access/revoke`, `/webapp/folders`, `/webapp/folders/{}/delete`, `/webapp/folders/{}/rename`, `/webapp/more`, `/webapp/tags/pending`, `/webapp/tags/{}/approve` | нет |
+| `/webapp/folder` | `services/tool-api/app/pages/routes.py:157` | `files.FOLDER_PAGE` | `/webapp/admin/overview`, `/webapp/files`, `/webapp/folder/{}/files`, `/webapp/folder/{}/order`, `/webapp/folder/{}/zip` | нет |
+| `/webapp/home` | `services/tool-api/app/pages/routes.py:65` | `home.HOME_PAGE` | `/webapp/home/data` | нет |
 | `/webapp/money` | `services/tool-api/app/pages/routes.py:90` | `money.MONEY_PAGE` | `/webapp/admin/overview`, `/webapp/home/data`, `/webapp/my/dues` | нет |
 | `/webapp/more` | `services/tool-api/app/pages/routes.py:70` | `home.MORE_PAGE` | `/webapp/home/data` | нет |
 | `/webapp/notes` | `services/tool-api/app/pages/routes.py:152` | `notes.NOTES_PAGE` | `/webapp/admin/overview`, `/webapp/more`, `/webapp/notes/list`, `/webapp/notes/save` | нет |

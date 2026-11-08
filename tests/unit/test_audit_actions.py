@@ -121,17 +121,33 @@ def test_chat_inventory_has_commands_and_callbacks(inventory):
 
 
 def test_screens_are_resolved_to_page_code(inventory):
-    """У каждого экрана раскрыт код страницы, и почти каждый зовёт данные.
+    """У каждого экрана раскрыт код страницы, а без вызовов остаются только справочные.
 
-    Без вызовов остаются справочные экраны (`/webapp/ui` — витрина компонентов,
-    `/webapp/admin/t/audit` — лента событий приходит в разметке) и редиректы.
+    Без вызовов остаются ровно два справочных экрана: `/webapp/ui` — витрина
+    компонентов, `/webapp/admin/t/audit` — лента событий приходит в разметке.
+    Ожидание записано множеством путей, а не «len(screens) - N»: иначе экран,
+    потерявший адреса API при выносе вёрстки в новый модуль, проходит молча
+    (карта t_4632e576, урок L-035).
     """
     _, data = inventory
     assert data["screens"], "экранов не найдено"
     for screen in data["screens"]:
         assert screen["constant"] != "—", screen["path"]
-    calling = [screen for screen in data["screens"] if screen["endpoints"]]
-    assert len(calling) >= len(data["screens"]) - 4, "слишком много экранов без данных"
+    silent = {screen["path"] for screen in data["screens"] if not screen["endpoints"]}
+    assert silent == {"/webapp/admin/t/audit", "/webapp/ui"}, (
+        f"экраны без вызовов API: {sorted(silent)}")
+
+
+def test_home_screen_calls_home_data(inventory):
+    """Главная зовёт `GET /webapp/home/data` — вёрстка и скрипт лежат в `home_loading.py`.
+
+    Проверка держит раскрытие модуля страниц (`from app.pages import home_loading`,
+    `_SCRIPT_HOME = home_loading.SCRIPT`): если генератор перестанет понимать такую
+    связку, у Главной в инвентаре не останется адресов (карта t_4632e576).
+    """
+    _, data = inventory
+    home = {screen["path"]: screen for screen in data["screens"]}["/webapp/home"]
+    assert "/webapp/home/data" in home["endpoints"]
 
 
 def test_agent_tools_are_read_only(inventory):
