@@ -21,17 +21,18 @@ MAIN = (ROOT / "services" / "tool-api" / "app" / "api" / "admin.py").read_text(e
 
 
 def test_файлы_есть_вход_в_мини_апп():
-    """Строку «Файлы студии» отдаёт `/webapp/home/data` — и только администратору.
+    """Строку «Файлы студии» отдаёт `/webapp/home/data` — и тем, кому решил владелец.
 
     Страница — публичная константа (05b7d2b): права на момент отдачи HTML неизвестны,
     поэтому строка едет данными в `more.personal`, а рисует её скрипт страницы.
+    Решение V-039 (в): «Файлы студии» видят admin, org и master — право `files.access`.
     """
-    assert webapp_api.personal_rows(["admin.panel"]) == [
+    assert webapp_api.personal_rows(["files.access"]) == [
         {"title": "Файлы студии", "meta": "записи, фонограммы, тексты",
          "url": "/webapp/files"}]
-    # Заметки — личный раздел у всех (FR-F7): право `notes.write` есть у каждой роли,
-    # а файлы по-прежнему открыты только администратору.
-    assert webapp_api.personal_rows(["notes.write", "files.access"]) == [
+    # Заметки — отдельный личный раздел (FR-F7): право `notes.write` есть у каждой роли,
+    # и оно не подтягивает за собой файлы.
+    assert webapp_api.personal_rows(["notes.write"]) == [
         {"title": "Заметки", "meta": "личные и общие, с тегами", "url": "/webapp/notes"}]
     # В разметке строки файлов нет вовсе: её приносит ответ данных, а не страница.
     assert 'href="/webapp/files"' not in home.MORE_PAGE
