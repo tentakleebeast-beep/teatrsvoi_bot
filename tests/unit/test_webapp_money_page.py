@@ -83,3 +83,30 @@ def test_суммы_и_даты_по_русски_на_странице():
     assert "\\u2212" in money.TX_PAGE or "\u2212" in money.TX_PAGE
     for month in ("января", "октября", "декабря"):
         assert month in money.MONEY_PAGE
+
+
+def test_без_права_на_запись_нет_формы_а_есть_слова():
+    """Роль без `budget.write` не заполняет форму, которую сервер отклонит.
+
+    Обоснование: docs/91 принципы 8 («ошибка говорит, что делать») и 9 («пусто —
+    не тупик»), docs/92 §2: экран «Деньги: операции» — по `budget.write`.
+    """
+    # Форма отдаётся скрытой: право известно только из `/webapp/home/data`,
+    # а страница — публичная константа. Показ — после `can_record`.
+    assert 'id="tx-form" hidden' in money.TX_PAGE
+    assert "#tx-form[hidden]" in money.TX_PAGE, "скрытая форма останется видимой"
+    assert "display: none" in money.TX_PAGE
+
+    # Состояние без права — словом и с указанием, куда идти.
+    assert '<div class="ui-empty" id="tx-denied" hidden>' in money.TX_PAGE
+    denied = money.TX_PAGE.split('id="tx-denied"', 1)[1]
+    assert "Операции записывает организатор" in denied
+    assert "«Деньги»" in denied
+
+    # Права спрашиваем у сервера тем же ответом, что и «Главная».
+    assert 'fetch("/webapp/home/data")' in money.TX_PAGE
+    assert "body.can_record" in money.TX_PAGE
+    assert '"tx-form").hidden = false' in money.TX_PAGE
+    assert '"tx-denied").hidden = false' in money.TX_PAGE
+    # Категории грузятся только после подтверждённого права.
+    assert money.TX_PAGE.index("body.can_record") < money.TX_PAGE.index("loadCategories();")

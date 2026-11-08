@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import json
+
 import pytest
 
 
@@ -73,6 +75,29 @@ def test_форма_операции_показывает_итог_записи(
     assert "3 000" in text.replace("\xa0", " "), text
     assert "Аренда помещения" in text, text
     assert tx_page.input_value("#tx-amount") == ""
+
+
+def test_без_права_на_запись_формы_нет(app_page):
+    """У роли без `budget.write` экран не рисует форму: отказ приходит до заполнения.
+
+    Обоснование: docs/92 §2 (экран «Деньги: операции» — по `budget.write`),
+    docs/91 принципы 8 и 9.
+    """
+    page = app_page("/webapp/tx")
+    page.route("**/webapp/home/data", lambda route: route.fulfill(
+        status=200, content_type="application/json",
+        body=json.dumps({"ok": True, "name": "Студиец", "role": "troupe",
+                         "role_label": "труппа", "can_record": False})))
+    page.reload(wait_until="load")
+    page.wait_for_selector("#tx-denied:not([hidden])", timeout=10_000)
+
+    assert not page.is_visible("#tx-form"), "форма видна роли без права на запись"
+    assert not page.is_visible("#tx-save"), "кнопка «Записать» видна без права"
+    assert not page.is_visible("#tx-amount"), "поле суммы видно без права"
+    # Отказ словами и без «Записываю…» в тексте экрана: заполнять нечего.
+    body = page.inner_text("body")
+    assert "Операции записывает организатор" in body, body
+    assert "Записать" not in body, body
 
 
 def test_панель_люди_рисует_строки_и_ищет(app_page):

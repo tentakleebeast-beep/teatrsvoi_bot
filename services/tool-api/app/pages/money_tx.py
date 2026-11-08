@@ -2,6 +2,13 @@
 
 Одна форма: тип, сумма, категория, дата, статья, план/факт и одна кнопка
 «Записать». Разметка здесь, скрипт — в `pages/money_tx_script.py`.
+
+Права на запись (`budget.write`) на момент отдачи HTML неизвестны — страница
+публичная константа. Поэтому форма отдаётся скрытой (`#tx-form[hidden]`), а
+скрипт показывает её только после ответа `/webapp/home/data` с `can_record`.
+Человек без права видит состояние словами («Операции записывает организатор»)
+и не заполняет форму, которую сервер всё равно отклонит (docs/91 принципы 8, 9,
+docs/92 §2 таблица экранов: «Деньги: операции» — по `budget.write`).
 """
 
 from __future__ import annotations
@@ -9,7 +16,19 @@ from __future__ import annotations
 from app.pages import layout
 from app.pages.money_tx_script import _SCRIPT_TX
 
+# Обёртка формы — свой флекс-столбец: внутри общего `.ui-screen` она должна
+# держать тот же ритм, а `[hidden]` обязан перебивать `display: flex`
+# (иначе скрытая форма остаётся видимой — так уже было в `money.py`).
+_HEAD_TX = (
+    "<style>\n"
+    "  #tx-form { display: flex; flex-direction: column; gap: var(--ui-s4); }\n"
+    "  #tx-form[hidden], #tx-denied[hidden] { display: none; }\n"
+    "</style>"
+)
+
 _BODY_TX = (
+    '<div class="ui-small ui-muted" id="tx-status">Проверяю доступ…</div>'
+    '<div id="tx-form" hidden>'
     '<div class="ui-segmented" id="tx-type" role="group" aria-label="Тип операции">'
     '<button type="button" class="ui-segmented__item ui-segmented__item--on"'
     ' data-type="expense" aria-pressed="true">Расход</button>'
@@ -64,9 +83,17 @@ _BODY_TX = (
     '<div class="ui-actions ui-actions--bottom">'
     '<button type="button" class="ui-btn ui-btn--primary ui-btn--block" id="tx-save">'
     "Записать</button></div>"
+    "</div>"
+    # Состояние без права: словом, что происходит и где смотреть записанное.
+    '<div class="ui-empty" id="tx-denied" hidden>'
+    '<div class="ui-empty__title">Операции записывает организатор</div>'
+    '<div class="ui-empty__text">Расход и доход вносит организатор студии — '
+    "здесь их не добавить. Записанное за месяц видно в разделе «Деньги».</div>"
+    "</div>"
 )
 
 
-TX_PAGE = layout.page("Операция", _BODY_TX, back="/webapp/money", scripts=_SCRIPT_TX)
+TX_PAGE = layout.page("Операция", _BODY_TX, back="/webapp/money", head=_HEAD_TX,
+                      scripts=_SCRIPT_TX)
 
 __all__ = ["TX_PAGE"]
