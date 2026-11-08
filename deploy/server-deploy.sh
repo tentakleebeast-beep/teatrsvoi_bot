@@ -345,7 +345,7 @@ cmd_proxy() {
   systemctl reload caddy 2>/dev/null || systemctl restart caddy
 
   log "жду сертификаты: $SVOI_DOMAIN, $SVOI_STORAGE_DOMAIN"
-  local host i problems=0
+  local host i
   for host in "$SVOI_DOMAIN" "$SVOI_STORAGE_DOMAIN"; do
     for i in $(seq 1 30); do
       if curl -fsSI "https://$host" >/dev/null 2>&1; then
@@ -353,13 +353,18 @@ cmd_proxy() {
         break
       fi
       if [ "$i" = "30" ]; then
-        warn "сертификат $host не выпустился: journalctl -u caddy -n 50; проверьте DNS A-запись и порт 80"
-        problems=$((problems + 1))
+        # Основной домен без TLS — сайт недоступен, выкат валим. Поддомен хранилища —
+        # нет: без него не работает только загрузка файлов, а Caddy продолжает выпуск
+        # сам (ACME-лимит после неудачных проверок отпускает через час).
+        # shortcut: публичная загрузка ждёт сертификат поддомена, проверять по
+        # `journalctl -u caddy` и повторять `server-deploy.sh proxy`.
+        [ "$host" = "$SVOI_DOMAIN" ] \
+          && die "сертификат $host не выпустился: проверьте DNS A-запись и порт 80"
+        warn "сертификат $host не выпустился: загрузка файлов ждёт TLS, Caddy повторит выпуск"
       fi
       sleep 2
     done
   done
-  [ "$problems" -eq 0 ]
 }
 
 # -------------------------------------------------------------------- schema
