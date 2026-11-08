@@ -16,11 +16,13 @@ _BODY_SUMMARY = (
     + _DAYS
     + "</div>"
     + '<div class="ui-small ui-muted" id="status"></div>'
-    + '<a class="ui-btn ui-btn--primary ui-btn--block" id="to-slots" href="/webapp/slots">'
+    + '<a class="ui-btn ui-btn--primary ui-btn--block" id="to-slots" href="/webapp/slots" '
+    'data-svoi-cap="schedule.slots">'
     "Найти окно для события</a>"
     # Месяц — отдельное чтение (П-3, З9): сводка отвечает «кто свободен на неделе»,
     # сетка месяца — «что в таблице и где она расходится с базой».
-    + '<a class="ui-row" id="to-month" href="/webapp/week/month">'
+    + '<a class="ui-row" id="to-month" href="/webapp/week/month" '
+    'data-svoi-cap="schedule.read.all">'
     '<span class="ui-row__main">'
     '<span class="ui-row__title">Сетка месяца</span>'
     '<span class="ui-row__meta">люди и дни из Google-таблицы, только чтение</span></span>'

@@ -1,13 +1,18 @@
 name: ремонт схемы прода
 
-# Только DDL из репозитория: применяет указанные миграции к боевой базе и
-# перезапускает tool-api. Ничего не удаляет и не переписывает данные.
+# Только DDL из репозитория: применяет указанные миграции к боевой базе,
+# доводит учёт версии (alembic_version) и перезапускает tool-api. Ничего не удаляет
+# и не переписывает данные.
 #
 # Зачем отдельным workflow: обычный деплой миграции НЕ накатывает (в server-deploy.sh
 # это команда db/--migrate), поэтому схема на проде отстаёт от кода.
 #
 # Файлы берутся из checkout раннера, а не из /opt/svoi: на сервере лежит прошлый тег,
-# новых миграций там ещё нет.
+# новых миграций там ещё нет. По той же причине и alembic берётся из checkout раннера:
+# psql про Alembic не знает, и 08.11.2026 после наката 061 структура на проде была
+# впереди, а alembic_version — на 060. Выкат v0.8.0 упал на сверке версии и откатился.
+# Теперь после наката структура сверяется с db/init, и только потом версия ставится
+# на ревизию применённых файлов (`check_schema.py --stamp-head`).
 #
 # Пустой список файлов — только проверка состояния, база не меняется.
 # Запуск кнопкой Run workflow с явным подтверждением.
@@ -63,6 +68,41 @@ jobs:
               'docker exec -i svoi-postgres psql -U svoi -d svoi -v ON_ERROR_STOP=1 -q' < "$f"
             echo "  применено"
           done
+
+      - name: копия схемы и Alembic на сервер
+        # На сервере прошлый тег: новых ревизий в /opt/svoi ещё нет, поэтому цепочка
+        # и alembic.ini едут из checkout раннера во временный каталог с той же
+        # раскладкой (дерево читается по относительным путям, как в репозитории).
+        run: |
+          set -euo pipefail
+          tmp=/tmp/svoi-schema-repair
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "rm -rf '$tmp' && mkdir -p '$tmp'"
+          tar -cf - alembic.ini db/init deploy/check_schema.py services/tool-api/migrations \
+            | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+                "tar -xf - -C '$tmp'"
+          echo "SCHEMA_DIR=$tmp" >> "$GITHUB_ENV"
+
+      - name: учёт версии схемы (alembic current = head)
+        if: inputs.files != ''
+        env:
+          FILES: ${{ inputs.files }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "cd '$SCHEMA_DIR' && /opt/svoi/.venv/bin/python deploy/check_schema.py \
+               --stamp-head --env-file /opt/svoi/.env --files '$FILES'"
+
+      - name: версия схемы равна head
+        # Явная проверка, из-за отсутствия которой 08.11.2026 откатился выкат.
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "cd '$SCHEMA_DIR' && /opt/svoi/.venv/bin/python deploy/check_schema.py \
+               --expect-head --env-file /opt/svoi/.env" \
+            || { echo "ОШИБКА: alembic_version не равен head — следующий выкат остановится" >&2; \
+                 echo "на сервере: sudo deploy/server-deploy.sh db (alembic upgrade head)" >&2; \
+                 exit 1; }
 
       - name: состояние схемы
         run: |

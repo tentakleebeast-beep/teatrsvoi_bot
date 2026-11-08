@@ -10,12 +10,24 @@
     DATABASE_URL=... python3 deploy/check_schema.py            # только отчёт
     DATABASE_URL=... python3 deploy/check_schema.py --files    # плюс список файлов
     DATABASE_URL=... python3 deploy/check_schema.py --expect-head  # версия = head
+    DATABASE_URL=... python3 deploy/check_schema.py --stamp-head --files "db/init/061_master_role.sql"
 
 `--expect-head` — read-only сверка `alembic_version` с головой цепочки ревизий
 (docs/reports/132). Ею baseline после восстановления из дампа: `alembic stamp head`
 ставится только когда структура уже равна цепочке, иначе выкат останавливается.
 
-Код возврата 1, если чего-то не хватает.
+`--stamp-head` — та же сверка структуры, но с записью учёта: SQL, накатанный
+напрямую через psql (workflow `repair-schema.yml`), структуру меняет, а
+`alembic_version` — нет, и следующий выкат падает на сверке версии и откатывается
+(08.11.2026, v0.8.0). Флаг ставит версию на ревизию, соответствующую применённым
+файлам (`--files`), либо на head цепочки, если файлы не названы. Порядок жёсткий:
+сначала структура должна совпасть с db/init, потом двигается версия — «вперёд
+структуры» версия не уходит и назад не откатывается.
+
+`--env-file PATH` — взять `DATABASE_URL` из файла настроек, если переменной нет в
+окружении: на сервере настройки лежат в `/opt/svoi/.env`, а не в шелле раннера.
+
+Код возврата 1, если чего-то не хватает или версия не равна head.
 """
 
 from __future__ import annotations
@@ -28,6 +40,7 @@ from pathlib import Path
 import psycopg
 
 INIT_DIR = Path(__file__).resolve().parents[1] / "db" / "init"
+ROOT = INIT_DIR.parents[1]
 COLUMN_RE = re.compile(r"alter\s+table\s+(\w+)\s+add\s+column\s+if\s+not\s+exists\s+(\w+)", re.I)
 TABLE_RE = re.compile(r"create\s+table\s+if\s+not\s+exists\s+(\w+)", re.I)
 
@@ -45,16 +58,27 @@ def expected() -> tuple[dict[str, set[str]], dict[str, set[str]]]:
     return tables, columns
 
 
-def head_revision(root: Path) -> str:
-    """Голова цепочки ревизий из файлов, без подключения к базе."""
-    from alembic.config import Config  # noqa: PLC0415 — нужен только с --expect-head
+def script_directory(root: Path):
+    """Каталог ревизий Alembic: источник head и родословной версий."""
+    from alembic.config import Config  # noqa: PLC0415 — нужен только с --expect-head/--stamp-head
     from alembic.script import ScriptDirectory
 
-    script = ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
-    heads = script.get_heads()
+    return ScriptDirectory.from_config(Config(str(root / "alembic.ini")))
+
+
+def head_revision(root: Path) -> str:
+    """Голова цепочки ревизий из файлов, без подключения к базе."""
+    heads = script_directory(root).get_heads()
     if len(heads) != 1:
         raise RuntimeError(f"цепочка ревизий разветвлена: {sorted(heads)}")
     return heads[0]
+
+
+def chain(root: Path) -> list[str]:
+    """Ревизии от головы к началу цепочки: по ней считается «впереди/позади»."""
+    script = script_directory(root)
+    head = head_revision(root)
+    return [rev.revision for rev in script.iterate_revisions(head, "base")]
 
 
 def current_version(conn: psycopg.Connection) -> str | None:
@@ -68,11 +92,21 @@ def current_version(conn: psycopg.Connection) -> str | None:
     return rows[0][0] if len(rows) == 1 else None
 
 
+def structure_gaps(url: str) -> tuple[list[str], list[str]]:
+    """Чего не хватает базе по сравнению с db/init: таблицы и колонки."""
+    want_tables, want_columns = expected()
+    with psycopg.connect(url) as conn:
+        have_tables, have_columns = live(conn)
+    return (sorted(set(want_tables) - have_tables),
+            sorted(set(want_columns) - have_columns))
+
+
 def check_expect_head(url: str, root: Path) -> int:
     """0 — версия базы равна head цепочки; 1 — отстала или учёта нет."""
     with psycopg.connect(url) as conn:
         version = current_version(conn)
     head = head_revision(root)
+    print(version_line(version, head))
     if version is None:
         print(f"схема не применена: в alembic_version нет версии (head={head})")
         return 1
@@ -81,6 +115,112 @@ def check_expect_head(url: str, root: Path) -> int:
         return 1
     print(f"схема совпадает с Alembic: {head}")
     return 0
+
+
+def version_line(version: str | None, head: str) -> str:
+    """Строка в духе `alembic current`: по ней видно «SQL есть, учёта нет»."""
+    return f"alembic current: {version or 'нет'} | head: {head}"
+
+
+def target_revision(chain_list: list[str], files: list[str]) -> tuple[str, list[str]]:
+    """Какую ревизию ставить: максимум по применённым файлам, иначе head.
+
+    Имя файла `db/init/NNN_x.sql` — это и есть id ревизии (docs/reports/132).
+    Возвращает (ревизия, файлы без соответствующей ревизии).
+    """
+    known = set(chain_list)
+    mapped: list[str] = []
+    unknown: list[str] = []
+    for item in files:
+        stem = Path(item).stem
+        if stem in known:
+            mapped.append(stem)
+        else:
+            unknown.append(item)
+    if not mapped:
+        raise ValueError("ни один файл не соответствует ревизии Alembic: " + ", ".join(files))
+    order = {rev: index for index, rev in enumerate(chain_list)}
+    return max(mapped, key=lambda rev: order[rev]), unknown
+
+
+def stamp(url: str, root: Path, revision: str) -> None:
+    """Записать версию схемы тем же механизмом, что и деплой (`alembic stamp`)."""
+    from alembic import command  # noqa: PLC0415
+    from alembic.config import Config
+
+    cfg = Config(str(root / "alembic.ini"))
+    cfg.attributes["url"] = url
+    command.stamp(cfg, revision)
+
+
+def stamp_head(url: str, root: Path, files: list[str]) -> int:
+    """Довести учёт версии до применённой структуры — после psql-наката."""
+    chain_list = chain(root)
+    head = chain_list[0]
+    try:
+        target, unknown = target_revision(chain_list, files) if files else (head, [])
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    for item in unknown:
+        print(f"файл {item} не меняет версию схемы: ревизии с таким id в цепочке нет")
+
+    missing_tables, missing_columns = structure_gaps(url)
+    if missing_tables or missing_columns:
+        # Версия не обгоняет структуру: иначе выкат пройдёт сверку и упадёт на данных.
+        for name in missing_tables:
+            print(f"нет таблицы: {name}")
+        for name in missing_columns:
+            print(f"нет колонки: {name}")
+        print("структура отстаёт от db/init — версию не двигаю: "
+              "сначала накатите файлы (repair-schema files=… или server-deploy.sh db --migrate)")
+        return 1
+
+    with psycopg.connect(url) as conn:
+        version = current_version(conn)
+    print(version_line(version, head))
+
+    order = {rev: index for index, rev in enumerate(chain_list)}
+    if version == head:
+        print("версия схемы уже равна head: учёт актуален, ничего не меняю")
+        return 0
+    if version in order:
+        if order[version] < order[target]:
+            # Назад версия не идёт: применённый позже файл не отменяет учёт.
+            print(f"версия уже впереди цели {target}: оставляю {version}")
+            target = version
+        elif order[version] > order[target]:
+            print(f"ставлю версию {target} (было {version})")
+    else:
+        print(f"версия {version or 'отсутствует'} в цепочке этого checkout "
+              f"не найдена — ставлю {target} после сверки структуры")
+
+    if version != target:
+        stamp(url, root, target)
+    with psycopg.connect(url) as conn:
+        after = current_version(conn)
+    print(version_line(after, head))
+    if after != head:
+        later = chain_list[:order[after]] if after in order else []
+        print(f"версия {after} отстаёт от head {head}: передайте оставшиеся файлы "
+              f"({', '.join(f'db/init/{rev}.sql' for rev in later)}) "
+              f"или выполните на сервере server-deploy.sh db --migrate")
+        return 1
+    print(f"учёт версии приведён к head: {head}")
+    return 0
+
+
+def url_from_env_file(path: Path) -> str | None:
+    """DATABASE_URL из файла настроек: на сервере он в /opt/svoi/.env, не в шелле."""
+    for raw in path.read_text(encoding="utf-8").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        if key.strip() == "DATABASE_URL":
+            value = value.split(" #", 1)[0].strip().strip('"').strip("'")
+            return value or None
+    return None
 
 
 def live(conn: psycopg.Connection) -> tuple[set[str], set[str]]:
@@ -94,15 +234,44 @@ def live(conn: psycopg.Connection) -> tuple[set[str], set[str]]:
     return tables, columns
 
 
+def files_argument(argv: list[str]) -> list[str]:
+    """Значение `--files "a.sql b.sql"` — тот же формат, что у workflow."""
+    for index, arg in enumerate(argv):
+        if arg == "--files" and index + 1 < len(argv):
+            return argv[index + 1].split()
+        if arg.startswith("--files="):
+            return arg.split("=", 1)[1].split()
+    return []
+
+
 def main(argv: list[str]) -> int:
     url = os.getenv("DATABASE_URL")
     if not url:
+        for index, arg in enumerate(argv):
+            candidate = None
+            if arg == "--env-file" and index + 1 < len(argv):
+                candidate = argv[index + 1]
+            elif arg.startswith("--env-file="):
+                candidate = arg.split("=", 1)[1]
+            if candidate:
+                path = Path(candidate)
+                if not path.is_file():
+                    print(f"файл настроек не найден: {path}")
+                    return 2
+                url = url_from_env_file(path)
+                if not url:
+                    print(f"в {path} нет DATABASE_URL")
+                    return 2
+    if not url:
         print("DATABASE_URL не задан")
         return 2
-    show_files = "--files" in argv
+    show_files = any(arg == "--files" or arg.startswith("--files=") for arg in argv)
+
+    if "--stamp-head" in argv:
+        return stamp_head(url, ROOT, files_argument(argv))
 
     if "--expect-head" in argv:
-        return check_expect_head(url, INIT_DIR.parents[1])
+        return check_expect_head(url, ROOT)
 
     want_tables, want_columns = expected()
     with psycopg.connect(url) as conn:
