@@ -6,11 +6,29 @@
 Экран задаёт значения по умолчанию для всей студии. Частные настройки человека
 остаются в профиле (`/webapp/notifications`) и важнее общих: смена общего значения
 не переписывает то, что человек настроил себе сам (П-8, FR-G17).
+
+Право — `admin.panel`, и оно есть только у администратора. HTML — публичная
+константа, права на момент отдачи неизвестны, поэтому форма отдаётся скрытой
+(`#defaults-form[hidden]`) и показывается лишь после ответа
+`GET /webapp/admin/notifications/settings` со 200. Роль без права получает 403 и
+видит сообщение с ссылкой на свои настройки — до 08.11.2026 экран рисовал над
+ошибкой «Не хватает прав на это действие» переключатели и кнопку «Сохранить»,
+то есть предлагал сохранить то, что сохранить нельзя (принципы 91: 9, 12, Б3;
+карта t_5b401a86, дизайн-ревью 142 §3 строка 30).
 """
 
 from __future__ import annotations
 
 from app.pages.admin_core import screen
+
+# `.ui-section` — флекс, поэтому атрибут `hidden` его не прячет: правило нужно
+# своё (та же причина, что в `pages/money_tx.py`).
+_HEAD_NOTIFICATION_DEFAULTS = (
+    "<style>\n"
+    "  #defaults-form { display: flex; flex-direction: column; gap: var(--ui-s4); }\n"
+    "  #defaults-form[hidden], #denied[hidden] { display: none; }\n"
+    "</style>"
+)
 
 _SCRIPT_NOTIFICATION_DEFAULTS = r"""
   var KEYS = ["rehearsals", "dues", "schedule_changes"];
@@ -42,6 +60,20 @@ _SCRIPT_NOTIFICATION_DEFAULTS = r"""
     return false;
   }
 
+  /* Права `admin.panel` нет: общего экрана человеку не показываем вовсе —
+     ни переключателей, ни «Сохранить», они всё равно получат 403. Вместо формы
+     сообщение, у кого эти значения, и строка на свои настройки (принципы 91: 9, 12). */
+  function showDenied() {
+    $("defaults-form").hidden = true;
+    $("denied").hidden = false;
+    status("");
+  }
+
+  function showForm() {
+    $("denied").hidden = true;
+    $("defaults-form").hidden = false;
+  }
+
   function render(settings) {
     KEYS.forEach(function (key) { setOn(key, settings[key]); });
     $("quiet_from").value = String(settings.quiet_from || "20:00").slice(0, 5);
@@ -52,11 +84,13 @@ _SCRIPT_NOTIFICATION_DEFAULTS = r"""
     return auth().then(function (denied) {
       if (denied) { status(denied, true); return null; }
       return api("/webapp/admin/notifications/settings").then(function (res) {
+        if (res.status === 403) { showDenied(); return null; }
         if (res.status !== 200 || !res.body || !res.body.ok) {
           status(problem(res), true);
           return null;
         }
         render(res.body.settings || {});
+        showForm();
         status("");
         return res.body.settings;
       });
@@ -97,8 +131,24 @@ _SCRIPT_NOTIFICATION_DEFAULTS = r"""
 """
 
 _BODY_NOTIFICATION_DEFAULTS = """
-<div class="ui-small ui-muted" id="status" role="status"></div>
+<div class="ui-small ui-muted" id="status" role="status">Проверяю доступ…</div>
 
+<section class="ui-section" id="denied" hidden>
+  <div class="ui-empty">
+    <div class="ui-empty__title">Общие настройки — у администратора</div>
+    <div class="ui-empty__text">Что присылать по умолчанию и тихие часы для всей
+      студии задаёт администратор. Свои уведомления настраиваются отдельно.</div>
+  </div>
+  <div class="ui-list">
+    <a class="ui-row" href="/webapp/notifications">
+      <span class="ui-row__main"><span class="ui-row__title">Мои настройки уведомлений</span>
+        <span class="ui-row__meta">что и когда приходит лично вам</span></span>
+      <span class="ui-row__chevron">&#8250;</span>
+    </a>
+  </div>
+</section>
+
+<div id="defaults-form" hidden>
 <section class="ui-section">
   <div class="ui-section__head"><h2 class="ui-section__title">Что присылать по умолчанию</h2></div>
   <div class="ui-list" id="switches">
@@ -149,7 +199,9 @@ _BODY_NOTIFICATION_DEFAULTS = """
 </section>
 
 <button class="ui-btn ui-btn--primary ui-btn--block" id="save" type="button">Сохранить</button>
+</div>
 """
 
 NOTIFICATION_DEFAULTS_PAGE = screen("Уведомления", _BODY_NOTIFICATION_DEFAULTS,
-                                    _SCRIPT_NOTIFICATION_DEFAULTS)
+                                    _SCRIPT_NOTIFICATION_DEFAULTS,
+                                    head=_HEAD_NOTIFICATION_DEFAULTS)

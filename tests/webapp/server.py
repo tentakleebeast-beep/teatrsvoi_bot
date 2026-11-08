@@ -533,12 +533,26 @@ async def notifications_save(request: Request):
     return JSONResponse({"ok": True, "settings": body})
 
 
-app.add_api_route("/webapp/admin/notifications/settings", _data({
-    "ok": True,
+# Право `admin.panel` есть только у администратора, поэтому заголовок с другой
+# ролью стенд считает «без права»: экран общих значений не должен рисовать форму
+# тому, кому сохранять нельзя (142 §3 строка 30, карта t_5b401a86).
+NO_ADMIN_PANEL_ROLES = {"participant", "org", "master", "troupe"}
+
+
+@app.get("/webapp/admin/notifications/settings")
+async def admin_notifications_get(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_ADMIN_PANEL_ROLES:
+        return JSONResponse({"ok": False, "code": "capability_required",
+                             "detail": "capability required: admin.panel"},
+                            status_code=403)
     # Общие значения студии — те же 20:00–08:00 (FR-G3, FR-G17).
-    "settings": {"rehearsals": True, "dues": True, "schedule_changes": True,
-                 "quiet_from": "20:00", "quiet_to": "08:00"},
-}), methods=["GET"])
+    return JSONResponse({"ok": True,
+                         "settings": {"rehearsals": True, "dues": True,
+                                      "schedule_changes": True,
+                                      "quiet_from": "20:00", "quiet_to": "08:00"}})
 
 
 @app.post("/webapp/admin/notifications/settings")
