@@ -1,7 +1,7 @@
 {
   "version": 1,
   "number": "145",
-  "commit": "e9e58d5",
+  "commit": "4641267",
   "date": "2026-11-08",
   "env": "стенд svoi_smoke",
   "marker": "SMOKE-20261108-01",
@@ -16,8 +16,8 @@
     "p2": 7,
     "unset": 24,
     "with_tests": 59,
-    "test_refs": 764,
-    "unique_pairs": 477,
+    "test_refs": 765,
+    "unique_pairs": 478,
     "command": "env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json"
   },
   "layers": {
@@ -25,8 +25,8 @@
       {
         "layer": "core",
         "file": "/Users/viktormamlutov/svoi-smoke/run-2026-11-08/smoke-junit-core.xml",
-        "tests": 2954,
-        "passed": 2533,
+        "tests": 2955,
+        "passed": 2534,
         "failed": 0,
         "skipped": 421
       },
@@ -79,8 +79,8 @@
     }
   },
   "coverage": {
-    "pairs": 477,
-    "covered": 477,
+    "pairs": 478,
+    "covered": 478,
     "missing": []
   },
   "requirements": [
@@ -377,6 +377,7 @@
       "evidence": [
         "тест:tests/smoke/test_cm01_login.py::test_cm01_login (2026-11-08)",
         "тест:tests/smoke/test_cm06_feedback.py::test_cm06_feedback (2026-11-08)",
+        "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/smoke/test_cm12_audit_cleanup.py::test_cm12_audit_cleanup (2026-11-08)",
         "сценарий:СМ-1/8. GET /tools/audit/recent (org, admin) (2026-11-08)",
         "сценарий:СМ-1/9. аудит содержит access.denied для труппы (2026-11-08)",
@@ -784,6 +785,7 @@
       "status19": "готово",
       "line": 68,
       "evidence": [
+        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_фраза_про_занятость_даёт_карточку_а_не_подсказку (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_запись_только_после_подтверждения (2026-11-08)",
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_исправить_возвращает_в_форму (2026-11-08)",
@@ -793,14 +795,15 @@
         "тест:tests/unit/test_gateway_avail_text.py::test_aud4_трата_с_суммой_остаётся_карточкой_траты (2026-11-08)",
         "тест:tests/unit/test_rules_availability.py::test_явный_год_сохраняется (2026-11-08)",
         "тест:tests/unit/test_rules_availability.py::test_явный_год_осенью (2026-11-08)",
+        "тест:tests/unit/test_smoke_report.py::test_провал_теста_сценария_не_красит_строку_но_виден (2026-11-08)",
         "сценарий:СМ-2/1. POST /tools/availability/parse («занят в среду с 10 до 12») (2026-11-08)",
         "сценарий:СМ-2/2. POST /tools/availability/parse (дата с годом) (провал)",
         "сценарий:СМ-2/3. POST /tools/availability/commit (занят 10–12) (2026-11-08)"
       ],
       "result": "провал",
       "cause": "",
-      "matrix_tests": 10,
-      "matrix_measured": 10,
+      "matrix_tests": 11,
+      "matrix_measured": 11,
       "prod": "не проверено",
       "prod_cause": "нужен прод"
     },
@@ -833,6 +836,7 @@
       "status19": "частично",
       "line": 70,
       "evidence": [
+        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "сценарий:СМ-2/4. повторный commit того же интервала (свободен) (2026-11-08)",
         "сценарий:СМ-2/5. audit_event: availability.set (2026-11-08)",
         "сценарий:СМ-2/9. импорт часовой матрицы не затирает ручную отметку (не проверено: нужен Google Sheets/Calendar)"
@@ -864,6 +868,7 @@
         "тест:tests/integration/test_webapp_grid.py::test_сверка_открыта_по_праву_а_не_по_роли (2026-11-08)",
         "тест:tests/integration/test_webapp_grid.py::test_своя_отметка_не_попадает_чужому (2026-11-08)",
         "тест:tests/integration/test_webapp_grid.py::test_импорт_из_файла_не_перезаписывает_отметку_бота (2026-11-08)",
+        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/unit/test_gateway_schedule_text.py::test_день_с_отметками_показывает_часы_и_людей (2026-11-08)",
         "тест:tests/unit/test_gateway_schedule_text.py::test_день_без_отметок_не_пропадает (2026-11-08)",
         "тест:tests/unit/test_gateway_schedule_text.py::test_часы_вне_рабочего_дня_показаны_отдельно (2026-11-08)",
@@ -947,6 +952,7 @@
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_день_из_чата_читается_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_свободен_до_часа_из_чата_виден_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c10_обычная_неделя_запомненная_из_чата_видна_экрану (2026-11-08)",
+        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/unit/test_availability_template.py::test_fr_c10_неделя_становится_шаблоном_по_дням_недели (2026-11-08)",
         "тест:tests/unit/test_availability_template.py::test_fr_c10_шаблон_разворачивается_в_конкретные_даты (2026-11-08)",
         "тест:tests/unit/test_availability_template.py::test_fr_c10_заполнение_не_затирает_уже_отмеченные_дни (2026-11-08)",
@@ -1015,6 +1021,7 @@
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c9_свободен_до_часа_из_чата_виден_экраном (2026-11-08)",
         "тест:tests/integration/test_gateway_quiet_parity.py::test_fr_c10_обычная_неделя_запомненная_из_чата_видна_экрану (2026-11-08)",
         "тест:tests/integration/test_webapp_grid.py::test_импорт_из_файла_не_перезаписывает_отметку_бота (2026-11-08)",
+        "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/unit/test_availability_card.py::test_fr_c9_канон_для_всех_форм_записи (2026-11-08)",
         "тест:tests/unit/test_availability_card.py::test_fr_c9_женский_род_не_теряется_при_записи (2026-11-08)",
         "тест:tests/unit/test_availability_card.py::test_fr_c9_корпус_листа_переживает_перезапись (2026-11-08)",
@@ -1665,6 +1672,7 @@
         "тест:tests/integration/test_files_actions_screen.py::test_порядок_папок_сохраняется_и_одинаков_на_экране_и_в_чате (2026-11-08)",
         "тест:tests/integration/test_files_actions_screen.py::test_папку_создают_переименовывают_и_закрывают_с_экрана (2026-11-08)",
         "тест:tests/integration/test_files_actions_screen.py::test_участник_не_правит_папки_с_экрана (2026-11-08)",
+        "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/unit/test_files_one_upload_path.py::test_второго_пути_записи_нет (2026-11-08)",
         "тест:tests/unit/test_files_one_upload_path.py::test_поток_бота_идёт_общим_коммитом (2026-11-08)",
         "тест:tests/unit/test_files_one_upload_path.py::test_маршрут_загрузки_зовёт_общий_путь (2026-11-08)",
@@ -1716,6 +1724,7 @@
         "тест:tests/integration/test_notes_api.py::test_пустая_заметка_отклоняется (2026-11-08)",
         "тест:tests/integration/test_notes_api.py::test_экран_mini_app_читает_и_создаёт_ту_же_заметку (2026-11-08)",
         "тест:tests/integration/test_webapp_home.py::test_у_студийца_личное_без_файлов (2026-11-08)",
+        "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
         "тест:tests/unit/test_gateway_assign_dialog.py::test_живой_диалог_собирает_карточку_за_три_реплики (2026-11-08)",
         "тест:tests/unit/test_gateway_assign_dialog.py::test_карточка_собирается_и_одной_фразой (2026-11-08)",
         "тест:tests/unit/test_gateway_assign_dialog.py::test_интервал_времени_без_назначения_не_становится_расходом (2026-11-08)",
@@ -4528,6 +4537,86 @@
       "evidence": "DELETE /files/1 → 405 {\"type\":\"https://svoi.local/errors/method_not_allowed\",\"title\":\"Метод не поддерживается\",\"status\":40; GET /files/1/content → 200 smoke file: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
       "severity": "важно",
       "id": "Д-02"
+    },
+    {
+      "requirement": "FR-A8",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm07_files.py::test_cm07_files",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-03"
+    },
+    {
+      "requirement": "FR-C2",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-04"
+    },
+    {
+      "requirement": "FR-C4",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-05"
+    },
+    {
+      "requirement": "FR-C5",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-06"
+    },
+    {
+      "requirement": "FR-C10",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-07"
+    },
+    {
+      "requirement": "FR-C9",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm02_availability.py::test_cm02_availability (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-08"
+    },
+    {
+      "requirement": "FR-F5",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm07_files.py::test_cm07_files",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-09"
+    },
+    {
+      "requirement": "FR-F7",
+      "scenario": "",
+      "step": "тест:tests/smoke/test_cm07_files.py::test_cm07_files",
+      "expected": "тест проходит",
+      "actual": "тест упал в junit",
+      "evidence": "тест:tests/smoke/test_cm07_files.py::test_cm07_files (2026-11-08, провал сценария — отнесён к дефекту шага)",
+      "severity": "важно",
+      "id": "Д-10"
     }
   ],
   "delta": {

@@ -237,6 +237,32 @@ def test_провал_теста_сценария_не_красит_строку
     assert any("провал сценария" in item for item in requirements[0]["evidence"])
 
 
+def test_дефект_по_тесту_не_размножается_на_строки_файла():
+    """Д-02/146 §5: провал теста сценария даёт дефект шага, а не восемь дефектов FR.
+
+    Провал `test_cm02_availability` относится к своему шагу (FR-C2, карта `t_fd553b1b`);
+    остальные требования файла, доказанные шагами, не становятся дефектами.
+    """
+    rows = [{"id": "FR-C4", "text": "Перезапись с аудитом", "priority": "P1",
+             "status": "частично", "confirm": "код", "line": 70},
+            {"id": "FR-A1", "text": "Доступ владельца", "priority": "P0",
+             "status": "готово", "confirm": "код", "line": 1}]
+    matrix = {"FR-C4": [{"file": "tests/smoke/test_cm02_availability.py",
+                         "test": "test_cm02_availability"}],
+              "FR-A1": [{"file": "tests/unit/test_rules.py", "test": "test_access"}]}
+    outcomes = {("tests/smoke/test_cm02_availability.py", "test_cm02_availability"):
+                {"result": "провал", "message": "boom"},
+                ("tests/unit/test_rules.py", "test_access"):
+                {"result": "провал", "message": "boom"}}
+    steps = [{"scenario": "СМ-2", "title": "", "roles": [], "domain": "", "step": "4. commit",
+              "expected": "200", "actual": "200", "evidence": "x", "result": "пройдено",
+              "cause": "", "requirements": ["FR-C4"], "severity": "важно"}]
+    requirements, _ = smoke_report.build_requirements(rows, matrix, outcomes, steps, [],
+                                                      "2026-11-08")
+    defects = smoke_report.build_defects(steps, requirements, outcomes, matrix)
+    assert [defect["requirement"] for defect in defects] == ["FR-A1"]
+
+
 def _p1_rows(passed: int) -> list[dict]:
     """34 строки P1: `passed` из них с доказательством, остальные — без автотеста."""
     return [{"id": f"FR-P{i}", "priority": "P1",

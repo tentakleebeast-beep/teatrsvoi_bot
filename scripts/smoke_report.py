@@ -523,10 +523,15 @@ def build_defects(steps: list[dict], requirements: list[dict], outcomes: dict,
                     if any((outcome_for(outcomes, entry) or {}).get("result") == "провал"
                            for entry in entries)]
     for requirement in requirements:
-        if requirement["id"] not in failed_tests:
+        # Дефект по тесту заводится только на строку, которая из-за него же и провалилась:
+        # иначе провал одного сценария размножается на все FR его файла (первый прогон
+        # дал 8 таких «дефектов» из двух настоящих). Тесты сценариев сюда не входят —
+        # их провал уже записан дефектом шага, с требованием шага и картой держателя.
+        if requirement["id"] not in failed_tests or requirement["result"] != "провал":
             continue
         broken = [label for label in requirement["evidence"]
-                  if label.startswith("тест:") and "провал" in label]
+                  if label.startswith("тест:") and "провал" in label
+                  and not label.startswith("тест:tests/smoke/")]
         if not broken:
             continue
         defects.append({
