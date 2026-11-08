@@ -1,0 +1,145 @@
+# 144. Смоук: как поднять стенд, прогнать и прочитать отчёт
+
+Дата: 08.11.2026. Карта `t_3cfde332` (Э3, реализация). Вход — дизайн
+`docs/development/143-smoke-plan.md`. Первый прогон — `docs/reports/145-smoke-2026-11-08`.
+
+Runbook описывает **порядок команд**, а не идею смоука: идея — в 143. Каждая команда
+скопирована из фактического запуска 08.11.2026; там, где важен код возврата, он назван.
+
+---
+
+## 1. Что нужно один раз
+
+| Что | Откуда | Проверка |
+|---|---|---|
+| Postgres `127.0.0.1:5433` | `docker compose up -d postgres` | `docker ps --filter name=svoi-postgres` |
+| Garage dev `127.0.0.1:3900` | `docker compose up -d garage` | `docker ps --filter name=svoi-garage-dev` |
+| Свежий дамп прода | `scp svoi-prod:/opt/svoi/backups/svoi_ГГГГ-ММ-ДД_ЧЧММ.dump ~/svoi-smoke/` | `shasum -a 256` (сверить с отчётом прогона) |
+| `.env.smoke` | `cp .env.smoke.example .env.smoke && chmod 600 .env.smoke` | `git status --porcelain` — пусто |
+| Ключ хранилища стенда | `docker exec svoi-garage-dev /garage key create smoke`, `… bucket allow --read --write --owner svoi-private --key <id>` | `STORAGE_ACCESS_KEY` в `.env.smoke` |
+
+`.env.smoke` в git не попадает (правило `.env.*`); в индексе только шаблон
+`.env.smoke.example` без токенов.
+
+---
+
+## 2. Стенд: база из дампа и сервис на :8011
+
+```bash
+cd "<репозиторий>"
+set -a; . ./.env.smoke; set +a
+
+# 1. База стенда из дампа прода (первый запуск: сервиса ещё нет)
+.venv/bin/python scripts/smoke_data.py prepare --marker SMOKE-$(date +%Y%m%d)-01 --skip-health
+#    → «дамп: … (sha256 …)», «база svoi_smoke восстановлена; миграции: код 0: …»
+
+# 2. tool-api стенда на :8011 (отдельный процесс, чужой порт не занимает)
+SVOI_DEV_ENV_FILE=.env.smoke .venv/bin/python scripts/run_service.py tool-api --port 8011
+```
+
+`prepare` разворачивает дамп в соседнюю базу и подменяет имена — работающий сервис
+переживает восстановление и переподключается сам. Прямой `drop database` рвал пул, и
+стенд выглядел поднятым, пока `/health` отвечал 500.
+
+Проверка, что стенд живой:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:8011/health   # 200
+.venv/bin/python scripts/smoke_data.py prepare --marker SMOKE-$(date +%Y%m%d)-01
+#    → «/health: код 200» и «счётчики по маркеру до прогона: 0 строк»
+```
+
+`prepare` падает с кодом 1 и **ничего не удаляет**, если в стенде остались объекты прошлого
+прогона (маркер в имени/тексте): «накопленные» тестовые данные портят следующие числа.
+
+---
+
+## 3. Прогон сценариев
+
+```bash
+set -a; . ./.env.smoke; set +a
+SVOI_SMOKE_TESTS=1 .venv/bin/python -m pytest tests/smoke -q \
+    --junitxml=smoke-junit.xml
+```
+
+Что происходит: 12 сценариев СМ-1…СМ-12 пишут шаги в `smoke-scenarios.json` (путь —
+`SVOI_SMOKE_SCENARIOS`), создают объекты с маркером и в конце (СМ-12) вызывают
+`scripts/smoke_data.py cleanup`. Без `SVOI_SMOKE_TESTS=1` те же тесты показываются
+`skipped` с причиной «стенд не включён», и `scripts/check_done.py` остаётся зелёным.
+
+Маркер — `SMOKE-<YYYYMMDD>-<NN>`; `NN` — номер прогона в этот день. Второй прогон в тот же
+день идёт с `-02` и не пересекается с первым ни людьми, ни адресатами.
+
+---
+
+## 4. Уборка и проверка уборки
+
+```bash
+.venv/bin/python scripts/smoke_data.py cleanup --marker SMOKE-$(date +%Y%m%d)-01   # код 0
+.venv/bin/python scripts/smoke_data.py check  --marker SMOKE-$(date +%Y%m%d)-01 --json > smoke-cleanup.json
+```
+
+`check` печатает строку на каждую из 11 таблиц набора §6.2 и «итоги месяцев совпадают со
+снимком: да». Код 1 — остатки есть или итоги месяца не вернулись.
+
+---
+
+## 5. Отчёт
+
+```bash
+.venv/bin/python scripts/test_audit.py --matrix --json > smoke-matrix.json
+.venv/bin/python scripts/smoke_report.py \
+    --junit smoke-junit.xml --matrix smoke-matrix.json \
+    --scenarios smoke-scenarios.json --cleanup smoke-cleanup.json \
+    --previous docs/reports/<предыдущий>-smoke-<дата>.json \
+    --out docs/reports/145-smoke-$(date +%Y-%m-%d) --number 145
+```
+
+Ключи: `--previous` — дельта к прошлому прогону (без него в отчёте строка «первый прогон,
+дельты нет»); `--check <json>` — проверка готового отчёта (код 1 и список ID, если строка
+«не проверено» без причины или шаг без ожидаемого/фактического).
+
+Код возврата `smoke_report.py` — 1, если не пройден хоть один порог §7 дизайна; это не
+ошибка скрипта, а состояние прогона.
+
+```bash
+.venv/bin/python scripts/build_docs_index.py      # индекс docs/ после нового отчёта
+```
+
+---
+
+## 6. Слой В (прод) — до ответа на V-042 не выполняется
+
+`scripts/smoke_prod.py` умеет **только** `--read-only`: GET `/health`, счётчики ключевых
+таблиц, сверка коммита. Пишущие флаги (`--write`, `--apply`, `--marker`) дают код 2 до
+подключения; соединение с базой открывается в режиме `read only`, поэтому запись упадёт
+на уровне Postgres, а не «на честном слове». До V-042 в отчёте колонка «проверено на
+проде» = `не проверено`, причина `нужен прод`.
+
+---
+
+## 7. Чего нельзя (границы §6.2 дизайна)
+
+- Писать в `svoi` и `svoi_ui`: скрипты отказываются работать с любой базой, кроме
+  `svoi_smoke` (код 2).
+- Отправлять сообщения живым людям: адресаты — тестовые `chat_id` (`900_000_0NN`) или
+  dev-бот стенда.
+- Создавать события с реальным составом, менять тарифы и начисления.
+- Накатывать миграции на прод и запускать `smoke_data.py` с прод-строкой подключения.
+- Чинить найденные дефекты этой картой: провал шага уходит отдельной картой
+  `worker-feature` с требованием, шагом, ожидаемым, фактическим и доказательством.
+- Убирать данные руками: уборка только скриптом, иначе она недоказуема в отчёте.
+
+---
+
+## 8. Грабли, проверенные на первом прогоне
+
+- `psycopg` не принимает `:m` и `like 'budget.%'`: именованные параметры — `%(m)s`,
+  процент в шаблоне — `%s` с параметром (иначе «only '%s', '%b', '%t' are allowed»).
+- Уборка обязана удалять строки во **всех** таблицах, ссылающихся на `participant`:
+  `notification` держала внешний ключ, и удаление человека падало на `ForeignKeyViolation`.
+  Список берётся из `pg_constraint`, а не пишется руками.
+- `budget_month_total` после удаления расхода возвращается к снимку `prepare`, а не
+  пересчитывается на глаз: снимок лежит в `~/.cache/svoi-smoke/state-<маркер>.json`.
+- Сценарии идут в порядке СМ-1 → СМ-12: СМ-12 запускает уборку прогона. Запускать
+  отдельный сценарий можно, но уборку тогда нужно вызвать руками.

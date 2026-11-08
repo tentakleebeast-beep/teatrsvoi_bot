@@ -11,6 +11,8 @@ __pycache__/
 # на машине разработчика, шаблон `.env.dev.example` — в индексе.
 .env.*
 !.env.example
+# шаблон стенда смоука — в индексе, сам `.env.smoke` закрыт правилом `.env.*` (Э3)
+!.env.smoke.example
 .env.dev
 creds.json
 *.creds.json
