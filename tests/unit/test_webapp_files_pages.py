@@ -99,6 +99,26 @@ def test_папка_играет_подряд_и_качает_архив():
     assert "<audio" in page and "hidden" in page, "плеер не выставляем на показ"
 
 
+def test_папка_без_номера_не_тупик():
+    """Пусто — не тупик (docs/development/91 §1 п.9, отчёт 142 §3 строка 17).
+
+    Без `?id=` экран говорил только «Папка не выбрана»: как в папку попасть,
+    не сказано, хотя вход в неё один — из «Файлов». Теперь пустое состояние
+    называет источник и даёт ссылку. Редирект не выбран намеренно: адрес
+    `/webapp/folder` остаётся открывающимся (141 §2.4 — старые адреса не удаляются).
+    """
+    page = files.FOLDER_PAGE
+    # Подсказка лежит в разметке и ждёт решения скрипта: первый кадр не пустой.
+    assert '<div id="no-folder" hidden>' in page
+    start = page.index('<div id="no-folder"')
+    block = page[start:start + 700]
+    assert "Папки открываются из «Файлов»" in block
+    assert 'href="/webapp/files"' in block, "в пустом состоянии нет пути в «Файлы»"
+    # Показывается именно при отсутствии номера папки, а не всегда.
+    assert '$("no-folder").hidden = false' in page
+    assert 'if (!folderId)' in page
+
+
 def test_маршруты_файлов_на_месте():
     router = routes.build_router(actor=lambda: {}, caps_for=lambda who: [])
     paths = {route.path for route in router.routes}
