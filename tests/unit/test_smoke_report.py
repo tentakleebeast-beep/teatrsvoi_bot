@@ -1,10 +1,11 @@
 """Матрица требований и отчёт смоука: scripts/test_audit.py --matrix, scripts/smoke_report.py.
 
 Обоснование: FR-… связи «требование → доказательство» — docs/development/143 §3 (Э3),
-критерии К1–К3, К9, К14, К17. Проверяется машина сверки, а не прогон на стенде: строки
+критерии К1–К3, К5, К7, К9, К14, К17. Проверяется машина сверки, а не прогон на стенде: строки
 документа 19 читаются как есть, junit join'ится по имени теста, шаг без
 ожидаемого/фактического результата валит отчёт, порог P1 считается по К17 (80 %),
-а тест в матрице без исхода в junit валит отчёт, а не превращается в «нет автотеста».
+а тест в матрице без исхода в junit валит отчёт, а не превращается в «нет автотеста»;
+проверки прогона К5/К7 попадают в отчёт из `--checks` и не могут промолчать.
 """
 
 from __future__ import annotations
@@ -209,3 +210,67 @@ def test_знаменатель_p0_один_в_факте_и_пороге():
     assert p0["value"] == "2/2"
     assert p0["target"] == "2/2"
     assert p0["ok"] is True
+
+
+def _minimal_report(**overrides) -> dict:
+    """Каркас отчёта для проверки раздела и валидации: строки матрицы здесь не нужны."""
+    report = {
+        "version": 1, "number": "145", "commit": "x", "date": "2026-11-08",
+        "env": "стенд", "marker": "SMOKE-20261108-01", "dump_sha256": "x",
+        "layers": {"junit": {"passed": 1, "failed": 0, "skipped": 0},
+                   "junit_sources": [], "gates": [], "prod": {"executed": False}},
+        "requirements": [], "scenarios": [], "cleanup": {}, "defects": [], "risk": [],
+        "delta": {"note": "первый прогон, дельты нет", "added": [], "changed": [], "removed": []},
+        "thresholds": {"checks": [], "ok": True, "not_measured": []},
+        "summary": "…", "run_checks": [],
+    }
+    report.update(overrides)
+    return report
+
+
+def _k5_k7() -> list[dict]:
+    """Проверки прогона в том виде, в каком их отдаёт `run_checks`: К5 пройдена, К7 — провал."""
+    return smoke_report.run_checks({"checks": [
+        {"id": "К5", "title": "prepare при остатках прошлого прогона", "expected": "код 1",
+         "actual": "код 1, остаток перечислен, строка на месте", "evidence": "k5-prepare.log",
+         "result": "пройдено"},
+        {"id": "К7", "title": "два прогона в один день", "expected": "оба прогона зелены",
+         "actual": "1 failed, 11 passed; итоги и счётчики совпали", "evidence": "marker-02/pytest.log",
+         "result": "провал", "defect": "FR-F5 (удаление файла), карта t_61ec7e55"}]})
+
+
+def test_проверки_прогона_к5_к7_в_отчёте():
+    """Д5/К5/К7: проверки попадают в отчёт машинно, провал К7 остаётся провалом."""
+    checks = _k5_k7()
+    assert [check["id"] for check in checks] == ["К5", "К7"]
+    md = smoke_report.render_markdown(_minimal_report(run_checks=checks))
+    assert "## 5. Проверки прогона (К5, К7)" in md
+    assert "| К5 |" in md and "| К7 |" in md
+    assert "К7: FR-F5 (удаление файла), карта t_61ec7e55" in md
+    assert "Проверки прогона: К5 пройдено; К7 провал." in smoke_report.summary(
+        [], {"checks": [], "ok": True}, checks)
+
+
+def test_проверки_прогона_обязательны_в_отчёте():
+    """Д5: отчёт без проверок прогона не собирается — молчание вместо факта недопустимо."""
+    empty = smoke_report.validate(_minimal_report())
+    assert any("run_checks пуст" in item for item in empty)
+    missing = _minimal_report()
+    del missing["run_checks"]
+    assert any("нет ключа run_checks" in item for item in smoke_report.validate(missing))
+    # «не проверено» с причиной из §3.3 — допустимый исход, а не ошибка
+    unchecked = smoke_report.run_checks({"checks": [
+        {"id": "К7", "title": "два прогона в один день", "expected": "оба зелены",
+         "actual": "не снимали", "evidence": "—", "result": "не проверено",
+         "cause": "нет данных в копии"}]})
+    problems = smoke_report.validate(_minimal_report(run_checks=unchecked))
+    assert not any(item.startswith("проверка К7") for item in problems)
+
+
+def test_провал_проверки_без_дефекта_валит_отчёт():
+    """Д5: провал проверки без требования и карты — ошибка отчёта, а не свободный текст."""
+    checks = smoke_report.run_checks({"checks": [
+        {"id": "К7", "title": "два прогона в один день", "expected": "оба зелены",
+         "actual": "1 failed", "evidence": "marker-02/pytest.log", "result": "провал"}]})
+    problems = smoke_report.validate(_minimal_report(run_checks=checks))
+    assert any("проверка К7: провал без ссылки на дефект" in item for item in problems)

@@ -7,11 +7,12 @@
 `docs/development/143`: `.md` для человека и `.json` как источник истины для дельты.
 
     # вход: junit полного прогона `tests/` (сценарии — своим файлом, если он есть),
-    # матрица от test_audit, журнал сценариев, данные уборки
+    # матрица от test_audit, журнал сценариев, данные уборки, проверки прогона (К5/К7)
     env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py \\
         --junit smoke-junit-full.xml [--junit smoke-junit.xml] \\
         --matrix smoke-matrix.json --scenarios smoke-scenarios.json \\
-        --cleanup smoke-cleanup.json --out docs/reports/145-smoke-2026-11-08
+        --cleanup smoke-cleanup.json --checks smoke-checks.json \\
+        --out docs/reports/145-smoke-2026-11-08
 
     # проверка готового отчёта (код 1 и список ID, если строка врёт)
     env -u PYTHONPATH .venv/bin/python scripts/smoke_report.py --check docs/reports/145-smoke-2026-11-08.json
@@ -24,6 +25,9 @@
   * `не проверено` без причины из закрытого списка — ошибка отчёта, а не пустая клетка;
   * шаг сценария без `expected` или `actual` не засчитывается: разбор падает с кодом 1,
     а не пишет «пройдено» (К9);
+  * проверки прогона (К5 — `prepare` при остатках, К7 — два прогона в один день) —
+    обязательный вход `--checks`: проверка без строки в отчёте не «молчит», а валит сборку
+    (`run_checks` пуст или исход вне списка — ошибка, а не пустая клетка);
   * приоритет не выдумывается: строки дополнений идут как `не задан` и в проценты
     не входят (V-044, К18);
   * слой В (прод) до ответа на V-042 не выполняется: прод-колонка — `не проверено`
@@ -61,6 +65,9 @@ CAUSES = (
     "снято решением V-NNN",
 )
 RESULTS = ("пройдено", "провал", "не проверено", "не проверяется")
+# Исход проверки прогона: «не проверяется» сюда не входит — проверка К5/К7 либо
+# выполнена (пройдено/провал), либо названа непроверенной с причиной из §3.3.
+RUN_CHECK_RESULTS = ("пройдено", "провал", "не проверено")
 SEVERITIES = ("блокер", "важно", "мелко")
 # Пороги §7 дизайна: значения по умолчанию для сценариев; P0 и P1 считаются от числа
 # строк документа 19, а не от литерала (Д3: в дизайне стояло 47, фактических P0 — 48).
@@ -243,6 +250,40 @@ def flat_steps(scenarios: dict | None) -> list[dict]:
                 "severity": step.get("severity") or "важно",
             })
     return steps
+
+
+# --- проверки прогона (К5, К7) -------------------------------------------------
+
+def run_checks(payload: dict | None) -> list[dict]:
+    """Проверки прогона из `--checks`: id, что проверялось, ожидалось, факт, исход, доказательство.
+
+    Зачем отдельный вход. К5 (`prepare` при остатках прошлого прогона) и К7 (два прогона
+    в один день) — не строки матрицы требований и не шаги сценария, но критерии приёмки
+    прогона. Их вывод раньше жил в рабочем каталоге стенда и в отчёт не попадал: карта
+    сдавалась без К5/К7, хотя доказательства были сняты (доработка Д5). Поэтому проверка,
+    названная в `--checks`, попадает в отчёт машинно, а её отсутствие — ошибка сборки.
+
+    Исход — фактический: `провал` остаётся провалом с ссылкой на дефект, а не «зелёным»,
+    потому что остальные числа прогона сошлись.
+    """
+    if not payload:
+        return []
+    checks = []
+    for entry in payload.get("checks", []):
+        checks.append({
+            "id": str(entry.get("id", "")).strip(),
+            "title": str(entry.get("title", "")).strip(),
+            "expected": str(entry.get("expected", "")).strip(),
+            "actual": str(entry.get("actual", "")).strip(),
+            "command": str(entry.get("command", "")).strip(),
+            "evidence": str(entry.get("evidence", "")).strip(),
+            "result": str(entry.get("result", "")).strip(),
+            # Причина нужна только непроверенной проверке (§3.3), дефект — проваленной:
+            # иначе «провал» повисает без адреса, куда идти за починкой.
+            "cause": str(entry.get("cause", "")).strip(),
+            "defect": str(entry.get("defect", "")).strip(),
+        })
+    return checks
 
 
 # --- гейты ---------------------------------------------------------------------
@@ -499,8 +540,9 @@ def risk_section(requirements: list[dict]) -> list[dict]:
             if r["priority"] == "P0" and r["result"] == "не проверено"]
 
 
-def summary(requirements: list[dict], thresholds_block: dict) -> str:
-    """Итог из трёх предложений — как требует §7 дизайна."""
+def summary(requirements: list[dict], thresholds_block: dict,
+            run_checks: list[dict] | None = None) -> str:
+    """Итог: три предложения по матрице и строка о проверках прогона (К5, К7)."""
     measured = sum(1 for r in requirements if r["result"] == "пройдено")
     failed = [r["id"] for r in requirements if r["result"] == "провал"]
     unknown = sum(1 for r in requirements if r["result"] == "не проверено")
@@ -511,7 +553,13 @@ def summary(requirements: list[dict], thresholds_block: dict) -> str:
               "Пороги §7 не пройдены: " + "; ".join(
                   f"{c['criterion']} {c['value']} (нужно {c['target']})"
                   for c in thresholds_block["checks"] if not c["ok"]) + ".")
-    return f"{first} {second} Слой В (прод) не выполнялся: нет ответа на V-042."
+    third = "Слой В (прод) не выполнялся: нет ответа на V-042."
+    if run_checks:
+        # Проверки прогона называются фактическим исходом: провал К7 не прячется за тем,
+        # что остальные числа прогона сошлись (Д5).
+        third = "Проверки прогона: " + "; ".join(
+            f"{check['id']} {check['result']}" for check in run_checks) + ". " + third
+    return f"{first} {second} {third}"
 
 
 def render_markdown(report: dict) -> str:
@@ -522,8 +570,8 @@ def render_markdown(report: dict) -> str:
              f"Маркер прогона `{report.get('marker') or '—'}`. "
              f"sha256 дампа `{report.get('dump_sha256') or '—'}`.", "",
              "Отчёт собран машиной: `scripts/smoke_report.py` из junit, матрицы "
-             "`scripts/test_audit.py --matrix`, журнала сценариев и гейт-скриптов. "
-             "Ручных чисел в таблицах нет.", "", "## 1. Пороги приёмки", "",
+             "`scripts/test_audit.py --matrix`, журнала сценариев, проверок прогона и "
+             "гейт-скриптов. Ручных чисел в таблицах нет.", "", "## 1. Пороги приёмки", "",
              "| Критерий | Факт | Порог | Итог |", "|---|---|---|---|"]
     for check in report["thresholds"]["checks"]:
         lines.append(f"| {check['criterion']} | {check['value']} | {check['target']} | "
@@ -581,21 +629,37 @@ def render_markdown(report: dict) -> str:
             lines.append(f"- {defect['id']}: `{defect['evidence']}`")
     else:
         lines.append("Дефектов не найдено: провалов шагов и тестов нет.")
-    lines += ["", "## 5. Риск: P0 без доказательства", ""]
+    lines += ["", "## 5. Проверки прогона (К5, К7)", ""]
+    checks = report.get("run_checks") or []
+    if checks:
+        lines += ["| Проверка | Что проверялось | Ожидалось | Факт | Итог | Доказательство |",
+                  "|---|---|---|---|---|---|"]
+        for check in checks:
+            lines.append(f"| {check['id']} | {check['title']} | {check['expected']} | "
+                         f"{check['actual']} | {check['result']} | `{check['evidence']}` |")
+        broken = [check for check in checks if check["result"] == "провал"]
+        if broken:
+            lines += ["", "Проваленные проверки (фактический исход, не «зелёный»):", ""]
+            for check in broken:
+                lines.append(f"- {check['id']}: {check['defect']}")
+    else:
+        lines.append("Проверки прогона не переданы: отчёт не должен собираться без них "
+                     "(`--checks`), см. `docs/development/144` §5.")
+    lines += ["", "## 6. Риск: P0 без доказательства", ""]
     if report["risk"]:
         lines += ["| Требование | Причина | Цена проверки |", "|---|---|---|"]
         for item in report["risk"]:
             lines.append(f"| {item['id']} | {item['cause']} | {item['cost']} |")
     else:
         lines.append("Нет: у каждого P0 есть доказательство или причина.")
-    lines += ["", "## 6. Матрица требований", "",
+    lines += ["", "## 7. Матрица требований", "",
               "| ID | Приоритет | Статус в 19 | Доказательство | Результат | Причина |",
               "|---|---|---|---|---|---|"]
     for req in reqs:
         proof = "<br>".join(req["evidence"]) if req["evidence"] else "—"
         lines.append(f"| {req['id']} | {req['priority']} | {req['status19'] or '—'} | "
                      f"{proof} | {req['result']} | {req['cause'] or '—'} |")
-    lines += ["", "## 7. Итог", "", report["summary"], "",
+    lines += ["", "## 8. Итог", "", report["summary"], "",
               "Слой В: не проверялся, нужен ответ на V-042 (прод — только чтение).", ""]
     return "\n".join(lines)
 
@@ -622,6 +686,7 @@ def build(args: argparse.Namespace) -> dict:
     steps = flat_steps(read_json(args.scenarios))
     cleanup = read_json(args.cleanup) or {}
     previous = read_json(args.previous) or {}
+    checks = run_checks(read_json(args.checks))
     gates = run_gates(enabled=not args.no_gates)
     date = args.date or dt.date.today().isoformat()
     requirements, unmatched = build_requirements(rows, matrix, outcomes, steps, gates, date)
@@ -647,13 +712,14 @@ def build(args: argparse.Namespace) -> dict:
         # Тесты, у которых нет исхода в junit: непустой список валит отчёт (Д1).
         "unmatched_tests": unmatched,
         "scenarios": steps,
+        "run_checks": checks,
         "cleanup": cleanup,
         "defects": defects,
         "delta": delta(requirements, previous or None),
         "thresholds": thresholds(requirements, steps, defects, cleanup),
         "risk": risk_section(requirements),
     }
-    report["summary"] = summary(requirements, report["thresholds"])
+    report["summary"] = summary(requirements, report["thresholds"], checks)
     return report
 
 
@@ -709,6 +775,26 @@ def validate(report: dict) -> list[str]:
         for field in ("requirement", "step", "expected", "actual", "evidence"):
             if not str(defect.get(field) or "").strip():
                 problems.append(f"{defect.get('id')}: пустое поле {field}")
+    # К5/К7: молчание недопустимо. Отчёт без раздела проверок прогона — такой же дефект,
+    # как строка «нет автотеста» при наличии теста: критерий есть, а доказательства нет.
+    if "run_checks" not in report:
+        problems.append("нет ключа run_checks: проверки прогона (К5, К7) не переданы")
+    elif not report["run_checks"]:
+        problems.append("run_checks пуст: проверки прогона К5/К7 не названы ни исходом, "
+                        "ни причиной §3.3")
+    for check in report.get("run_checks") or []:
+        check_id = check.get("id") or "без id"
+        if check.get("result") not in RUN_CHECK_RESULTS:
+            problems.append(f"проверка {check_id}: неизвестный исход {check.get('result')!r}")
+        for field in ("id", "title", "expected", "actual", "evidence"):
+            if not str(check.get(field) or "").strip():
+                problems.append(f"проверка {check_id}: пустое поле {field}")
+        if check.get("result") == "не проверено" and check.get("cause") not in CAUSES:
+            problems.append(f"проверка {check_id}: причина {check.get('cause')!r} "
+                            f"вне закрытого списка §3.3")
+        if check.get("result") == "провал" and not str(check.get("defect") or "").strip():
+            problems.append(f"проверка {check_id}: провал без ссылки на дефект "
+                            f"(требование и карта)")
     return problems
 
 
@@ -730,6 +816,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--matrix", default=None, help="JSON от test_audit.py --matrix")
     parser.add_argument("--scenarios", default=None, help="JSON журнала сценариев")
     parser.add_argument("--cleanup", default=None, help="JSON от smoke_data.py check")
+    parser.add_argument("--checks", default=None,
+                        help="JSON проверок прогона К5/К7 (фактический вывод команд)")
     parser.add_argument("--previous", default=None, help="JSON прошлого прогона (дельта)")
     parser.add_argument("--out", default=None, help="префикс отчёта без расширения")
     parser.add_argument("--check", default=None, help="проверить готовый отчёт .json")
