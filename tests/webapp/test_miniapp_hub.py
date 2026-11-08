@@ -84,6 +84,10 @@ def test_раздел_управления_открывается_своим_а�
     assert page.locator("nav.ui-tabs, #nav").count() == 0, "вернулась лента вкладок"
     back = page.locator(".ui-appbar__back")
     assert back.count() == 1 and back.get_attribute("href") == "/webapp/more"
+    # Стрелка остаётся стрелкой: оболочка подписывала «Управление» четвёртую вкладку,
+    # но селектор без области цеплял и эту ссылку — в шапке появлялось «авлениеАудит»
+    # (08.11.2026). Проверяем текст, а не только наличие.
+    assert back.inner_text().strip() == "‹", f"шапка раздела «{tab}»: «{back.inner_text()}»"
     assert page.locator("table").count() == 0, "таблица в админском разделе"
     overflow = page.evaluate(
         "() => document.documentElement.scrollWidth - document.documentElement.clientWidth")
