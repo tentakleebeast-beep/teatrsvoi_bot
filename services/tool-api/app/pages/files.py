@@ -2,9 +2,9 @@
 
 Что здесь важнее всего:
 
-* **Только администратор.** Раздел открыт по `admin.panel`; правило проверяется на
-  сервере (страница и данные), а не спрятанной кнопкой. Когда файлы понадобятся
-  актёрам, снимется одна проверка в маршруте и в эндпоинтах `main.py`.
+* **Кому открыто.** Решение V-039 (в): «Файлы студии» видят admin, org и master (право
+  `files.access`, проверка на сервере); без права экран говорит словами (Б3). Кого
+  пускает действие, решает домен: `folders` — admin и org, `tags`/`file_access` — admin.
 * **Действия — на экране, а не только в чате.** Папки, доступ к личному файлу и
   утверждение тега живут в `files_actions.py`: экран и чат зовут один обработчик.
   Загрузка одна на оба входа — `presign → PUT → commit` (Ш-08).
@@ -138,10 +138,10 @@ _SCRIPT_FILES = r"""
         denied = true;
         $("upload").disabled = true;
         $("pick").disabled = true;
-        status("Раздел доступен администратору.", true);
+        status("Раздел доступен администратору, организатору и мастеру.", true);
         clear($("list"));
-        $("list").appendChild(empty("Раздел для администратора",
-          "Файлы студии открыты администратору. Здесь будут ваши записи и фонограммы."));
+        $("list").appendChild(empty("Раздел не для вас",
+          "Файлы студии открыты администратору, организатору и мастеру."));
         $("count").textContent = "";
         return null;
       }
@@ -385,7 +385,7 @@ _SCRIPT_FOLDER = r"""
     if (denied) { status(denied, true); return; }
     if (!folderId) { $("subtitle").textContent = "Папка не выбрана."; return; }
     api("/webapp/folder/" + folderId + "/files").then(function (res) {
-      if (res.status === 403) { $("subtitle").textContent = "Раздел доступен администратору."; return; }
+      if (res.status === 403) { $("subtitle").textContent = "Раздел доступен администратору, организатору и мастеру."; return; }
       if (res.status !== 200) { $("subtitle").textContent = problem(res); return; }
       var folder = res.body.folder || {};
       tracks = res.body.data || [];
