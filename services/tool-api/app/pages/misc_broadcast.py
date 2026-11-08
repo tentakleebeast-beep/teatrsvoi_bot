@@ -2,6 +2,10 @@
 
 Вложенный экран с шапкой и «‹»; возврат ведёт в `/webapp/more` (`window.SVOI_BACK`),
 а не всегда на «Главную» (docs/86 §6). Общий JS — `misc_common.py`.
+
+Право `notify.send` есть только у администратора (`db/init/057`, FR-G2), поэтому
+ответ 403 на счётчик адресатов — не сбой сети: экран говорит, у кого рассылка
+есть, и прячет форму (принципы 91: 8, Б3; карта t_41a4ef6d).
 """
 
 from __future__ import annotations
@@ -10,6 +14,16 @@ from app.pages import layout
 from app.pages.misc_common import JS_COMMON as _JS_COMMON
 
 _BODY_BROADCAST = """
+<section class="ui-section" id="denied" hidden>
+  <div class="ui-empty">
+    <div class="ui-empty__title">Рассылка доступна администратору</div>
+    <div class="ui-empty__text" id="denied-text">Рассылка участникам — только у
+      администратора: право notify.send есть у него одного. Если написать всем
+      нужно вам — попросите администратора отправить сообщение.</div>
+  </div>
+</section>
+
+<div id="form">
 <p class="ui-small ui-muted">Шаблон подставит текст — его можно поправить до отправки.</p>
 
 <div class="ui-chips" id="templates"></div>
@@ -27,6 +41,7 @@ _BODY_BROADCAST = """
   Отправить
 </button>
 <div class="ui-alert" id="error" hidden></div>
+</div>
 """
 
 _SCRIPT_BROADCAST = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/more\";\n" + _JS_COMMON + r"""
@@ -57,6 +72,19 @@ _SCRIPT_BROADCAST = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_
     var box = $("error");
     box.textContent = text || "";
     box.hidden = !text;
+  }
+
+  /* 403 — не сбой сети, а закрытое право: рассылка есть только у администратора
+     (право `notify.send`, db/init/057, FR-G2). Экран говорит, у кого действие
+     есть, и прячет форму — иначе человек ждёт «повторите позже» вечно
+     (принципы 91: 8, Б3; карта t_41a4ef6d). */
+  function showDenied() {
+    $("denied").hidden = false;
+    $("form").hidden = true;
+  }
+
+  function deniedText() {
+    return $("denied-text").textContent.replace(/\s+/g, " ").trim();
   }
 
   function showFieldError(text) {
@@ -97,6 +125,11 @@ _SCRIPT_BROADCAST = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_
 
   async function countRecipients() {
     var result = await api("/webapp/admin/broadcast/preview");
+    /* 403 от счётчика — закрытое право `notify.send`, а не сеть (карта t_41a4ef6d). */
+    if (result.status === 403) {
+      showDenied();
+      return;
+    }
     if (!result.body.ok) {
       $("counts").textContent = "Не удалось посчитать адресатов. Повторите позже.";
       return;
@@ -129,6 +162,10 @@ _SCRIPT_BROADCAST = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_
       text: text, dry_run: false, request_id: requestId,
     });
     button.disabled = false;
+    if (result.status === 403) {
+      showError(deniedText());
+      return;
+    }
     if (result.body.ok) {
       SVOI.toast("Отправлено: " + (result.body.recipients || 0) + ".");
       button.textContent = "Отправить " + recipientsWord(reachable());
