@@ -9,7 +9,7 @@
 
 | Группа | Что внутри | Документов |
 |---|---|---|
-| [Архитектура](architecture/) | модель данных, правила, алгоритмы, границы систем | 20 |
+| [Архитектура](architecture/) | модель данных, правила, алгоритмы, границы систем | 21 |
 | [Инфраструктура](infrastructure/) | Google, календари, уведомления, развёртывание | 10 |
 | [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 35 |
 | [Планы](plans/) | роадмап, планы развития | 8 |
@@ -42,6 +42,7 @@
 | 51 | [51-assignment-implementation.md](architecture/51-assignment-implementation.md) | 51. Назначение события: что сделано |
 | 52 | [52-twins-teachers-director.md](architecture/52-twins-teachers-director.md) | 52. Тёзки, педагоги и режиссёр |
 | 85 | [85-error-catalog.md](architecture/85-error-catalog.md) | 85. Каталог ошибок HTTP API |
+| 140 | [140-master-role.md](architecture/140-master-role.md) | 140. Роль «Педагог» (master): модель, дисциплины, права |
 
 ## Инфраструктура
 
