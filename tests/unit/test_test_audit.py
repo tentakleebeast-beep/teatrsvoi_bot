@@ -125,3 +125,5 @@ def test_номер_обращения_считается_ид():
     assert test_audit.ID_RE.search("Обращение №15: панель показывала декабрь")
     assert test_audit.ID_RE.findall("S-3 и №22") == ["S-3", "№22"]
     assert test_audit.ID_RE.search("дефект №7")
+    # Д-03 — так нумеруются дефекты в отчётах смоука (docs/reports/145)
+    assert test_audit.ID_RE.search("Д-03: хранилище не развёрнуто")

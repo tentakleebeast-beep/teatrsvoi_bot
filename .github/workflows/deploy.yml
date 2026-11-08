@@ -115,6 +115,9 @@ jobs:
             # Хранилище файлов: без него presign отвечает 503, а Mini App не грузит файлы
             # (Д-03, 09.11.2026). Шаг идемпотентен и сам дописывает STORAGE_* в .env.
             deploy/server-deploy.sh storage
+            # Caddy: шаблон содержит хост хранилища (files.$SVOI_DOMAIN) — без proxy
+            # поддомен не получает TLS, и загрузка файлов остаётся 503 (Д-03).
+            deploy/server-deploy.sh proxy
             deploy/server-deploy.sh units
             systemctl restart svoi-tool-api
             systemctl restart svoi-gateway 2>/dev/null || echo "svoi-gateway не запущен — пропускаю"
