@@ -341,7 +341,8 @@ _BODY_PEOPLE = """
   <input class="ui-input" id="people-search" type="search" inputmode="search"
          autocomplete="off" placeholder="Имя или фамилия">
 </div>
-<button class="ui-btn ui-btn--block" id="people-dues" type="button" hidden>Взносы: тариф и начисление</button>
+<button class="ui-btn ui-btn--block" id="people-dues" type="button" hidden
+        data-svoi-cap="budget.write">Взносы: тариф и начисление</button>
 <div class="ui-small ui-muted" id="people-count"></div>
 <div class="ui-list" id="people-list"></div>
 <button class="ui-btn ui-btn--block" id="people-more" type="button" hidden>Показать ещё</button>

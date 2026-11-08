@@ -1,7 +1,7 @@
 {
   "version": 1,
   "number": "145",
-  "commit": "5d28dd7",
+  "commit": "d157d0c",
   "date": "2026-11-08",
   "env": "стенд svoi_smoke",
   "marker": "SMOKE-20261108-01",
@@ -4538,16 +4538,6 @@
       "evidence": "DELETE /files/1 → 405 {\"type\":\"https://svoi.local/errors/method_not_allowed\",\"title\":\"Метод не поддерживается\",\"status\":40; GET /files/1/content → 200 smoke file: xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
       "severity": "важно",
       "id": "Д-02"
-    },
-    {
-      "requirement": "FR-C2",
-      "scenario": "",
-      "step": "тест:tests/unit/test_smoke_report.py::test_провал_теста_сценария_не_красит_строку_но_виден",
-      "expected": "тест проходит",
-      "actual": "тест упал в junit",
-      "evidence": "тест:tests/unit/test_smoke_report.py::test_провал_теста_сценария_не_красит_строку_но_виден (2026-11-08)",
-      "severity": "важно",
-      "id": "Д-03"
     }
   ],
   "delta": {

@@ -13,6 +13,7 @@ import pathlib
 import subprocess
 
 import pytest
+import yaml
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DEPLOY = ROOT / "deploy"
@@ -350,3 +351,41 @@ def test_локальный_сторож_конфликтов_стоит_в_ра
     assert "--source" in template and "files" in template
     assert "<key>StartInterval</key>" in template
     assert "<integer>300</integer>" in template
+
+
+WORKFLOW = ROOT / ".github" / "workflows" / "repair-schema.yml"
+
+
+def test_ремонт_схемы_двигает_учёт_версии_alembic():
+    """После наката SQL в psql шаг workflow обязан довести alembic_version до head.
+
+    Дефект 08.11.2026: `repair-schema` накатил 061, psql про Alembic не знает, версия
+    осталась на 060 — выкат v0.8.0 остановился на сверке версии и откатился на v0.7.0.
+    Порядок шагов и наличие проверки — то, без чего дефект возвращается молча.
+    Обоснование: docs/infrastructure/35 §10.2.
+    """
+    data = yaml.safe_load(WORKFLOW.read_text(encoding="utf-8"))
+    steps = data["jobs"]["repair"]["steps"]
+    names = [step.get("name", "") for step in steps]
+
+    apply_at = names.index("применить миграции")
+    sync_at = next(i for i, name in enumerate(names) if "учёт версии схемы" in name)
+    verify_at = next(i for i, name in enumerate(names) if "версия схемы равна head" in name)
+    restart_at = next(i for i, name in enumerate(names) if name.startswith("перезапустить"))
+    assert apply_at < sync_at < verify_at < restart_at, names
+
+    sync = steps[sync_at]
+    assert sync.get("if") == "inputs.files != ''"
+    assert "--stamp-head" in sync["run"]
+    assert "--files" in sync["run"], "версия должна ставиться по применённым файлам"
+    assert "/opt/svoi/.env" in sync["run"], "на сервере DATABASE_URL лежит в .env"
+    assert "$SCHEMA_DIR" in sync["run"], "путь к копии схемы задаёт шаг копирования"
+    copy_run = next(step["run"] for step in steps
+                    if "/tmp/svoi-schema-repair" in step.get("run", ""))
+    assert "alembic.ini" in copy_run and "services/tool-api/migrations" in copy_run, (
+        "alembic берётся из checkout раннера: в /opt/svoi прошлый тег без новых ревизий")
+
+    verify = steps[verify_at]
+    assert "--expect-head" in verify["run"]
+    assert "alembic_version не равен head" in verify["run"], "сообщение должно называть причину"
+    assert "server-deploy.sh db" in verify["run"], "сообщение должно называть лечение"

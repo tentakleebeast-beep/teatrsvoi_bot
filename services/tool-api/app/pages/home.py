@@ -65,7 +65,8 @@ _BODY_HOME = """
   <span class="ui-small ui-muted" id="debt-meta"></span>
 </div>
 
-<a class="ui-btn ui-btn--block" id="quick-tx" href="/webapp/tx" hidden>Записать операцию</a>
+<a class="ui-btn ui-btn--block" id="quick-tx" href="/webapp/tx" hidden
+   data-svoi-cap="budget.write">Записать операцию</a>
 
 <div class="ui-small ui-muted" id="status"></div>
 """
