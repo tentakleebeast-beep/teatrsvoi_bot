@@ -589,9 +589,11 @@ async def feedback_send(request: Request):
                          "kind_title": "Вопрос", "notified": 0})
 
 
-app.add_api_route("/webapp/admin/overview", _data({
+ADMIN_OVERVIEW = {
     "ok": True,
-    "actions": {"manage_rights": True, "set_tariff": True, "accrue_dues": True},
+    "allowed": ["people", "pending", "rights", "budget", "feedback", "audit", "invites"],
+    "actions": {"approve_pending": True, "manage_rights": True, "set_tariff": True,
+                "accrue_dues": True, "issue_codes": True},
     "blocks": {
         "people": {"counts": {"active": 17, "pending": 2}, "data": [
             {"id": 1, "display_name": "Иванов Виктор", "roles": ["admin"], "status": "active"},
@@ -609,7 +611,30 @@ app.add_api_route("/webapp/admin/overview", _data({
         "audit": {"data": []},
         "invites": {"data": []},
     },
-}), methods=["GET"])
+}
+
+
+async def _admin_overview(request: Request) -> JSONResponse:
+    """Панель по роли: master видит только людей, troupe не видит панели вовсе.
+
+    В бою разделы приходят списком `allowed` (`allowed_admin_blocks`): у master
+    есть `participants.view`, а `pending` требует `registration.approve` или
+    `participants.manage`. Без этого стенд отдавал всем админа, и дефект экрана 21
+    (карта t_8111b38d) на нём не воспроизводился.
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    if role in {"master", "participant"}:
+        return JSONResponse({"ok": True, "allowed": ["people"], "actions": {},
+                             "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
+    if role == "troupe":
+        return JSONResponse({"detail": "admin_panel_forbidden"}, status_code=403)
+    return JSONResponse(ADMIN_OVERVIEW)
+
+
+app.add_api_route("/webapp/admin/overview", _admin_overview, methods=["GET"])
 
 
 app.add_api_route("/webapp/admin/dues", _data({
