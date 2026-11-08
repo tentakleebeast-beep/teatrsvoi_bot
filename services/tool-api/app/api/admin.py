@@ -730,14 +730,28 @@ def admin_reconcile(body: ReconcileIn, who: dict = Depends(core.require("budget.
 
 @router.post("/webapp/feedback")
 def webapp_feedback(body: FeedbackIn, who: dict = Depends(core.webapp_actor)) -> dict:
-    return feedback_create(body, who)
+    """Обращение из Mini App — по праву `feedback.send`, как у `/tools/feedback` в чате.
+
+    Проверка здесь, а не на странице: экран может только не рисовать форму,
+    отказ обязан прийти с сервера (docs/development/91 принципы 9, Б3).
+    """
+    return feedback_create(body, core._webapp_require(who, "feedback.send"))
 
 
 
 @router.get("/webapp/feedback/mine")
 def webapp_feedback_mine(limit: int = Query(default=10, ge=1, le=50),
                          who: dict = Depends(core.webapp_actor)) -> dict:
-    return feedback_mine(limit, who)
+    """Свои обращения и право отправки одним ответом.
+
+    `can_send` — это `feedback.send`, посчитанный на сервере: у мастера его нет
+    (`db/init/031`, docs/141 §3). Страница берёт право отсюда и не выводит его
+    из роли сама (док. 86 §7: недоступное не приходит в браузер вовсе).
+    """
+    viewer = core._webapp_viewer(who)
+    answer = feedback_mine(limit, viewer)
+    answer["can_send"] = page_layout.has(viewer.get("caps"), "feedback.send")
+    return answer
 
 
 

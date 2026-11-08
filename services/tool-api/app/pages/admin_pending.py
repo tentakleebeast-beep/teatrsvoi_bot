@@ -45,16 +45,22 @@ _SCRIPT_PENDING = r"""
     if (!person.invite_code && person.phone) {
       row.appendChild(el("span", "ui-row__meta", "Телефон: " + person.phone));
     }
-    var actions = el("div", "ui-actions admin-actions--split");
-    var accept = el("button", "ui-btn ui-btn--sm ui-btn--primary", "Принять");
-    accept.type = "button";
-    accept.onclick = function () { decide(person, true); };
-    var reject = el("button", "ui-btn ui-btn--sm", "Отклонить");
-    reject.type = "button";
-    reject.onclick = function () { confirmReject(person); };
-    actions.appendChild(accept);
-    actions.appendChild(reject);
-    row.appendChild(actions);
+    // Без `registration.approve` строки остаются только для чтения: кнопка,
+    // которая ответит 403, — тот же дефект, что и пустота без объяснения (Б3).
+    if (ACTIONS.approve_pending) {
+      // Кнопки строки — обычные: главная на экране одна (принцип 1, docs/development/91),
+      // а «Принять» на каждой из четырёх заявок давало четыре главных (А9 отчёта 142).
+      var actions = el("div", "ui-actions admin-actions--split");
+      var accept = el("button", "ui-btn ui-btn--sm", "Принять");
+      accept.type = "button";
+      accept.onclick = function () { decide(person, true); };
+      var reject = el("button", "ui-btn ui-btn--sm", "Отклонить");
+      reject.type = "button";
+      reject.onclick = function () { confirmReject(person); };
+      actions.appendChild(accept);
+      actions.appendChild(reject);
+      row.appendChild(actions);
+    }
     return row;
   }
 
@@ -74,6 +80,15 @@ _SCRIPT_PENDING = r"""
       if (denied) { status(denied, true); return null; }
       return loadOverview().then(function (data) {
         if (!data) return null;
+        // Право проверяется до пустого состояния: у master блок `pending` не
+        // приходит (у него только `participants.view`), и «Заявок нет» читалось
+        // как «решать нечего» вместо «решать не вам» (принцип 9, Б3).
+        // Слова — из общего словаря ядра, те же, что видит troupe при 403.
+        if ((data.allowed || []).indexOf("pending") === -1) {
+          clear($("pending-list"));
+          status(ERRORS.admin_panel_forbidden, true);
+          return data;
+        }
         var rows = BLOCKS.pending || [];
         renderPending(rows);
         status(rows.length

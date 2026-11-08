@@ -565,9 +565,35 @@ def broadcast_preview(request: Request) -> JSONResponse:
     })
 
 
-app.add_api_route("/webapp/admin/overview", _data({
+# Право `feedback.send` есть у admin/org/troupe, у мастера его нет
+# (`db/init/031`, docs/141 §3). Стенд отвечает как прод после карты t_4f0c64d6:
+# право приходит полем `can_send` в данных, а POST без права — 403.
+@app.get("/webapp/feedback/mine")
+async def feedback_mine(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    allowed = (request.headers.get(ROLE_HEADER) or "").strip().lower() != "master"
+    return JSONResponse({"ok": True, "data": [], "can_send": allowed})
+
+
+@app.post("/webapp/feedback")
+async def feedback_send(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() == "master":
+        return JSONResponse({"detail": "capability required: feedback.send"},
+                            status_code=403)
+    return JSONResponse({"ok": True, "id": 1, "status": "new",
+                         "kind_title": "Вопрос", "notified": 0})
+
+
+ADMIN_OVERVIEW = {
     "ok": True,
-    "actions": {"manage_rights": True, "set_tariff": True, "accrue_dues": True},
+    "allowed": ["people", "pending", "rights", "budget", "feedback", "audit", "invites"],
+    "actions": {"approve_pending": True, "manage_rights": True, "set_tariff": True,
+                "accrue_dues": True, "issue_codes": True},
     "blocks": {
         "people": {"counts": {"active": 17, "pending": 2}, "data": [
             {"id": 1, "display_name": "Иванов Виктор", "roles": ["admin"], "status": "active"},
@@ -585,7 +611,40 @@ app.add_api_route("/webapp/admin/overview", _data({
         "audit": {"data": []},
         "invites": {"data": []},
     },
-}), methods=["GET"])
+}
+
+
+async def _admin_overview(request: Request) -> JSONResponse:
+    """Панель по роли: master видит только людей, troupe не видит панели вовсе.
+
+    В бою разделы приходят списком `allowed` (`allowed_admin_blocks`): у master
+    есть `participants.view`, а `pending` требует `registration.approve` или
+    `participants.manage`. Без этого стенд отдавал всем админа, и дефект экрана 21
+    (карта t_8111b38d) на нём не воспроизводился.
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    if role in {"master", "participant"}:
+        return JSONResponse({"ok": True, "allowed": ["people"], "actions": {},
+                             "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
+    if role == "org":
+        # У организатора панель есть (`participants.view`, `registration.approve`,
+        # `budget.read`), а `registration.code.issue` нет (`db/init/008`), поэтому
+        # раздела `invites` не приходит ни блоком, ни в `allowed` — как в бою
+        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет).
+        blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "pending", "budget")}
+        actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
+                   if name != "issue_codes"}
+        return JSONResponse({"ok": True, "allowed": ["people", "pending", "budget"],
+                             "actions": actions, "blocks": blocks})
+    if role == "troupe":
+        return JSONResponse({"detail": "admin_panel_forbidden"}, status_code=403)
+    return JSONResponse(ADMIN_OVERVIEW)
+
+
+app.add_api_route("/webapp/admin/overview", _admin_overview, methods=["GET"])
 
 
 app.add_api_route("/webapp/admin/dues", _data({
