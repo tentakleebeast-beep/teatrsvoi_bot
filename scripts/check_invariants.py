@@ -117,8 +117,10 @@ def check_no_autodeploy(root: pathlib.Path | None = None) -> int:
     path = root / DEPLOY_WORKFLOW
     shown = DEPLOY_WORKFLOW.as_posix()
     if not path.is_file():
-        print(f"FAIL деплой нет {shown}: workflow ручного выката обязателен")
-        return 1
+        # Прод-workflow живут только в приватном репозитории (docs/development/26 §10):
+        # в публичном дереве deploy.yml нет, а без него автодеплою неоткуда взяться.
+        print(f"OK   деплой  {'deploy.yml не публикуется — автодеплоя нет':52} проверено: нет файла")
+        return 0
     triggers, found = _on_block(path.read_text(encoding="utf-8", errors="ignore"))
     if not found:
         print(f"FAIL деплой {shown}: нет блока on: — триггер не проверить")

@@ -57,6 +57,21 @@ def test_ручной_выкат_проходит(tmp_path):
     assert "OK   cron" in result.stdout
 
 
+def test_без_deploy_yml_проверка_проходит(tmp_path):
+    """Публичное дерево без прод-workflow — не провал: автодеплою неоткуда взяться.
+
+    Прод-workflow живут только в приватном репозитории (docs/development/26 §10),
+    поэтому отсутствие `deploy.yml` — ожидаемое состояние публичного среза.
+    """
+    root = _root(tmp_path)
+    (root / ".github" / "workflows" / "deploy.yml").unlink()
+
+    result = _run(root)
+
+    assert result.returncode == 0, result.stdout + result.stderr
+    assert "OK   деплой" in result.stdout
+
+
 def test_автодеплой_по_push_падает(tmp_path):
     """Добавленный кем-то `push:` в `on:` — `FAIL деплой` и код 1."""
     workflow = WORKFLOW.replace("on:\n  workflow_dispatch:", "on:\n  push:\n  workflow_dispatch:")

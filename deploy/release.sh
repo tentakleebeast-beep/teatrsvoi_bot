@@ -13,6 +13,10 @@
 set -euo pipefail
 
 WORKFLOW="deploy.yml"
+# Прод-workflow живут только в приватном репозитории (docs/development/26 §10):
+# gh без этого ищет deploy.yml в публичном и не находит. Переопределяется окружением.
+WORKFLOW_REPO="${WORKFLOW_REPO:-tentakleebeast-beep/teatrsvoi_bot-private}"
+export GH_REPO="$WORKFLOW_REPO"
 REPORT="docs/reports/78-release-state.md"
 CHANGELOG="CHANGELOG.md"
 

@@ -129,21 +129,23 @@ def test_prepare_ставит_локальный_тег_и_печатает_пл
                 "refs/tags/v0.4.0").returncode != 0
 
 
-def _fake_gh(tmp_path: pathlib.Path, watch_rc: int) -> tuple[pathlib.Path, pathlib.Path]:
+def _fake_gh(tmp_path: pathlib.Path, watch_rc: int) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path]:
     bin_dir = tmp_path / "bin"
     bin_dir.mkdir()
     log = tmp_path / "gh.log"
+    repo_log = tmp_path / "gh_repo.log"
     gh = bin_dir / "gh"
     gh.write_text(
         "#!/usr/bin/env bash\n"
         f'printf "%s\\n" "$*" >> "{log}"\n'
+        f'printf "%s\\n" "${{GH_REPO:-<не задан>}}" >> "{repo_log}"\n'
         'if [ "$1 $2" = "run list" ]; then echo 4242; exit 0; fi\n'
         f'if [ "$1 $2" = "run watch" ]; then exit {watch_rc}; fi\n'
         "exit 0\n",
         encoding="utf-8",
     )
     gh.chmod(0o755)
-    return bin_dir, log
+    return bin_dir, log, repo_log
 
 
 def _notify_stub(repo: pathlib.Path) -> pathlib.Path:
@@ -161,7 +163,7 @@ def _notify_stub(repo: pathlib.Path) -> pathlib.Path:
 def test_apply_запускает_workflow_и_сообщает_об_откате(tmp_path):
     """--apply: push тега, gh workflow run с dry_run=false, при провале — notify_admin."""
     repo = _repo(tmp_path)
-    bin_dir, gh_log = _fake_gh(tmp_path, watch_rc=1)
+    bin_dir, gh_log, repo_log = _fake_gh(tmp_path, watch_rc=1)
 
     prepared = _run(repo, "v0.4.0", "--skip-tests")
     assert prepared.returncode == 0, prepared.stdout + prepared.stderr
@@ -179,3 +181,6 @@ def test_apply_запускает_workflow_и_сообщает_об_откате
     # тег ушёл в origin — выкатывается именно он
     assert _git(tmp_path / "origin.git", "rev-parse", "-q", "--verify",
                 "refs/tags/v0.4.0").returncode == 0
+    # выкат идёт из приватного репозитория: в публичном срезе deploy.yml нет (docs/26 §10)
+    assert set(repo_log.read_text(encoding="utf-8").split()) == {
+        "tentakleebeast-beep/teatrsvoi_bot-private"}
