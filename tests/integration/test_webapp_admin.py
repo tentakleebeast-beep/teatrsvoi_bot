@@ -124,3 +124,31 @@ def test_панель_не_показывает_закрытые_обращен�
     assert all(item["id"] != created["id"] for item in data)
     assert all(item["status"] in ("new", "seen", "planned") for item in data)
     assert body["blocks"]["feedback"]["counts"].get("done", 0) >= 1
+
+
+def test_без_audit_view_журнал_не_читается(client, monkeypatch):
+    """Отчёт 142 §3 строка 28, Б3: у org и master нет `audit.view`.
+
+    Экран «Аудит» показывал этим ролям «Событий нет» — молчаливую пустоту,
+    хотя у troupe в том же месте честное «Раздел доступен организатору и
+    администратору» (403). Журнал закрыт, а не пуст: сервер не должен даже
+    читать `audit`, иначе экран получит повод нарисовать пустой список.
+    """
+    import app.api.admin as admin_api
+
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 782007, "Панель Орг Без Журнала", role="org")
+        _person(conn, 782008, "Панель Мастер Без Журнала", role="master")
+
+    def no_journal(*args, **kwargs):
+        raise AssertionError("журнал прочитан без audit.view")
+
+    monkeypatch.setattr(admin_api, "audit_recent", no_journal)
+
+    for chat_id in (782007, 782008):
+        result = client.get("/webapp/admin/overview", headers=_token(client, chat_id))
+        assert result.status_code == 200, result.text
+        body = result.json()
+        assert "audit" not in body["allowed"], chat_id
+        assert "audit" not in body["blocks"], chat_id
