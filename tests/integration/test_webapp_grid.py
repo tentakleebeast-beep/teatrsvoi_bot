@@ -184,6 +184,30 @@ def test_fr_h9_навигация_знает_о_праве_на_сводку(cli
     assert member_body["staff"] is False
 
 
+def test_сверка_открыта_по_праву_а_не_по_роли(client):
+    """`/webapp/nav` отдаёт `reconcile` по праву `budget.import` (отчёт 142 §3 строка 10).
+
+    Сверка листов пишет в Google-таблицу, поэтому кнопка «Проверить» нужна только
+    тем, кому открыт `POST /webapp/admin/reconcile`: организатору и админу. У
+    `troupe` и `master` права нет, и экран обязан сказать это словами, а не
+    оставить кнопку, упирающуюся в 403 (карта t_01784cc4, docs/architecture/25 §9.2).
+    """
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 781022, "Сверка Орг", role="org")
+        _person(conn, 781023, "Сверка Студиец")
+        _person(conn, 781024, "Сверка Мастер", role="master")
+
+    org = client.get("/webapp/nav", headers=_token(client, 781022)).json()
+    assert org["ok"] is True
+    assert org["reconcile"] is True, "организатор потерял сверку листов"
+
+    for chat_id, name in ((781023, "студиец"), (781024, "мастер")):
+        body = client.get("/webapp/nav", headers=_token(client, chat_id)).json()
+        assert body["ok"] is True
+        assert body["reconcile"] is False, f"{name} получил кнопку сверки"
+
+
 def test_своя_отметка_не_попадает_чужому(client):
     """Отметка дня идёт от токена: `participant_id` в запросе нет, чужое не пишется.
 
