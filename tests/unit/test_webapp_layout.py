@@ -27,6 +27,34 @@ def test_каркас_закрыт_и_подключает_систему():
     assert "maximum-scale=1" in html
 
 
+def test_щипок_включён_только_у_экрана_с_флагом_zoom():
+    """V-051: флаг `zoom` печатает одну мету «можно увеличивать» и помечает <html>.
+
+    Мету исторически писали два места (`layout.page` и `viewportGuard` в оболочке),
+    и оболочка перетирала страницу при загрузке. Поэтому у экрана по умолчанию
+    проверяется и мета, и отсутствие флага: разъехавшаяся пара вернула бы дефект
+    молча (docs/development/150 §2.8, §3 D3.2).
+    """
+    zoomed = layout.page("Файл", "", back="/webapp/files", zoom=True)
+    assert zoomed.count('name="viewport"') == 1
+    assert "maximum-scale=5" in zoomed and "user-scalable=yes" in zoomed
+    assert "maximum-scale=1" not in zoomed and "user-scalable=no" not in zoomed
+    assert "viewport-fit=cover" in zoomed
+    assert zoomed.split("\n", 1)[1].startswith('<html lang="ru" data-svoi-zoom="1">')
+
+    plain = layout.page("Деньги", "", tab="money", caps=[])
+    assert plain.count('name="viewport"') == 1
+    assert "maximum-scale=1, user-scalable=no, viewport-fit=cover" in plain
+    assert '<html lang="ru">' in plain
+    assert "data-svoi-zoom" not in plain
+
+    # Экран файла в продукте получает флаг: иначе щипок не включится нигде.
+    from app.pages import files_file
+
+    assert 'data-svoi-zoom="1"' in files_file.FILE_PAGE
+    assert "maximum-scale=5, user-scalable=yes" in files_file.FILE_PAGE
+
+
 def test_вкладок_ровно_четыре():
     html = layout.tabbar("week", [])
     assert html.count('class="ui-tabbar__item') == 4

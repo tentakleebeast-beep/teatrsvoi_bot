@@ -27,13 +27,19 @@ TOKEN = ("#tgWebAppData=user%3D%7B%22id%22%3A30%7D%26auth_date%3D1793000000%26ha
          "&tgWebAppVersion=7.0&tgWebAppPlatform=desktop&tgWebAppThemeParams=%7B%7D")
 SHELL = REPO / "services/tool-api/app/static/webapp-shell.js"
 
-FIXED_SHELL = SHELL.read_text(encoding="utf-8").replace(
-    '  meta.setAttribute("content",\n    "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");',
-    '  var allowZoom = document.documentElement.hasAttribute("data-svoi-zoom");\n'
-    '  meta.setAttribute("content", allowZoom\n'
-    '    ? "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover"\n'
-    '    : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");')
-assert "allowZoom" in FIXED_SHELL
+# Подмена оболочки нужна только там, где `viewportGuard` ещё перетирает мету.
+# После реализации V-051 в файле есть проверка `data-svoi-zoom` — берём его как есть.
+SHELL_TEXT = SHELL.read_text(encoding="utf-8")
+if "data-svoi-zoom" in SHELL_TEXT:
+    FIXED_SHELL = SHELL_TEXT
+else:
+    FIXED_SHELL = SHELL_TEXT.replace(
+        '  meta.setAttribute("content",\n    "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");',
+        '  var allowZoom = document.documentElement.hasAttribute("data-svoi-zoom");\n'
+        '  meta.setAttribute("content", allowZoom\n'
+        '    ? "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover"\n'
+        '    : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");')
+    assert "allowZoom" in FIXED_SHELL, "текст оболочки не совпал — подмена не сработала"
 
 NOZOOM = "maximum-scale=1, user-scalable=no"
 

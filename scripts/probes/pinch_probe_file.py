@@ -30,12 +30,20 @@ SHOTS = pathlib.Path(tempfile.gettempdir()) / "pinch-probe"
 SHOTS.mkdir(exist_ok=True)
 SHELL = REPO / "services/tool-api/app/static/webapp-shell.js"
 
-FIXED_SHELL = SHELL.read_text(encoding="utf-8").replace(
-    '  meta.setAttribute("content",\n    "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");',
-    '  var allowZoom = document.documentElement.hasAttribute("data-svoi-zoom");\n'
-    '  meta.setAttribute("content", allowZoom\n'
-    '    ? "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover"\n'
-    '    : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");')
+# Подмена оболочки нужна только там, где `viewportGuard` ещё перетирает мету.
+# После реализации V-051 в файле есть проверка `data-svoi-zoom` — тогда берём его
+# как есть: иначе подмена не найдёт старый текст и проба упадёт на собственном assert.
+SHELL_TEXT = SHELL.read_text(encoding="utf-8")
+if "data-svoi-zoom" in SHELL_TEXT:
+    FIXED_SHELL = SHELL_TEXT
+else:
+    FIXED_SHELL = SHELL_TEXT.replace(
+        '  meta.setAttribute("content",\n    "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");',
+        '  var allowZoom = document.documentElement.hasAttribute("data-svoi-zoom");\n'
+        '  meta.setAttribute("content", allowZoom\n'
+        '    ? "width=device-width, initial-scale=1, maximum-scale=5, user-scalable=yes, viewport-fit=cover"\n'
+        '    : "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");')
+    assert "allowZoom" in FIXED_SHELL, "текст оболочки не совпал — подмена не сработала"
 
 NOZOOM_META = ('<meta name="viewport" content="width=device-width, initial-scale=1, '
                'maximum-scale=1, user-scalable=no, viewport-fit=cover">')
@@ -51,7 +59,9 @@ def patched_file_page() -> str:
     from app.pages import files_file
 
     html = files_file.FILE_PAGE
-    assert NOZOOM_META in html, "в FILE_PAGE нет ожидаемой меты — код уже поменяли"
+    if ZOOM_META in html and 'data-svoi-zoom="1"' in html:
+        return html          # V-051 реализован: подмена страницы не нужна
+    assert NOZOOM_META in html, "в FILE_PAGE нет ожидаемой меты — код поменяли иначе"
     html = html.replace(NOZOOM_META, ZOOM_META, 1)
     return html.replace('<html lang="ru">', '<html lang="ru" data-svoi-zoom="1">', 1)
 
