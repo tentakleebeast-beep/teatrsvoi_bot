@@ -9,9 +9,12 @@
   нажатие открывает `.ui-sheet` с тремя вариантами и интервалом `.ui-range`;
   шаг интервала — 30 минут;
 * сохранение идёт сразу при закрытии листа, результат — `.ui-toast` с «Вернуть»;
-* «Заполнить по шаблону» и «Очистить неделю» — компактные кнопки под неделей,
-  чтобы попадать в первый экран 390×844; «Запомнить неделю» и ссылка на сводку
-  остаются строками ниже;
+* «Заполнить по шаблону» — компактная кнопка под неделей; «Загрузить из
+  общего листа» открывает предпросмотр своей колонки из «Расписания
+  студийцы»; сводка, «Сохранить шаблон недели» и «Очистить неделю» — строки
+  нижнего списка. Такой порядок — ответ владельца на V-048 (09.11.2026):
+  строка загрузки встала на место шаблона, шаблон уехал в блок со сводкой,
+  поэтому экран прокручивается на 110 px (замер 954 px);
 * сводка — те же семь строк с числами «свободны 7 из 9 · не отметились: …»,
   нажатие раскрывает людей в листе. Ни одной таблицы и ни одной сетки 30 × 16.
 
@@ -51,9 +54,13 @@ from app.pages.month import MONTH_PAGE
 from app.pages.week_marks import _SCRIPT_WEEK_MARKS
 from app.pages.week_shared import _DAYS, _WEEK_NAV_WITH_PROGRESS
 from app.pages.week_sheet import _SCRIPT_WEEK_SHEET
+from app.pages.week_sheet_load import _SCRIPT_WEEK_SHEET_LOAD, ROW_LOAD_FROM_SHEET
 from app.pages.week_summary import SUMMARY_PAGE
 from app.pages.week_template import _SCRIPT_WEEK_TEMPLATE
 
+#: Порядок нижнего блока — решение владельца по V-048 (09.11.2026): «Загрузить из
+#: общего листа» встаёт на место «Сохранить шаблон недели», сам шаблон переезжает
+#: ниже, в блок со сводкой и очисткой. Очистка — разрушающее действие — последняя.
 _BODY_WEEK = (
     _WEEK_NAV_WITH_PROGRESS
     + '<div class="ui-list" id="day-list">'
@@ -64,16 +71,20 @@ _BODY_WEEK = (
     + '<div class="ui-actions">'
     '<button class="ui-btn ui-btn--sm" type="button" id="fill-template" '
     'style="flex:1">Заполнить по шаблону</button>'
-    '<button class="ui-btn ui-btn--sm" type="button" id="save-template" '
-    'style="flex:1">Сохранить шаблон недели</button>'
     "</div>"
     + '<div class="ui-list">'
+    + ROW_LOAD_FROM_SHEET
     + '<a class="ui-row" id="to-summary" href="/webapp/week/summary" '
     'data-svoi-cap="schedule.read.all">'
     '<span class="ui-row__main">'
     '<span class="ui-row__title">Сводка занятости</span>'
     '<span class="ui-row__meta">кто свободен на этой неделе</span></span>'
     '<span class="ui-row__chevron">&#8250;</span></a>'
+    + '<button class="ui-row" type="button" id="save-template">'
+    '<span class="ui-row__main">'
+    '<span class="ui-row__title">Сохранить шаблон недели</span>'
+    '<span class="ui-row__meta">запомнить эту неделю как обычную</span></span>'
+    '<span class="ui-row__chevron">&#8250;</span></button>'
     + '<button class="ui-row" type="button" id="clear-week">'
     '<span class="ui-row__main">'
     '<span class="ui-row__title">Очистить неделю</span>'
@@ -83,7 +94,10 @@ _BODY_WEEK = (
     + '<div class="ui-small ui-muted" id="status"></div>'
 )
 
-_SCRIPT_WEEK = _SCRIPT_WEEK_SHEET + _SCRIPT_WEEK_MARKS + _SCRIPT_WEEK_TEMPLATE
+_SCRIPT_WEEK = (
+    _SCRIPT_WEEK_SHEET + _SCRIPT_WEEK_MARKS + _SCRIPT_WEEK_SHEET_LOAD
+    + _SCRIPT_WEEK_TEMPLATE
+)
 
 WEEK_PAGE = layout.page("Занятость", _BODY_WEEK, tab="week", scripts=_SCRIPT_WEEK)
 

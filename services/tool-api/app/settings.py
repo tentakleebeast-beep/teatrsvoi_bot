@@ -31,6 +31,12 @@ DEFAULT_GOOGLE_SA_JSON = "secrets/google-sa.json"
 DEFAULT_INVITE_TTL_DAYS = 7
 DEFAULT_ZIP_MAX_BYTES = 100 * 1024 * 1024   # потолок архива папки (FR-M6, аудит ponytail)
 
+# Общий лист людей «Расписание студийцы» (Э5, docs/development/149 §2.1): источник, из которого
+# человек загружает свою колонку. Адрес задан явно, а не «первым листом», и не переиспользует
+# SCHEDULE_SPREADSHEET_ID: тот указывает на плоский журнал «Занятость» и служит импорту.
+DEFAULT_SCHEDULE_HUMAN_SPREADSHEET_ID = "1fPIFtRBbGvhz6sgTfhBMKBMU3cZ-G30bM-EaEVe_nvI"
+DEFAULT_SCHEDULE_HUMAN_SHEET_TITLE = "студийцы"
+
 
 @dataclass(frozen=True, slots=True)
 class Settings(BaseSettings):
@@ -46,6 +52,8 @@ class Settings(BaseSettings):
     budget_spreadsheet_id: str = ""
     schedule_spreadsheet_id: str = ""
     schedule_sheet_title: str = ""
+    schedule_human_spreadsheet_id: str = DEFAULT_SCHEDULE_HUMAN_SPREADSHEET_ID
+    schedule_human_sheet_title: str = DEFAULT_SCHEDULE_HUMAN_SHEET_TITLE
     calendar_id_read: str = ""
     calendar_id_venue: str = ""
     calendar_id_draft: str = ""
@@ -95,6 +103,10 @@ class Settings(BaseSettings):
             budget_spreadsheet_id=env_str(src, "BUDGET_SPREADSHEET_ID"),
             schedule_spreadsheet_id=env_str(src, "SCHEDULE_SPREADSHEET_ID"),
             schedule_sheet_title=env_str(src, "SCHEDULE_SHEET_TITLE"),
+            schedule_human_spreadsheet_id=env_str(
+                src, "SCHEDULE_HUMAN_SPREADSHEET_ID", DEFAULT_SCHEDULE_HUMAN_SPREADSHEET_ID),
+            schedule_human_sheet_title=env_str(
+                src, "SCHEDULE_HUMAN_SHEET_TITLE", DEFAULT_SCHEDULE_HUMAN_SHEET_TITLE),
             calendar_id_read=env_str(src, "CALENDAR_ID_READ"),
             calendar_id_venue=env_str(src, "CALENDAR_ID_VENUE"),
             calendar_id_draft=env_str(src, "CALENDAR_ID_DRAFT"),

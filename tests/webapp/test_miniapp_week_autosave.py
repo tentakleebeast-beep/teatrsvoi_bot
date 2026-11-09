@@ -138,13 +138,15 @@ def test_вернуть_живёт_десять_секунд(week_page) -> None:
     assert page.locator(".ui-toast").count() == 0, "«Вернуть» остался дольше десяти секунд"
 
 
-def test_шаблон_сохраняется_отдельной_кнопкой(week_page) -> None:
+def test_шаблон_сохраняется_отдельной_строкой(week_page) -> None:
+    """Ответ V-048: шаблон переехал из кнопок в нижний блок — строка с пояснением."""
     page = week_page
-    button = page.locator("#save-template")
-    assert button.inner_text().strip() == "Сохранить шаблон недели"
-    overflow = button.evaluate("el => el.scrollWidth - el.clientWidth")
-    assert overflow <= 1, f"подпись кнопки не помещается: +{overflow} px"
-    button.click()
+    row = page.locator("#save-template")
+    assert row.locator(".ui-row__title").inner_text().strip() == "Сохранить шаблон недели"
+    assert row.locator(".ui-row__meta").inner_text().strip() == "запомнить эту неделю как обычную"
+    overflow = row.evaluate("el => el.scrollWidth - el.clientWidth")
+    assert overflow <= 1, f"подпись строки не помещается: +{overflow} px"
+    row.click()
 
     page.wait_for_timeout(300)
     saved = [body for kind, body in WEEK_EVENTS if kind == "TEMPLATE_FROM_WEEK"]

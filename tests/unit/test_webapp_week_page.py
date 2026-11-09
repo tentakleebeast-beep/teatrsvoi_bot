@@ -72,6 +72,26 @@ def test_одна_главная_кнопка_на_экран() -> None:
     assert "Сохранить неделю" not in week.WEEK_PAGE
 
 
+def test_загрузка_из_листа_на_месте_шаблона() -> None:
+    """Ответ V-048 (09.11.2026): строка загрузки вместо кнопки шаблона.
+
+    Порядок нижнего блока — тоже решение владельца: загрузка, сводка, шаблон,
+    очистка. Проверяем позиции, а не просто наличие.
+    """
+    html = week.WEEK_PAGE
+    assert 'id="load-from-sheet"' in html
+    assert "Загрузить из общего листа" in html
+    assert "своя колонка из «Расписание студийцы»" in html
+    load = html.index('id="load-from-sheet"')
+    summary = html.index('id="to-summary"')
+    template = html.index('id="save-template"')
+    clear = html.index('id="clear-week"')
+    assert load < summary < template < clear
+    # Шаблон — строка нижнего блока, а не кнопка рядом с «Заполнить по шаблону».
+    assert 'class="ui-btn ui-btn--sm" type="button" id="save-template"' not in html
+    assert 'class="ui-row" type="button" id="save-template"' in html
+
+
 def test_лист_дня_вместо_сетки() -> None:
     html = week.WEEK_PAGE
     assert "SVOI.sheet(" in html and "SVOI.toast(" in html

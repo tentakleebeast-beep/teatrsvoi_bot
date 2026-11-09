@@ -8,7 +8,7 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field, field_validator
 
-from .. import availability_store, core, month_grid
+from .. import availability_store, core, month_grid, sheet_load
 from ..availability_card import (
     DayCard,
     DayCardError,
@@ -29,6 +29,7 @@ from ..external import GOOGLE_API_ERRORS
 from ..rules import parse_availability, parse_interval
 from ..schedule_sheet import (
     cell_a1,
+    column_letter,
     find_names_row,
     find_service_column,
     merge_snapshot,
@@ -697,7 +698,9 @@ def _read_week(target: int, first: date) -> tuple[list[tuple[date, DayCard | Non
     cards: list[tuple[date, DayCard | None]] = []
     for offset in range(core.WEEK_DAYS):
         day = first + timedelta(days=offset)
-        declared = parse(texts[day]) if day in texts else None
+        # `raw_text` бывает клеткой сетки `1`/`0` (загрузка из общего листа): её
+        # состояние — «весь день», а не «пока не понятно» (149 §4.3).
+        declared = sheet_load.cell_card(texts[day]) if day in texts else None
         cards.append((day, declared if declared is not None else from_hours(by_day.get(day) or {})))
     return cards, female
 
@@ -1172,10 +1175,7 @@ def _sheet_sync(target: int, start: str | None, apply: bool, force: bool,
         return {"ok": False, "error": "nothing_to_write",
                 "detail": "на эту неделю нет отмеченных дней"}
 
-    with core.pool.connection() as conn:
-        person = conn.execute("select display_name from participant where id = %s",
-                              (target,)).fetchone()
-    display = person["display_name"] if person else ""
+    display, aliases = _sheet_load_person(target)
 
     service = core._sheets()
     try:
@@ -1191,14 +1191,14 @@ def _sheet_sync(target: int, start: str | None, apply: bool, force: bool,
 
     # политика: правку человека не затираем молча — показываем и спрашиваем `force`
     week_days = {day.isoformat() for day in texts}
-    conflicts = [row for row in snapshot_mismatches(values, target, display)
+    conflicts = [row for row in snapshot_mismatches(values, target, display, aliases=aliases)
                  if row["day"] in week_days]
     if conflicts and not force:
         return {"ok": False, "applied": False, "error": "mismatches_present",
                 "detail": "в листе есть правки после записи бота — решите, что верно",
                 "mismatches": conflicts}
 
-    plan = plan_week(values, texts, target, display)
+    plan = plan_week(values, texts, target, display, aliases=aliases)
     preview = [{"cell": cell.a1, "text": cell.text} for cell in plan.cells]
     if plan.problems:
         return {"ok": False, "error": "plan_problems", "problems": plan.problems,
@@ -1267,6 +1267,178 @@ def webapp_availability_sheet(body: WeekSheetIn, who: dict = Depends(core.webapp
     _webapp_self(who)
     return _sheet_sync(who["id"], body.start, body.apply, body.force, who["id"])
 
+
+
+def _sheet_load_values() -> tuple[list[list] | None, str]:
+    """Значения общего листа «Расписание студийцы» целиком: (строки, причина отказа).
+
+    Источник — отдельная пара настроек `SCHEDULE_HUMAN_*`: `SCHEDULE_SPREADSHEET_ID` смотрит
+    на плоский журнал «Занятость», и загрузка на нём читала бы пустой первый лист
+    (docs/development/149 §2.1). Диапазон тот же `A1:AZ3000`, что у остальных читателей листа:
+    он растёт вниз, и фиксированные 400 строк из замера стали бы обрезкой.
+    """
+    if not core.SCHEDULE_HUMAN_SPREADSHEET_ID:
+        return None, "no_spreadsheet"
+    try:
+        service = core._sheets()
+        values = service.spreadsheets().values().get(
+            spreadsheetId=core.SCHEDULE_HUMAN_SPREADSHEET_ID,
+            range=f"'{core.SCHEDULE_HUMAN_SHEET_TITLE}'!A1:AZ3000",
+            majorDimension="ROWS").execute().get("values", [])
+    except GOOGLE_API_ERRORS as e:
+        core.log.warning("общий лист «Расписание студийцы» недоступен: %s", e)
+        return None, "sheet_unavailable"
+    return values, ""
+
+
+def _sheet_load_person(target: int) -> tuple[str, list[str]]:
+    """Имя и псевдонимы человека: по ним ищется колонка в шапке листа (149 D9).
+
+    Ролевые псевдонимы (`alias_kind = 'role'`) не берём: «мастер» — это не имя, и колонку
+    по нему искать нельзя.
+    """
+    with core.pool.connection() as conn:
+        person = conn.execute("select display_name from participant where id = %s",
+                              (target,)).fetchone()
+        rows = conn.execute(
+            "select alias from person_alias"
+            " where participant_id = %s and alias_kind <> 'role' order by alias",
+            (target,)).fetchall()
+    return (person["display_name"] if person else ""), [row["alias"] for row in rows]
+
+
+def _sheet_load_preview(target: int, first: date) -> dict:
+    """Предпросмотр недели: где колонка человека, что в листе, что в базе, где расходятся.
+
+    Общий ответ у предпросмотра и загрузки один: загрузка считает состояния тем же путём,
+    иначе экран и запись разошлись бы в том, что считать расхождением. Ничего не пишет.
+    """
+    values, reason = _sheet_load_values()
+    if values is None:
+        return {"ok": False, "error": reason, "detail": sheet_load.detail(reason)}
+
+    display, aliases = _sheet_load_person(target)
+    cards, female = _read_week(target, first)
+    days = [first + timedelta(days=offset) for offset in range(core.WEEK_DAYS)]
+    db = {day: (to_text(card, female=female) if card is not None else None)
+          for day, card in cards}
+    preview = sheet_load.build_preview(values, display, aliases, days, db, female=female)
+    if not preview["ok"]:
+        columns = list(preview.get("columns") or [])
+        return {"ok": False, "error": preview["error"],
+                "detail": sheet_load.detail(preview["error"], columns),
+                "columns": [column_letter(column) for column in columns]}
+
+    out_days = []
+    for item in preview["days"]:
+        day = date.fromisoformat(item["day"])
+        out_days.append({**item, "weekday": core.WEEKDAY_SHORT[day.weekday()]})
+    return {"ok": True, "start": first.isoformat(), "title": _week_title(first),
+            "source": {"spreadsheet": sheet_load.SOURCE_TITLE,
+                       "tab": core.SCHEDULE_HUMAN_SHEET_TITLE},
+            "person": {"id": target, "name": display,
+                       "column": column_letter(preview["column"])},
+            "days": out_days, "counts": preview["counts"]}
+
+
+@router.get("/webapp/availability/sheet/preview")
+def webapp_availability_sheet_preview(start: str | None = None,
+                                      who: dict = Depends(core.webapp_actor)) -> dict:
+    """Своя колонка из общего листа: предпросмотр недели без записи (Э5, 149 §4.2).
+
+    Только для себя: параметра «чужой человек» здесь нет, право то же, что у отметки недели.
+    Неверная дата — 400 `bad_date`, как у недели.
+    """
+    _webapp_self(who)
+    return _sheet_load_preview(who["id"], _week_start(start))
+
+
+class SheetLoadIn(core.ApiIn):
+    """Что загрузить: неделя и дни. Состояния дня считает сервер, клиент присылает даты."""
+
+    start: str | None = None
+    days: list[str] = Field(default_factory=list, max_length=core.WEEK_DAYS)
+
+
+def _sheet_load_days(days: list[str], first: date) -> list[date]:
+    """Даты из запроса: порядок сохраняется, дубликаты схлопываются, чужая неделя — 400."""
+    if not days:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Выберите хотя бы один день",
+                       code="empty_selection")
+    allowed = {first + timedelta(days=offset) for offset in range(core.WEEK_DAYS)}
+    out: list[date] = []
+    for value in days:
+        try:
+            day = datetime.strptime(value, "%Y-%m-%d").date()
+        except ValueError:
+            raise ApiError(status.HTTP_400_BAD_REQUEST,
+                           "Дата должна быть в формате ГГГГ-ММ-ДД", code="bad_date") from None
+        if day not in allowed:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "day_outside_week")
+        if day not in out:
+            out.append(day)
+    return out
+
+
+def _sheet_load_apply(target: int, first: date, requested: list[date],
+                      actor_id: int) -> dict:
+    """Перенести выбранные дни из листа в базу — одной транзакцией (149 D7, §4.4).
+
+    День заменяется целиком (`delete_day` + `write_hours`): иначе часы 00–07 от старой
+    отметки пережили бы загрузку и свободное утро осталось бы враньём. `raw_text` — текст
+    листа как написан, поэтому неделя покажет то, что человек видел в таблице. В лист не
+    пишем ничего; любое исключение откатывает всю загрузку.
+    """
+    preview = _sheet_load_preview(target, first)
+    if not preview["ok"]:
+        return preview
+
+    plan = sheet_load.plan_load(preview["days"], requested)
+    skipped = plan["skipped"]
+    if not plan["write"]:
+        return {"ok": False, "error": "nothing_to_write",
+                "detail": sheet_load.detail("nothing_to_write"), "skipped": skipped}
+
+    before = {item["day"]: {"state": item["db_state"], "text": item["db_text"] or ""}
+              for item in preview["days"]}
+    after = {item["day"]: {"state": item["sheet_state"], "text": item["sheet_text"]}
+             for item in preview["days"]}
+    done: list[dict] = []
+    with core.pool.connection() as conn:
+        for item in plan["write"]:
+            day = item["day"]
+            card = sheet_load.cell_card(item["text"])
+            availability_store.delete_day(conn, target, day)
+            if card is not None:
+                availability_store.write_hours(
+                    conn, target, day, to_hours(card),
+                    source=availability_store.SHEET_IMPORT, raw_text=item["text"])
+            done.append({"day": day.isoformat(),
+                         "action": "загружен" if card is not None else "стёрт",
+                         "text": item["text"]})
+        keys = [item["day"].isoformat() for item in plan["write"]]
+        core.audit(conn, "human", actor_id, "availability.sheet.pull", "availability_hour",
+                   f"{target}:{first.isoformat()}",
+                   before={key: before[key] for key in keys},
+                   after={key: after[key] for key in keys},
+                   source={"spreadsheet": sheet_load.SOURCE_TITLE,
+                           "tab": core.SCHEDULE_HUMAN_SHEET_TITLE,
+                           "column": preview["person"]["column"]})
+    return {"ok": True, "applied": True, "start": first.isoformat(),
+            "days": done, "skipped": skipped}
+
+
+@router.post("/webapp/availability/sheet/load")
+def webapp_availability_sheet_load(body: SheetLoadIn,
+                                   who: dict = Depends(core.webapp_actor)) -> dict:
+    """Загрузить выбранные дни своей колонки из общего листа в базу (Э5).
+
+    Дни вне запрошенной недели — 400 до обращения к листу: лишнее не читаем и не пишем.
+    """
+    _webapp_self(who)
+    first = _week_start(body.start)
+    requested = _sheet_load_days(body.days, first)
+    return _sheet_load_apply(who["id"], first, requested, who["id"])
 
 
 @router.get("/tools/availability/sheet/mismatches")
