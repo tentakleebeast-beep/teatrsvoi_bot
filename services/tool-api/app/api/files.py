@@ -659,6 +659,56 @@ def webapp_folders_tree(scope: Literal["shared", "personal"] = Query(default="sh
     return {"ok": True, "data": rows, "count": len(rows)}
 
 
+@router.get("/webapp/files/{file_id}/view")
+def webapp_file_view(file_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Ссылка на просмотр одного файла для экрана `/webapp/file?id=N` (А3).
+
+    До этой ручки «Файлы» умели только загружать и удалять: картинку и pdf в
+    Mini App открыть было нельзя, а в папке pdf уходил в `<audio src>` — человек
+    «слушал» ноты (docs/development/150 §1). Здесь один вид ссылки на все виды
+    файлов: подпись `inline` на 15 минут, ключ объекта наружу не отдаётся.
+
+    Кто видит файл, решает `files_store.file_for_reader`: свой файл, файл общей
+    папки, админ с активным грантом. Чужой закрытый и несуществующий отвечают
+    одинаково — 404 (FR-K8).
+
+    Каждый просмотр пишется в аудит как `file.view` (FR-K9): по нему видно, кто
+    и когда открывал файл, и открывал ли его админ по гранту (`as_admin`).
+    Холодный файл возвращается в горячий бакет до выдачи ссылки; нет холодной
+    копии — 410, а не пустая ссылка.
+    """
+    reader = core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
+    with core.pool.connection() as conn:
+        row, as_admin = files_store.file_for_reader(conn, file_id, reader)
+        if row is None:
+            raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.",
+                           code="file_not_found")
+        if not row["object_key"]:
+            raise ApiError(status.HTTP_404_NOT_FOUND,
+                           "Файл не долетел до хранилища — загрузите заново.",
+                           code="file_not_uploaded")
+        restored = False
+        if row.get("cold_at"):
+            try:
+                restored = cold.restore(conn, file_id)
+            except FileNotFoundError as exc:
+                raise ApiError(status.HTTP_410_GONE,
+                               "Файл не найден ни в хранилище, ни в архиве.",
+                               code="file_cold_missing") from exc
+        conn.execute("update file_object set last_access_at = now() where id = %s", (file_id,))
+        url = files_store.presigned_view_url(row["object_key"], ttl=files_store.PRESIGN_TTL)
+        core.audit(conn, "human", who["id"], "file.view", "file_object", str(file_id),
+                   after={"name": row["name"], "kind": row["kind"], "via": "webapp",
+                          "as_admin": as_admin})
+    return {"ok": True, "id": file_id, "url": url, "expires_in": files_store.PRESIGN_TTL,
+            "kind": row["kind"], "name": row["name"], "mime": row["mime"],
+            "size_bytes": row["size_bytes"],
+            # `extension` держит точку ради Content-Disposition («file» + ext);
+            # наружу расширение уходит без неё: `png`, а не `.png` (§3.1).
+            "ext": files_store.extension(row["name"]).lstrip("."),
+            "folder": row.get("folder"), "as_admin": as_admin, "cold_restored": restored}
+
+
 @router.post("/webapp/folders")
 def webapp_folders_create(body: FolderIn, who: dict = Depends(core.webapp_actor)) -> dict:
     """Создать папку с экрана: обработчик тот же, что у `/folders` в чате."""

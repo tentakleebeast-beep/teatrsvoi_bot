@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Слой А дизайн-ревью Mini App: 30 экранов, четыре роли, две схемы, две ширины.
+"""Слой А дизайн-ревью Mini App: 31 экран, четыре роли, две схемы, две ширины.
 
 Зачем отдельный скрипт, а не `scripts/ux_audit.py`: замер 31.10.2026 (отчёт 95)
 обходил 20 экранов из 30 и не знал тёмной схемы, контраст проверялся на 5 экранах.
@@ -20,9 +20,9 @@
 
 А10 (семь редиректов: 301 и цель открывается) проверяется отдельно, без браузера.
 
-Список экранов берётся из кода: маршруты-страницы `app/pages/routes.py` (20 штук)
+Список экранов берётся из кода: маршруты-страницы `app/pages/routes.py` (21 штука)
 плюс записи с полем `page` в реестре `app/webapp.py:SECTIONS` (10 разделов) —
-ровно те же 30 адресов, что отдаёт стенд `tests/webapp/server.py:PAGE_ROUTES`.
+ровно те же 31 адрес, что отдаёт стенд `tests/webapp/server.py:PAGE_ROUTES`.
 Сверка списков — `--verify-inventory` (код возврата 1 при расхождении).
 
 Вход на стенд: `POST /webapp/auth` с initData, подписанным токеном dev-бота, —
@@ -87,6 +87,7 @@ SCREEN_LABELS: dict[str, tuple[int, str, str]] = {
     "/webapp/notes": (15, "notes", "Заметки"),
     "/webapp/files": (16, "files", "Файлы студии"),
     "/webapp/folder": (17, "folder", "Папка"),
+    "/webapp/file": (31, "file", "Файл"),
     "/webapp/person": (18, "person", "Карточка участника"),
     "/webapp/services": (19, "services", "Сервисы"),
     "/webapp/ui": (20, "ui", "Справочник компонентов"),
@@ -284,7 +285,7 @@ MEASURE = r"""
 # --- инвентарь из кода ---------------------------------------------------------
 
 def inventory_from_code() -> dict[str, str]:
-    """30 экранов: маршруты-страницы `routes.py` + разделы реестра `SECTIONS`."""
+    """31 экран: маршруты-страницы `routes.py` + разделы реестра `SECTIONS`."""
     import sys as _sys
 
     for path in (str(ROOT), str(TOOL_API)):
@@ -344,7 +345,7 @@ def screen_slug(path: str) -> str:
 
 
 def build_inventory() -> list[str]:
-    """Список 30 экранов в порядке чек-листа 141 §2."""
+    """Список 31 экрана в порядке чек-листа 141 §2."""
     screens = inventory_from_code()
     order = sorted(screens, key=lambda p: (SCREEN_LABELS.get(p, (999, "", ""))[0], p))
     return order
@@ -675,7 +676,7 @@ def markdown_report(payload: dict) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Слой А дизайн-ревью Mini App: 30 экранов, 4 роли, 2 схемы, 2 ширины.")
+        description="Слой А дизайн-ревью Mini App: 31 экран, 4 роли, 2 схемы, 2 ширины.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8010",
                         help="адрес стенда tool-api (по умолчанию http://127.0.0.1:8010)")
     parser.add_argument("--out", help="куда записать JSON с мерками")

@@ -229,6 +229,14 @@ entries:
     tool: list_files
     note: "список треков папки; чтение текста — read_file"
 
+  - id: screen.file
+    kind: screen
+    surface: webapp
+    source: /webapp/file
+    title: Файл
+    tool: read_file
+    note: "один файл по номеру: имя, вид, ссылка на просмотр; текст и цитата — read_file"
+
   - id: screen.notes
     kind: screen
     surface: webapp

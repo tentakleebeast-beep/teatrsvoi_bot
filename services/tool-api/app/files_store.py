@@ -343,6 +343,44 @@ def file_for_viewer(conn, file_id: int, who: dict) -> tuple[dict | None, bool]:
     return None, False
 
 
+def file_for_reader(conn, file_id: int, who: dict) -> tuple[dict | None, bool]:
+    """Файл глазами читателя Mini App: (строка, «видно по гранту админа»).
+
+    Одно правило на все три действия экрана файла (`/view`, будущее скачивание,
+    открытие в браузере) — чтобы «аудио в общей папке слышу, pdf рядом — 404»
+    не повторялось (docs/development/150 §3 D6). Законных случаев три:
+
+    * свой файл;
+    * файл лежит в папке с `folder.scope = 'shared'` — её читают все роли (FR-K10);
+      истина здесь — папка, а не `file_object.scope`: колонка ставится константой
+      при вставке и в `shared` не переходит (замер 09.11.2026 — 4/4 на проде);
+    * админ с активным грантом `file_access` — тогда второй элемент `True`.
+
+    Иначе `(None, False)`: чужой закрытый и несуществующий неотличимы (FR-K8).
+    Мёртвую ветку `file_object.scope = 'shared'` не трогаем — она осталась в
+    `file_for_viewer` до отдельной карты про данные.
+    """
+    from . import file_access
+
+    row = conn.execute(f"{_FILE_SELECT} where f.id = %s and f.deleted_at is null",
+                       (file_id,)).fetchone()
+    if row is None:
+        return None, False
+    if int(row["participant_id"] or 0) == int(who.get("id") or 0):
+        return row, False
+    shared = conn.execute(
+        "select 1 from folder fo join file_folder ff on ff.folder_id = fo.id"
+        " where ff.file_id = %s and fo.deleted_at is null and fo.scope = 'shared'"
+        " limit 1", (file_id,)).fetchone()
+    if shared is not None:
+        return row, False
+    if "admin" in file_access.roles_of(who):
+        grant = file_access.active_grant(conn, file_id, int(who.get("id") or 0))
+        if grant is not None:
+            return row, True
+    return None, False
+
+
 def remove(conn, who: dict, file_id: int) -> dict:
     """Мягко удалить свой файл: строка остаётся, но больше нигде не видна (FR-M8, FR-L8).
 
@@ -435,6 +473,21 @@ def presigned_url(key: str, name: str, ttl: int = 900) -> str:
         "get_object",
         Params={"Bucket": bucket_private(), "Key": key,
                 "ResponseContentDisposition": attachment_header(name)},
+        ExpiresIn=ttl)
+
+
+def presigned_view_url(key: str, ttl: int = PRESIGN_TTL) -> str:
+    """Ссылка на просмотр: браузер показывает файл, а не скачивает его.
+
+    `presigned_url` всегда ставит `attachment` — по такой ссылке pdf уходит в
+    «Загрузки» вместо того, чтобы открыться (замер 150 §2.4). Здесь тот же GET,
+    но `inline`: картинка рисуется, pdf открывается встроенным просмотрщиком.
+    Ключ объекта наружу не отдаётся — только подпись, и живёт она 15 минут.
+    """
+    return public_client().generate_presigned_url(
+        "get_object",
+        Params={"Bucket": bucket_private(), "Key": key,
+                "ResponseContentDisposition": "inline"},
         ExpiresIn=ttl)
 
 

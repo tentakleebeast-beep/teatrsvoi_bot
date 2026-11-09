@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import base64
 import json
 import pathlib
 import sys
@@ -64,6 +65,7 @@ PAGE_ROUTES = {
     "/webapp/services": services_page.SERVICES_PAGE,
     "/webapp/files": files_pages.FILES_PAGE,
     "/webapp/folder": files_pages.FOLDER_PAGE,
+    "/webapp/file": files_pages.FILE_PAGE,
     "/webapp/notes": pages.NOTES_PAGE,
     "/webapp/more": home_pages.MORE_PAGE,
 }
@@ -881,16 +883,130 @@ app.add_api_route("/webapp/files/list", _files_data({
     "quota": {"used": 25 * 1024 * 1024, "total": 1024 * 1024 * 1024, "left": 999 * 1024 * 1024},
 }))
 
-app.add_api_route("/webapp/folder/{folder_id}/files", _files_data({
-    "ok": True,
-    "folder": {"id": 7, "path": "Спектакль/Музыка", "scope": "folder"},
-    "count": 3,
-    "data": [
-        {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "about:blank"},
-        {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "about:blank"},
-        {"id": 33, "name": "03 Финал.mp3", "kind": "audio", "duration_sec": 241, "url": "about:blank"},
-    ],
-}))
+# Папка по номеру: 7 — только звук, 8 — только документы, 9 — только картинки,
+# 10 — смешанная. Нужны, чтобы проверить кнопки и плеер по набору видов (А3 §6).
+FOLDER_FILES = {
+    7: {"ok": True, "folder": {"id": 7, "path": "Спектакль/Музыка", "scope": "folder"},
+        "count": 3, "data": [
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "about:blank"},
+            {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "about:blank"},
+            {"id": 33, "name": "03 Финал.mp3", "kind": "audio", "duration_sec": 241, "url": "about:blank"},
+        ]},
+    8: {"ok": True, "folder": {"id": 8, "path": "Документы/Ноты", "scope": "folder"},
+        "count": 2, "data": [
+            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
+            {"id": 42, "name": "Программа концерта.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
+        ]},
+    9: {"ok": True, "folder": {"id": 9, "path": "Спектакль/Афиши", "scope": "folder"},
+        "count": 2, "data": [
+            {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
+            {"id": 52, "name": "Сцена.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
+        ]},
+    10: {"ok": True, "folder": {"id": 10, "path": "Спектакль/Пурга", "scope": "folder"},
+         "count": 3, "data": [
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "about:blank"},
+            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
+            {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
+        ]},
+}
+
+
+def _files_folder_files():
+    """Ответ стенда «файлы папки»: данные зависят от номера папки."""
+
+    async def handler(request: Request, folder_id: int):
+        denied = _files_guard(request)
+        if denied is not None:
+            return denied
+        return JSONResponse(FOLDER_FILES.get(folder_id) or FOLDER_FILES[7])
+    return handler
+
+
+app.add_api_route("/webapp/folder/{folder_id}/files", _files_folder_files(), methods=["GET"])
+
+# Экран файла (А3): один ответ на каждый вид и по отказу на 404/410.
+VIEW_FILES = {
+    1: {"ok": True, "id": 1, "url": "about:blank", "expires_in": 900, "kind": "audio",
+        "name": "Репетиция 12 октября.m4a", "mime": "audio/mp4",
+        "size_bytes": 18 * 1024 * 1024, "ext": "m4a", "folder": None,
+        "as_admin": False, "cold_restored": False},
+    2: {"ok": True, "id": 2, "url": "/stand/sample.pdf", "expires_in": 900, "kind": "text",
+        "name": "Гаммы для хора.pdf", "mime": "application/pdf",
+        "size_bytes": 430 * 1024, "ext": "pdf", "folder": None,
+        "as_admin": False, "cold_restored": False},
+    3: {"ok": True, "id": 3, "url": "/stand/image.png", "expires_in": 900, "kind": "image",
+        "name": "01 Увертюра.png", "mime": "image/png", "size_bytes": 6 * 1024 * 1024,
+        "ext": "png", "folder": "Спектакль/Музыка", "as_admin": False,
+        "cold_restored": False},
+    4: {"ok": True, "id": 4, "url": "/stand/program.txt", "expires_in": 900, "kind": "text",
+        "name": "Программа.txt", "mime": "text/plain", "size_bytes": 512,
+        "ext": "txt", "folder": None, "as_admin": False, "cold_restored": False},
+    5: {"ok": True, "id": 5, "url": "/stand/archive.bin", "expires_in": 900, "kind": "other",
+        "name": "Архив.bin", "mime": "application/octet-stream", "size_bytes": 2048,
+        "ext": "bin", "folder": None, "as_admin": False, "cold_restored": False},
+    # Ссылка «протухла»: картинка отвечает 403, и экран обязан повторить запрос
+    # ровно один раз, а потом показать заглушку (А3 §7.6).
+    6: {"ok": True, "id": 6, "url": "/stand/expired.png", "expires_in": 900, "kind": "image",
+        "name": "Протухшая ссылка.png", "mime": "image/png", "size_bytes": 2048,
+        "ext": "png", "folder": None, "as_admin": False, "cold_restored": False},
+    # Длинное имя в две строки: экран обязан уложиться в высоту без прокрутки (К8).
+    8: {"ok": True, "id": 8, "url": "/stand/image.png", "expires_in": 900, "kind": "image",
+        "name": "Монолог Гамлета «Быть или не быть, вот в чём вопрос» — снимок экрана 09.11.2026.png",
+        "mime": "image/png", "size_bytes": 1169163, "ext": "png",
+        "folder": "Личное/Фото", "as_admin": False, "cold_restored": False},
+}
+
+#: 1×1 прозрачный PNG: больше для проверки «картинка нарисовалась» не нужно.
+PIXEL_PNG = base64.b64decode(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==")
+
+
+def _webapp_file_view():
+    """Ответ стенда на `/webapp/files/{id}/view`: 200, 404 или 410, как tool-api."""
+
+    async def handler(request: Request, file_id: int):
+        denied = _files_guard(request)
+        if denied is not None:
+            return denied
+        VIEW_CALLS[file_id] = VIEW_CALLS.get(file_id, 0) + 1
+        if file_id == 7:
+            return JSONResponse({"ok": False, "error": "file_cold_missing",
+                                 "detail": "Файл не найден ни в хранилище, ни в архиве."},
+                                status_code=410)
+        payload = VIEW_FILES.get(file_id)
+        if payload is None:
+            return JSONResponse({"ok": False, "error": "file_not_found",
+                                 "detail": "Файл не найден."}, status_code=404)
+        return JSONResponse(payload)
+    return handler
+
+
+#: Сколько раз стенд выдавал ссылку на файл: по этому счёту видно, что экран
+#: повторил запрос ровно один раз, а не зациклился (А3 §7.6).
+VIEW_CALLS: dict[int, int] = {}
+
+
+@app.get("/stand/view-calls/{file_id}")
+def stand_view_calls(file_id: int, reset: int = 0) -> dict:
+    count = VIEW_CALLS.get(file_id, 0)
+    if reset:
+        VIEW_CALLS[file_id] = 0
+    return {"file_id": file_id, "count": count}
+
+
+app.add_api_route("/webapp/files/{file_id}/view", _webapp_file_view(), methods=["GET"])
+
+
+@app.get("/stand/image.png")
+def stand_image() -> Response:
+    return Response(PIXEL_PNG, media_type="image/png")
+
+
+@app.get("/stand/expired.png")
+def stand_expired() -> Response:
+    """Подпись истекла: хранилище отвечает 403 — картинка не рисуется."""
+    return JSONResponse({"detail": "Request has expired"}, status_code=403)
+
 
 # Действия экрана «Файлы» (Ш-08): папки, доступ, теги. Стенд отвечает так же, как
 # tool-api, иначе страница показывала бы «ошибка» там, где на проде всё работает.
