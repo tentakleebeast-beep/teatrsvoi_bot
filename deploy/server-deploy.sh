@@ -348,7 +348,9 @@ cmd_proxy() {
   local host i problems=0
   for host in "$SVOI_DOMAIN" "$SVOI_STORAGE_DOMAIN"; do
     for i in $(seq 1 30); do
-      if curl -fsSI "https://$host" >/dev/null 2>&1; then
+      # -f нельзя: Garage на / отвечает 403, и проверка TLS принимала бы это за
+      # отсутствие сертификата (Д-03: выкат v0.9.0 падал уже после выпуска TLS).
+      if curl -sSI "https://$host" >/dev/null 2>&1; then
         info "TLS $host в порядке"
         break
       fi
