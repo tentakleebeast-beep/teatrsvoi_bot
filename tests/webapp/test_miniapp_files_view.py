@@ -7,6 +7,11 @@
 * строка «Файлов» открывает экран файла, «Удалить» и шеврон остаются отдельными целями;
 * картинка укладывается в экран без прокрутки при имени в одну и в две строки;
 * документ и текст показывают карточку и «Открыть в браузере» (свежая ссылка + openLink);
+* строка папки ведёт в файл, который действительно открывается: картинка рисуется,
+  документ показывает карточку (не «Файл не найден»);
+* «Слушать всё» и автопереход идут только по звуку — pdf между треками очередь не ломает;
+* стрелки порядка меняют строки местами и шлют `/order` с новым списком id;
+* «Скачать архивом» отдаёт поток и пишет «Архив скачивается.», а отказ 413 — словами;
 * истёкшая ссылка повторяется ровно один раз, затем понятная заглушка;
 * 404/410/403 говорят словами, кнопок не предлагают;
 * папка без звука не заводит ни «Слушать всё», ни плеера.
@@ -19,6 +24,8 @@
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 
@@ -30,6 +37,39 @@ def _rows(page) -> None:
 def _file_screen(page) -> None:
     page.wait_for_function(
         "() => document.querySelector('#file-name').textContent !== 'Файл'", timeout=10_000)
+
+
+def _tracks(page, count: int) -> None:
+    """Ждёт строки папки: их число — доказательство, что экран загрузил файлы."""
+    page.wait_for_function(
+        "(n) => document.querySelectorAll('#tracks .ui-row').length === n",
+        arg=count, timeout=10_000)
+
+
+def _stand(page, path: str) -> dict:
+    """Читает журнал стенда (`/stand/...`) — последствие действия, а не картинка."""
+    base = page.url.split("/webapp/")[0]
+    return page.request.get(f"{base}/stand/{path}").json()
+
+
+def _wait_stand(page, path: str, ready, timeout: float = 5.0) -> dict:
+    """Ждёт запись в журнале стенда: без неё экран мог перестроить только DOM."""
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        data = _stand(page, path)
+        if ready(data):
+            return data
+        page.wait_for_timeout(100)
+    raise AssertionError(f"стенд не записал {path}: {_stand(page, path)}")
+
+
+def _opened_file(page, file_id: int) -> None:
+    """Проверяет, что по адресу файла открылся он сам, а не «Файл не найден»."""
+    page.wait_for_url(f"**/webapp/file?id={file_id}", timeout=10_000)
+    _file_screen(page)
+    body = page.inner_text("body")
+    assert "Файл не найден" not in body, body
+    assert not page.svoi_errors, page.svoi_errors
 
 
 def test_строка_списка_открывает_экран_файла(app_page) -> None:
@@ -56,6 +96,10 @@ def test_удаление_и_шеврон_не_открывают_файл(app_p
 
     page.locator("#list .ui-row").nth(2).locator(".ui-row__chevron").click()
     page.wait_for_url("**/webapp/folder?id=7", timeout=10_000)
+    # Адрес папки — не доказательство: на новом экране должны быть её строки.
+    _tracks(page, 3)
+    assert "Спектакль/Музыка" in page.inner_text("#subtitle"), page.inner_text("#subtitle")
+    assert not page.svoi_errors, page.svoi_errors
 
 
 @pytest.mark.parametrize("file_id", [3, 8], ids=["имя в одну строку", "имя в две строки"])
@@ -178,8 +222,7 @@ def test_роль_без_права_читает_отказ(app_page) -> None:
 def test_папка_из_документов_без_плеера(app_page) -> None:
     """К1 §6.1: pdf-папка не создаёт ни «Слушать всё», ни `<audio>`; архив есть."""
     page = app_page("/webapp/folder?id=8")
-    page.wait_for_function(
-        "() => document.querySelectorAll('#tracks .ui-row').length > 0", timeout=10_000)
+    _tracks(page, 2)
 
     assert page.locator("#tracks .ui-row").count() == 2
     assert page.locator("audio").count() == 0, "папка из pdf завела плеер"
@@ -188,25 +231,124 @@ def test_папка_из_документов_без_плеера(app_page) -> N
     assert "2 файла" in page.inner_text("#subtitle"), page.inner_text("#subtitle")
     assert "документ" in page.inner_text("#tracks")
 
+    # Строка документа — не адрес, а открывшийся документ: карточка и кнопка.
+    page.locator("#tracks .ui-row").first.click()
+    _opened_file(page, 41)
+    page.wait_for_selector(".ui-file__card", timeout=10_000)
+    card = page.inner_text(".ui-file__card")
+    assert "Гаммы для хора.pdf" in card and "документ" in card, card
+    assert page.locator("#file-actions button:has-text('Открыть в браузере')").count() == 1
+
 
 def test_папка_с_картинками_не_играет_а_открывает(app_page) -> None:
     """К2: клик по картинке в папке открывает экран файла, а не запускает плеер."""
     page = app_page("/webapp/folder?id=9")
-    page.wait_for_function(
-        "() => document.querySelectorAll('#tracks .ui-row').length > 0", timeout=10_000)
+    _tracks(page, 2)
     assert page.locator("#play-all").is_visible() is False
     assert page.locator("audio").count() == 0
 
     page.locator("#tracks .ui-row").first.click()
-    page.wait_for_url("**/webapp/file?id=51", timeout=10_000)
+    _opened_file(page, 51)
+    # На новом экране — сама картинка: `naturalWidth > 0` значит, что байты пришли.
+    page.wait_for_function(
+        "() => { var i = document.querySelector('#scene img');"
+        " return i && i.complete && i.naturalWidth > 0; }", timeout=10_000)
+    assert page.inner_text("#file-name") == "Афиша.png", page.inner_text("#file-name")
 
 
 def test_смешанная_папка_играет_только_звук(app_page) -> None:
     """К3: «Слушать всё» есть, но документ в очередь воспроизведения не попадает."""
     page = app_page("/webapp/folder?id=10")
-    page.wait_for_function(
-        "() => document.querySelectorAll('#tracks .ui-row').length > 0", timeout=10_000)
+    _tracks(page, 3)
     assert page.locator("#play-all").is_visible() is True
 
     page.locator("#tracks .ui-row").nth(1).click()
-    page.wait_for_url("**/webapp/file?id=41", timeout=10_000)
+    _opened_file(page, 41)
+    page.wait_for_selector(".ui-file__card", timeout=10_000)
+    assert "документ" in page.inner_text(".ui-file__card"), page.inner_text("#scene")
+
+
+def test_автопереход_идёт_по_звуку_а_pdf_в_очередь_не_попадает(app_page) -> None:
+    """К3, §6.5: между двумя audio лежит pdf — «ended» уводит на второй звук.
+
+    Папка 11 (`audio 31, pdf 41, audio 32`): без пропуска не-звука очередь встала
+    бы на pdf, и человек услышал бы тишину. Адрес у треков разный (`?track=N`),
+    иначе `#player.src` не отличит первый звук от второго.
+    """
+    page = app_page("/webapp/folder?id=11")
+    _tracks(page, 3)
+    assert page.locator("#play-all").is_visible() is True
+
+    page.locator("#play-all").click()
+    page.wait_for_function(
+        "() => { var n = document.querySelector('#now');"
+        " return !n.hidden && n.textContent.indexOf('01 Увертюра.mp3') >= 0; }",
+        timeout=10_000)
+    first_src = page.evaluate("() => document.querySelector('#player').src")
+    assert "track=1" in first_src, first_src
+    assert "sample.pdf" not in first_src, first_src
+
+    page.evaluate("() => document.querySelector('#player').dispatchEvent(new Event('ended'))")
+    page.wait_for_function(
+        "() => document.querySelector('#now').textContent.indexOf('02 Выход героя.mp3') >= 0",
+        timeout=10_000)
+    now = page.inner_text("#now")
+    second_src = page.evaluate("() => document.querySelector('#player').src")
+    assert "Играет: 3." in now, now
+    assert "track=2" in second_src, second_src
+    assert "pdf" not in now.lower() and "sample.pdf" not in second_src, (now, second_src)
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_порядок_треков_меняет_строки_и_шлёт_order(app_page) -> None:
+    """§6.6: «↑» меняет местами строки и отправляет новый список id, а не только DOM."""
+    page = app_page("/webapp/folder?id=7")
+    _tracks(page, 3)
+    _stand(page, "folder-order/7?reset=1")
+
+    titles = page.locator("#tracks .ui-row__title")
+    assert titles.nth(0).inner_text() == "01 Увертюра.mp3", titles.all_inner_texts()
+
+    page.locator("#tracks .ui-row").nth(1).locator("button[aria-label='Выше']").click()
+    page.wait_for_function(
+        "() => document.querySelectorAll('#tracks .ui-row__title')[0].textContent"
+        " === '02 Выход героя.mp3'", timeout=10_000)
+
+    orders = _wait_stand(page, "folder-order/7", lambda data: data["count"] >= 1)
+    assert orders["last"]["file_ids"] == [32, 31, 33], orders
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_архив_скачивается_и_пишет_об_этом(app_page) -> None:
+    """§6.6: «Скачать архивом» получает поток и начинает загрузку — это видно."""
+    page = app_page("/webapp/folder?id=8")
+    _tracks(page, 2)
+    _stand(page, "zip-calls/8?reset=1")
+
+    with page.expect_download(timeout=10_000) as caught:
+        page.locator("#zip").click()
+    download = caught.value
+    assert download.suggested_filename.endswith(".zip"), download.suggested_filename
+
+    page.wait_for_function(
+        "() => document.querySelector('#status').textContent.indexOf('Архив скачивается.') >= 0",
+        timeout=10_000)
+    assert _wait_stand(page, "zip-calls/8", lambda data: data["count"] >= 1)["count"] >= 1
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_архив_413_говорит_словами_а_не_пустым_экраном(app_page) -> None:
+    """§6.6: потолок архива — отказ в `detail`, экран печатает его, а не пустое место."""
+    page = app_page("/webapp/folder?id=12")
+    _tracks(page, 1)
+    _stand(page, "zip-calls/12?reset=1")
+
+    page.locator("#zip").click()
+    page.wait_for_function(
+        "() => document.querySelector('#status').textContent"
+        ".indexOf('Архив больше 100 МБ — скачивайте по файлам.') >= 0", timeout=10_000)
+    status = page.inner_text("#status")
+    assert "Архив больше 100 МБ" in status, status
+    assert page.locator("#tracks .ui-row").count() == 1, "отказ архива стёр папку"
+    assert _wait_stand(page, "zip-calls/12", lambda data: data["count"] >= 1)
+    assert not page.svoi_errors, page.svoi_errors

@@ -32,7 +32,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | Маршрутов (методов) в `contracts/openapi.json` | 236 |
 | Маршрутов в коде, которые есть в контракте | 236 |
 | Всего маршрутов в коде (с редиректами и ресурсами) | 237 |
-| Из них с тестом (по вызову пути в `tests/`) | 223 |
+| Из них с тестом (по вызову пути в `tests/`) | 224 |
 | Действий без права (ни возможности, ни сессии) | 48 |
 | Действий с правом, проверенным в теле через `core._webapp_require(…)` | 50 |
 | Действий с правом, проверенным в теле через «*» в caps | 2 |
@@ -236,8 +236,8 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/files/{file_id}/view` | `services/tool-api/app/api/files.py:662` | Mini App: files_file | сессия Mini App + files.access | server.py, test_files_studio_roles.py, test_webapp_files_view.py | право проверяется в теле обработчика, а не в зависимости: files.access |
 | GET `/webapp/folder` | `services/tool-api/app/pages/routes.py:157` | Mini App: files, files_actions, routes; чат: _zip_refusal_text, cmd_zip; скрипты: ui_review | — | server.py, test_miniapp_files_view.py, test_miniapp_shell_contract.py (+4) | экран Mini App: HTML без данных |
 | GET `/webapp/folder/{folder_id}/files` | `services/tool-api/app/api/files.py:502` | Mini App: files_folder | сессия Mini App + files.access | server.py, test_folder_order.py | право проверяется в теле обработчика, а не в зависимости: files.access |
-| POST `/webapp/folder/{folder_id}/order` | `services/tool-api/app/api/files.py:518` | Mini App: files_folder | сессия Mini App + files.access | test_files_actions_screen.py, test_folder_order.py | право проверяется в теле обработчика, а не в зависимости: files.access |
-| GET `/webapp/folder/{folder_id}/zip` | `services/tool-api/app/api/files.py:531` | Mini App: files_folder | сессия Mini App + files.access | нет | право проверяется в теле обработчика, а не в зависимости: files.access |
+| POST `/webapp/folder/{folder_id}/order` | `services/tool-api/app/api/files.py:518` | Mini App: files_folder | сессия Mini App + files.access | server.py, test_files_actions_screen.py, test_folder_order.py | право проверяется в теле обработчика, а не в зависимости: files.access |
+| GET `/webapp/folder/{folder_id}/zip` | `services/tool-api/app/api/files.py:531` | Mini App: files_folder | сессия Mini App + files.access | server.py | право проверяется в теле обработчика, а не в зависимости: files.access |
 | GET `/webapp/folders` | `services/tool-api/app/api/files.py:652` | Mini App: files_actions | сессия Mini App + files.access | server.py, test_files_actions_screen.py | право проверяется в теле обработчика, а не в зависимости: files.access |
 | POST `/webapp/folders` | `services/tool-api/app/api/files.py:712` | Mini App: files_actions | сессия Mini App + files.access | server.py, test_files_actions_screen.py | право проверяется в теле обработчика, а не в зависимости: files.access |
 | POST `/webapp/folders/{folder_id}/delete` | `services/tool-api/app/api/files.py:736` | Mini App: files_actions | сессия Mini App + files.access | server.py, test_files_actions_screen.py | право проверяется в теле обработчика, а не в зависимости: files.access |
@@ -591,8 +591,8 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/webapp/files/{file_id}/access/revoke` | `services/tool-api/app/api/files.py:761` | files.access | сессия Mini App | server.py, test_files_actions_screen.py |
 | GET `/webapp/files/{file_id}/view` | `services/tool-api/app/api/files.py:662` | files.access | сессия Mini App | server.py, test_files_studio_roles.py, test_webapp_files_view.py |
 | GET `/webapp/folder/{folder_id}/files` | `services/tool-api/app/api/files.py:502` | files.access | сессия Mini App | server.py, test_folder_order.py |
-| POST `/webapp/folder/{folder_id}/order` | `services/tool-api/app/api/files.py:518` | files.access | сессия Mini App | test_files_actions_screen.py, test_folder_order.py |
-| GET `/webapp/folder/{folder_id}/zip` | `services/tool-api/app/api/files.py:531` | files.access | сессия Mini App | нет |
+| POST `/webapp/folder/{folder_id}/order` | `services/tool-api/app/api/files.py:518` | files.access | сессия Mini App | server.py, test_files_actions_screen.py, test_folder_order.py |
+| GET `/webapp/folder/{folder_id}/zip` | `services/tool-api/app/api/files.py:531` | files.access | сессия Mini App | server.py |
 | GET `/webapp/folders` | `services/tool-api/app/api/files.py:652` | files.access | сессия Mini App | server.py, test_files_actions_screen.py |
 | POST `/webapp/folders` | `services/tool-api/app/api/files.py:712` | files.access | сессия Mini App | server.py, test_files_actions_screen.py |
 | POST `/webapp/folders/{folder_id}/delete` | `services/tool-api/app/api/files.py:736` | files.access | сессия Mini App | server.py, test_files_actions_screen.py |
