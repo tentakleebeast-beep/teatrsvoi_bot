@@ -91,6 +91,13 @@ zip 1 МБ с `Content-Disposition: attachment`. WKWebView 390×844, полит�
 Скачивания не произошло: файла нет, диалога сохранения нет. На светлой теме это белый
 экран, на тёмной — чёрный; владелец видит чёрный.
 
+Тот же опыт с **прямым переходом** на URL архива, без `blob:` (`location.href =
+'/zip?mb=2'`): `webview_url: http://…/zip?mb=2`, `page_title: ""`, `mean_brightness: 1`,
+`page_state_error: "A JavaScript exception occurred"` — страница снова пустая. Значит и
+прямой переход внутри webview не скачивает: браузерная навигация верхнего уровня в
+WKWebView умеет только показать документ, а zip показать нечем. Скачивает только
+внешний браузер, куда ведёт `openLink`.
+
 ### 2.4. Исходник клиента Telegram-iOS: blob — это переход, а не скачивание
 
 `submodules/WebUI/Sources/WebAppController.swift` (скачан из GitHub, 4 396 строк):
