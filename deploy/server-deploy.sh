@@ -554,12 +554,58 @@ cmd_smoke() {
 }
 
 # ------------------------------------------------------------------ rollback
+# Откат кода без отката базы невозможен: служба при старте сверяет alembic_version
+# с head (services/tool-api/app/main.py) и при расхождении не поднимается, а сайт
+# отвечает 502. Понижающих миграций в db/init нет. Так ушёл в 502 выкат Д-03
+# 09.11.2026: rollback переключил код на старый тег поверх накатанной схемы.
+# Поэтому сверка — ДО checkout: лучше остаться на текущей рабочей версии, чем уронить прод.
+ROLLBACK_TREE=""
+cleanup_rollback_tree() {
+  [ -n "$ROLLBACK_TREE" ] && rm -rf "$ROLLBACK_TREE"
+  return 0
+}
+trap cleanup_rollback_tree EXIT
+
 cmd_rollback() {
   require_root rollback
   local ref="${1:?укажите тег или коммит: rollback v0.2.0}"
   log "откат на $ref"
   # Клон мелкий: тег или коммит нужно дотянуть отдельно, иначе checkout не найдёт его.
   git_as_user -C "$SVOI_ROOT" fetch --depth 1 origin "$ref"
+
+  local url venv_python="$SVOI_ROOT/.venv/bin/python"
+  [ -x "$venv_python" ] || die "нет venv: $venv_python — сначала deploy/server-deploy.sh app"
+  url=$(app_env DATABASE_URL || true)
+  [ -n "$url" ] || die "нет DATABASE_URL в $(env_file): сверка схемы невозможна"
+
+  # Head берём из дерева САМОГО тега, но без checkout: git archive читает
+  # FETCH_HEAD и в мелком клоне, а код остаётся текущим, пока сверка не пройдёт.
+  ROLLBACK_TREE=$(mktemp -d "${TMPDIR:-/tmp}/svoi-rollback.XXXXXX")
+  git_as_user -C "$SVOI_ROOT" archive FETCH_HEAD alembic.ini services/tool-api/migrations \
+      | tar -x -C "$ROLLBACK_TREE" \
+    || die "не удалось прочитать дерево $ref: сверять схему не с чем, откат не выполнен"
+  [ -f "$ROLLBACK_TREE/alembic.ini" ] \
+    || die "в теге $ref нет alembic.ini: сверять схему не с чем, откат не выполнен.
+  Порядок «сначала БД, потом код»: docs/infrastructure/35-deploy-runbook.md §10.3"
+
+  log "сверка схемы базы с head тега $ref (до переключения кода)"
+  local checked
+  if ! checked=$(DATABASE_URL="$url" "$venv_python" "$REPO_DIR/deploy/check_schema.py" \
+                   --root "$ROLLBACK_TREE" --expect-head 2>&1); then
+    printf '%s\n' "$checked" | sed 's/^/   /' >&2
+    die "схема базы не совпадает с head тега $ref — откат НЕ выполнен, прод остаётся на текущей версии.
+  Причина: services/tool-api/app/main.py требует version = head; старый код поверх новой
+  схемы не стартует (цикл перезапусков, сайт 502). Понижающих миграций в db/init нет.
+  Порядок «сначала БД, потом код»:
+   1) схема впереди — восстановить базу из дампа до отката:
+      docs/infrastructure/110-backups-and-restore.md §4, затем повторить rollback;
+   2) понижающая миграция для затронутых ревизий есть — alembic downgrade до head тега
+      (значение head — в строке сверки выше); нет миграции — её не придумывают, это отдельная задача;
+   3) схема позади — накатить миграции: deploy/server-deploy.sh db --migrate.
+  Подробно: docs/infrastructure/35-deploy-runbook.md §10.3"
+  fi
+  info "схема совпадает с тегом: $(printf '%s\n' "$checked" | tail -1 | sed 's/^ *//')"
+
   git_as_user -C "$SVOI_ROOT" checkout --force FETCH_HEAD
   as_user "$SVOI_ROOT/.venv/bin/pip" install -q -r "$SVOI_ROOT/requirements.txt"
   systemctl restart svoi-tool-api
