@@ -494,16 +494,24 @@
 /* Масштаб внутри Mini App: double-tap и «щипок» — это поведение WebView по умолчанию,
    а не свойство стека. Приложение с фиксированной сеткой от масштабирования только
    ломается: элементы уезжают, закреплённые панели перекрывают содержимое.
-   Правим один раз в оболочке, чтобы не трогать 16 страниц. */
+   Правим один раз в оболочке, чтобы не трогать 16 страниц.
+
+   Исключение — экран файла (V-051): ему щипок нужен, чтобы читать текст на скриншотах.
+   `layout.page` с `zoom=True` печатает свою мету и ставит на <html> флаг
+   `data-svoi-zoom`; такую мету оболочка не перетирает, иначе зум пропадает. */
 (function viewportGuard() {
+  var NOZOOM = "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover";
   var meta = document.querySelector('meta[name="viewport"]');
   if (!meta) {
     meta = document.createElement("meta");
     meta.name = "viewport";
     document.head.appendChild(meta);
   }
-  meta.setAttribute("content",
-    "width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover");
+  // Страховка для страниц, собранных не через `layout.page`: меты нет — ставим «нельзя».
+  var zoomPage = document.documentElement.hasAttribute("data-svoi-zoom");
+  if (!zoomPage || !meta.getAttribute("content")) {
+    meta.setAttribute("content", NOZOOM);
+  }
 
   var style = document.createElement("style");
   style.setAttribute("data-svoi-nozoom", "1");

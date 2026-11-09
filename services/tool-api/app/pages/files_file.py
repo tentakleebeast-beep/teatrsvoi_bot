@@ -261,4 +261,4 @@ _SCRIPT_FILE = r"""
 
 FILE_PAGE = layout.page("Файл", _BODY_FILE, back="/webapp/files", head=_STYLE_FILE,
                         scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FILE
-                        + "\n})();\n</script>")
+                        + "\n})();\n</script>", zoom=True)

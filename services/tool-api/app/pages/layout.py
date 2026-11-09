@@ -139,24 +139,38 @@ def appbar(title: str, *, back: str = "/webapp/home", action: str = "") -> str:
     )
 
 
+# Мета viewport: щипок выключен на всех экранах, кроме экрана файла (V-051).
+# `maximum-scale=1, user-scalable=no` на остальных — чтобы iOS не приближал страницу
+# при фокусе на полях. Экран файла получает `zoom=True`: полей ввода там нет, а текст
+# на скриншотах читается только увеличением (docs/development/150 §2.8, §3 D3).
+NOZOOM_VIEWPORT = ("width=device-width, initial-scale=1, maximum-scale=1, "
+                   "user-scalable=no, viewport-fit=cover")
+ZOOM_VIEWPORT = ("width=device-width, initial-scale=1, maximum-scale=5, "
+                 "user-scalable=yes, viewport-fit=cover")
+
+
 def page(title: str, body: str, *, tab: str = "", back: str = "",
          action: str = "", caps: list[str] | tuple[str, ...] | set[str] | None = None,
-         head: str = "", scripts: str = "") -> str:
+         head: str = "", scripts: str = "", zoom: bool = False) -> str:
     """Собрать экран целиком.
 
     tab   — ключ вкладки: экран получает нижние вкладки и не получает шапку;
     back  — адрес возврата: экран получает шапку с «‹» (по умолчанию на «Главную»);
     head  — дополнительная разметка в <head>; scripts — код страницы перед </body>.
+    zoom  — разрешить щипок на этом экране. Один флаг ставит оба признака (мету и
+            `data-svoi-zoom` на <html>), по которому оболочка `viewportGuard`
+            понимает, что мету перетирать нельзя.
     """
     screen_class = "ui-screen ui-screen--tabbed" if tab else "ui-screen"
     header = appbar(title, back=back, action=action) if back else ""
     footer = tabbar(tab, caps) if tab else ""
+    viewport = ZOOM_VIEWPORT if zoom else NOZOOM_VIEWPORT
+    html_open = '<html lang="ru" data-svoi-zoom="1">' if zoom else '<html lang="ru">'
     return (
         "<!doctype html>\n"
-        '<html lang="ru">\n<head>\n'
+        f"{html_open}\n<head>\n"
         '<meta charset="utf-8">\n'
-        '<meta name="viewport" content="width=device-width, initial-scale=1, '
-        'maximum-scale=1, user-scalable=no, viewport-fit=cover">\n'
+        f'<meta name="viewport" content="{viewport}">\n'
         f"<title>{esc(title)}</title>\n"
         '<link rel="stylesheet" href="/webapp/ui.css" data-svoi-ui="1">\n'
         '<script src="/webapp/tg.js"></script>\n'
