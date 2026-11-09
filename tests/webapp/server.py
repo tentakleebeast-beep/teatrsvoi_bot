@@ -18,6 +18,7 @@ from __future__ import annotations
 import base64
 import json
 import pathlib
+import struct
 import sys
 
 from fastapi import FastAPI, Request
@@ -968,9 +969,9 @@ app.add_api_route("/webapp/files/list", _files_data({
 FOLDER_FILES = {
     7: {"ok": True, "folder": {"id": 7, "path": "Спектакль/Музыка", "scope": "folder"},
         "count": 3, "data": [
-            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "about:blank"},
-            {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "about:blank"},
-            {"id": 33, "name": "03 Финал.mp3", "kind": "audio", "duration_sec": 241, "url": "about:blank"},
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav"},
+            {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "/stand/tone.wav"},
+            {"id": 33, "name": "03 Финал.mp3", "kind": "audio", "duration_sec": 241, "url": "/stand/tone.wav"},
         ]},
     8: {"ok": True, "folder": {"id": 8, "path": "Документы/Ноты", "scope": "folder"},
         "count": 2, "data": [
@@ -984,7 +985,7 @@ FOLDER_FILES = {
         ]},
     10: {"ok": True, "folder": {"id": 10, "path": "Спектакль/Пурга", "scope": "folder"},
          "count": 3, "data": [
-            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "about:blank"},
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav"},
             {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
             {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
         ]},
@@ -1006,7 +1007,7 @@ app.add_api_route("/webapp/folder/{folder_id}/files", _files_folder_files(), met
 
 # Экран файла (А3): один ответ на каждый вид и по отказу на 404/410.
 VIEW_FILES = {
-    1: {"ok": True, "id": 1, "url": "about:blank", "expires_in": 900, "kind": "audio",
+    1: {"ok": True, "id": 1, "url": "/stand/tone.wav", "expires_in": 900, "kind": "audio",
         "name": "Репетиция 12 октября.m4a", "mime": "audio/mp4",
         "size_bytes": 18 * 1024 * 1024, "ext": "m4a", "folder": None,
         "as_admin": False, "cold_restored": False},
@@ -1080,6 +1081,20 @@ app.add_api_route("/webapp/files/{file_id}/view", _webapp_file_view(), methods=[
 @app.get("/stand/image.png")
 def stand_image() -> Response:
     return Response(PIXEL_PNG, media_type="image/png")
+
+
+#: Тишина 0.05 с, 8 кГц, 8 бит: настоящий WAV, чтобы `<audio>` на стенде не получал
+#: `MEDIA_ERR_SRC_NOT_SUPPORTED` от `about:blank`. На Linux-WebKit такой отказ
+#: срабатывает сразу, экран делает свой единственный повтор и убирает сцену вместе
+#: с плеером — тест «плеер на экране» падал по таймауту (CI `webapp-webkit`, 09.11.2026).
+TONE_WAV = (b"RIFF" + struct.pack("<I", 36 + 400) + b"WAVEfmt "
+            + struct.pack("<IHHIIHH", 16, 1, 1, 8000, 8000, 1, 8)
+            + b"data" + struct.pack("<I", 400) + bytes(400))
+
+
+@app.get("/stand/tone.wav")
+def stand_tone() -> Response:
+    return Response(TONE_WAV, media_type="audio/wav")
 
 
 @app.get("/stand/expired.png")

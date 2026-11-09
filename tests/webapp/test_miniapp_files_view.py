@@ -85,14 +85,20 @@ def test_картинка_без_прокрутки(app_page, file_id) -> None:
 def test_аудио_играет_и_не_зовёт_браузер(app_page) -> None:
     """§7.4: у звука единственное действие — плеер, «Открыть в браузере» нет.
 
-    Ждём именно появления элемента, а не видимости: у `<audio controls>` без
-    загруженного медиа (стенд отдаёт `about:blank`) высота зависит от движка —
-    Linux-WebKit рисует его нулевым и `:visible` не наступает никогда, хотя
-    плеер на экране есть (CI `webapp-webkit`, 09.11.2026).
+    Плеер ищем по элементу и свойству `controls`, а не селектором `audio[controls]`
+    и не по видимости: в Linux-WebKit `<audio>` без загруженного медиа имеет
+    нулевую высоту, а от `about:blank` приходит `MEDIA_ERR_SRC_NOT_SUPPORTED` —
+    экран делает свой единственный повтор и убирает сцену вместе с плеером.
+    Поэтому стенд отдаёт настоящий WAV (`/stand/tone.wav`), а тест проверяет
+    наличие элемента и включённые у него элементы управления.
     """
     page = app_page("/webapp/file?id=1")
-    page.wait_for_selector("#scene audio[controls]", state="attached", timeout=10_000)
-    assert page.locator("#scene audio[controls]").count() == 1, "плеера на экране нет"
+    page.wait_for_selector("#scene audio", state="attached", timeout=10_000)
+    player = page.evaluate(
+        "() => { var a = document.querySelector('#scene audio');"
+        " return a ? {count: document.querySelectorAll('#scene audio').length,"
+        " controls: a.controls} : null; }")
+    assert player == {"count": 1, "controls": True}, f"плеера с управлением нет: {player}"
 
     assert page.locator("#file-actions button").count() == 0
     assert "аудио" in page.inner_text("#file-meta")
