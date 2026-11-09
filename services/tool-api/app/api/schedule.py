@@ -698,7 +698,9 @@ def _read_week(target: int, first: date) -> tuple[list[tuple[date, DayCard | Non
     cards: list[tuple[date, DayCard | None]] = []
     for offset in range(core.WEEK_DAYS):
         day = first + timedelta(days=offset)
-        declared = parse(texts[day]) if day in texts else None
+        # `raw_text` бывает клеткой сетки `1`/`0` (загрузка из общего листа): её
+        # состояние — «весь день», а не «пока не понятно» (149 §4.3).
+        declared = sheet_load.cell_card(texts[day]) if day in texts else None
         cards.append((day, declared if declared is not None else from_hours(by_day.get(day) or {})))
     return cards, female
 
@@ -1405,7 +1407,7 @@ def _sheet_load_apply(target: int, first: date, requested: list[date],
     with core.pool.connection() as conn:
         for item in plan["write"]:
             day = item["day"]
-            card = parse(item["text"]) if item["text"] else None
+            card = sheet_load.cell_card(item["text"])
             availability_store.delete_day(conn, target, day)
             if card is not None:
                 availability_store.write_hours(

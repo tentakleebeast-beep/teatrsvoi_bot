@@ -26,7 +26,7 @@ from collections.abc import Iterable, Mapping
 from datetime import date
 
 from app import month_grid
-from app.availability_card import parse, to_text
+from app.availability_card import DayCard, parse, to_text
 from app.schedule_sheet import column_letter, find_day_rows, resolve_column, same_day
 
 #: Имя таблицы для человека и для аудита — одно, чтобы в журнале не было двух названий.
@@ -69,6 +69,21 @@ def _grid_same(db_text: str, sheet_state: str) -> bool:
     """
     card = parse(db_text)
     return card is not None and card.is_whole_day and card.status == sheet_state
+
+
+def cell_card(sheet_text: str) -> DayCard | None:
+    """Текст клетки листа → карточка для записи в базу.
+
+    `parse` не знает клеток раскрашенной сетки: `1`/`0` он читает как «пока не понятно»,
+    хотя предпросмотр уже назвал их `busy`/`free`. Запись обязана получить то же
+    состояние, что человек видел в листе (149 §4.3), иначе загрузка `1` даёт
+    `uncertain` вместо «занят весь день». Поэтому `1`/`0` переводятся в карточку
+    «весь день», а остальной текст идёт обычным разбором.
+    """
+    key = " ".join(str(sheet_text or "").split())
+    if key in GRID_CELLS:
+        return DayCard(status=GRID_CELLS[key])
+    return parse(key)
 
 
 def day_state(sheet_state: str, sheet_text: str, db_text: str | None) -> str:
@@ -169,6 +184,7 @@ __all__ = [
     "SOURCE_TITLE",
     "STATES",
     "build_preview",
+    "cell_card",
     "day_state",
     "detail",
     "grid_cell",

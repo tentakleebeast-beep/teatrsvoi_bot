@@ -124,11 +124,26 @@ _SCRIPT_WEEK_SHEET_LOAD = r"""
 
   function sheetLoadFail(overlay, text) {
     var state = sheetLoadState;
-    if (state && state.primary) { state.primary.hidden = true; }
+    if (state && state.primary) { state.primary.style.display = "none"; }
     sheetLoadText(overlay, "#sheet-load-intro", text);
     var list = overlay.querySelector("#sheet-load-list");
     if (list) { list.textContent = ""; }
     sheetLoadText(overlay, "#sheet-load-same", "");
+  }
+
+  function sheetLoadWritable(item) {
+    return item.state === "new" || item.state === "differs" || item.state === "sheet_empty";
+  }
+
+  function sheetLoadNothing(list) {
+    var note = document.createElement("p");
+    note.className = "ui-text";
+    note.id = "sheet-load-nothing";
+    note.textContent = "В листе и в приложении одно и то же — загружать нечего.";
+    list.appendChild(note);
+    var state = sheetLoadState;
+    /* `hidden` не прячет: у `.ui-btn` свой `display`, и он сильнее атрибута. */
+    if (state && state.primary) { state.primary.style.display = "none"; }
   }
 
   function sheetLoadRender(overlay, answer) {
@@ -142,7 +157,13 @@ _SCRIPT_WEEK_SHEET_LOAD = r"""
     var list = overlay.querySelector("#sheet-load-list");
     if (!list) { return; }
     var defaults = sheetLoadFresh();
-    (answer.days || []).forEach(function (item) {
+    var days = answer.days || [];
+    var writable = 0;
+    days.forEach(function (item) {
+      /* Совпавший день — не строка выбора: грузить в нём нечего, а подпись
+         «у вас не отмечено» была бы ложью. Его учитывают счётчики ниже. */
+      if (item.state === "same") { return; }
+      if (sheetLoadWritable(item)) { writable += 1; }
       var on = Boolean(defaults[item.state]);
       state.order.push(item.day);
       state.selected[item.day] = on;
@@ -156,15 +177,21 @@ _SCRIPT_WEEK_SHEET_LOAD = r"""
     });
 
     var counts = answer.counts || {};
-    var inSheet = (counts.same || 0) + (answer.days || []).filter(function (item) {
+    /* «Отмечено в листе» — по непустым клеткам ответа: совпавшие дни уже в `days`,
+       прибавлять `counts.same` значило бы посчитать их дважды (К2). */
+    var inSheet = days.filter(function (item) {
       return item.sheet_state && item.sheet_state !== "empty";
     }).length;
-    if (state.order.length) {
-      sheetLoadText(overlay, "#sheet-load-note", "Отмечено в листе: " + inSheet + " из 7.");
+    if (days.length) {
+      sheetLoadText(overlay, "#sheet-load-note",
+        "Отмечено в листе: " + sheetLoadDays(inSheet) + " из 7.");
     }
     if (counts.same) {
       sheetLoadText(overlay, "#sheet-load-same",
         "Совпало: " + counts.same + " " + plural(counts.same, "день", "дня", "дней") + " из 7.");
+    }
+    if (!writable && counts.same && counts.same === days.length) {
+      sheetLoadNothing(list);
     }
     sheetLoadPrimary();
   }

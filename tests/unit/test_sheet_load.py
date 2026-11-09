@@ -14,7 +14,8 @@ from __future__ import annotations
 from collections.abc import Mapping
 from datetime import date, datetime, timedelta
 
-from app.sheet_load import build_preview, day_state, detail, grid_cell, plan_load
+from app.availability_card import to_hours
+from app.sheet_load import build_preview, cell_card, day_state, detail, grid_cell, plan_load
 
 MONDAY = date(2026, 11, 9)
 WEEK = [MONDAY + timedelta(days=offset) for offset in range(7)]
@@ -91,6 +92,20 @@ def test_fr_c9_клетка_сетки_совпадает_только_с_цел
     assert days[WEEK[1].isoformat()]["state"] == "same"
     assert days[WEEK[2].isoformat()]["state"] == "differs"
     assert grid_cell("1") is True and grid_cell("свободен") is False
+
+
+def test_fr_c9_клетка_сетки_грузится_как_весь_день() -> None:
+    """FR-C9: `1`/`0` при записи — «весь день» своего состояния, а не «пока не понятно»."""
+    busy = cell_card("1")
+    free = cell_card("0")
+    assert busy is not None and busy.status == "busy" and busy.is_whole_day
+    assert free is not None and free.status == "free" and free.is_whole_day
+    assert set(to_hours(busy).values()) == {"busy"}
+    assert set(to_hours(free).values()) == {"free"}
+
+    assert cell_card("") is None
+    interval = cell_card("занят с 16 до 20")
+    assert interval is not None and (interval.from_min, interval.to_min) == (16 * 60, 20 * 60)
 
 
 def test_fr_c9_вопрос_грузится_как_неуверенность() -> None:

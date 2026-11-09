@@ -301,6 +301,10 @@ def availability_sheet_preview(request: Request) -> JSONResponse:
     Фиксированные дни недели стенда 26.10–01.11.2026: два новых, два совпавших,
     один расходится, один пуст в листе, один не разобран — по ним браузерный
     сценарий проверяет все состояния дня и подписи переключателей.
+
+    Форма ответа — та же, что у настоящего сервера: совпавшие дни приходят
+    в `days` (их отбрасывает экран, а не сервер), `counts.same` их считает.
+    Иначе браузерный тест зеленел бы на payload, которого сервер не отдаёт.
     """
     denied = _guard(request)
     if denied is not None:
@@ -314,11 +318,17 @@ def availability_sheet_preview(request: Request) -> JSONResponse:
             {"day": "2026-10-26", "weekday": "Пн", "sheet_text": "свободен",
              "sheet_state": "free", "db_text": "занят с 12:00 до 15:00", "db_state": "busy",
              "state": "differs"},
+            {"day": "2026-10-27", "weekday": "Вт", "sheet_text": "занят весь день",
+             "sheet_state": "busy", "db_text": "занят весь день", "db_state": "busy",
+             "state": "same"},
             {"day": "2026-10-28", "weekday": "Ср", "sheet_text": "занят весь день",
              "sheet_state": "busy", "db_text": None, "db_state": "empty", "state": "new"},
             {"day": "2026-10-29", "weekday": "Чт", "sheet_text": "",
              "sheet_state": "empty", "db_text": "свободен с 18:00", "db_state": "free",
              "state": "sheet_empty"},
+            {"day": "2026-10-30", "weekday": "Пт", "sheet_text": "свободен",
+             "sheet_state": "free", "db_text": "свободен", "db_state": "free",
+             "state": "same"},
             {"day": "2026-10-31", "weekday": "Сб", "sheet_text": "свободен",
              "sheet_state": "free", "db_text": None, "db_state": "empty", "state": "new"},
             {"day": "2026-11-01", "weekday": "Вс", "sheet_text": "?",

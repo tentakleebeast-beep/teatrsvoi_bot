@@ -220,6 +220,47 @@ def test_э5_вопрос_грузится_как_неуверенность(mon
     assert week["days"][0]["text"] == "пока не понятно"
 
 
+def test_э5_клетка_сетки_грузится_как_весь_день(monkeypatch, client):
+    """К7/§4.3: `1`/`0` дают «весь день» своего состояния, а не `uncertain`."""
+    cells = {0: "1", 1: "0"}
+    fake, monday, headers, pid = _setup(monkeypatch, client, cells)
+    tuesday = monday + dt.timedelta(days=1)
+    saved = client.post("/webapp/availability/week", headers=headers, json={
+        "start": monday.isoformat(),
+        "days": [{"day": monday.isoformat(), "status": "busy",
+                  "from_time": "16:00", "to_time": "20:00"},
+                 {"day": tuesday.isoformat(), "status": "busy"}]})
+    assert saved.json()["ok"]
+
+    preview = _preview(client, headers, monday).json()
+    days = {item["day"]: item for item in preview["days"]}
+    assert days[monday.isoformat()]["state"] == "differs", "интервал против `1` — расхождение"
+
+    done = client.post("/webapp/availability/sheet/load", headers=headers,
+                       json={"start": monday.isoformat(),
+                             "days": [monday.isoformat(), tuesday.isoformat()]}).json()
+    assert done["ok"] is True
+    assert {item["day"]: item["text"] for item in done["days"]} == {
+        monday.isoformat(): "1", tuesday.isoformat(): "0"}
+
+    first = _hours(pid, monday)
+    assert {kind for kind, _, _ in first.values()} == {"busy"}, "`1` — занят весь день"
+    assert {text for _, _, text in first.values()} == {"1"}, "в базе текст листа как написан"
+    second = _hours(pid, tuesday)
+    assert {kind for kind, _, _ in second.values()} == {"free"}, "`0` — свободен весь день"
+    assert {text for _, _, text in second.values()} == {"0"}
+
+    week = client.get("/webapp/availability/week", headers=headers,
+                      params={"start": monday.isoformat()}).json()
+    # Канонический текст «весь день» — «занят»/«свободен»; экран недели добавляет
+    # «весь день» сам, потому что границ у карточки нет.
+    assert week["days"][0]["status"] == "busy"
+    assert week["days"][0]["text"] == "занят"
+    assert week["days"][0]["from"] is None and week["days"][0]["to"] is None
+    assert week["days"][1]["status"] == "free"
+    assert week["days"][1]["text"] == "свободен"
+
+
 def test_э5_журнал_помнит_дни_тексты_и_колонку(monkeypatch, client):
     """К12: одно событие на загрузку, в нём — до и после по каждому дню и адрес колонки."""
     cells = {0: "свободен", 1: "занят"}

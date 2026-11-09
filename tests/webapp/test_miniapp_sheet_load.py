@@ -8,6 +8,8 @@
 
 Стенд отдаёт неделю 26.10–01.11.2026 и фиксированный предпросмотр:
 новые 28 и 31, расхождение 26, пустая клетка 29, не разобрано 01, совпали 27 и 30.
+Совпавшие дни приходят в `days` — как у настоящего сервера; строк они не дают,
+а счётчик «Отмечено в листе» считает их один раз.
 
 Обоснование: FR-C9, FR-C10, docs/development/149 §6.2-6.3, docs/reports/74 V-048.
 
@@ -73,7 +75,7 @@ def test_строка_открывает_лист_без_записи(week_page)
     assert "Загрузить из общего листа" in page.locator(".ui-sheet__title").inner_text()
     assert "ваша колонка K" in page.locator("#sheet-load-intro").inner_text()
     assert "Ничего не изменится" in page.locator("#sheet-load-intro").inner_text()
-    assert "Отмечено в листе: 6 из 7." == page.locator("#sheet-load-note").inner_text()
+    assert "Отмечено в листе: 6 дней из 7." == page.locator("#sheet-load-note").inner_text()
     assert "Совпало: 2 дня из 7." == page.locator("#sheet-load-same").inner_text()
 
     assert not [item for item in seen if item[0] == "POST"], seen
@@ -108,6 +110,52 @@ def test_состояния_дня_и_переключатели(week_page) -> N
     assert "не разобрано, загрузить нельзя" in unparsed.inner_text()
     assert unparsed.locator(".ui-switch").count() == 0
     assert "?»" in unparsed.inner_text()
+
+
+def test_совпавшие_дни_приходят_в_ответе_и_не_дают_строк(week_page) -> None:
+    """К2: сервер отдаёт `same` в `days`, экран их пропускает и не считает дважды."""
+    page = week_page
+    with page.expect_response(
+            lambda response: "/webapp/availability/sheet/preview" in response.url) as info:
+        _open(page)
+    payload = info.value.json()
+    same = [item for item in payload["days"] if item["state"] == "same"]
+    assert [item["day"] for item in same] == ["2026-10-27", "2026-10-30"], payload["days"]
+    assert payload["counts"]["same"] == 2
+
+    assert page.locator(".ui-switch-row").count() == 4
+    for day in ("2026-10-27", "2026-10-30"):
+        assert page.locator(f'.ui-row[data-day="{day}"]').count() == 0, day
+    assert "Отмечено в листе: 6 дней из 7." == page.locator("#sheet-load-note").inner_text()
+
+
+def test_когда_всё_совпало_лист_говорит_что_грузить_нечего(week_page) -> None:
+    """К11: выбирать нечего — сообщение §7 вместо пустого списка и кнопки."""
+    page = week_page
+    days = [
+        {"day": f"2026-10-{26 + offset:02d}", "weekday": weekday,
+         "sheet_text": "занят весь день", "sheet_state": "busy",
+         "db_text": "занят весь день", "db_state": "busy", "state": "same"}
+        for offset, weekday in enumerate(("Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"))
+    ]
+    payload = {
+        "ok": True, "start": "2026-10-26", "title": "26 октября — 01 ноября",
+        "source": {"spreadsheet": "Расписание студийцы", "tab": "студийцы"},
+        "person": {"id": 30, "name": "Тестовый Участник", "column": "K"},
+        "days": days,
+        "counts": {"same": 7, "new": 0, "differs": 0, "sheet_empty": 0, "unparsed": 0},
+    }
+    page.route("**/webapp/availability/sheet/preview*",
+               lambda route: route.fulfill(json=payload))
+    page.locator("#load-from-sheet").click()
+    page.wait_for_selector("#sheet-load-nothing", timeout=5_000)
+
+    assert page.locator("#sheet-load-nothing").inner_text() == (
+        "В листе и в приложении одно и то же — загружать нечего.")
+    assert page.locator(".ui-switch-row").count() == 0
+    assert page.locator(".ui-sheet__actions .ui-btn--primary").is_hidden()
+    assert "Отмечено в листе: 7 дней из 7." == page.locator("#sheet-load-note").inner_text()
+    assert "Совпало: 7 дней из 7." == page.locator("#sheet-load-same").inner_text()
 
 
 def test_кнопка_считает_выбор(week_page) -> None:
