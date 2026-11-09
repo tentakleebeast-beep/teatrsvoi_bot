@@ -10,7 +10,13 @@
 
 Щипок — настоящий: `Input.synthesizePinchGesture` есть только в Chromium, поэтому
 проверки масштаба на WebKit пропускаются (пинч через Playwright там не измерить).
-Проверка меты по всем 31 маршруту идёт в обоих движках.
+Само окружение тоже решает: Linux-headless Chromium в CI отвечает на тот же вызов
+масштабом 1.00, а macOS Chromium — 3.00. Чтобы красный CI не путали с дефектом
+продукта, перед жестами ставится проба окружения на заведомо масштабируемой странице
+(`_pinch_available`): если даже собранная тестом страница с `user-scalable=yes`
+не увеличивается — окружение не умеет синтетический жест, и жесты скипаются
+с этой причиной. Договор (одна мета и `user-scalable=no` у 30 экранов) проверяется
+по всем 31 маршруту в обоих движках и от окружения не зависит.
 
     SVOI_WEBAPP_TESTS=1 .venv/bin/python -m pytest tests/webapp/test_miniapp_zoom.py -q --browser chromium
 """
@@ -70,9 +76,47 @@ def _pinch(context, page, factor: float, x: int = 195, y: int = 380) -> None:
     page.wait_for_timeout(700)
 
 
-def _only_chromium(browser) -> None:
-    if browser.browser_type.name != "chromium":
-        pytest.skip("Input.synthesizePinchGesture есть только в Chromium")
+PROBE_HTML = (
+    '<!doctype html><html><head>'
+    '<meta name="viewport" content="width=device-width, initial-scale=1, '
+    'maximum-scale=5, user-scalable=yes"></head>'
+    '<body style="height: 2000px">щипок</body></html>'
+)
+
+
+def _pinch_available(context) -> bool:
+    """Умеет ли это окружение применить синтетический щипок к visualViewport.
+
+    Проба идёт на странице, собранной самим тестом, с заведомо масштабируемой метой.
+    Если даже она не увеличилась — дело не в продукте, а в среде: у WebKit нет
+    CDP-сессии, а Linux-headless Chromium в CI отвечает на `synthesizePinchGesture`
+    масштабом 1.00 (macOS Chromium — 3.00). Отдельная проба нужна, чтобы сломанный
+    жест в продукте не прятался за «окружение не умеет»: проба страницы продукта
+    идёт отдельно и падает, если мета верна, а увеличения нет.
+    """
+    probe = context.new_page()
+    try:
+        probe.goto("about:blank")
+        probe.set_content(PROBE_HTML)
+        try:
+            _pinch(context, probe, 3.0, x=195, y=380)
+        except Exception:  # pytest не должен падать на отсутствии API
+            return False
+        return bool(probe.evaluate(
+            "() => (window.visualViewport ? visualViewport.scale : 1) > 1.5"))
+    finally:
+        probe.close()
+
+
+@pytest.fixture
+def pinch(phone):
+    """Контекст, в котором синтетический щипок реально меняет масштаб."""
+    if not _pinch_available(phone):
+        pytest.skip("синтетический щипок не применяется в этом окружении: "
+                    "Input.synthesizePinchGesture не меняет visualViewport.scale "
+                    "(WebKit или Linux-headless Chromium); жест проверяется пробой "
+                    "scripts/probes/pinch_probe_file.py и живым телефоном")
+    return phone
 
 
 @pytest.mark.parametrize("route", sorted(PAGE_ROUTES))
@@ -100,9 +144,8 @@ def test_мета_после_оболочки_увеличивает_тольк�
     assert state["touch"] == "manipulation", f"{route}: touch-action {state['touch']}"
 
 
-def test_щипок_увеличивает_файл_и_не_трогает_соседние(phone, webapp_server, browser):
+def test_щипок_увеличивает_файл_и_не_трогает_соседние(phone, pinch, webapp_server):
     """V-051, К3: щипок 3× даёт scale ≥ 2.0 на файле и ровно 1.00 на остальных."""
-    _only_chromium(browser)
     cases = (f"{FILE_ROUTE}?id=3", "/webapp/files", "/webapp/week")
     measured = {}
     for path in cases:
@@ -118,9 +161,8 @@ def test_щипок_увеличивает_файл_и_не_трогает_со�
         assert abs(measured[path] - 1.0) <= 0.01, measured
 
 
-def test_возврат_масштаба_и_кнопка_назад_на_файле(phone, webapp_server, browser):
+def test_возврат_масштаба_и_кнопка_назад_на_файле(phone, pinch, webapp_server):
     """V-051, К4: обратный щипок возвращает экран, «‹» 44×44 и ведёт на `/webapp/files`."""
-    _only_chromium(browser)
     page = _open(phone, webapp_server, f"{FILE_ROUTE}?id=3")
     page.wait_for_function(
         "() => { var i = document.querySelector('#scene img');"
