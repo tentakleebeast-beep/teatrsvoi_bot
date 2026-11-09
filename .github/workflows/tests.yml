@@ -172,7 +172,10 @@ jobs:
         # 2) iPhone-профили не скипнуты — если движок не WebKit, conftest
         #    пропустит их и job снова ничего не проверит;
         # 3) скипнуты только Android-профили: их движок Chromium, на WebKit их
-        #    место занимает job `webapp`. Больше скипов быть не должно.
+        #    место занимает job `webapp`. Кроме них допускается ровно один
+        #    известный скип: жестовые тесты V-051 (синтетический щипок
+        #    `Input.synthesizePinchGesture` в WebKit недоступен); проверка меты
+        #    по всем 31 маршруту на WebKit при этом идёт.
         env:
           SVOI_WEBAPP_TESTS: "1"
           # pytest переносит длинные строки по ширине терминала; при переносе
@@ -189,10 +192,19 @@ jobs:
             echo "iPhone-профили скипнуты на WebKit: iOS снова не проверен" >&2
             exit 1
           fi
+          # Любой скип, кроме Android-профилей и недоступного в WebKit щипка, —
+          # тихо выключенная проверка: называем его и падаем.
+          if grep -E '^SKIPPED' /tmp/webapp-webkit-run.txt \
+              | grep -vE 'проверяется в chromium|синтетический щипок'; then
+            echo "на WebKit скипнуто что-то помимо Android-профилей и щипка" >&2
+            exit 1
+          fi
           skipped=$(grep -cE '^SKIPPED' /tmp/webapp-webkit-run.txt || true)
           android=2
-          if [ "${skipped}" -gt "${android}" ]; then
-            echo "скипнуто ${skipped} групп, а Android-профилей всего ${android}: на WebKit пропущено лишнее" >&2
+          pinch=1
+          allowed=$((android + pinch))
+          if [ "${skipped}" -gt "${allowed}" ]; then
+            echo "скипнуто ${skipped} групп, допустимо ${allowed}: Android-профили (${android}) и щипок (${pinch})" >&2
             exit 1
           fi
 
