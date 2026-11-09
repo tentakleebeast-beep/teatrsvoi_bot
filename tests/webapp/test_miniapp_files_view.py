@@ -83,9 +83,16 @@ def test_картинка_без_прокрутки(app_page, file_id) -> None:
 
 
 def test_аудио_играет_и_не_зовёт_браузер(app_page) -> None:
-    """§7.4: у звука единственное действие — плеер, «Открыть в браузере» нет."""
+    """§7.4: у звука единственное действие — плеер, «Открыть в браузере» нет.
+
+    Ждём именно появления элемента, а не видимости: у `<audio controls>` без
+    загруженного медиа (стенд отдаёт `about:blank`) высота зависит от движка —
+    Linux-WebKit рисует его нулевым и `:visible` не наступает никогда, хотя
+    плеер на экране есть (CI `webapp-webkit`, 09.11.2026).
+    """
     page = app_page("/webapp/file?id=1")
-    page.wait_for_selector("#scene audio[controls]", timeout=10_000)
+    page.wait_for_selector("#scene audio[controls]", state="attached", timeout=10_000)
+    assert page.locator("#scene audio[controls]").count() == 1, "плеера на экране нет"
 
     assert page.locator("#file-actions button").count() == 0
     assert "аудио" in page.inner_text("#file-meta")
