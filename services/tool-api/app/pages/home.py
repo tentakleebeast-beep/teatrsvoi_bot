@@ -1,8 +1,20 @@
 """«Главная» и «Ещё/Управление» — вход в Mini App (docs/development/86 §2.1, §2.4).
 
 Главная перестала быть каталогом из тринадцати плиток: человек открывает приложение,
-чтобы узнать «что у меня сейчас» и «что требует решения». Поэтому сверху — только
-действия со счётчиками, затем сегодняшний день, неделя занятости и долг.
+чтобы узнать «что у меня сейчас» и «что требует решения».
+
+Загрузка (docs/development/148). До ответа данных экран показывал неправду и прыгал:
+«СВОИ» подменялось именем человека, на месте счётчика недели стояла фраза про раздел,
+скрытые карточки открывались по одной. Теперь серверная разметка сразу содержит знак
+`h1#logo`, скелет строки имени и роли и настоящую карточку недели; готовое содержимое
+подставляется одной операцией. Ошибка ответа показывается на месте скелета, а не
+строкой внизу страницы. При 5xx и обрыве страница молчит: сообщение одно и его даёт
+баннер оболочки (`webapp-shell.js`) — ответ владельца на V-047
+(`docs/reports/74-questions.md`).
+
+Разметка и скрипт Главной живут в `home_loading.py`: экран со всеми состояниями
+занимает больше половины модуля, а страница не должна превышать 400 строк
+(`tests/unit/test_webapp_pages_split.py`). Здесь — сборка страницы каркасом.
 
 Данные приходят из `/webapp/home/data` одним ответом:
 
@@ -31,167 +43,10 @@
 
 from __future__ import annotations
 
-from app.pages import layout
+from app.pages import home_loading, layout
 
-_BODY_HOME = """
-<div>
-  <h1 class="ui-title" id="name">СВОИ</h1>
-  <div class="ui-small ui-muted" id="role"></div>
-</div>
-
-<section class="ui-section" id="attention" hidden>
-  <div class="ui-section__head"><h2 class="ui-section__title">Требует внимания</h2></div>
-  <div class="ui-list" id="attention-list"></div>
-</section>
-
-<div class="ui-card" id="today" hidden>
-  <span class="ui-card__label" id="today-label"></span>
-  <h2 class="ui-h2" id="today-title"></h2>
-  <span class="ui-small ui-muted" id="today-place"></span>
-</div>
-
-<div class="ui-card" id="week">
-  <div class="ui-section__head" style="padding:0">
-    <h2 class="ui-section__title">Занятость на неделе</h2>
-    <span class="ui-section__meta" id="week-count"></span>
-  </div>
-  <span class="ui-small ui-muted" id="week-meta">Открывается в разделе «Занятость».</span>
-  <a class="ui-btn ui-btn--primary ui-btn--block" href="/webapp/week">Отметить занятость</a>
-</div>
-
-<div class="ui-card" id="debt" hidden>
-  <span class="ui-card__label" id="debt-label"></span>
-  <span class="ui-amount ui-amount--due" id="debt-rest"></span>
-  <span class="ui-small ui-muted" id="debt-meta"></span>
-</div>
-
-<a class="ui-btn ui-btn--block" id="quick-tx" href="/webapp/tx" hidden
-   data-svoi-cap="budget.write">Записать операцию</a>
-
-<div class="ui-small ui-muted" id="status"></div>
-"""
-
-_SCRIPT_HOME = """
-<script>
-(function () {
-  "use strict";
-  var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
-  if (tg) { tg.ready(); tg.expand(); if (tg.BackButton) tg.BackButton.hide(); }
-  var $ = function (id) { return document.getElementById(id); };
-
-  function attentionRow(item) {
-    var row = document.createElement("a");
-    row.className = "ui-row ui-row--attention";
-    row.href = item.url || "/webapp/more";
-    var main = document.createElement("span");
-    main.className = "ui-row__main";
-    var title = document.createElement("span");
-    title.className = "ui-row__title";
-    title.textContent = item.title || "";
-    main.appendChild(title);
-    if (item.meta) {
-      var meta = document.createElement("span");
-      meta.className = "ui-row__meta";
-      meta.textContent = item.meta;
-      main.appendChild(meta);
-    }
-    row.appendChild(main);
-    if (item.count) {
-      var badge = document.createElement("span");
-      badge.className = "ui-badge";
-      badge.textContent = String(item.count);
-      row.appendChild(badge);
-    }
-    var chevron = document.createElement("span");
-    chevron.className = "ui-row__chevron";
-    chevron.textContent = "\\u203A";
-    row.appendChild(chevron);
-    return row;
-  }
-
-  function render(data) {
-    $("name").textContent = data.name || "СВОИ";
-    // Подпись роли и дисциплины одной строкой: педагог видит, что он ведёт
-    // (140 §4.2). Данные приходят в ответе, страница их не вычисляет.
-    var role = data.role_label || "";
-    var subjects = (data.disciplines || []).map(function (item) { return item.name; });
-    if (subjects.length) { role += " · " + subjects.join(", "); }
-    $("role").textContent = role;
-
-    var attention = data.attention || [];
-    if (attention.length) {
-      var list = $("attention-list");
-      attention.forEach(function (item) { list.appendChild(attentionRow(item)); });
-      $("attention").hidden = false;
-    }
-
-    var today = data.today || {};
-    if (today.event) {
-      $("today-label").textContent = today.label || "сегодня";
-      $("today-title").textContent = (today.event.time ? today.event.time + " — " : "")
-        + (today.event.title || "Событие");
-      $("today-place").textContent = today.event.place || "";
-      $("today").hidden = false;
-    }
-
-    var week = data.week || {};
-    if (week.days) {
-      $("week-count").textContent = "отмечено " + (week.marked || 0) + " из " + week.days;
-      if (week.marked >= week.days) {
-        $("week-meta").textContent = "Неделя заполнена целиком. Можно поправить любую отметку.";
-      } else if (week.marked) {
-        $("week-meta").textContent = "Не отмечены " + (week.days - week.marked)
-          + " дня. Пустая клетка — это «не знаю», а не «свободен».";
-      }
-    }
-
-    var debt = data.debt || null;
-    if (debt && debt.rest > 0) {
-      $("debt-label").textContent = "взносы за " + (debt.period || "месяц");
-      $("debt-rest").textContent = formatMoney(debt.rest);
-      $("debt-meta").textContent = "осталось внести из " + formatMoney(debt.due)
-        + " · вносит организатор";
-      $("debt").hidden = false;
-    }
-
-    if (data.can_record) { $("quick-tx").hidden = false; }
-
-    if (data.more && data.more.management) { renderMore(data.more.management); }
-  }
-
-  function formatMoney(value) {
-    var digits = String(Math.round(Number(value) || 0)).replace(/\\B(?=(\\d{3})+(?!\\d))/g, "\\u00A0");
-    return digits + "\\u00A0\\u20BD";
-  }
-
-  function renderMore(items) {
-    var host = $("management-list");
-    if (!host) { return; }
-    items.forEach(function (item) { host.appendChild(attentionRow(item)); });
-    $("management").hidden = items.length === 0;
-  }
-
-  async function boot() {
-    try {
-      var res = await fetch("/webapp/home/data");
-      var data = await res.json().catch(function () { return {}; });
-      if (!res.ok || !data.ok) {
-        $("status").textContent = res.status === 401
-          ? "Откройте приложение из бота — сессия не подтверждена."
-          : "Не удалось загрузить. Потяните экран вниз, чтобы повторить.";
-        return;
-      }
-      $("status").textContent = "";
-      render(data);
-    } catch (error) {
-      $("status").textContent = "Сайт недоступен, попробуйте ещё раз.";
-    }
-  }
-
-  boot();
-})();
-</script>
-"""
+_BODY_HOME = home_loading.BODY
+_SCRIPT_HOME = home_loading.SCRIPT
 
 _BODY_MORE = """
 <section class="ui-section" id="management" hidden>

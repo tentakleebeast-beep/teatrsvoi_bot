@@ -17,6 +17,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from datetime import date, datetime
 
@@ -96,8 +97,27 @@ def parse_day_cell(value) -> date | None:
 
 
 def _name_words(value) -> set[str]:
-    text = str(value or "").replace(".", " ").replace(",", " ")
-    return {word.lower() for word in text.split() if len(word) > 2}
+    """Значимые слова имени: без регистра, `ё → е`, без точек и запятых (docs/development/149 D9).
+
+    `ё → е` появилось не из красоты: в листе «Алена Кондракова», в базе «Кондракова Алёна»,
+    и без нормализации фамилия совпадала, а имя — нет, то есть человек молча получал
+    `person_not_found` (замер 149 §2.3).
+    """
+    text = str(value or "").lower().replace("ё", "е").replace(".", " ").replace(",", " ")
+    return {word for word in text.split() if len(word) > 2}
+
+
+def _same_name(words: set[str], wanted: set[str]) -> bool:
+    """Подпись колонки называет человека: два общих значимых слова или одно и то же слово.
+
+    Одно общее слово из двух («Виктор Иванов» против «Виктор Мамлютов») человеком не является —
+    совпадение по имени без фамилии, — поэтому правило требует двух слов, кроме случая,
+    когда всё имя состоит из одного значимого слова.
+    """
+    common = words & wanted
+    if not common:
+        return False
+    return len(wanted) == 1 or len(common) >= 2
 
 
 def find_names_row(values: list[list], limit: int = 10) -> int | None:
@@ -110,12 +130,19 @@ def find_names_row(values: list[list], limit: int = 10) -> int | None:
     return best_row if best_score >= 2 else None
 
 
-def find_person_columns(values: list[list], names_row: int, display_name: str) -> list[int]:
-    """Колонки, чья подпись похожа на человека. Больше одной — неоднозначность."""
-    if names_row is None or 1 > names_row > len(values):
+def find_person_columns(values: list[list], names_row: int, display_name: str,
+                        aliases: Iterable[str] = ()) -> list[int]:
+    """Колонки, чья подпись называет человека. Больше одной — неоднозначность.
+
+    Подписи колонки хватает, чтобы совпасть с именем человека или с любым его псевдонимом:
+    в листе люди подписаны то «Витя», то «Виктор Мамлютов», и заводить второй список имён
+    для чтения и записи нельзя — разойдётся (одна функция на оба направления, 149 D9).
+    """
+    if names_row is None or not 1 <= names_row <= len(values):
         return []
-    wanted = _name_words(display_name)
-    if not wanted:
+    names = [_name_words(display_name)] + [_name_words(alias) for alias in aliases]
+    names = [wanted for wanted in names if wanted]
+    if not names:
         return []
     row = values[names_row - 1]
     found = []
@@ -123,9 +150,18 @@ def find_person_columns(values: list[list], names_row: int, display_name: str) -
         words = _name_words(cell)
         if not words:
             continue
-        if wanted & words and (len(wanted & words) >= 2 or len(wanted) == 1):
+        if any(_same_name(words, wanted) for wanted in names):
             found.append(column)
     return found
+
+
+def resolve_column(values: list[list], display_name: str,
+                   aliases: Iterable[str] = ()) -> tuple[list[int], int | None]:
+    """Где человек в листе: (колонки, строка шапки). 0 колонок — нет, 2 и больше — неясно."""
+    names_row = find_names_row(values)
+    columns = (find_person_columns(values, names_row, display_name, aliases)
+               if names_row is not None else [])
+    return columns, names_row
 
 
 def find_day_rows(values: list[list], date_column: int = 2) -> dict[date, int]:
@@ -209,6 +245,7 @@ def plan_week(
     person_id: int,
     display_name: str,
     date_column: int = 2,
+    aliases: Iterable[str] = (),
 ) -> Plan:
     """
     Карточки недели → адреса и тексты.
@@ -223,7 +260,7 @@ def plan_week(
         plan.problems.append("names_row_not_found")
         return plan
 
-    columns = find_person_columns(values, names_row, display_name)
+    columns = find_person_columns(values, names_row, display_name, aliases)
     if not columns:
         plan.problems.append(f"person_not_found: {display_name}")
         return plan
@@ -272,6 +309,7 @@ def snapshot_mismatches(
     person_id: int,
     display_name: str,
     date_column: int = 2,
+    aliases: Iterable[str] = (),
 ) -> list[dict]:
     """
     Где человек правил руками после записи бота.
@@ -288,7 +326,7 @@ def snapshot_mismatches(
     names_row = find_names_row(values)
     if names_row is None:
         return []
-    columns = find_person_columns(values, names_row, display_name)
+    columns = find_person_columns(values, names_row, display_name, aliases)
     if len(columns) != 1:
         return []
     person_column = columns[0]

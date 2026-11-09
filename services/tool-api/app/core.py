@@ -74,6 +74,12 @@ SCHEDULE_SPREADSHEET_ID = settings.schedule_spreadsheet_id
 
 SCHEDULE_SHEET_TITLE = settings.schedule_sheet_title
 
+# Общий лист людей «Расписание студийцы»: из него человек загружает свою колонку (Э5).
+# Отдельная пара настроек, потому что SCHEDULE_* смотрит на плоский журнал «Занятость».
+SCHEDULE_HUMAN_SPREADSHEET_ID = settings.schedule_human_spreadsheet_id
+
+SCHEDULE_HUMAN_SHEET_TITLE = settings.schedule_human_sheet_title
+
 CALENDAR_ID_READ = settings.calendar_id_read
 
 CALENDAR_ID_VENUE = settings.calendar_id_venue     # актуальный календарь зала, только чтение
@@ -109,6 +115,7 @@ def configure(cfg: Settings) -> None:
     global SHEET_WRITE_ENABLED, INVITE_TTL_DAYS, WEBAPP_SECRET, BOT_TOKEN
     global GOOGLE_SA_JSON, BUDGET_SPREADSHEET_ID, SCHEDULE_SPREADSHEET_ID
     global SCHEDULE_SHEET_TITLE, CALENDAR_ID_READ, CALENDAR_ID_VENUE, CALENDAR_ID_DRAFT
+    global SCHEDULE_HUMAN_SPREADSHEET_ID, SCHEDULE_HUMAN_SHEET_TITLE
     global ZIP_MAX_BYTES
     global pool
 
@@ -128,6 +135,8 @@ def configure(cfg: Settings) -> None:
     BUDGET_SPREADSHEET_ID = cfg.budget_spreadsheet_id
     SCHEDULE_SPREADSHEET_ID = cfg.schedule_spreadsheet_id
     SCHEDULE_SHEET_TITLE = cfg.schedule_sheet_title
+    SCHEDULE_HUMAN_SPREADSHEET_ID = cfg.schedule_human_spreadsheet_id
+    SCHEDULE_HUMAN_SHEET_TITLE = cfg.schedule_human_sheet_title
     CALENDAR_ID_READ = cfg.calendar_id_read
     CALENDAR_ID_VENUE = cfg.calendar_id_venue
     CALENDAR_ID_DRAFT = cfg.calendar_id_draft

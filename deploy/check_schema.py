@@ -10,11 +10,17 @@
     DATABASE_URL=... python3 deploy/check_schema.py            # только отчёт
     DATABASE_URL=... python3 deploy/check_schema.py --files    # плюс список файлов
     DATABASE_URL=... python3 deploy/check_schema.py --expect-head  # версия = head
+    DATABASE_URL=... python3 deploy/check_schema.py --root /tmp/тег --expect-head  # head чужого дерева
     DATABASE_URL=... python3 deploy/check_schema.py --stamp-head --files "db/init/061_master_role.sql"
 
 `--expect-head` — read-only сверка `alembic_version` с головой цепочки ревизий
 (docs/reports/132). Ею baseline после восстановления из дампа: `alembic stamp head`
 ставится только когда структура уже равна цепочке, иначе выкат останавливается.
+Строка «схема впереди/позади» называет, в какую сторону разошлось: впереди — понижающих
+миграций нет и код старше базы не стартует (откат выката, docs/infrastructure/35 §10.3).
+
+`--root PATH` — взять `alembic.ini` и цепочку ревизий из другого дерева: откат выката
+сверяет базу с head выбранного тега, вытащенного `git archive`, не делая checkout.
 
 `--stamp-head` — та же сверка структуры, но с записью учёта: SQL, накатанный
 напрямую через psql (workflow `repair-schema.yml`), структуру меняет, а
@@ -101,8 +107,28 @@ def structure_gaps(url: str) -> tuple[list[str], list[str]]:
             sorted(set(want_columns) - have_columns))
 
 
+def revision_position(version: str, chain_list: list[str]) -> str:
+    """Где версия базы относительно head этого дерева: equal, behind или ahead.
+
+    Цепочка линейная (docs/reports/132): `chain_list[0]` — head, дальше старше.
+    Версия, которой в цепочке нет, применена позже её head — схема впереди кода.
+    Это и есть случай отката выката: понижающих миграций нет, старый код не стартует.
+    """
+    if version == chain_list[0]:
+        return "equal"
+    return "behind" if version in chain_list else "ahead"
+
+
+POSITION_HINTS = {
+    "ahead": "схема впереди тега: ревизия новее его head, понижающих миграций нет — "
+             "код старше базы не стартует (опускать базу: restore из дампа или alembic downgrade)",
+    "behind": "схема позади тега: ревизии тега не накатаны — накатите миграции "
+              "(server-deploy.sh db --migrate)",
+}
+
+
 def check_expect_head(url: str, root: Path) -> int:
-    """0 — версия базы равна head цепочки; 1 — отстала или учёта нет."""
+    """0 — версия базы равна head цепочки; 1 — отстала, впереди или учёта нет."""
     with psycopg.connect(url) as conn:
         version = current_version(conn)
     head = head_revision(root)
@@ -111,7 +137,9 @@ def check_expect_head(url: str, root: Path) -> int:
         print(f"схема не применена: в alembic_version нет версии (head={head})")
         return 1
     if version != head:
+        position = revision_position(version, chain(root))
         print(f"версия схемы {version} не равна head {head}")
+        print(POSITION_HINTS[position])
         return 1
     print(f"схема совпадает с Alembic: {head}")
     return 0
@@ -244,6 +272,16 @@ def files_argument(argv: list[str]) -> list[str]:
     return []
 
 
+def root_argument(argv: list[str]) -> Path | None:
+    """Значение `--root PATH`: каталог дерева, чей `alembic.ini` задаёт head."""
+    for index, arg in enumerate(argv):
+        if arg == "--root" and index + 1 < len(argv):
+            return Path(argv[index + 1])
+        if arg.startswith("--root="):
+            return Path(arg.split("=", 1)[1])
+    return None
+
+
 def main(argv: list[str]) -> int:
     url = os.getenv("DATABASE_URL")
     if not url:
@@ -266,12 +304,18 @@ def main(argv: list[str]) -> int:
         print("DATABASE_URL не задан")
         return 2
     show_files = any(arg == "--files" or arg.startswith("--files=") for arg in argv)
+    # Дерево для сверки версии: по умолчанию это сам скрипт (текущий checkout),
+    # при откате — дерево выбранного тега, вытащенное git archive.
+    root = root_argument(argv) or ROOT
+    if not (root / "alembic.ini").is_file():
+        print(f"нет {root / 'alembic.ini'}: сверять версию схемы не с чем")
+        return 2
 
     if "--stamp-head" in argv:
-        return stamp_head(url, ROOT, files_argument(argv))
+        return stamp_head(url, root, files_argument(argv))
 
     if "--expect-head" in argv:
-        return check_expect_head(url, ROOT)
+        return check_expect_head(url, root)
 
     want_tables, want_columns = expected()
     with psycopg.connect(url) as conn:

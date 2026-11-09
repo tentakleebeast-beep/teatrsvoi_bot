@@ -640,12 +640,14 @@ def page_constants() -> dict[str, dict[str, Any]]:
     `misc_profile.py`. Поэтому мало знать имя константы: нужно раскрыть её
     содержимое по ссылкам и по импортам, иначе адреса API экрана теряются.
     """
+    paths = sorted(PAGES.glob("*.py"))
+    stems = {path.stem for path in paths}
     modules: dict[str, dict[str, Any]] = {}
-    for path in sorted(PAGES.glob("*.py")):
+    for path in paths:
         tree = ast.parse(path.read_text(encoding="utf-8"))
         spans: dict[str, list[tuple[int, int]]] = {}
         names: dict[str, set[str]] = {}
-        imports: dict[str, tuple[str, str]] = {}
+        imports: dict[str, tuple[str, str | None]] = {}
         for node in tree.body:
             if isinstance(node, ast.Assign):
                 for target in node.targets:
@@ -654,14 +656,37 @@ def page_constants() -> dict[str, dict[str, Any]]:
                     spans.setdefault(target.id, []).append(
                         (node.lineno, node.end_lineno or node.lineno))
                     names.setdefault(target.id, set()).update(
-                        child.id for child in ast.walk(node.value)
-                        if isinstance(child, ast.Name))
+                        _assignment_refs(node.value))
             elif isinstance(node, ast.ImportFrom) and (node.module or "").startswith("app.pages"):
+                package = (node.module or "").rsplit(".", 1)[-1]
                 for alias in node.names:
-                    imports[alias.asname or alias.name] = (
-                        (node.module or "").rsplit(".", 1)[-1], alias.name)
+                    local = alias.asname or alias.name
+                    if package == "pages" and alias.name in stems:
+                        # `from app.pages import home_loading, layout` — модуль, а не
+                        # константа: имя означает файл `app/pages/home_loading.py`.
+                        imports[local] = (alias.name, None)
+                    else:
+                        imports[local] = (package, alias.name)
         modules[path.stem] = {"spans": spans, "names": names, "imports": imports}
     return modules
+
+
+def _assignment_refs(value: ast.AST) -> set[str]:
+    """На что ссылается присваивание: `_X` и `модуль.Константа` из вёрстки страницы.
+
+    Имя-основание атрибута (`files_actions` в `files_actions.SCRIPT`) само по себе
+    не ссылка: раскрывать весь модуль из-за него нельзя, иначе экран получит чужие
+    адреса. Атрибут (`files_actions.SCRIPT`) — ссылка на конкретную часть модуля.
+    """
+    bases = {id(child.value) for child in ast.walk(value)
+             if isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name)}
+    refs: set[str] = set()
+    for child in ast.walk(value):
+        if isinstance(child, ast.Name) and id(child) not in bases:
+            refs.add(child.id)
+        elif isinstance(child, ast.Attribute) and isinstance(child.value, ast.Name):
+            refs.add(f"{child.value.id}.{child.attr}")
+    return refs
 
 
 def _resolve_constant(modules: dict[str, dict[str, Any]], module: str, name: str,
@@ -680,12 +705,29 @@ def _resolve_constant(modules: dict[str, dict[str, Any]], module: str, name: str
         return set()
     if name not in data["spans"]:
         target = data["imports"].get(name)
-        return _resolve_constant(modules, target[0], target[1], seen) if target else set()
+        if target is None:
+            return set()
+        if target[1] is None:                       # ссылка на модуль целиком
+            return _module_spans(modules, target[0])
+        return _resolve_constant(modules, target[0], target[1], seen)
     found = {(module, start, end) for start, end in data["spans"][name]}
     for child in data["names"].get(name, set()):
-        if child != name:
-            found |= _resolve_constant(modules, module, child, seen)
+        if child == name:
+            continue
+        head, _, attribute = child.partition(".")
+        target = data["imports"].get(head)
+        if target is not None and target[1] is None:   # `home_loading.SCRIPT`
+            found |= (_resolve_constant(modules, target[0], attribute, seen) if attribute
+                      else _module_spans(modules, target[0]))
+            continue
+        found |= _resolve_constant(modules, module, child, seen)
     return found
+
+
+def _module_spans(modules: dict[str, dict[str, Any]], module: str) -> set[tuple[str, int, int]]:
+    """Все части модуля страниц: имя модуля без атрибута означает файл целиком."""
+    data = modules.get(module) or {}
+    return {(module, start, end) for spans in data.get("spans", {}).values() for start, end in spans}
 
 
 def _known(path: str, routes: list[Route]) -> bool:

@@ -160,6 +160,16 @@ _BODY = """
   <div class="ui-skeleton"></div>
 </div>
 
+<h2 class="ui-section__title">Загрузка экрана</h2>
+<div class="ui-card">
+  <h1 class="ui-logo">СВОИ</h1>
+  <h2 class="ui-h2"><span class="ui-skeleton ui-skeleton--line-title"
+    style="width:60%" aria-hidden="true"></span></h2>
+  <div class="ui-small ui-muted"><span class="ui-skeleton ui-skeleton--line-text"
+    style="width:35%" aria-hidden="true"></span></div>
+  <p class="ui-small ui-muted">Скелет стоит на месте будущего текста и не подменяет знак.</p>
+</div>
+
 <h2 class="ui-section__title">Лист и сообщение</h2>
 <div class="ui-card">
   <div class="ui-actions">

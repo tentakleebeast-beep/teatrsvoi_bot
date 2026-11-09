@@ -434,3 +434,151 @@ def test_ремонт_схемы_двигает_учёт_версии_alembic():
     assert "--expect-head" in verify["run"]
     assert "alembic_version не равен head" in verify["run"], "сообщение должно называть причину"
     assert "server-deploy.sh db" in verify["run"], "сообщение должно называть лечение"
+
+
+# Откат выката: старый тег поверх накатанной схемы не стартует (Д-03, 09.11.2026).
+# Проверяем решение cmd_rollback, а не текст: на сервере вместо git/systemctl/venv
+# подставляются заглушки, и видно, дошло ли дело до переключения кода.
+# Обоснование: docs/infrastructure/35 §10.3, docs/infrastructure/110 §4.
+
+
+def _stub(path: pathlib.Path, body: str) -> None:
+    path.write_text("#!/bin/sh\n" + body, encoding="utf-8")
+    path.chmod(0o755)
+
+
+def _rollback_sandbox(tmp_path: pathlib.Path, schema_code: int, schema_out: str):
+    """Прогнать `server-deploy.sh rollback v0.8.0` на заглушках сервера."""
+    root = tmp_path / "svoi"
+    (root / ".venv" / "bin").mkdir(parents=True)
+    (root / ".env").write_text(
+        "DATABASE_URL=postgresql://svoi:secret@127.0.0.1:5432/svoi\n", encoding="utf-8")
+    out_file = tmp_path / "schema.out"
+    out_file.write_text(schema_out + "\n", encoding="utf-8")
+    # venv-питон изображает check_schema.py: печатает сверку и выходит с нужным кодом
+    _stub(root / ".venv" / "bin" / "python", 'cat "$STUB_SCHEMA_OUT"\nexit "$STUB_SCHEMA_CODE"\n')
+    _stub(root / ".venv" / "bin" / "pip", "exit 0\n")
+
+    # дерево тега, которое git archive отдаёт в tar-потоке
+    tag_tree = tmp_path / "tag-tree"
+    (tag_tree / "services" / "tool-api" / "migrations").mkdir(parents=True)
+    (tag_tree / "alembic.ini").write_text("[alembic]\n", encoding="utf-8")
+
+    bin_dir = tmp_path / "bin"
+    bin_dir.mkdir()
+    _stub(bin_dir / "id", "echo 0\n")                       # require_root проходит без sudo
+    _stub(bin_dir / "runuser", 'shift\nshift\n[ "$1" = "--" ] && shift\nexec "$@"\n')
+    _stub(bin_dir / "git",
+          'printf "%s\\n" "$*" >> "$GIT_LOG"\n'
+          'case "$*" in *archive*) cd "$FAKE_TAG_TREE" && tar -cf - alembic.ini services;; esac\n'
+          "exit 0\n")
+    _stub(bin_dir / "systemctl", 'printf "%s\\n" "$*" >> "$SYSTEMCTL_LOG"\nexit 0\n')
+    _stub(bin_dir / "curl", "printf '{\"ok\":true}\\n'\nexit 0\n")
+    _stub(bin_dir / "sleep", "exit 0\n")
+
+    env_file = tmp_path / "svoi.env"
+    env_file.write_text(
+        "SVOI_DOMAIN=example.test\n"
+        "SVOI_REPO=https://example.test/repo.git\n"
+        "SVOI_ACME_EMAIL=admin@example.test\n"
+        f"SVOI_ROOT={root}\n"
+        "SVOI_USER=svoi\n",
+        encoding="utf-8")
+    git_log = tmp_path / "git.log"
+    systemctl_log = tmp_path / "systemctl.log"
+    for log in (git_log, systemctl_log):
+        log.write_text("", encoding="utf-8")
+    env = {
+        **os.environ,
+        "PATH": f"{bin_dir}{os.pathsep}{os.environ['PATH']}",
+        "SVOI_DEPLOY_ENV": str(env_file),
+        "GIT_LOG": str(git_log),
+        "SYSTEMCTL_LOG": str(systemctl_log),
+        "FAKE_TAG_TREE": str(tag_tree),
+        "STUB_SCHEMA_OUT": str(out_file),
+        "STUB_SCHEMA_CODE": str(schema_code),
+    }
+    result = subprocess.run(
+        ["bash", str(DEPLOY / "server-deploy.sh"), "rollback", "v0.8.0"],
+        capture_output=True, text=True, env=env,
+    )
+    return (result, git_log.read_text(encoding="utf-8"),
+            systemctl_log.read_text(encoding="utf-8"))
+
+
+def test_откат_при_схеме_впереди_не_переключает_код(tmp_path):
+    """Схема новее head тега: код остаётся текущим, прод продолжает отвечать.
+
+    До исправления rollback делал checkout и restart, служба падала на сверке схемы
+    и сайт отдавал 502 до ручного вмешательства (Д-03).
+    """
+    code, git_log, systemctl_log = _rollback_sandbox(
+        tmp_path, 1,
+        "alembic current: 062_storage_files | head: 061_master_role\n"
+        "версия схемы 062_storage_files не равна head 061_master_role\n"
+        "схема впереди тега: ревизия новее его head, понижающих миграций нет",
+    )
+    assert code.returncode == 1, code.stdout + code.stderr
+    assert "схема базы не совпадает с head тега v0.8.0" in code.stderr
+    assert "откат НЕ выполнен" in code.stderr
+    assert "110-backups-and-restore.md" in code.stderr       # лечение: дамп до отката
+    assert "downgrade" in code.stderr                        # либо понижающая миграция
+    assert "35-deploy-runbook.md" in code.stderr and "§10.3" in code.stderr
+    # решение, а не текст: ни checkout, ни перезапуска службы не было
+    assert "checkout" not in git_log, git_log
+    assert "restart" not in systemctl_log, systemctl_log
+
+
+def test_откат_при_совпадающей_схеме_проходит_как_раньше(tmp_path):
+    """Схема равна head тега — прежнее поведение отката не изменилось."""
+    code, git_log, systemctl_log = _rollback_sandbox(
+        tmp_path, 0,
+        "alembic current: 061_master_role | head: 061_master_role\n"
+        "схема совпадает с Alembic: 061_master_role",
+    )
+    assert code.returncode == 0, code.stdout + code.stderr
+    assert "checkout --force FETCH_HEAD" in git_log
+    assert "restart svoi-tool-api" in systemctl_log
+    assert "откат выполнен" in code.stdout
+
+
+def test_сверка_схемы_в_откате_идёт_до_переключения_кода():
+    """Порядок шагов и дерево тега: head берётся из git archive, а не из checkout."""
+    script = (DEPLOY / "server-deploy.sh").read_text(encoding="utf-8")
+    rollback = script.split("cmd_rollback()", 1)[1]
+    guard_at = rollback.index("--expect-head")
+    assert guard_at < rollback.index("checkout --force FETCH_HEAD")
+    assert "archive FETCH_HEAD alembic.ini services/tool-api/migrations" in rollback
+    assert '--root "$ROLLBACK_TREE"' in rollback, "head должен считаться по дереву тега"
+    assert "die" in rollback[:guard_at], "отказ до переключения кода"
+
+
+def test_позиция_версии_различает_вперёд_и_назад():
+    """«Схема впереди» и «схема позади» лечатся по-разному, их нельзя путать."""
+    spec = importlib.util.spec_from_file_location("check_schema", DEPLOY / "check_schema.py")
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    chain_list = ["062_storage_files", "061_master_role", "060_participant_role_revoked"]
+    assert module.revision_position("062_storage_files", chain_list) == "equal"
+    assert module.revision_position("063_new", chain_list) == "ahead"
+    assert module.revision_position("060_participant_role_revoked", chain_list) == "behind"
+
+    assert module.root_argument(["--root", "/tmp/t", "--expect-head"]) == pathlib.Path("/tmp/t")
+    assert module.root_argument(["--root=/tmp/t"]) == pathlib.Path("/tmp/t")
+    assert module.root_argument(["--expect-head"]) is None
+
+
+def test_ранбук_и_бэкапы_описывают_порядок_сначала_бд():
+    """Дежурный не должен искать причину 502: правило записано в обоих документах."""
+    runbook = (ROOT / "docs" / "infrastructure" / "35-deploy-runbook.md").read_text(encoding="utf-8")
+    assert "## 10.3. Откат выката: сначала БД, потом код" in runbook
+    section = runbook.split("## 10.3.", 1)[1].split("## 11.", 1)[0]
+    assert "git archive FETCH_HEAD" in section
+    assert "110-backups-and-restore.md" in section and "alembic downgrade" in section
+    assert runbook.index("## 10.3.") < runbook.index("## 11. Что нельзя делать")
+
+    backups = (ROOT / "docs" / "infrastructure" / "110-backups-and-restore.md").read_text(encoding="utf-8")
+    assert "сначала база" in backups and "потом код" in backups
+    assert "35-deploy-runbook.md" in backups and "§10.3" in backups
