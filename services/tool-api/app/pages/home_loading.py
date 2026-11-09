@@ -7,8 +7,9 @@
 
 Правила, которые держит разметка:
 
-* «СВОИ» — постоянный знак `h1#logo`; имя и роль — отдельные строки, на их месте
-  скелет (высота полосы равна высоте будущей строки, поэтому подмена не двигает
+* «СВОИ» — постоянный знак `h1#logo`: слово, обрезанное из файла студии, под маской
+  в цвет текста (`docs/development/148` §2 D1); имя и роль — отдельные строки, на их
+  месте скелет (высота полосы равна высоте будущей строки, поэтому подмена не двигает
   соседей);
 * карточка недели настоящая с первого кадра, включая рабочую кнопку;
 * готовое содержимое подставляется одной операцией: `#home-loading` заменяется
@@ -19,9 +20,18 @@
 
 from __future__ import annotations
 
+#: Разметка знака «СВОИ» — **одно** место на серверную разметку и на сборку в
+#: `render()`. Знак не `<img>`: маска на картинке не режет её белые пиксели, а `alt`
+#: битого `<img>` WebKit не рисует — поэтому пустой `span` под маску плюс скрытая
+#: текстовая копия для фолбэка (`docs/development/148` §2 D1).
+LOGO_MARKUP = (
+    '<span class="ui-logo__mark" role="img" aria-label="СВОИ"></span>'
+    '<span class="ui-logo__text" hidden>СВОИ</span>'
+)
+
 BODY = """
 <div id="home-loading" class="ui-home">
-  <h1 class="ui-logo" id="logo">СВОИ</h1>
+  <h1 class="ui-logo" id="logo">{logo}</h1>
   <h2 class="ui-h2" id="name"><span class="ui-skeleton ui-skeleton--line-title"
     style="width:60%" aria-hidden="true"></span></h2>
   <div class="ui-small ui-muted" id="role"><span class="ui-skeleton ui-skeleton--line-text"
@@ -41,7 +51,7 @@ BODY = """
    data-svoi-cap="budget.write">Записать операцию</a>
 
 <p class="ui-sr-only" role="status" aria-live="polite">Загружаем данные</p>
-"""
+""".replace("{logo}", LOGO_MARKUP)
 
 SCRIPT = """
 <script>
@@ -56,6 +66,32 @@ SCRIPT = """
   // Копия загрузочного состояния: «Повторить» возвращает экран в него, а не
   // перезагружает страницу (docs/development/148 §3).
   var loadingTemplate = loading ? loading.cloneNode(true) : null;
+  // Адрес знака держим в скрипте, а не только в CSS: `mini_app_refs()`
+  // (`scripts/audit_actions.py`) читает `scripts/*.js` и `pages/*.py`, но не CSS,
+  // и маршрут из одной маски попал бы в «сироты» (docs/development/148 §2 D1).
+  var LOGO_SRC = "/webapp/logo.png";
+  // Разметка знака — из одной серверной константы LOGO_MARKUP (home_loading.py):
+  // второй независимый литерал после replaceWith(fragment) вернул бы знак текстом.
+  var LOGO_HTML = '{logo}';
+  // «Знак не отдался»: маска без файла не рисует ничего — прозрачный бокс, поэтому
+  // на месте знака показывается текстовая копия (148 §2 D1). Флаг применяется при
+  // каждой сборке, иначе после подмены содержимого текст пропадёт.
+  var logoFailed = false;
+
+  function applyLogoState(scope) {
+    var mark = scope.querySelector(".ui-logo__mark");
+    var text = scope.querySelector(".ui-logo__text");
+    if (mark) { mark.hidden = logoFailed; }
+    if (text) { text.hidden = !logoFailed; }
+  }
+
+  function logoMarkup() {
+    var node = el("h1", "ui-logo");
+    node.id = "logo";
+    node.innerHTML = LOGO_HTML;
+    applyLogoState(node);
+    return node;
+  }
 
   function say(text) {
     if (!statusNode) { return; }
@@ -78,9 +114,7 @@ SCRIPT = """
 
   function root() {
     var node = el("div", "ui-home ui-fade-in");
-    var logo = el("h1", "ui-logo", "СВОИ");
-    logo.id = "logo";
-    node.appendChild(logo);
+    node.appendChild(logoMarkup());
     return node;
   }
 
@@ -272,8 +306,20 @@ SCRIPT = """
     }
   }
 
+  // Проверка файла знака: один запрос (он же прогревает кэш маски). Без неё при
+  // недоступном файле на месте знака остаётся прозрачный бокс 54 x 20.
+  var logoProbe = new Image();
+  logoProbe.onerror = function () {
+    logoFailed = true;
+    applyLogoState(document);
+    // Копия загрузочного состояния для «Повторить» склонирована до ответа картинки:
+    // без этой строки повтор вернул бы пустой бокс вместо текста.
+    if (loadingTemplate) { applyLogoState(loadingTemplate); }
+  };
+  logoProbe.src = LOGO_SRC;
+
   busy(true);
   load();
 })();
 </script>
-"""
+""".replace("{logo}", LOGO_MARKUP)

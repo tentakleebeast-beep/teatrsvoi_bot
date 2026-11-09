@@ -10,6 +10,8 @@ Mini App открывался без CSS (текст наложением) и б
 
 from __future__ import annotations
 
+import re
+
 
 def test_стили_отдаются(client):
     r = client.get("/webapp/ui.css")
@@ -40,3 +42,31 @@ def test_страница_ссылается_на_живые_адреса(client
     assert page.status_code == 200
     assert 'href="/webapp/ui.css"' in page.text
     assert client.get("/webapp/ui.css").status_code == 200
+
+
+def test_знак_отдаётся(client):
+    """К5: V-046 — знак студии отдаётся собственным маршрутом как PNG.
+
+    Маска в CSS без живого файла не рисует ничего (знак прозрачный), поэтому
+    проверяется не «маршрут есть», а «по адресу приезжает PNG» — как у стилей
+    и оболочки после дефекта 01.11.2026.
+    """
+    response = client.get("/webapp/logo.png")
+    assert response.status_code == 200, response.text
+    assert response.headers["content-type"] == "image/png"
+    assert response.content.startswith(b"\x89PNG\r\n\x1a\n"), "пришёл не PNG"
+    assert len(response.content) > 10_000, "файл знака пустой или обрезан"
+    assert response.headers["cache-control"] == "public, max-age=86400"
+
+
+def test_маска_знака_отдаётся(client):
+    """К6: V-046 — адрес из `url(...)` в CSS ведёт на живой маршрут.
+
+    `test_static_contract.py` видит только `href|src` с `.css|.js` и PNG из CSS
+    не ловит: без этой проверки адрес маски мог бы разойтись с маршрутом молча.
+    """
+    css = client.get("/webapp/ui.css").text
+    urls = set(re.findall(r'url\("(/webapp/[^"]+)"\)', css))
+    assert "/webapp/logo.png" in urls, f"в CSS нет адреса знака: {sorted(urls)}"
+    for url in sorted(urls):
+        assert client.get(url).status_code == 200, f"адрес из CSS не отдаётся: {url}"

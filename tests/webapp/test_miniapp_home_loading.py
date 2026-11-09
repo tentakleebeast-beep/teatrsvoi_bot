@@ -26,6 +26,7 @@ import pytest
 from tests.webapp.conftest import TELEGRAM_HASH, VIEWPORT
 
 DATA_URL = "**/webapp/home/data"
+LOGO_URL = "**/webapp/logo.png"
 DELAY_MS = 800
 MESSAGE = "Сайт недоступен, попробуйте ещё раз."
 RETRY = "Повторить"
@@ -105,12 +106,16 @@ LOADING_JS = """
 () => {
   const q = (s) => document.querySelector(s);
   const name = q("#name"), role = q("#role"), meta = q("#week-meta");
+  const logo = q("#logo");
   const weekLink = q("#week a");
   const nameSkeleton = name ? name.querySelector(".ui-skeleton") : null;
   const roleSkeleton = role ? role.querySelector(".ui-skeleton") : null;
   const metaSkeleton = meta ? meta.querySelector(".ui-skeleton") : null;
   return {
-    logo: ((q("#logo") || {}).textContent || "").trim(),
+    logo: ((logo || {}).textContent || "").trim(),
+    logoInner: logo ? logo.innerText.trim() : null,
+    logoMark: !!(logo && logo.querySelector(".ui-logo__mark")),
+    logoText: !!(logo && logo.querySelector(".ui-logo__text")),
     nameText: name ? name.innerText.trim() : null,
     roleText: role ? role.innerText.trim() : null,
     nameSkeleton: !!nameSkeleton,
@@ -132,12 +137,16 @@ READY_JS = """
 () => {
   const q = (s) => document.querySelector(s);
   const meta = q("#week-meta");
+  const logo = q("#logo");
   const blocks = ["attention", "today", "debt"].filter(function (id) {
     const node = document.getElementById(id);
     return node && !node.hidden;
   });
   return {
-    logo: ((q("#logo") || {}).textContent || "").trim(),
+    logo: ((logo || {}).textContent || "").trim(),
+    logoInner: logo ? logo.innerText.trim() : null,
+    logoMark: !!(logo && logo.querySelector(".ui-logo__mark")),
+    logoText: !!(logo && logo.querySelector(".ui-logo__text")),
     name: q("#name") ? q("#name").innerText.trim() : null,
     role: q("#role") ? q("#role").innerText.trim() : null,
     week: !!q("#week"),
@@ -195,6 +204,30 @@ BARE_JS = """
 }
 """
 
+LOGO_JS = """
+() => {
+  const logo = document.querySelector("#logo");
+  if (!logo) { return null; }
+  const mark = logo.querySelector(".ui-logo__mark");
+  const text = logo.querySelector(".ui-logo__text");
+  const markBox = mark ? mark.getBoundingClientRect() : null;
+  const textStyle = text ? getComputedStyle(text) : null;
+  return {
+    inner: logo.innerText.trim(),
+    content: (logo.textContent || "").trim(),
+    height: logo.getBoundingClientRect().height,
+    mark: !!mark,
+    markHidden: mark ? !!mark.hidden : null,
+    markWidth: markBox ? markBox.width : null,
+    markHeight: markBox ? markBox.height : null,
+    text: !!text,
+    textHidden: text ? !!text.hidden : null,
+    textSize: textStyle ? textStyle.fontSize : null,
+    textWeight: textStyle ? textStyle.fontWeight : null,
+  };
+}
+"""
+
 A11Y_JS = """
 () => {
   const main = document.querySelector("main");
@@ -230,6 +263,17 @@ def _json(payload: dict, status: int = 200):
         route.fulfill(status=status, content_type="application/json",
                       body=json.dumps(payload, ensure_ascii=False))
     return handler
+
+
+def _logo_404(page) -> None:
+    """Файл знака не отдался: маска пуста, значит обязан работать текстовый фолбэк."""
+    page.route(LOGO_URL, lambda route: route.fulfill(status=404, body="not found"))
+
+
+def _wait_logo_fallback(page, timeout: int = 5_000) -> None:
+    page.wait_for_function(
+        "() => { const node = document.querySelector('#logo .ui-logo__mark');"
+        " return !!node && node.hidden; }", timeout=timeout)
 
 
 def _slow(page, ms: int = DELAY_MS) -> None:
@@ -289,38 +333,155 @@ def test_первый_кадр_без_лжи(app_page):
 
 
 def test_знак_не_подменяется(app_page):
-    """К2: `#logo` — постоянный знак; его место не двигается ни на пиксель."""
+    """К1, К3: `#logo` — постоянный знак; его место не двигается ни на пиксель.
+
+    V-046: знак — маска слова «СВОИ» на пустом span, видимого текста нет
+    (`innerText` пуст, `textContent` = «СВОИ» — скрытая копия для фолбэка).
+    """
     page = app_page("/webapp/home")
     _slow(page)
     page.route(DATA_URL, _json(TROUPE))
     _reload(page)
 
-    before = page.locator("#logo").bounding_box()
-    assert _loading(page)["logo"] == "СВОИ"
+    before_box = page.locator("#logo").bounding_box()
+    before = page.evaluate(LOGO_JS)
+    assert before["mark"] and not before["markHidden"], before
+    assert before["inner"] == "", before
+    assert before["content"] == "СВОИ", before
+    assert abs(before["height"] - 20) <= 0.5, before["height"]
 
     _wait_ready(page)
-    after = page.locator("#logo").bounding_box()
-    assert page.locator("#logo").inner_text().strip() == "СВОИ"
-    assert before and after
+    after_box = page.locator("#logo").bounding_box()
+    after = page.evaluate(LOGO_JS)
+    assert after["mark"] is True, "после подмены содержимого знак стал текстовым узлом"
+    assert after["markHidden"] is False, after
+    assert after["inner"] == "" and after["content"] == "СВОИ", after
+    assert before_box and after_box
     for key in ("x", "y", "width", "height"):
-        assert abs(before[key] - after[key]) <= 1, (key, before, after)
+        assert abs(before_box[key] - after_box[key]) <= 1, (key, before_box, after_box)
 
 
 def test_знак_не_подменяется_при_ошибке(app_page):
-    """К2: ошибка ответа тоже не трогает знак и его место."""
+    """К3: ошибка ответа тоже не трогает знак и его место (V-046)."""
     page = app_page("/webapp/home")
     _slow(page)
     page.route(DATA_URL, _json({"ok": False}))
     _reload(page)
 
-    before = page.locator("#logo").bounding_box()
+    before_box = page.locator("#logo").bounding_box()
     page.wait_for_selector("main .ui-alert", timeout=5_000)
 
-    after = page.locator("#logo").bounding_box()
-    assert page.locator("#logo").inner_text().strip() == "СВОИ"
-    assert before and after
+    after_box = page.locator("#logo").bounding_box()
+    after = page.evaluate(LOGO_JS)
+    assert after["mark"] is True and after["markHidden"] is False, after
+    assert after["inner"] == "" and after["content"] == "СВОИ", after
+    assert before_box and after_box
     for key in ("x", "y", "width", "height"):
-        assert abs(before[key] - after[key]) <= 1, (key, before, after)
+        assert abs(before_box[key] - after_box[key]) <= 1, (key, before_box, after_box)
+
+
+def test_знак_есть_в_первом_кадре(app_page):
+    """К1: V-046 — в первом кадре на месте знака маска 54 x 20, а не текст.
+
+    Разметку отдаёт сервер, поэтому знак есть до ответа данных и до скрипта:
+    ни пустого бокса, ни литерала «СВОИ» текстом.
+    """
+    page = app_page("/webapp/home")
+    _slow(page)
+    page.route(DATA_URL, _json(TROUPE))
+    _reload(page)
+
+    mark = page.locator("#logo .ui-logo__mark")
+    assert mark.count() == 1, "знак — не маска"
+    assert mark.get_attribute("role") == "img", mark.get_attribute("role")
+    assert mark.get_attribute("aria-label") == "СВОИ"
+    assert abs(mark.bounding_box()["width"] - 54) <= 0.5, mark.bounding_box()
+    assert abs(mark.bounding_box()["height"] - 20) <= 0.5, mark.bounding_box()
+    assert abs(page.locator("#logo").bounding_box()["height"] - 20) <= 0.5
+
+    state = page.evaluate(LOGO_JS)
+    assert state["text"] and state["textHidden"], "скрытой текстовой копии нет"
+    assert state["inner"] == "" and state["content"] == "СВОИ", state
+
+
+@pytest.mark.parametrize("scheme", ("light", "dark"))
+def test_знак_красится_цветом_текста(app_page, scheme):
+    """К4: V-046 — знак залит цветом текста в обеих темах, второго файла нет.
+
+    `currentColor` берёт `--fg`, который оболочка ставит из темы Telegram: в тёмной
+    теме знак белый, в светлой — цвет основного текста. Чёрных пикселей файла не
+    видно, потому что маска режет заливку, а не рисует картинку.
+    """
+    page = app_page("/webapp/home", color_scheme=scheme)
+    _slow(page)
+    page.route(DATA_URL, _json(TROUPE))
+    _reload(page)
+
+    def colors():
+        return page.evaluate("""() => {
+          const mark = document.querySelector("#logo .ui-logo__mark");
+          return {
+            mark: getComputedStyle(mark).backgroundColor,
+            body: getComputedStyle(document.body).color,
+            logo: getComputedStyle(document.querySelector("#logo")).color,
+            mask: getComputedStyle(mark).maskImage
+              || getComputedStyle(mark).webkitMaskImage,
+          };
+        }""")
+
+    loading = colors()
+    assert loading["mark"] == loading["body"], (scheme, loading)
+    assert loading["mark"] == loading["logo"], (scheme, loading)
+    assert "logo.png" in loading["mask"], loading["mask"]
+
+    _wait_ready(page)
+    ready = colors()
+    assert ready["mark"] == ready["body"], (scheme, ready)
+
+
+def test_фолбэк_знака_текстом(app_page):
+    """К7–К9: V-046 — файл не отдался: на месте знака текст, и он не пропадает.
+
+    Проверяются три состояния подряд: загрузка, ответ `ok:false` (подмена
+    содержимого) и «Повторить» (возврат загрузочной копии).
+    """
+    page = app_page("/webapp/home")
+    _logo_404(page)
+    calls: list[str] = []
+
+    def handler(route):
+        calls.append(route.request.url)
+        payload = {"ok": False} if len(calls) == 1 else TROUPE
+        route.fulfill(status=200, content_type="application/json",
+                      body=json.dumps(payload, ensure_ascii=False))
+
+    _slow(page)
+    page.route(DATA_URL, handler)
+    _reload(page)
+    _wait_logo_fallback(page)
+
+    loading = page.evaluate(LOGO_JS)
+    assert loading["inner"] == "СВОИ", loading
+    assert loading["markHidden"] is True, loading
+    assert loading["textHidden"] is False, loading
+    assert loading["markWidth"] == 0, loading
+    assert loading["textSize"] == "20px" and loading["textWeight"] == "700", loading
+    assert abs(loading["height"] - 20) <= 1, loading["height"]
+
+    # К8: флаг фолбэка применён и при сборке готового содержимого.
+    page.wait_for_selector("main .ui-alert", timeout=5_000)
+    after_data = page.evaluate(LOGO_JS)
+    assert after_data["inner"] == "СВОИ", after_data
+    assert after_data["markHidden"] is True and after_data["textHidden"] is False, after_data
+    assert abs(after_data["height"] - 20) <= 1, after_data["height"]
+
+    # К9: «Повторить» возвращает копию загрузочного состояния — с текстом, а не с боксом.
+    page.click("main .ui-alert button")
+    _wait_logo_fallback(page)
+    retry = page.evaluate(LOGO_JS)
+    assert retry["inner"] == "СВОИ", retry
+    assert retry["markHidden"] is True and retry["textHidden"] is False, retry
+    assert retry["markWidth"] == 0, retry
 
 
 def test_одна_подмена_без_промежуточного_кадра(app_page):
@@ -540,10 +701,18 @@ def test_нет_горизонтального_скролла(app_page):
 
 
 def test_справочник_обновлён(app_page):
-    """К15: в `/webapp/ui` есть знак и оба вида скелета."""
+    """К15, К10: в `/webapp/ui` есть знак (тот же компонент, что в шапке) и оба скелета."""
     page = app_page("/webapp/ui")
     body = page.content()
     assert "ui-logo" in body, "нет строки для знака"
     assert "ui-skeleton--line-title" in body, "нет скелета строки заголовка"
     assert "ui-skeleton--line-text" in body, "нет скелета строки текста"
-    assert "СВОИ" in page.inner_text(".ui-logo")
+    # V-046: в справочнике тот же компонент знака — маска плюс скрытая копия,
+    # а не литерал «СВОИ» текстом (иначе справочник врёт про шапку).
+    mark = page.locator(".ui-logo .ui-logo__mark")
+    assert mark.count() == 1, "знак в справочнике — текст, а не маска"
+    assert mark.get_attribute("role") == "img"
+    assert mark.get_attribute("aria-label") == "СВОИ"
+    text = page.locator(".ui-logo .ui-logo__text")
+    assert text.count() == 1 and text.text_content().strip() == "СВОИ"
+    assert page.inner_text(".ui-logo").strip() == "", "видимый текст знака остался"

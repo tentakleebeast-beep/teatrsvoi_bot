@@ -586,7 +586,19 @@ body.ui-page {
    равна высоте будущей строки (1.45em), поэтому подмена содержимого не двигает
    соседей. Карточка недели настоящая с первого кадра. */
 
-.ui-logo { margin: 0; font-size: 20px; line-height: 1.25; font-weight: 700; }
+.ui-logo { margin: 0; font-size: 20px; line-height: 1; font-weight: 700; }
+/* Знак: слово «СВОИ», обрезанное из файла студии, залитое цветом текста через маску.
+   `currentColor` — это `--fg` из темы Telegram (webapp-shell.js), поэтому один файл
+   на обе темы; `prefers-color-scheme` про схему ОС, а не про тему (148 §2 D1). */
+.ui-logo__mark {
+  display: block; width: 54px; height: 20px;
+  background-color: currentColor;
+  -webkit-mask: url("/webapp/logo.png") no-repeat left center / contain;
+  mask: url("/webapp/logo.png") no-repeat left center / contain;
+}
+/* `display: block` у знака сильнее UA-стиля `[hidden]`: без этих правил при
+   недоступном файле видны оба состояния сразу, а текст уезжает под бокс знака. */
+.ui-logo__mark[hidden], .ui-logo__text[hidden] { display: none; }
 
 /* Текст только для скринридера: объявление о загрузке не занимает места. */
 .ui-sr-only {

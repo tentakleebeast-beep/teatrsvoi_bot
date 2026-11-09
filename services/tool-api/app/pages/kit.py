@@ -9,6 +9,7 @@
 from __future__ import annotations
 
 from app.pages import layout
+from app.pages.home_loading import LOGO_MARKUP
 
 _SHEET_DEMO = """
 <script>
@@ -162,7 +163,7 @@ _BODY = """
 
 <h2 class="ui-section__title">Загрузка экрана</h2>
 <div class="ui-card">
-  <h1 class="ui-logo">СВОИ</h1>
+  <h1 class="ui-logo">{logo}</h1>
   <h2 class="ui-h2"><span class="ui-skeleton ui-skeleton--line-title"
     style="width:60%" aria-hidden="true"></span></h2>
   <div class="ui-small ui-muted"><span class="ui-skeleton ui-skeleton--line-text"
@@ -196,6 +197,7 @@ def _build() -> str:
     ])
     body = _BODY.format(
         rows=rows,
+        logo=LOGO_MARKUP,
         field_text=layout.field("Имя", '<input class="ui-input" id="kit-name" value="Виктор">',
                                 field_id="kit-name"),
         field_amount=layout.field(
