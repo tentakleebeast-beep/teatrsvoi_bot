@@ -225,6 +225,11 @@ app.add_api_route("/webapp/my", _data({
 # иначе стенд поехал бы под другими тестами.
 WEEK_EVENTS: list[tuple[str, dict]] = []
 
+#: Дни, «загруженные из листа» в этом прогоне стенда: `GET /week` отдаёт их
+#: отмеченными, чтобы браузерный сценарий видел настоящее последствие загрузки
+#: (и «Вернуть» шёл путём `clear` + запись снимка, как в `149` §6.3).
+SHEET_LOADED: dict[str, str] = {}
+
 TEMPLATE_DAYS = [
     {"weekday": 0, "status": "busy", "from": None, "to": "15:00", "note": "",
      "text": "занят до 15:00"},
@@ -239,9 +244,16 @@ def availability_week(request: Request, start: str | None = None) -> JSONRespons
     if denied is not None:
         return denied
     WEEK_EVENTS.append(("GET", {"start": start}))
+    days = []
+    for item in DAYS:
+        if item["day"] in SHEET_LOADED:
+            days.append({**item, "marked": True, "status": "busy", "from": "00:00",
+                         "to": "24:00", "note": "", "text": SHEET_LOADED[item["day"]]})
+        else:
+            days.append(item)
     return JSONResponse({
         "ok": True, "start": "2026-10-26", "title": "26 октября — 01 ноября",
-        "participant_id": 30, "female": False, "days": DAYS, "note": "",
+        "participant_id": 30, "female": False, "days": days, "note": "",
     })
 
 
@@ -282,12 +294,67 @@ async def availability_template_apply(request: Request) -> JSONResponse:
                          "skipped": []})
 
 
+@app.get("/webapp/availability/sheet/preview")
+def availability_sheet_preview(request: Request) -> JSONResponse:
+    """Своя колонка из общего листа (Э5, docs/development/149 §4.2).
+
+    Фиксированные дни недели стенда 26.10–01.11.2026: два новых, два совпавших,
+    один расходится, один пуст в листе, один не разобран — по ним браузерный
+    сценарий проверяет все состояния дня и подписи переключателей.
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    WEEK_EVENTS.append(("SHEET_PREVIEW", {"start": request.query_params.get("start")}))
+    return JSONResponse({
+        "ok": True, "start": "2026-10-26", "title": "26 октября — 01 ноября",
+        "source": {"spreadsheet": "Расписание студийцы", "tab": "студийцы"},
+        "person": {"id": 30, "name": "Тестовый Участник", "column": "K"},
+        "days": [
+            {"day": "2026-10-26", "weekday": "Пн", "sheet_text": "свободен",
+             "sheet_state": "free", "db_text": "занят с 12:00 до 15:00", "db_state": "busy",
+             "state": "differs"},
+            {"day": "2026-10-28", "weekday": "Ср", "sheet_text": "занят весь день",
+             "sheet_state": "busy", "db_text": None, "db_state": "empty", "state": "new"},
+            {"day": "2026-10-29", "weekday": "Чт", "sheet_text": "",
+             "sheet_state": "empty", "db_text": "свободен с 18:00", "db_state": "free",
+             "state": "sheet_empty"},
+            {"day": "2026-10-31", "weekday": "Сб", "sheet_text": "свободен",
+             "sheet_state": "free", "db_text": None, "db_state": "empty", "state": "new"},
+            {"day": "2026-11-01", "weekday": "Вс", "sheet_text": "?",
+             "sheet_state": "uncertain", "db_text": None, "db_state": "empty",
+             "state": "unparsed"},
+        ],
+        "counts": {"same": 2, "new": 2, "differs": 1, "sheet_empty": 1, "unparsed": 1},
+    })
+
+
+@app.post("/webapp/availability/sheet/load")
+async def availability_sheet_load(request: Request) -> JSONResponse:
+    """Загрузка выбранных дней из листа (Э5, §4.4): пишем только то, что выбрали."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    WEEK_EVENTS.append(("SHEET_LOAD", body))
+    days = body.get("days") or []
+    for day in days:
+        SHEET_LOADED[day] = "занят весь день"
+    return JSONResponse({
+        "ok": True, "applied": True, "start": body.get("start"),
+        "days": [{"day": day, "action": "загружен", "text": "занят весь день"}
+                 for day in days],
+        "skipped": [],
+    })
+
+
 @app.post("/__reset")
 def reset_events() -> dict:
     """Сброс журнала стенда перед браузерным сценарием."""
     WEEK_EVENTS.clear()
     SLOTS_EVENTS.clear()
     FEEDBACK_EVENTS.clear()
+    SHEET_LOADED.clear()
     return {"ok": True}
 
 
@@ -570,6 +637,9 @@ async def availability_clear(request: Request):
     denied = _guard(request)
     if denied is not None:
         return denied
+    body = await request.json()
+    WEEK_EVENTS.append(("CLEAR", body))
+    SHEET_LOADED.clear()
     # cleared — дни-отметки (Ш-53), hours — строки availability_hour: экран печатает дни
     return JSONResponse({"ok": True, "cleared": 3, "hours": 19, "start": "2026-10-26"})
 
