@@ -16,10 +16,12 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import pathlib
 import struct
 import sys
+import zipfile
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
@@ -368,6 +370,8 @@ def reset_events() -> dict:
     SLOTS_EVENTS.clear()
     FEEDBACK_EVENTS.clear()
     SHEET_LOADED.clear()
+    FOLDER_ORDER_CALLS.clear()
+    FOLDER_ZIP_CALLS.clear()
     return {"ok": True}
 
 
@@ -965,29 +969,43 @@ app.add_api_route("/webapp/files/list", _files_data({
 }))
 
 # Папка по номеру: 7 — только звук, 8 — только документы, 9 — только картинки,
-# 10 — смешанная. Нужны, чтобы проверить кнопки и плеер по набору видов (А3 §6).
+# 10 — смешанная, 11 — звук/документ/звук (очередь), 12 — отказ архива (413).
+# Нужны, чтобы проверить кнопки и плеер по набору видов (А3 §6). Ссылки файлов — те
+# же адреса, что отдаёт `/webapp/files/{id}/view`: иначе строка папки ведёт на экран
+# «Файл не найден», и сквозной сценарий «в папке картинка → нажал → вижу картинку»
+# на стенде не проходит, хотя тесты зелёные (карта t_4e6780d1).
 FOLDER_FILES = {
     7: {"ok": True, "folder": {"id": 7, "path": "Спектакль/Музыка", "scope": "folder"},
         "count": 3, "data": [
-            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav"},
-            {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "/stand/tone.wav"},
-            {"id": 33, "name": "03 Финал.mp3", "kind": "audio", "duration_sec": 241, "url": "/stand/tone.wav"},
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav?track=1"},
+            {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "/stand/tone.wav?track=2"},
+            {"id": 33, "name": "03 Финал.mp3", "kind": "audio", "duration_sec": 241, "url": "/stand/tone.wav?track=3"},
         ]},
     8: {"ok": True, "folder": {"id": 8, "path": "Документы/Ноты", "scope": "folder"},
         "count": 2, "data": [
-            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
-            {"id": 42, "name": "Программа концерта.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
+            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "/stand/sample.pdf"},
+            {"id": 42, "name": "Программа концерта.pdf", "kind": "text", "duration_sec": None, "url": "/stand/sample.pdf"},
         ]},
     9: {"ok": True, "folder": {"id": 9, "path": "Спектакль/Афиши", "scope": "folder"},
         "count": 2, "data": [
-            {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
-            {"id": 52, "name": "Сцена.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
+            {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "/stand/image.png"},
+            {"id": 52, "name": "Сцена.png", "kind": "image", "duration_sec": None, "url": "/stand/image.png"},
         ]},
     10: {"ok": True, "folder": {"id": 10, "path": "Спектакль/Пурга", "scope": "folder"},
          "count": 3, "data": [
-            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav"},
-            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "about:blank"},
-            {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "about:blank"},
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav?track=1"},
+            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "/stand/sample.pdf"},
+            {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "/stand/image.png"},
+        ]},
+    11: {"ok": True, "folder": {"id": 11, "path": "Спектакль/Прогон", "scope": "folder"},
+         "count": 3, "data": [
+            {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav?track=1"},
+            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "/stand/sample.pdf"},
+            {"id": 32, "name": "02 Выход героя.mp3", "kind": "audio", "duration_sec": 96, "url": "/stand/tone.wav?track=2"},
+        ]},
+    12: {"ok": True, "folder": {"id": 12, "path": "Спектакль/Большая", "scope": "folder"},
+         "count": 1, "data": [
+            {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "/stand/sample.pdf"},
         ]},
 }
 
@@ -1035,6 +1053,21 @@ VIEW_FILES = {
         "name": "Монолог Гамлета «Быть или не быть, вот в чём вопрос» — снимок экрана 09.11.2026.png",
         "mime": "image/png", "size_bytes": 1169163, "ext": "png",
         "folder": "Личное/Фото", "as_admin": False, "cold_restored": False},
+    # Файлы папок 8–12: тот же id, что в `FOLDER_FILES`. Без этих записей строка
+    # папки открывала «Файл не найден», а браузерный тест этого не замечал — он ждал
+    # только адрес (карта t_4e6780d1).
+    41: {"ok": True, "id": 41, "url": "/stand/sample.pdf", "expires_in": 900, "kind": "text",
+         "name": "Гаммы для хора.pdf", "mime": "application/pdf", "size_bytes": 430 * 1024,
+         "ext": "pdf", "folder": "Документы/Ноты", "as_admin": False, "cold_restored": False},
+    42: {"ok": True, "id": 42, "url": "/stand/sample.pdf", "expires_in": 900, "kind": "text",
+         "name": "Программа концерта.pdf", "mime": "application/pdf", "size_bytes": 210 * 1024,
+         "ext": "pdf", "folder": "Документы/Ноты", "as_admin": False, "cold_restored": False},
+    51: {"ok": True, "id": 51, "url": "/stand/image.png", "expires_in": 900, "kind": "image",
+         "name": "Афиша.png", "mime": "image/png", "size_bytes": 96 * 1024,
+         "ext": "png", "folder": "Спектакль/Афиши", "as_admin": False, "cold_restored": False},
+    52: {"ok": True, "id": 52, "url": "/stand/image.png", "expires_in": 900, "kind": "image",
+         "name": "Сцена.png", "mime": "image/png", "size_bytes": 120 * 1024,
+         "ext": "png", "folder": "Спектакль/Афиши", "as_admin": False, "cold_restored": False},
 }
 
 #: 1×1 прозрачный PNG: больше для проверки «картинка нарисовалась» не нужно.
@@ -1078,9 +1111,84 @@ def stand_view_calls(file_id: int, reset: int = 0) -> dict:
 app.add_api_route("/webapp/files/{file_id}/view", _webapp_file_view(), methods=["GET"])
 
 
+#: Журналы папки: по ним видно, что экран действительно сходил в `POST /order`
+#: и `GET /zip`, а не только переставил строки на месте (А3 §6, карта t_4e6780d1).
+FOLDER_ORDER_CALLS: dict[int, list[dict]] = {}
+FOLDER_ZIP_CALLS: dict[int, int] = {}
+
+
+@app.post("/webapp/folder/{folder_id}/order")
+async def webapp_folder_order(folder_id: int, request: Request):
+    """Порядок треков: стенд запоминает тело, чтобы тест проверил новый список id."""
+    denied = _files_guard(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    FOLDER_ORDER_CALLS.setdefault(folder_id, []).append(body)
+    return JSONResponse({"ok": True, "updated": len(body.get("file_ids") or [])})
+
+
+@app.get("/stand/folder-order/{folder_id}")
+def stand_folder_order(folder_id: int, reset: int = 0) -> dict:
+    calls = list(FOLDER_ORDER_CALLS.get(folder_id) or [])
+    if reset:
+        FOLDER_ORDER_CALLS[folder_id] = []
+    return {"folder_id": folder_id, "count": len(calls),
+            "last": calls[-1] if calls else None}
+
+
+def _folder_zip_bytes(folder_id: int) -> bytes:
+    """Маленький настоящий zip: важно, что экран получает поток и начинает загрузку."""
+    buffer = io.BytesIO()
+    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+        archive.writestr(f"папка-{folder_id}.txt", f"Папка {folder_id}\n")
+    return buffer.getvalue()
+
+
+@app.get("/webapp/folder/{folder_id}/zip")
+def webapp_folder_zip(folder_id: int, request: Request):
+    """Архив папки: 200 потоком, а для папки 12 — отказ 413, как у боевого потолка.
+
+    В бою `files_store.stream_folder_zip` отдаёт 413 с этой фразой в `detail`
+    (`api/files.py`), и экран печатает её словами, а не пустой экран (§6).
+    """
+    denied = _files_guard(request)
+    if denied is not None:
+        return denied
+    FOLDER_ZIP_CALLS[folder_id] = FOLDER_ZIP_CALLS.get(folder_id, 0) + 1
+    if folder_id == 12:
+        return JSONResponse({"ok": False, "code": "archive_too_large",
+                             "detail": "Архив больше 100 МБ — скачивайте по файлам."},
+                            status_code=413)
+    return Response(_folder_zip_bytes(folder_id), media_type="application/zip",
+                    headers={"Content-Disposition": f"attachment; filename=folder-{folder_id}.zip"})
+
+
+@app.get("/stand/zip-calls/{folder_id}")
+def stand_zip_calls(folder_id: int, reset: int = 0) -> dict:
+    count = FOLDER_ZIP_CALLS.get(folder_id, 0)
+    if reset:
+        FOLDER_ZIP_CALLS[folder_id] = 0
+    return {"folder_id": folder_id, "count": count}
+
+
 @app.get("/stand/image.png")
 def stand_image() -> Response:
     return Response(PIXEL_PNG, media_type="image/png")
+
+
+#: Минимальный PDF: ссылка «Открыть в браузере» у документа должна вести на живой
+#: файл, а не на 404 стенда (карта t_4e6780d1). Содержимое тестами не читается.
+SAMPLE_PDF = (b"%PDF-1.4\n"
+              b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+              b"2 0 obj<</Type/Pages/Kids[3 0 R]/Count 1>>endobj\n"
+              b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 200 200]>>endobj\n"
+              b"trailer<</Root 1 0 R>>\n%%EOF\n")
+
+
+@app.get("/stand/sample.pdf")
+def stand_sample_pdf() -> Response:
+    return Response(SAMPLE_PDF, media_type="application/pdf")
 
 
 #: Тишина 0.05 с, 8 кГц, 8 бит: настоящий WAV, чтобы `<audio>` на стенде не получал
