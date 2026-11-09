@@ -15,7 +15,7 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
-from app.pages import files, routes  # noqa: E402
+from app.pages import files, files_actions, routes  # noqa: E402
 
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF]")
 # маршруты файлов живут в своём домене (этап B, карта t_135f65cd)
@@ -24,7 +24,7 @@ ROUTES = (ROOT / "services" / "tool-api" / "app" / "pages" / "routes.py").read_t
 
 
 def test_экраны_собраны_каркасом():
-    for page in (files.FILES_PAGE, files.FOLDER_PAGE):
+    for page in (files.FILES_PAGE, files.FOLDER_PAGE, files.FILE_PAGE):
         assert page.startswith("<!doctype html>")
         assert 'class="ui-page"' in page, "экран не на каркасе дизайн-системы"
         assert "ui-appbar__back" in page, "нет шапки с возвратом"
@@ -32,7 +32,7 @@ def test_экраны_собраны_каркасом():
 
 
 def test_нет_эмодзи_и_таблиц():
-    for page in (files.FILES_PAGE, files.FOLDER_PAGE):
+    for page in (files.FILES_PAGE, files.FOLDER_PAGE, files.FILE_PAGE):
         assert not EMOJI.search(page)
         assert "<table" not in page, "таблицы на телефоне не используем"
 
@@ -112,7 +112,51 @@ def test_папка_играет_подряд_и_качает_архив():
     page = files.FOLDER_PAGE
     assert "/webapp/folder/" in page and "/zip" in page
     assert "addEventListener(\"ended\"" in page, "треки должны идти подряд"
-    assert "<audio" in page and "hidden" in page, "плеер не выставляем на показ"
+    # Плеер создаётся скриптом, когда в папке есть звук: папка из одних pdf не
+    # должна заводить ни кнопки, ни элемента `<audio>` (А3 §6.1–6.2).
+    assert "<audio" not in page, "в статической разметке снова есть плеер"
+    assert 'id="player-slot"' in page, "нет контейнера, куда скрипт ставит плеер"
+    assert 'document.createElement("audio")' in page
+    assert 'toggle($("play-all"), hasAudio)' in page
+
+
+def test_строка_списка_открывает_файл_а_не_молчит():
+    """А3 §5: у строки файла появился обработчик — до этого она была мёртвой зоной.
+
+    Обработчик висит на `.ui-row__main`, а не на строке: «Удалить» и шеврон папки
+    остаются отдельными целями и не срабатывают вместе с переходом.
+    """
+    page = files.FILES_PAGE
+    assert 'main.addEventListener("click", function () {' in page
+    assert 'location.href = "/webapp/file?id=" + file.id' in page
+    assert 'chevron.addEventListener("click"' in page
+    assert 'location.href = "/webapp/folder?id=" + file.folder_id' in page
+
+
+def test_слово_вида_одно_на_списки_и_экран():
+    """D8 (А3 §4): pdf и docx — «документ», .txt/.md — «текст».
+
+    Слово живёт в одной функции `kindWord(kind, name)` (`pages/files_actions.py`):
+    три экрана не должны разойтись в названии одного и того же файла.
+    """
+    assert "function kindWord(kind, name)" in files_actions.KIND_WORD
+    for page in (files.FILES_PAGE, files.FOLDER_PAGE, files.FILE_PAGE):
+        assert "function kindWord(kind, name)" in page, "экран собирает слово вида сам"
+    word = files_actions.KIND_WORD
+    for ext in ("pdf", "docx", "xlsx", "pptx", "odt", "ods", "rtf"):
+        assert f'"{ext}"' in word
+    assert '"txt", "md", "csv"' in word
+    assert "if (kind === \"document\") return \"документ\";" in word
+    assert "return \"файл\";" in word
+
+
+def test_в_папке_не_звук_уводит_на_экран_файла():
+    """А3 §6.4: играет только `audio`, остальное открывает `/webapp/file?id=N`."""
+    page = files.FOLDER_PAGE
+    assert "function isAudio(track) { return track.kind === \"audio\"; }" in page
+    assert 'location.href = "/webapp/file?id=" + track.id' in page
+    assert "function nextAudio(from)" in page, "«Слушать всё» идёт только по звуку"
+    assert 'plural(tracks.length, "файл", "файла", "файлов")' in page
 
 
 def test_папка_без_номера_не_тупик():
@@ -138,4 +182,4 @@ def test_папка_без_номера_не_тупик():
 def test_маршруты_файлов_на_месте():
     router = routes.build_router(actor=lambda: {}, caps_for=lambda who: [])
     paths = {route.path for route in router.routes}
-    assert {"/webapp/files", "/webapp/folder"} <= paths
+    assert {"/webapp/files", "/webapp/folder", "/webapp/file"} <= paths

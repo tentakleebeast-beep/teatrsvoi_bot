@@ -1,8 +1,17 @@
-"""Экран «Папка»: список треков, порядок, прослушивание и архив (Ш-08).
+"""Экран «Папка»: файлы папки, порядок, прослушивание и архив (Ш-08, А3).
 
 Вынесен из `pages/files.py` отдельным модулем: экран файлов вырос (загрузка, список,
 удаление), а порог `test_webapp_pages_split.py` — ~400 строк на модуль страниц. Разделение
 по смыслу: `files.py` — «Файлы» и действия в списке, этот модуль — сама папка.
+
+С А3 (docs/development/150) папка больше не «плейлист»: в ней лежат картинки и pdf, и
+играет только звук. Правила:
+
+* «Слушать всё» видна, только если в папке есть `audio`; `<audio controls>` создаётся
+  при первом воспроизведении, а в статической разметке его нет;
+* нажатие на строку `audio` играет, на любую другую — открывает `/webapp/file?id=N`;
+  стрелки порядка остаются у всех строк (порядок — свойство папки, не вида);
+* «Скачать архивом» видна, если в папке есть файлы.
 
 Помощники (`$`, `el`, `api`, `problem`, `status`, `auth`) приходят из CORE и живут в
 общем замыкании страницы — скрипт просто подклеивается к `files.py`.
@@ -17,12 +26,12 @@ _BODY_FOLDER = files_actions.EMPTY_FOLDER + """
 <p class="ui-small ui-muted" id="subtitle">считаю</p>
 <p class="ui-small ui-muted" id="now" hidden></p>
 <div class="ui-list" id="tracks"></div>
+<div id="player-slot"></div>
 <div class="ui-actions files-actions">
   <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="play-all" hidden>Слушать всё</button>
   <button class="ui-btn ui-btn--block" type="button" id="zip" hidden>Скачать архивом</button>
 </div>
 <p class="ui-small ui-muted" id="status"></p>
-<audio id="player" preload="none" hidden></audio>
 """
 
 _SCRIPT_FOLDER = r"""
@@ -36,15 +45,33 @@ _SCRIPT_FOLDER = r"""
     return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
   }
 
+  function isAudio(track) { return track.kind === "audio"; }
+
+  // Первый звук после `from`: «Слушать всё» и `ended` идут только по звуку,
+  // картинки и документы в очередь воспроизведения не попадают (6.5).
+  function nextAudio(from) {
+    for (var i = from + 1; i < tracks.length; i += 1) {
+      if (isAudio(tracks[i])) return i;
+    }
+    return -1;
+  }
+
+  function firstAudio() {
+    for (var i = 0; i < tracks.length; i += 1) {
+      if (isAudio(tracks[i])) return i;
+    }
+    return -1;
+  }
+
   function trackRow(track, index) {
     var node = el("div", "ui-row");
     var main = el("span", "ui-row__main");
     // Без своего номера: порядок видно по месту в списке и стрелками, а в именах
     // треков часто уже стоит «01 …» — два номера подряд читались как ошибка.
     main.appendChild(el("span", "ui-row__title", track.name));
-    var meta = [mmss(track.duration_sec)];
+    var meta = [mmss(track.duration_sec), kindWord(track.kind, track.name)];
     if (index === current) meta.unshift("играет");
-    main.appendChild(el("span", "ui-row__meta", meta.filter(Boolean).join(" · ")));
+    main.appendChild(el("span", "ui-row__meta", meta.filter(Boolean).join(" \u00b7 ")));
     node.appendChild(main);
 
     var order = el("span", "ui-track__order");
@@ -62,33 +89,59 @@ _SCRIPT_FOLDER = r"""
     order.appendChild(down);
     node.appendChild(order);
 
-    node.addEventListener("click", function () { play(index); });
+    // Звук играет, всё остальное открывает свой экран (6.4). Стрелки порядка
+    // гасят всплытие сами, поэтому нажатие на них сюда не доходит.
+    node.addEventListener("click", function () {
+      if (isAudio(track)) { play(index); return; }
+      location.href = "/webapp/file?id=" + track.id;
+    });
     return node;
   }
 
   function render() {
     var list = $("tracks");
     clear(list);
+    var hasAudio = firstAudio() >= 0;
     if (!tracks.length) {
       list.appendChild(empty("В папке пока пусто",
-        "Треки появятся, когда их положат в папку из бота."));
+        "Файлы появятся, когда их положат в папку из бота."));
       toggle($("play-all"), false);
       toggle($("zip"), false);
       return;
     }
     tracks.forEach(function (track, index) { list.appendChild(trackRow(track, index)); });
-    toggle($("play-all"), true);
+    // Файлы есть, звука нет — папка из одних pdf: ни кнопки, ни плеера (6.1).
+    toggle($("play-all"), hasAudio);
     toggle($("zip"), true);
+  }
+
+  // Плеер создаётся при первом воспроизведении: папка без звука его не заводит,
+  // а в статической разметке плеера нет вовсе (6.2).
+  function player() {
+    var node = $("player");
+    if (node) return node;
+    node = document.createElement("audio");
+    node.id = "player";
+    node.controls = true;
+    node.preload = "none";
+    node.addEventListener("ended", function () {
+      var next = nextAudio(current);
+      if (next >= 0) { play(next); return; }
+      current = -1;
+      render();
+    });
+    $("player-slot").appendChild(node);
+    return node;
   }
 
   function play(index) {
     var track = tracks[index];
-    if (!track) return;
+    if (!track || !isAudio(track)) return;
     if (!track.url) { status("Ссылка на трек не выдана — попробуйте ещё раз.", true); return; }
-    var player = $("player");
+    var audio = player();
     current = index;
-    player.src = track.url;
-    player.play().catch(function () {
+    audio.src = track.url;
+    audio.play().catch(function () {
       status("Нажмите ещё раз: браузер ждёт действия человека.", true);
     });
     $("now").hidden = false;
@@ -139,11 +192,11 @@ _SCRIPT_FOLDER = r"""
       }, function () { status("Нет связи. Проверьте сеть и повторите.", true); });
   }
 
-  $("play-all").addEventListener("click", function () { play(0); });
-  $("zip").addEventListener("click", download);
-  $("player").addEventListener("ended", function () {
-    if (current + 1 < tracks.length) play(current + 1);
+  $("play-all").addEventListener("click", function () {
+    var index = firstAudio();
+    if (index >= 0) play(index);
   });
+  $("zip").addEventListener("click", download);
 
   auth().then(function (denied) {
     // Имя не `problem`: ниже вызывается помощник `problem(res)` — параметр
@@ -160,12 +213,14 @@ _SCRIPT_FOLDER = r"""
       if (res.status !== 200) { $("subtitle").textContent = problem(res); return; }
       var folder = res.body.folder || {};
       tracks = res.body.data || [];
-      $("subtitle").textContent = (folder.path || "Папка") + " · "
-        + tracks.length + " " + plural(tracks.length, "трек", "трека", "треков");
+      // «Трек» про картинки и pdf врёт: в папке теперь лежит всё, что угодно (6.7).
+      $("subtitle").textContent = (folder.path || "Папка") + " \u00b7 "
+        + tracks.length + " " + plural(tracks.length, "файл", "файла", "файлов");
       render();
     });
   });
 """
 
 FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files", head=files_actions.STYLE,
-                          scripts="<script>\n" + CORE + _SCRIPT_FOLDER + "\n})();\n</script>")
+                          scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FOLDER
+                          + "\n})();\n</script>")

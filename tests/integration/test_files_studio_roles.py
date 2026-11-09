@@ -88,6 +88,29 @@ def test_строка_на_ещё_приходит_тем_же_трём_роля
         assert "/webapp/files" in urls, f"{role}: строки файлов нет"
 
 
+def test_ссылка_на_просмотр_открыта_тем_же_трём_ролям(client, people, monkeypatch):
+    """А3, К5: `/view` — то же право, что у раздела; у студийца его нет.
+
+    Ссылку на свой файл получает каждая роль с `files.access` (admin, org, master),
+    а `troupe` упирается в 403: иначе просмотр стал бы лазейкой в закрытый раздел.
+    """
+    from app import files_store
+
+    class _Signer:
+        def generate_presigned_url(self, operation: str, Params: dict, ExpiresIn: int) -> str:
+            return f"https://files.example.test/{Params['Key']}?X-Amz-Signature=test"
+
+    monkeypatch.setattr(files_store, "public_client", lambda: _Signer())
+    for role, chat_id in people.items():
+        file_id = _file(chat_id, f"файл {role}.pdf")
+        response = client.get(f"/webapp/files/{file_id}/view",
+                              headers=_webapp_headers(client, chat_id))
+        if role == "troupe":
+            assert response.status_code == 403, f"студиец открыл файл: {response.text}"
+            continue
+        assert response.status_code == 200, f"{role}: {response.text}"
+
+
 def test_история_доступов_видна_владельцу_и_админу_но_не_мастеру(client, people):
     """Право на раздел не открывает историю доступов к чужому личному файлу (FR-K9).
 

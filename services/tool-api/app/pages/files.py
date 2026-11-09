@@ -20,7 +20,7 @@
 
 from __future__ import annotations
 
-from app.pages import files_actions, files_folder, layout
+from app.pages import files_actions, files_file, files_folder, layout
 from app.pages.admin_core import CORE
 
 _BODY_FILES = """
@@ -76,11 +76,6 @@ _SCRIPT_FILES = r"""
     return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
   }
 
-  function kindWord(kind) {
-    var words = { audio: "аудио", image: "картинка", document: "документ", text: "текст" };
-    return words[kind] || "файл";
-  }
-
   function renderQuota(quota) {
     quota = quota || { used: 0, total: 0 };
     var percent = quota.total ? Math.min(100, 100 * quota.used / quota.total) : 0;
@@ -95,20 +90,28 @@ _SCRIPT_FILES = r"""
     var node = el("div", "ui-row");
     var main = el("span", "ui-row__main");
     main.appendChild(el("span", "ui-row__title", file.name));
-    var meta = [humanSize(file.size_bytes), kindWord(file.kind)];
+    var meta = [humanSize(file.size_bytes), kindWord(file.kind, file.name)];
     if (file.duration_sec) meta.push(mmss(file.duration_sec));
     if (file.folder) meta.push(file.folder);
     main.appendChild(el("span", "ui-row__meta", meta.join(" · ")));
+    // Нажатие на имя открывает файл (А3): до этого строка была мёртвой зоной —
+    // нажать можно было только «Удалить». Обработчик на `.ui-row__main`, а не на
+    // строке: «Удалить» и шеврон папки остаются отдельными целями (150 §5.1).
+    main.addEventListener("click", function () {
+      location.href = "/webapp/file?id=" + file.id;
+    });
     node.appendChild(main);
     // Удаление — только человек и кнопкой (FR-L8); подтверждение спрашивает лист.
     var actions = el("span", "ui-track__order");
     deleteFileButton(file, actions);
     node.appendChild(actions);
     if (file.folder_id) {
-      node.appendChild(el("span", "ui-row__chevron", "\u203a"));
-      node.addEventListener("click", function () {
+      var chevron = el("span", "ui-row__chevron", "\u203a");
+      chevron.addEventListener("click", function (event) {
+        event.stopPropagation();
         location.href = "/webapp/folder?id=" + file.folder_id;
       });
+      node.appendChild(chevron);
     }
     return node;
   }
@@ -238,8 +241,11 @@ _SCRIPT_FILES = r"""
 
 FILES_PAGE = layout.page(
     "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=files_actions.STYLE,
-    scripts="<script>\n" + CORE + _SCRIPT_FILES + files_actions.SCRIPT + "\n})();\n</script>")
+    scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FILES
+            + files_actions.SCRIPT + "\n})();\n</script>")
 
 # Экран папки живёт своим модулем (`files_folder.py`): порог ~400 строк на модуль страниц.
 FOLDER_PAGE = files_folder.FOLDER_PAGE
+# Экран одного файла — тоже свой модуль (`files_file.py`, А3).
+FILE_PAGE = files_file.FILE_PAGE
 

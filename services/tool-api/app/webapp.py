@@ -297,7 +297,7 @@ def page_sections() -> tuple[WebappSection, ...]:
     return tuple(section for section in SECTIONS if section.page)
 
 
-#: Права на каждый экран Mini App — все 30 HTML-страниц, не только разделы хаба.
+#: Права на каждый экран Mini App — все 31 HTML-страница, не только разделы хаба.
 #:
 #: Правило владельца (08.11.2026): если действие человеку недоступно, вход в него
 #: не показываем — ни плитку в хабе, ни строку, ни кнопку, ни прямой адрес. Реестр
@@ -324,6 +324,7 @@ SCREEN_CAPS: dict[str, tuple[str, ...]] = {
     "/webapp/slots": ("schedule.slots",),
     "/webapp/ui": (),
     "/webapp/folder": ("files.access",),
+    "/webapp/file": ("files.access",),
     "/webapp/person": ("participants.view",),
 }
 

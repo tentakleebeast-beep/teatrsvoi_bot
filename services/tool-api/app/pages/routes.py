@@ -156,8 +156,17 @@ def build_router(*, actor: Callable[..., dict], caps_for: Callable[[dict], list[
 
     @router.get("/webapp/folder", response_class=HTMLResponse)
     def webapp_folder_page() -> str:
-        """Папка: треки по порядку, проигрывание подряд, архив (?id=<номер>)."""
+        """«Папка»: файлы папки, порядок, прослушивание и архив."""
         return files.FOLDER_PAGE
+
+    @router.get("/webapp/file", response_class=HTMLResponse)
+    def webapp_file_page() -> str:
+        """«Файл»: посмотреть один файл — картинку, запись или документ (А3).
+
+        Страница публична, как и остальные экраны: право `files.access` проверяет
+        `GET /webapp/files/{id}/view`, а оболочка не пускает на экран по `SCREEN_CAPS`.
+        """
+        return files.FILE_PAGE
 
     @router.get("/webapp/person", response_class=HTMLResponse)
     def webapp_person_page() -> str:
