@@ -201,7 +201,9 @@ jobs:
           fi
           skipped=$(grep -cE '^SKIPPED' /tmp/webapp-webkit-run.txt || true)
           android=2
-          pinch=1
+          # Каждый жестовый тест V-051 — отдельная группа скипа в отчёте pytest,
+          # поэтому считаем их по имени причины, а не одной константой.
+          pinch=$(grep -cE '^SKIPPED.*синтетический щипок' /tmp/webapp-webkit-run.txt || true)
           allowed=$((android + pinch))
           if [ "${skipped}" -gt "${allowed}" ]; then
             echo "скипнуто ${skipped} групп, допустимо ${allowed}: Android-профили (${android}) и щипок (${pinch})" >&2
