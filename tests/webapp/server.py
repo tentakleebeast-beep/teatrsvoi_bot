@@ -191,6 +191,14 @@ def shell_js() -> Response:
                     media_type="application/javascript")
 
 
+@app.get("/webapp/logo.png")
+def logo_png() -> Response:
+    """Знак шапки Главной. Без него в браузерных тестах всегда работал бы фолбэк."""
+    return Response((STATIC / "logo-svoi-word.png").read_bytes(),
+                    media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 @app.post("/webapp/auth")
 async def auth(request: Request) -> JSONResponse:
     body = await request.json()

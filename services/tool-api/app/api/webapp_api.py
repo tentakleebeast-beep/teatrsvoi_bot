@@ -71,6 +71,19 @@ def webapp_tg_sdk() -> Response:
                     headers={"Cache-Control": "public, max-age=86400"})
 
 
+@router.get("/webapp/logo.png")
+def webapp_logo() -> Response:
+    """Знак студии для шапки Главной — слово «СВОИ» под маску (148 §2 D1).
+
+    Собственный маршрут, а не общий `/webapp/static/*`: ради одного файла общая
+    раздача не нужна, а `_static()` читает текст и для PNG не годится. Файл
+    неизменяемый, поэтому кэш на сутки, как у SDK и оболочки.
+    """
+    content = (STATIC_DIR / "logo-svoi-word.png").read_bytes()
+    return Response(content=content, media_type="image/png",
+                    headers={"Cache-Control": "public, max-age=86400"})
+
+
 
 def _one_line(value: object, limit: int) -> str:
     """Поле журнала маяка — одной строкой.

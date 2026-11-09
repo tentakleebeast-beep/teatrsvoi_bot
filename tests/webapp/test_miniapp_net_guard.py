@@ -99,7 +99,8 @@ def test_ответ_5xx_показывает_баннер_и_экран_не_п�
     assert _message(page) == MESSAGE, page.inner_text("#net-error")
     assert page.locator("#net-error button").inner_text().strip() == RETRY
     # Экран не пустой: шапка и карточка недели — статичные, они не зависят от ответа.
-    assert page.locator("#logo").inner_text().strip() == "СВОИ"
+    # V-046: знак — маска слова, поэтому проверяется компонент, а не видимый текст.
+    assert page.locator("#logo .ui-logo__mark").get_attribute("aria-label") == "СВОИ"
     assert page.locator("#week").is_visible()
 
     # Живой ответ снимает баннер: сообщение не «прилипает» до перезагрузки.
