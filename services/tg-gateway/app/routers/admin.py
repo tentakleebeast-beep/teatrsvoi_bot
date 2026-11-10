@@ -322,8 +322,8 @@ async def panel_person_roles(cb: CallbackQuery) -> None:
     rows = [[(f"{'✓ ' if role in current else '· '}{texts.ROLE_TITLES.get(role, role)}",
               f"panel:role:{participant_id}:{role}:{0 if role in current else 1}")]
             for role in ("admin", "org", "troupe")]
-    # Педагог выдаётся только с дисциплиной, поэтому ведёт не прямое переключение,
-    # а экран дисциплин: роль без дисциплины сервер всё равно отклонит (140 §2.2).
+    # Педагог ведёт не прямое переключение, а экран дисциплин: там выбирают
+    # предметы. Без них роль тоже выдаётся — с предупреждением (V-037).
     rows.append([(f"{'✓ ' if 'master' in current else '· '}{texts.ROLE_TITLES['master']}",
                   f"panel:mroles:{participant_id}")])
     await cb.message.edit_text(

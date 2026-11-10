@@ -223,6 +223,10 @@ def test_анкета_мастера_блок_под_сохранить(app_page
     _settled(troupe)
     assert "Дисциплины" not in troupe.locator(".ui-screen").inner_text()
     assert "Дисциплина не выбрана" not in troupe.locator(".ui-screen").inner_text()
+    # Кнопка «Сохранить» на том же стенде у роли без блока стоит там же:
+    # блок добавлен ниже кнопки, а не сдвинул форму (замер «до/после», §11.3-7)
+    save_y_troupe = troupe.locator("#save").bounding_box()["y"]
+    assert abs(save_y_troupe - save_y_master) < 1, (save_y_master, save_y_troupe)
     assert master.svoi_errors == [], master.svoi_errors
 
 

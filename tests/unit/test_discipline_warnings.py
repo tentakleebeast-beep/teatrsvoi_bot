@@ -62,3 +62,19 @@ def test_отказ_по_правам_людей_на_сервере_один():
     """Текст Б3 — константа сервера: клиент не придумывает слова сам."""
     assert core.MANAGE_FORBIDDEN_CODE == "participants_manage_forbidden"
     assert core.MANAGE_FORBIDDEN_TEXT == "Роли и дисциплины педагога меняет администратор."
+
+
+def test_код_отказа_по_правам_людей_есть_в_каталоге_ошибок():
+    """Каталог `docs/architecture/85` знает код и его статус.
+
+    Код поднимается из `core._webapp_require`, а `test_error_catalog` разбирает
+    только `raise` в `main.py` — эту связку он не увидит, и код остался бы
+    недокументированным для клиентов. Держит проверка здесь (V-037).
+    """
+    catalog = (ROOT / "docs" / "architecture" / "85-error-catalog.md").read_text(
+        encoding="utf-8")
+    rows = [line for line in catalog.splitlines()
+            if line.startswith("| `") and
+            f"`{core.MANAGE_FORBIDDEN_CODE}`" in line.strip("|").split("|")[0]]
+    assert rows, f"нет строки `{core.MANAGE_FORBIDDEN_CODE}` в каталоге ошибок"
+    assert "403" in rows[0].strip("|").split("|")[1], rows[0]

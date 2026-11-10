@@ -239,7 +239,7 @@ _SCRIPT_PEOPLE = r"""
         button.type = "button";
         button.onclick = function () {
           if (!has && role === "admin") { confirmAdmin(person); return; }
-          // Педагог выдаётся только с дисциплиной: сначала выбор, потом запрос (Г16)
+          // Педагог: лист открывается ради выбора дисциплин, запрос уходит и без них (V-037)
           if (!has && role === "master") { confirmMaster(person, card); return; }
           changeRole(person, role, !has);
         };
