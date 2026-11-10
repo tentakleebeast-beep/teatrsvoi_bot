@@ -12,10 +12,15 @@ V-048 (09.11.2026) поменял нижний блок: «Загрузить и
 
 Пересмотр V-048 (09.11.2026, док. 149 D8/D11/D12): кнопки «Отметить сегодня»
 больше нет — её работу делает нажатие на строку сегодняшнего дня, а вторая
-строка этой строки говорит «нажмите, чтобы отметить». Экран стал короче на
-64 px: замер 890 px при экране 844, под нижней панелью остаётся только
-«Очистить неделю» и всего на 7 px. Подсказка стоит 0 px — строка дня 52 px
-до и после.
+строка этой строки говорит «нажмите». Экран стал короче на 64 px: замер 890 px
+при экране 844, под нижней панелью остаётся только «Очистить неделю» и всего на
+7 px. Подсказка стоит 0 px — строка дня 52 px до и после.
+
+Формулировка подсказки сокращена 10.11.2026 по замеру: полной фразе нужно
+163.5 px, а вторая строка сегодняшнего дня оставляет 141 px на 390 и 71 px на
+320 — человек видел обрезку. Слово «нажмите» занимает 56.2 px и читается
+целиком на обеих ширинах (К25 проверяет геометрию, а не `textContent`:
+обрезанный текст тоже отдаёт полную строку).
 
 Дату фиксируем часами браузера: стенд отдаёт неделю 26.10–01.11.2026, и
 сегодняшний день в ней — воскресенье 1 ноября. Иначе тест зависел бы от дня
@@ -30,13 +35,14 @@ import datetime as dt
 
 import pytest
 
+from tests.webapp.conftest import TELEGRAM_HASH
 from tests.webapp.server import SHEET_LOADED, WEEK_EVENTS
 
 VIEWPORT_HEIGHT = 844
 FIXED_TIME = dt.datetime(2026, 11, 1, 12, 0, tzinfo=dt.UTC)   # сегодня в фикстуре
 TODAY_SLOT = 6                                                         # вс 01.11.2026
 TODAY_ISO = "2026-11-01"
-HINT = "нажмите, чтобы отметить"
+HINT = "нажмите"
 
 
 @pytest.fixture(autouse=True)
@@ -156,6 +162,50 @@ def test_подсказка_в_строке_сегодня(app_page) -> None:
         timeout=10_000)
     assert meta(TODAY_SLOT) == "с 00:00 до 24:00", meta(TODAY_SLOT)
     assert HINT not in page.locator(f'[data-day-slot="{TODAY_SLOT}"]').inner_text()
+
+
+@pytest.mark.parametrize("width, height", ((390, 844), (320, 693)))
+def test_подсказка_видна_целиком_на_двух_ширинах(browser, webapp_server,
+                                                 width, height) -> None:
+    """К25: подсказка видна целиком, а не только в `textContent`.
+
+    Обрезанный текст отдаёт в `textContent` полную строку, поэтому прежний К17
+    (сравнение текста) дефект пропустил: длинной фразе нужно 163.5 px, а вторая
+    строка сегодняшнего дня оставляет 141 px на 390 и 71 px на 320 — человек
+    видел «нажмите…». Проверка геометрическая: `scrollWidth <= clientWidth`.
+    """
+    context = browser.new_context(viewport={"width": width, "height": height},
+                                  color_scheme="light")
+    try:
+        page = context.new_page()
+        page.goto(f"{webapp_server}/webapp/week{TELEGRAM_HASH}", wait_until="load")
+        page.clock.install(time=FIXED_TIME)
+        page.reload(wait_until="load")
+        page.wait_for_function(
+            "() => document.querySelector('[data-day-slot=\"0\"]')"
+            " && document.querySelector('[data-day-slot=\"0\"]').dataset.state === 'busy'",
+            timeout=10_000)
+        measured = page.locator(f'[data-day-slot="{TODAY_SLOT}"]').evaluate(
+            """row => {
+                 const meta = row.querySelector('.ui-row__meta');
+                 const flag = row.querySelector('.ui-day__today');
+                 return {text: meta.textContent.trim(),
+                         scroll: meta.scrollWidth, client: meta.clientWidth,
+                         state: row.querySelector('.ui-day__state').textContent.trim(),
+                         flag: !flag.hidden && getComputedStyle(flag).display !== 'none',
+                         height: row.getBoundingClientRect().height};
+               }""")
+    finally:
+        context.close()
+
+    assert measured["text"] == HINT, (width, measured)
+    assert measured["scroll"] <= measured["client"], (
+        f"{width} px: подсказке нужно {measured['scroll']} px, "
+        f"а вторая строка оставляет {measured['client']} px")
+    assert measured["state"] == "не отмечено", (width, measured)
+    assert measured["flag"] is True, f"{width} px: слово «сегодня» скрыто — {measured}"
+    assert abs(measured["height"] - 52) <= 1, (
+        f"{width} px: строка дня {measured['height']} px вместо 52")
 
 
 def test_состояние_дня_видно_цветом_и_словом(week_page) -> None:
