@@ -17,6 +17,16 @@ _STYLE = """
 <style>
   .admin-row--stack { flex-direction: column; align-items: stretch; gap: var(--ui-s2); }
   .admin-row--stack .ui-row__main { width: 100%; }
+  /* Обращение со скриншотом (Э6, D6): миниатюра справа от текстовой колонки, кнопки —
+     своей строкой. Третьим ребёнком `.admin-row--stack` миниатюра уходила под текст и
+     добавляла 64 px впустую (замер дизайна: 108 → 172 px строки). */
+  .feedback-row { flex-direction: row; flex-wrap: wrap; align-items: center;
+                  row-gap: var(--ui-s2); }
+  .feedback-row .ui-row__main { flex: 1 1 240px; }
+  .feedback-row .admin-actions--split { flex: 1 0 100%; }
+  .feedback-shot { flex: none; width: 56px; height: 56px; border-radius: var(--ui-r-sm);
+                   overflow: hidden; background: var(--ui-surface-2); }
+  .feedback-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .admin-actions--split .ui-btn { flex: 1; }
   .admin-caps { margin: 0; overflow-wrap: anywhere; }
   .ui-dl__value { overflow-wrap: anywhere; }
