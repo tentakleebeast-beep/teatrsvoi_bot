@@ -27,27 +27,29 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 import urllib.error
 import urllib.request
 
 import psycopg
-from _cli import ROOT, api_url, apply_env, dsn, env, now_local
+from _cli import api_url, apply_env, dsn, env, now_local
+from _questions import QUESTIONS, append_question, next_question_id
 from psycopg.rows import dict_row
 
 apply_env()
 
-PROJECT = ROOT
 DB = dsn()
 API = api_url()
 TOKEN = env("TOOL_API_TOKEN")
 ADMIN_CHAT = env("ADMIN_CHAT_ID")
 
-QUESTIONS = PROJECT / "docs" / "reports" / "74-questions.md"
 OPEN_STATUSES = ("new", "seen", "planned")
-QUESTION_ROW = re.compile(r"^\|\s*V-(\d+)\s*\|", re.MULTILINE)
 TIMEOUT = 20
+
+# Нумерация и запись строки вынесены в `_questions`: у файла вопросов два писателя
+# (разбор обратной связи и конвейер листа «Чего не умеем», V-035), и копия нумерации
+# в двух местах разошлась бы молча. Имена оставлены доступными отсюда.
+__all__ = ("append_question", "next_question_id")
 
 
 def today_local() -> str:
@@ -94,33 +96,6 @@ def decide(payload: dict) -> dict:
     except urllib.error.HTTPError as exc:
         detail = exc.read().decode(errors="replace")
         raise RuntimeError(f"tool-api {exc.code}: {detail[:300]}") from exc
-
-
-def next_question_id(text: str) -> str:
-    """Следующий V-NNN: максимум существующих + 1, а не число строк."""
-    ids = [int(match.group(1)) for match in QUESTION_ROW.finditer(text)]
-    return f"V-{max(ids) + 1:03d}" if ids else "V-001"
-
-
-def append_question(text: str, question: str, source: str, today: str) -> tuple[str, str]:
-    """Дописывает строку вопроса последней в таблицу раздела «Открытые»."""
-    clean = " ".join(question.split()).replace("|", "/")
-    if not clean:
-        raise ValueError("пустой текст вопроса")
-    question_id = next_question_id(text)
-    row = f"| {question_id} | {today} | {clean} | {source} | открыт | — |"
-    lines = text.splitlines()
-    last = None
-    for index, line in enumerate(lines):
-        if QUESTION_ROW.match(line):
-            last = index
-    if last is None:
-        raise ValueError(f"в {QUESTIONS.name} нет таблицы вопросов V-NNN")
-    lines.insert(last + 1, row)
-    updated = "\n".join(lines)
-    if text.endswith("\n"):
-        updated += "\n"
-    return updated, question_id
 
 
 def answer(feedback_id: int, status: str, text: str, commit: str | None,
