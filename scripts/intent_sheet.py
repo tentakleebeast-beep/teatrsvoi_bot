@@ -19,9 +19,14 @@
     людей, а половина файла хуже отсутствия файла;
   * `row_id` считается из `phrase` как есть — фразу уже привёл прод (`lower`, схлопнутые
     пробелы), вторая нормализация развела бы локальный ключ с прод-ключом;
-  * карточка не заводится дважды: маркер `строка <row_id>` ищется в `title`/`body`
-    карт доски (`hermes kanban list --json` не отдаёт `idempotency_key`, поэтому ключ —
-    только второй замок ядра);
+  * карточка не заводится дважды: связь строки и карты держит поле `created_by`
+    (`--created-by intent-sheet:<row_id>`) — `hermes kanban specify` переписывает
+    `title` и `body`, а `created_by` не трогает, и поле видно в `list --json`;
+    маркер `строка <row_id>` в тексте карты остаётся вторым замком (`hermes kanban list
+    --json` не отдаёт `idempotency_key`, поэтому ключ — только третий замок ядра);
+  * карта, у которой `specify` съел маркер, не теряется молча: `decide` находит её
+    по `row_id` в теле, сообщает об этом и возвращает маркер, `status` считает её
+    отдельно от «новых»;
   * работа запускается одним путём — `decide --decision yes` и только у `blocked`
     карточки: ни `assign`, ни `unblock` при другом состоянии не вызываются;
   * тело карточки (`card_body`) несёт шаг согласования: specifier после спецификации
@@ -43,6 +48,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -62,6 +68,8 @@ HERMES_FALLBACK = Path.home() / ".hermes" / "hermes-agent" / ".hermes" / "bin" /
 DEFAULT_BOARD = "teatrsvoi"
 ASSIGNEE = "specifier"
 WORKER = "worker-feature"
+# Метка создателя карты: связь строки и карты, которую `specify` не переписывает.
+CREATOR_TAG = "intent-sheet"
 RESOLVED = ("решено", "решён")
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%S%z"
 TITLE_LIMIT = 60
@@ -174,13 +182,65 @@ def list_cards(board: str) -> list[dict]:
     return [card for card in data if isinstance(card, dict)]
 
 
+def creator_tag(rid: str) -> str:
+    """Метка создателя карты: `specify` переписывает `title` и `body`, а `created_by` — нет."""
+    return f"{CREATOR_TAG}:{rid}"
+
+
+def card_text(card: dict) -> str:
+    """Текст карты, в котором ищется маркер строки."""
+    return f"{card.get('title') or ''}\n{card.get('body') or ''}"
+
+
 def find_card(cards: list[dict], rid: str) -> dict | None:
+    """Карта строки: сначала метка создателя, потом маркер в тексте — второй замок.
+
+    Метка переживает `hermes kanban specify` (он правит только title/body/assignee),
+    поэтому основная связь — она; текстовая остаётся для карт, заведённых до неё.
+    """
+    tag = creator_tag(rid)
+    for card in cards:
+        if str(card.get("created_by") or "") == tag:
+            return card
     pattern = row_marker(rid)
     for card in cards:
-        haystack = f"{card.get('title') or ''}\n{card.get('body') or ''}"
-        if pattern.search(haystack):
+        if pattern.search(card_text(card)):
             return card
     return None
+
+
+def lost_cards(cards: list[dict], rid: str) -> list[dict]:
+    """Карты, где `rid` упомянут без связи: метки нет, маркера нет — текст переписан.
+
+    Пустой список — карточки нет; одна карта — связь потеряна, её можно восстановить;
+    несколько — писать решение нельзя: `rid` в теле чужой карты ничего не доказывает.
+    Карты других строк пропускаются: у них метка есть, значит связь не потеряна.
+    """
+    token = re.compile(rf"(?<![0-9a-f]){re.escape(rid)}(?![0-9a-f])")
+    found = []
+    for card in cards:
+        if str(card.get("created_by") or "").startswith(f"{CREATOR_TAG}:"):
+            continue
+        if token.search(card_text(card)):
+            found.append(card)
+    return found
+
+
+def repair_link(board: str, card: dict, rid: str) -> bool:
+    """Возвращает маркер `строка <rid>` в тело карты, не теряя спецификацию.
+
+    Тело дописывается, а не заменяется: спецификация после `specify` дороже маркера.
+    """
+    task = str(card.get("id") or "")
+    if not task:
+        return False
+    restored = (f"{str(card.get('body') or '').rstrip()}\n\n"
+                f"Связь с листом (восстановлена): строка {rid}; V-035\n")
+    result = kanban(board, ["edit", task, "--body", restored])
+    if result.returncode != 0:
+        return False
+    card["body"] = restored
+    return True
 
 
 def card_title(rid: str, phrase: str) -> str:
@@ -224,6 +284,7 @@ def create_card(board: str, title: str, body: str, rid: str) -> tuple[int, str]:
     try:
         result = kanban(board, ["create", title, "--body-file", path,
                                 "--assignee", ASSIGNEE, "--priority", "4", "--triage",
+                                "--created-by", creator_tag(rid),
                                 "--idempotency-key", f"intent-sheet:{rid}", "--json"])
     finally:
         if os.path.exists(path):
@@ -303,6 +364,8 @@ def cmd_cards(env: dict[str, str], args) -> int:
 
     created = existing = closed = over_limit = 0
     new_cards: list[dict] = []
+    reused: list[dict] = []
+    known = {str(card.get("id") or "") for card in cards}
     for row in rows:
         phrase = str(row.get("phrase") or "")
         if not phrase:
@@ -328,14 +391,27 @@ def cmd_cards(env: dict[str, str], args) -> int:
         if code != 0:
             print(f"карточка по строке {rid} не заведена: {detail}", file=sys.stderr)
             return 1
-        cards.append({"id": detail, "title": title, "body": body, "status": "triage"})
+        if detail and detail in known:
+            # Ключ идемпотентности ядра вернул уже существующую карту: дубля нет,
+            # и «создано» про неё — неправда (дефект V-035, третий пункт).
+            existing += 1
+            reused.append({"row_id": rid, "task_id": detail})
+            continue
+        cards.append({"id": detail, "title": title, "body": body, "status": "triage",
+                      "created_by": creator_tag(rid)})
+        known.add(detail)
         new_cards.append({"row_id": rid, "task_id": detail})
         created += 1
+
+    for reuse in reused:
+        print(f"карта по строке {reuse['row_id']} уже есть ({reuse['task_id']}): "
+              "связь с листом потеряна, маркер вернёт `decide`", file=sys.stderr)
 
     if args.json:
         print(json.dumps({"ok": True, "dry_run": not args.apply, "created": created,
                           "existing": existing, "closed": closed,
-                          "over_limit": over_limit, "cards": new_cards},
+                          "over_limit": over_limit, "cards": new_cards,
+                          "reused": reused},
                          ensure_ascii=False, indent=2))
     elif args.apply:
         print(f"карт создано {created}; уже были {existing}; закрыто решением {closed}; "
@@ -365,6 +441,7 @@ def cmd_status(env: dict[str, str], args) -> int:
     text = read_questions()
     rows = snapshot.get("rows") or []
     closed = in_work = waiting = new = 0
+    lost: list[tuple[str, str]] = []
     for row in rows:
         rid = row_id(str(row.get("phrase") or ""))
         question = find_question(text, rid)
@@ -373,7 +450,12 @@ def cmd_status(env: dict[str, str], args) -> int:
             continue
         card = find_card(cards, rid)
         if card is None:
-            new += 1
+            candidates = lost_cards(cards, rid)
+            if candidates:
+                # Карта есть, но `specify` переписал тело: это не «новая» строка.
+                lost.append((rid, str(candidates[0].get("id") or "")))
+            else:
+                new += 1
         elif card.get("status") == "blocked":
             waiting += 1
         else:
@@ -384,6 +466,7 @@ def cmd_status(env: dict[str, str], args) -> int:
         print(json.dumps({"ok": True, "rows": len(rows),
                           "fetched_at": snapshot.get("fetched_at"), "closed": closed,
                           "in_work": in_work, "waiting": waiting, "new": new,
+                          "lost": [{"row_id": rid, "task_id": task} for rid, task in lost],
                           "expired": [{"row_id": rid, "question_id": qid}
                                       for rid, qid in gone]},
                          ensure_ascii=False, indent=2))
@@ -393,6 +476,8 @@ def cmd_status(env: dict[str, str], args) -> int:
     print(f"  в работе (карточка есть, решения нет): {in_work}")
     print(f"  ждут согласования: {waiting}")
     print(f"  новых: {new}")
+    for rid, task in lost:
+        print(f"связь потеряна: {rid} ({task}) — карту найдёт `decide`, маркер вернётся")
     for rid, qid in gone:
         print(f"источник истёк: {rid} ({qid})")
     return 0
@@ -418,14 +503,35 @@ def cmd_decide(env: dict[str, str], args) -> int:
         print(str(exc), file=sys.stderr)
         return 1
     card = find_card(cards, args.row)
+    degraded = False
     if card is None:
-        print(f"карточки по строке {args.row} нет: сначала `cards --apply`",
-              file=sys.stderr)
-        return 1
+        candidates = lost_cards(cards, args.row)
+        if not candidates:
+            print(f"карточки по строке {args.row} нет: сначала `cards --apply`",
+                  file=sys.stderr)
+            return 1
+        if len(candidates) > 1:
+            ids = ", ".join(str(candidate.get("id") or "") for candidate in candidates)
+            print(f"карточка по строке {args.row} есть, но связь потеряна и карт "
+                  f"несколько ({ids}): впишите «строка {args.row}» в тело нужной — "
+                  "угадывать нельзя, решение пишется в одну карту", file=sys.stderr)
+            return 1
+        # Карта есть, а съеденное `specify` тело маркера не содержит: связь восстановима,
+        # и без маркера `cards --apply` завёл бы дубль.
+        card = candidates[0]
+        degraded = True
     if card.get("status") != "blocked":
         print("спецификация ещё не готова: карточка не ждёт согласования",
               file=sys.stderr)
         return 1
+    if degraded and not repair_link(args.board, card, args.row):
+        print(f"карточка по строке {args.row} есть ({card.get('id')}), но маркер "
+              f"потерян после `specify`, и вернуть его не удалось: впишите "
+              f"«строка {args.row}» в тело карты", file=sys.stderr)
+        return 1
+    if degraded:
+        print(f"карточка по строке {args.row} найдена по {args.row} в теле "
+              f"({card.get('id')}): маркер «строка {args.row}» возвращён", file=sys.stderr)
 
     task = str(card.get("id") or "")
     today = datetime.now().strftime("%d.%m.%Y")

@@ -87,27 +87,46 @@ def _done(stdout=""):
     return SimpleNamespace(returncode=0, stdout=stdout, stderr="")
 
 
+def _flag(args, name):
+    """Значение флага в списке аргументов `hermes kanban …` или None."""
+    return args[args.index(name) + 1] if name in args else None
+
+
 class FakeKanban:
     """Доска в памяти: журнал вызовов вместо запуска `hermes`."""
 
-    def __init__(self, cards=()):
+    def __init__(self, cards=(), keys=None):
         self.calls = []
         self.cards = [dict(card) for card in cards]
         self.bodies = []
         self.created = 0
+        # Ключ идемпотентности ядра: второй `create` с тем же ключом возвращает старую карту.
+        self.keys = dict(keys or {})
 
     def __call__(self, board, args, timeout=120):
         self.calls.append({"board": board, "args": list(args)})
         if args[:1] == ["list"]:
             return _done(json.dumps(self.cards, ensure_ascii=False))
         if args[:1] == ["create"]:
-            path = Path(args[args.index("--body-file") + 1])
+            key = _flag(args, "--idempotency-key")
+            if key and key in self.keys:
+                return _done(json.dumps({"id": self.keys[key]}))
+            path = Path(_flag(args, "--body-file") or "")
             self.bodies.append(path.read_text(encoding="utf-8"))
             self.created += 1
             task_id = f"t_new{self.created}"
+            if key:
+                self.keys[key] = task_id
             self.cards.append({"id": task_id, "title": args[1],
-                               "body": self.bodies[-1], "status": "triage"})
+                               "body": self.bodies[-1], "status": "triage",
+                               "created_by": _flag(args, "--created-by")})
             return _done(json.dumps({"id": task_id}))
+        if args[:1] == ["edit"]:
+            body = _flag(args, "--body")
+            for card in self.cards:
+                if card.get("id") == args[1]:
+                    card["body"] = body
+            return _done("{}")
         return _done("{}")
 
     @property
@@ -115,10 +134,24 @@ class FakeKanban:
         return [call["args"] for call in self.calls]
 
 
-def _card(rid, status="blocked", task="t_1"):
-    return {"id": task, "status": status,
+def _card(rid, status="blocked", task="t_1", created_by=None):
+    return {"id": task, "status": status, "created_by": created_by,
             "title": f"Строка листа «Чего не умеем» {rid}",
             "body": f"Источник: лист «Чего не умеем», строка {rid}; V-035\n"}
+
+
+def _specified_card(rid, status="blocked", task="t_1"):
+    """Карта после `hermes kanban specify`: title и body переписаны, маркера нет."""
+    return {"id": task, "status": status, "created_by": SHEET.creator_tag(rid),
+            "title": f"Уточнить ответ бота на вопрос из листа ({rid})",
+            "body": f"**Goal** — Determine whether the bot should answer row {rid}.\n"}
+
+
+def _lost_card(rid, status="blocked", task="t_3"):
+    """Карта, у которой `specify` съел маркер: `rid` в теле есть, «строка <rid>» — нет."""
+    return {"id": task, "status": status, "created_by": "user",
+            "title": f"Review source row {rid}",
+            "body": f"Review source row {rid} from the «Чего не умеем» sheet\n"}
 
 
 # --- row_id -------------------------------------------------------------------------
@@ -463,6 +496,142 @@ def test_V_035_decide_повторный_отказывает(monkeypatch, tmp_p
     assert "решение уже записано" in capsys.readouterr().err
 
 
+# --- specify: маркер строки переживает переписывание карты ---------------------------
+
+def test_V_035_карта_ставит_метку_создателя(monkeypatch, tmp_path):
+    """V-035: связь строки и карты держит `--created-by intent-sheet:<rid>`, а не текст.
+
+    `hermes kanban specify` переписывает `title` и `body` карточки; `created_by` он
+    не трогает, поэтому метка в нём и есть первый замок дедупликации.
+    """
+    phrase = "кто завтра свободен?"
+    rid = SHEET.row_id(phrase)
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)]))
+    _questions(monkeypatch, tmp_path, _question_row("ffffffff"))
+    fake = FakeKanban()
+    monkeypatch.setattr(SHEET, "kanban", fake)
+
+    assert SHEET.main(["cards", "--apply"]) == 0
+
+    args = next(args for args in fake.commands if args[:1] == ["create"])
+    assert _flag(args, "--created-by") == f"intent-sheet:{rid}"
+    assert fake.cards[0]["created_by"] == f"intent-sheet:{rid}"
+
+
+def test_V_035_specify_переписал_тело_decide_находит_карту(monkeypatch, tmp_path):
+    """V-035: после `specify` в теле нет «строка <rid>» — `decide` её всё равно находит.
+
+    Дефект: связью был только текст, `specify` переписал тело на «row <rid>», и
+    `decide --decision no` отказывал «карточки по строке … нет», хотя карта ждала
+    согласования. Решение должно записаться в ту же карту.
+    """
+    phrase = "кто завтра свободен?"
+    rid = SHEET.row_id(phrase)
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)]))
+    path = _questions(monkeypatch, tmp_path, _question_row(rid))
+    fake = FakeKanban([_specified_card(rid, task="t_7")])
+    monkeypatch.setattr(SHEET, "kanban", fake)
+
+    assert SHEET.main(["decide", "--row", rid, "--decision", "no",
+                       "--note", "не нужно"]) == 0
+
+    actions = [args for args in fake.commands if args[:1] != ["list"]]
+    assert actions[0][:2] == ["comment", "t_7"]
+    assert actions[1][:2] == ["complete", "t_7"]
+    row = next(line for line in path.read_text(encoding="utf-8").splitlines()
+               if "V-001" in line)
+    assert "| решено |" in row and "„нет“" in row and "не нужно" in row
+
+
+def test_V_035_status_не_считает_новой_карту_без_маркера(monkeypatch, tmp_path, capsys):
+    """V-035: карта есть, маркер съеден `specify` — это «связь потеряна», а не «новая».
+
+    Счётчик «новых» врал (`новых: 1` при живой blocked-карте): строка попадала в него,
+    потому что маркера в тексте уже не было.
+    """
+    phrase = "кто завтра свободен?"
+    rid = SHEET.row_id(phrase)
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)], fetched_at=FETCHED))
+    _questions(monkeypatch, tmp_path, _question_row(rid))
+    fake = FakeKanban([_lost_card(rid, task="t_3")])
+    monkeypatch.setattr(SHEET, "kanban", fake)
+
+    assert SHEET.main(["status"]) == 0
+
+    lines = capsys.readouterr().out.splitlines()
+    assert "  новых: 0" in lines
+    assert f"связь потеряна: {rid} (t_3) — карту найдёт `decide`, маркер вернётся" in lines
+
+
+def test_V_035_decide_возвращает_маркер_потерянной_карте(monkeypatch, tmp_path, capsys):
+    """V-035: карту с потерянным маркером `decide` чинит — дописывает маркер, не теряя спеку."""
+    phrase = "кто завтра свободен?"
+    rid = SHEET.row_id(phrase)
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)]))
+    _questions(monkeypatch, tmp_path, _question_row(rid))
+    fake = FakeKanban([_lost_card(rid, task="t_3")])
+    journal = []
+
+    def spy_kanban(board, args, timeout=120):
+        journal.append(args[:1])
+        return fake(board, args, timeout)
+
+    monkeypatch.setattr(SHEET, "kanban", spy_kanban)
+
+    assert SHEET.main(["decide", "--row", rid, "--decision", "yes"]) == 0
+
+    edits = [args for args in fake.commands if args[:1] == ["edit"]]
+    assert len(edits) == 1 and edits[0][1] == "t_3"
+    body = _flag(edits[0], "--body") or ""
+    assert f"строка {rid}" in body
+    assert f"Review source row {rid} from the «Чего не умеем» sheet" in body
+    assert [step for step in journal if step != ["list"]] == [["edit"], ["assign"], ["unblock"]]
+    assert f"маркер «строка {rid}» возвращён" in capsys.readouterr().err
+
+
+def test_V_035_decide_отказывает_при_двух_картах_без_связи(monkeypatch, tmp_path, capsys):
+    """V-035: `rid` в двух картах без связи — двусмысленно: решение не пишется."""
+    phrase = "кто завтра свободен?"
+    rid = SHEET.row_id(phrase)
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)]))
+    path = _questions(monkeypatch, tmp_path, _question_row(rid))
+    before = path.read_text(encoding="utf-8")
+    fake = FakeKanban([_lost_card(rid, task="t_4"), _lost_card(rid, task="t_5")])
+    monkeypatch.setattr(SHEET, "kanban", fake)
+
+    assert SHEET.main(["decide", "--row", rid, "--decision", "yes"]) == 1
+
+    assert [args for args in fake.commands if args[:1] in (["comment"], ["complete"],
+                                                           ["assign"], ["unblock"],
+                                                           ["edit"])] == []
+    assert path.read_text(encoding="utf-8") == before
+    err = capsys.readouterr().err
+    assert "связь потеряна и карт несколько (t_4, t_5)" in err
+
+
+def test_V_035_cards_не_докладывает_created_для_существующей_карты(monkeypatch, tmp_path,
+                                                                  capsys):
+    """V-035: ядро вернуло уже существующую карту — «created: 0», id в `reused`.
+
+    Дефект: `cards --apply` докладывал `created: 1` и отдавал id старой карты, потому
+    что первый замок (маркер) не срабатывал, а работал только ключ идемпотентности ядра.
+    """
+    phrase = "кто завтра свободен?"
+    rid = SHEET.row_id(phrase)
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)]))
+    _questions(monkeypatch, tmp_path, _question_row("ffffffff"))
+    key = f"intent-sheet:{rid}"
+    fake = FakeKanban([_lost_card(rid, task="t_9")], keys={key: "t_9"})
+    monkeypatch.setattr(SHEET, "kanban", fake)
+
+    assert SHEET.main(["cards", "--apply", "--json"]) == 0
+
+    data = json.loads(capsys.readouterr().out)
+    assert data["created"] == 0 and data["existing"] == 1
+    assert data["cards"] == []
+    assert data["reused"] == [{"row_id": rid, "task_id": "t_9"}]
+
+
 # --- status -------------------------------------------------------------------------
 
 def test_V_035_status_считает_по_правилу(monkeypatch, tmp_path, capsys):
@@ -510,3 +679,98 @@ def test_V_035_state_в_gitignore():
     result = subprocess.run(["git", "check-ignore", "-q", ".state/intent_sheet.json"],
                             cwd=str(PROJECT), check=False)
     assert result.returncode == 0
+
+
+# --- обёртка планировщика -----------------------------------------------------------
+
+def _load_wrapper():
+    path = PROJECT / "scripts" / "cron" / "intent_sheet_daily.py"
+    spec = importlib.util.spec_from_file_location("intent_sheet_daily", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+DAILY = _load_wrapper()
+
+
+class FakeRun:
+    """Журнал вызовов вместо запуска `intent_sheet.py`: обёртка проверяется по аргументам."""
+
+    def __init__(self, codes=None, payload='{"created": 0, "cards": []}'):
+        self.calls = []
+        self.codes = dict(codes or {})
+        self.payload = payload
+
+    def __call__(self, args):
+        self.calls.append(list(args))
+        code = self.codes.get(args[0], 0)
+        stdout = self.payload if args[0] == "cards" else ""
+        return SimpleNamespace(returncode=code, stdout=stdout, stderr="сбой" if code else "")
+
+
+def test_V_035_daily_dry_run_не_выгружает_лист(monkeypatch, capsys):
+    """V-035: `--dry-run` обещает «ничего не писать» — `pull` не зовётся, снимок цел."""
+    fake = FakeRun()
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run", "--board", "v035-test"]) == 0
+
+    assert [call[0] for call in fake.calls] == ["cards"], "pull в сухом прогоне не нужен"
+    assert capsys.readouterr().out == ""            # новых нет — тишина
+
+
+def test_V_035_daily_передаёт_board_в_карточки(monkeypatch):
+    """V-035: `--board` уходит в `cards`, иначе сухой прогон заводит карты на боевой доске."""
+    fake = FakeRun(payload='{"created": 1, "cards": [{"row_id": "abcd1234", "task_id": null}]}')
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run", "--board", "v035-test"]) == 0
+
+    assert fake.calls == [["cards", "--max-new", str(DAILY.MAX_NEW), "--json",
+                           "--board", "v035-test"]]
+
+
+def test_V_035_daily_без_board_поведение_прежнее(monkeypatch):
+    """V-035: без `--board` обёртка не добавляет флаг — боевая доска остаётся по умолчанию."""
+    fake = FakeRun()
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run"]) == 0
+
+    assert fake.calls == [["cards", "--max-new", str(DAILY.MAX_NEW), "--json"]]
+
+
+def test_V_035_daily_боевой_прогон_выгружает_и_создаёт(monkeypatch):
+    """V-035: без `--dry-run` сначала `pull`, затем `cards --apply` с той же доской."""
+    fake = FakeRun()
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--board", "v035-test"]) == 0
+
+    assert fake.calls == [
+        ["pull"],
+        ["cards", "--apply", "--max-new", str(DAILY.MAX_NEW), "--json",
+         "--board", "v035-test"],
+    ]
+
+
+def test_V_035_daily_пустой_лист_молчит(monkeypatch, capsys):
+    """V-035: код 4 от `pull` — «спрашивать нечего», пустой вывод и код 0."""
+    fake = FakeRun(codes={"pull": 4})
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main([]) == 0
+
+    assert fake.calls == [["pull"]]
+    assert capsys.readouterr().out == ""
+
+
+def test_V_035_daily_отказ_карточек_печатает_причину(monkeypatch, capsys):
+    """V-035: тишина не означает «сломалось» — отказ печатает причину и код."""
+    fake = FakeRun(codes={"cards": 1})
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run", "--board", "v035-test"]) == 1
+
+    assert "карточки не заведены — сбой" in capsys.readouterr().out
