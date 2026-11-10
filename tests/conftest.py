@@ -35,7 +35,7 @@ TOKEN = "test-token"
 
 TABLES = (
     "agent_proposal",
-    "feedback_answer", "feedback", "slot_proposal", "event_plan", "venue",
+    "feedback_attachment", "feedback_answer", "feedback", "slot_proposal", "event_plan", "venue",
     "approval_request", "notification", "notification_pref",
     "intent_log", "category_candidate",
     "availability_hour", "dues_charge", "budget_tx", "budget_month_total",

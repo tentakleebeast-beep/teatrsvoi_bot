@@ -90,6 +90,40 @@ def test_в_дайджест_попадают_только_открытые(clie
 
 
 
+def test_дайджест_помечает_обращение_со_скриншотом(client):
+    """К21: у обращения со скриншотом `has_attachment` истинно, и строка это говорит.
+
+    Слово «со скриншотом» нужно админу до открытия обращения: скриншот дефекта часто
+    и есть суть («чёрный экран»). Файл кладём прямо в схему — байты дайджесту не нужны.
+    """
+    with psycopg.connect(_test_dsn()) as conn:
+        author = _person(conn, 250364914, "Автор Скриншота")
+        with_shot = conn.execute(
+            "insert into feedback (participant_id, kind, text) "
+            "values (%s, 'bug', 'Чёрный экран') returning id", (author,)).fetchone()[0]
+        without = conn.execute(
+            "insert into feedback (participant_id, kind, text) "
+            "values (%s, 'bug', 'Кнопка не нажимается') returning id", (author,)).fetchone()[0]
+        file_id = conn.execute(
+            "insert into file_object (participant_id, name, mime, size_bytes, scope,"
+            " uploaded_via, object_key) values (%s,'IMG_0421.png','image/png',1800,"
+            "'feedback','webapp','p' || %s || '/digest.png') returning id",
+            (author, author)).fetchone()[0]
+        conn.execute("insert into feedback_attachment (feedback_id, file_id, position)"
+                     " values (%s, %s, 0)", (with_shot, file_id))
+        conn.commit()
+
+    with _digest_conn() as conn:
+        items = {item["id"]: item for item in digest.open_feedback(conn)}
+        marked = digest._line(items[with_shot])
+        plain = digest._line(items[without])
+
+    assert items[with_shot]["has_attachment"] is True
+    assert items[without]["has_attachment"] is False
+    assert "со скриншотом" in marked, marked
+    assert "со скриншотом" not in plain, plain
+
+
 def test_организатор_без_права_не_разбирает_и_не_получает(client):
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 250364911, "Орг Без Права", "org")

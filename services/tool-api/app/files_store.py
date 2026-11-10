@@ -34,6 +34,18 @@ MAX_UPLOAD_BYTES = 20 * 1024 * 1024          # что бот вообще мож
 MAX_CHAT_SEND_BYTES = 50 * 1024 * 1024       # что бот может отправить обратно (Ш-4)
 QUOTA_BYTES = 2 * 1024 ** 3                  # 2 ГБ на человека (FR-K14)
 MAX_MINIAPP_BYTES = 200 * 1024 * 1024        # Mini App грузит мимо Telegram: потолок выше 20 МБ
+FEEDBACK_MAX_FILES = 3                       # скриншотов на обращение (Э6, D8)
+FEEDBACK_MAX_BYTES = 8 * 1024 ** 2           # потолок одного скриншота: 8 МБ
+# Скриншот обращения живёт в `file_object`, но не в личном месте: он не виден в «Моих
+# файлах» и поиске, не занимает квоту и не удаляется, пока обращение не разобрано.
+FEEDBACK_SCOPE = "feedback"
+# Типы вложения обращения: только изображения (D8). `<input accept>` на экране —
+# удобство, а не защита: тип проверяет сервер по имени, mime и сигнатуре.
+FEEDBACK_MIME = ("image/png", "image/jpeg", "image/webp", "image/gif")
+FEEDBACK_TYPE_MESSAGE = ("К обращению можно приложить только изображение — png, jpeg, "
+                         "webp или gif.")
+FEEDBACK_TOO_LARGE_MESSAGE = "Скриншот больше 8 МБ — пришлите меньше."
+
 PRESIGN_TTL = 900                            # ссылка на загрузку живёт 15 минут
 MAGIC_BYTES = 16
 
@@ -252,9 +264,15 @@ def _ensure_folder(conn, participant_id: int, parent_id: int | None,
 
 
 def used_bytes(conn, participant_id: int) -> int:
+    """Занятое личное место. Скриншоты обращений не считаются (V-055 (а), §4.2).
+
+    Иначе человек с забитыми 2 ГБ не мог бы даже сообщить о дефекте, а каждый
+    приложенный скриншот «дарил» бы ему 8 МБ сверх квоты.
+    """
     row = conn.execute(
         "select coalesce(sum(size_bytes), 0) as used from file_object"
-        " where participant_id = %s and deleted_at is null", (participant_id,)).fetchone()
+        " where participant_id = %s and deleted_at is null and scope <> %s",
+        (participant_id, FEEDBACK_SCOPE)).fetchone()
     return int(row["used"] or 0)
 
 
@@ -269,7 +287,8 @@ def _quota_error(conn, participant_id: int, size: int) -> FileRejected:
 
 
 def _insert_with_quota(conn, *, participant_id: int, name: str, mime: str, size: int,
-                       via: str, key: str, digest: str | None, kind: str) -> int | None:
+                       via: str, key: str, digest: str | None, kind: str,
+                       scope: str = "personal") -> int | None:
     """Вставить строку файла, только если место ещё есть — одним запросом.
 
     Отдельный `select used_bytes` перед вставкой гоняется с параллельным подтверждением:
@@ -277,7 +296,18 @@ def _insert_with_quota(conn, *, participant_id: int, name: str, mime: str, size:
     второго файла (аудит ponytail). Поэтому сумма проверяется в том же `insert ... select`,
     что пишет строку, а строка участника берётся `for update`: второй коммит ждёт первый
     и считает сумму уже с его файлом. `None` — места не хватило, строки нет.
+
+    Для `scope='feedback'` условия по сумме нет вовсе (V-055 (а)): скриншот обращения —
+    не личный файл, и забитая квота не должна мешать сообщить о дефекте.
     """
+    if scope == FEEDBACK_SCOPE:
+        row = conn.execute(
+            "insert into file_object (participant_id, name, mime, size_bytes, scope, uploaded_via,"
+            " object_key, bucket, sha256, kind)"
+            " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id",
+            (participant_id, name, mime, size, scope, via, key, bucket_private(), digest,
+             kind)).fetchone()
+        return None if row is None else int(row["id"])
     conn.execute("select id from participant where id = %s for update", (participant_id,))
     row = conn.execute(
         "insert into file_object (participant_id, name, mime, size_bytes, scope, uploaded_via,"
@@ -292,10 +322,17 @@ def _insert_with_quota(conn, *, participant_id: int, name: str, mime: str, size:
 
 
 def find_duplicate(conn, participant_id: int, sha256: str) -> dict | None:
+    """Живой личный файл с теми же байтами. Скриншоты обращений дублями не считаются.
+
+    Иначе человек, отправивший скриншот в обращение, а потом загрузивший тот же файл
+    в «Файлы», получил бы `duplicate` на строку со `scope='feedback'`: файл не появился
+    бы в списке, а байты были бы удалены (Э6, §4.3).
+    """
     return conn.execute(
         "select id, name, kind, size_bytes from file_object"
         " where participant_id = %s and sha256 = %s and deleted_at is null"
-        " order by id limit 1", (participant_id, sha256)).fetchone()
+        "   and scope <> %s"
+        " order by id limit 1", (participant_id, sha256, FEEDBACK_SCOPE)).fetchone()
 
 
 # ------------------------------------------------------------------ выдача
@@ -344,16 +381,21 @@ def file_for_viewer(conn, file_id: int, who: dict) -> tuple[dict | None, bool]:
 
 
 def file_for_reader(conn, file_id: int, who: dict) -> tuple[dict | None, bool]:
-    """Файл глазами читателя Mini App: (строка, «видно по гранту админа»).
+    """Файл глазами читателя Mini App: (строка, «видно по праву админа»).
 
     Одно правило на все три действия экрана файла (`/view`, будущее скачивание,
     открытие в браузере) — чтобы «аудио в общей папке слышу, pdf рядом — 404»
-    не повторялось (docs/development/150 §3 D6). Законных случаев три:
+    не повторялось (docs/development/150 §3 D6). Законных случаев четыре:
 
     * свой файл;
     * файл лежит в папке с `folder.scope = 'shared'` — её читают все роли (FR-K10);
       истина здесь — папка, а не `file_object.scope`: колонка ставится константой
       при вставке и в `shared` не переходит (замер 09.11.2026 — 4/4 на проде);
+    * держатель `feedback.triage` — файл, приложенный к обращению (Э6, D4). Право —
+      именно возможность, а не роль: `feedback.triage` живёт в
+      `v_participant_capabilities`, а в `roles_of` лежат роли (`admin`, `org`, …), и
+      проверка по ролям не сработала бы никогда. Узко и проверяемо: не «админ видит
+      всё», а «файл, приложенный к обращению, видит тот, кто разбирает обращения»;
     * админ с активным грантом `file_access` — тогда второй элемент `True`.
 
     Иначе `(None, False)`: чужой закрытый и несуществующий неотличимы (FR-K8).
@@ -374,11 +416,43 @@ def file_for_reader(conn, file_id: int, who: dict) -> tuple[dict | None, bool]:
         " limit 1", (file_id,)).fetchone()
     if shared is not None:
         return row, False
+    triage = conn.execute(
+        "select 1 from v_participant_capabilities"
+        " where participant_id = %s and capability = 'feedback.triage'",
+        (int(who.get("id") or 0),)).fetchone()
+    if triage is not None:
+        attached = conn.execute(
+            "select 1 from feedback_attachment where file_id = %s", (file_id,)).fetchone()
+        if attached is not None:
+            return row, True
     if "admin" in file_access.roles_of(who):
         grant = file_access.active_grant(conn, file_id, int(who.get("id") or 0))
         if grant is not None:
             return row, True
     return None, False
+
+
+def feedback_attachments(conn, feedback_ids: list[int]) -> dict[int, list[dict]]:
+    """Вложения обращений одним запросом: `{feedback_id: [{id, name, mime, size_bytes}]}`.
+
+    Порядок — `position`, затем `id`: человек приложил три файла в известном порядке,
+    и очередь разбора должна видеть их так же. Удалённый файл в список не попадает,
+    а обращение без вложений — пустой список, а не отсутствие ключа: экран и мост
+    читают ответ одинаково (Э6 §3.3, §3.4).
+    """
+    ids = [int(item) for item in feedback_ids]
+    if not ids:
+        return {}
+    out: dict[int, list[dict]] = {item: [] for item in ids}
+    rows = conn.execute(
+        "select fa.feedback_id, f.id, f.name, f.mime, f.size_bytes"
+        "  from feedback_attachment fa join file_object f on f.id = fa.file_id"
+        " where fa.feedback_id = any(%s) and f.deleted_at is null"
+        " order by fa.feedback_id, fa.position, f.id", (ids,)).fetchall()
+    for row in rows:
+        item = dict(row)
+        out.setdefault(int(item.pop("feedback_id")), []).append(item)
+    return out
 
 
 def remove(conn, who: dict, file_id: int) -> dict:
@@ -396,6 +470,15 @@ def remove(conn, who: dict, file_id: int) -> dict:
     row = file_for(conn, file_id, int(who.get("id") or 0))
     if row is None:
         raise FileRejected("file_not_found", "Файл не найден.", 404)
+    if row.get("scope") == FEEDBACK_SCOPE:
+        link = conn.execute(
+            "select feedback_id from feedback_attachment where file_id = %s",
+            (file_id,)).fetchone()
+        if link is not None:
+            raise FileRejected(
+                "file_in_feedback",
+                f"Скриншот приложен к обращению №{link['feedback_id']} — он нужен, пока "
+                "обращение не разобрано.", 409)
     detached = conn.execute(
         "delete from file_folder where file_id = %s returning folder_id", (file_id,)).fetchall()
     conn.execute(
@@ -405,7 +488,11 @@ def remove(conn, who: dict, file_id: int) -> dict:
 
 
 def list_files(conn, participant_id: int, limit: int = 20) -> list[dict]:
-    """Последние файлы человека: то, что бот покажет списком с кнопками."""
+    """Последние файлы человека: то, что бот покажет списком с кнопками.
+
+    Скриншоты обращений не показываются (V-055 (а), §4.5): они живут при обращении,
+    а не в «Моих файлах» и не в «Фото».
+    """
     rows = conn.execute(
         "select f.id, f.name, f.kind, f.size_bytes, f.created_at, a.duration_sec,"
         "       (select path from folder fo join file_folder ff on ff.folder_id = fo.id"
@@ -413,9 +500,9 @@ def list_files(conn, participant_id: int, limit: int = 20) -> list[dict]:
         "       (select fo.id from folder fo join file_folder ff on ff.folder_id = fo.id"
         "         where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder_id"
         "  from file_object f left join file_audio a on a.file_id = f.id"
-        " where f.participant_id = %s and f.deleted_at is null"
+        " where f.participant_id = %s and f.deleted_at is null and f.scope <> %s"
         " order by f.created_at desc, f.id desc limit %s",
-        (participant_id, limit)).fetchall()
+        (participant_id, FEEDBACK_SCOPE, limit)).fetchall()
     return [dict(row) for row in rows]
 
 
@@ -639,18 +726,25 @@ def delete_object(key: str) -> None:
 
 def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
                    sha256: str | None, key: str, head: bytes,
-                   via: str = "webapp") -> SavedFile:
+                   via: str = "webapp", scope: str = "personal") -> SavedFile:
     """Записать в БД файл, который уже лежит в хранилище.
 
     Один путь записи на оба входа: браузер положил байты по presigned-ссылке, бот —
     потоком через `upload_stream`. Отличается только `uploaded_via`.
+
+    `scope='feedback'` — скриншот обращения (Э6, D1). Тогда: личной папки и связи
+    `file_folder` не создаётся (файл не появляется в «Моих файлах»), квота не считается
+    (V-055 (а)), а дедупликация выключена (§4.3): иначе тот же скриншот, уже лежащий
+    личным файлом, вернул бы **личную** строку — и админ получил бы доступ к личному
+    файлу по правилу §4.4, то есть дыру в FR-K9. Повторная отправка того же скриншота
+    в другое обращение упёрлась бы в `unique (file_id)` в `feedback_attachment`.
     """
     kind = detect_kind(name, mime, head)
     digest = (sha256 or "").strip().lower() or None
     if digest and len(digest) != 64:
         digest = None
 
-    if digest:
+    if digest and scope != FEEDBACK_SCOPE:
         dup = find_duplicate(conn, participant_id, digest)
         if dup is not None:
             delete_object(key)                    # байты уже есть: второй экземпляр не нужен
@@ -666,7 +760,7 @@ def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
     try:
         file_id = _insert_with_quota(
             conn, participant_id=participant_id, name=name, mime=mime, size=size,
-            via=via, key=key, digest=digest, kind=kind)
+            via=via, key=key, digest=digest, kind=kind, scope=scope)
     except SQL_ERRORS:
         delete_object(key)                        # тот же принцип: без записи байты не нужны
         raise
@@ -674,6 +768,11 @@ def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
         # Квота проверена тем же запросом, что писал строку: места не хватило.
         delete_object(key)
         raise _quota_error(conn, participant_id, size)
+    if scope == FEEDBACK_SCOPE:
+        # Скриншот обращения живёт без папки: он не «файл» в личном месте.
+        return SavedFile(file_id, name, kind, size, "", False,
+                         QUOTA_BYTES - used_bytes(conn, participant_id),
+                         warning=_warning(kind, size))
     folder_id, path = ensure_personal_folder(conn, participant_id, kind)
     conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
                  " on conflict do nothing", (file_id, folder_id))
@@ -867,10 +966,12 @@ def search(conn, participant_id: int, query: str, limit: int = 20) -> list[dict]
           from file_object f
           left join file_text ft on ft.file_id = f.id
          where f.participant_id = %(pid)s and f.deleted_at is null
+           and f.scope <> %(scope)s
            and f.search_tsv @@ websearch_to_tsquery('russian', %(q)s)
          order by rank desc, f.created_at desc
          limit %(limit)s
-        """, {"q": text, "pid": participant_id, "limit": limit}).fetchall()
+        """, {"q": text, "pid": participant_id, "limit": limit,
+              "scope": FEEDBACK_SCOPE}).fetchall()
     if rows:
         return [dict(row) for row in rows]
 
@@ -885,6 +986,7 @@ def search(conn, participant_id: int, query: str, limit: int = 20) -> list[dict]
                0::float as rank, null::text as snippet
           from file_object f
          where f.participant_id = %s and f.deleted_at is null and f.name ilike %s
+           and f.scope <> %s
          order by f.created_at desc limit %s
-        """, (participant_id, f"%{text}%", limit)).fetchall()
+        """, (participant_id, f"%{text}%", FEEDBACK_SCOPE, limit)).fetchall()
     return [dict(row) for row in rows]

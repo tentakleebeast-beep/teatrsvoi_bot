@@ -14,7 +14,7 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import Field
 
-from .. import agent, cold, core, file_access, llm, masking, notification_store
+from .. import agent, cold, core, file_access, files_store, llm, masking, notification_store
 from ..errors import ApiError
 from ..external import DB_ERRORS, HTTP_ERRORS
 from ..pages import layout as page_layout
@@ -143,6 +143,25 @@ class FeedbackIn(core.ApiIn):
     context: dict | None = None
 
 
+class FeedbackAttachmentIn(core.ApiIn):
+    """Ссылка на уже загруженный скриншот: ключ выдал `POST /webapp/feedback/presign`."""
+
+    object_key: str = Field(min_length=3, max_length=200)
+    name: str = Field(min_length=1, max_length=200)
+    mime: str = Field(default="application/octet-stream", max_length=120)
+    sha256: str | None = Field(default=None, max_length=64)
+
+
+class WebappFeedbackIn(FeedbackIn):
+    """Обращение из Mini App: прежнее тело плюс до трёх скриншотов (Э6 §3.2).
+
+    Наследуется от `FeedbackIn` намеренно: путь чата `/tools/feedback` вложения не
+    принимает вовсе — поля нет в модели, поэтому лишний ключ в теле просто отбрасывается
+    валидацией, а не создаёт связь (К17).
+    """
+
+    attachments: list[FeedbackAttachmentIn] = Field(default_factory=list, max_length=3)
+
 
 @router.post("/tools/feedback")
 def feedback_create(body: FeedbackIn, who: dict = Depends(core.current)) -> dict:
@@ -163,17 +182,115 @@ def feedback_create(body: FeedbackIn, who: dict = Depends(core.current)) -> dict
             "kind_title": core.FEEDBACK_KINDS[body.kind], "notified": notified}
 
 
+def _attachment_key_own(object_key: str, participant_id: int) -> bool:
+    """Ключ принадлежит человеку: `p<id>/<имя>`. Как в `webapp_files_commit`.
+
+    Проверка обязательна и до обращения к хранилищу: иначе `object_key` станет способом
+    прочитать (и удалить) чужой объект, подставив его ключ в своё обращение.
+    """
+    prefix = f"p{participant_id}/"
+    return object_key.startswith(prefix) and "/" not in object_key[len(prefix):]
+
+
+def _feedback_with_attachments(body: WebappFeedbackIn, who: dict) -> dict:
+    """Обращение из Mini App вместе со скриншотами — одной транзакцией (Э6 §3.2).
+
+    Порядок проверок на каждый файл: ключ → объект на месте → не пустой → не больше
+    8 МБ → только изображение → `save_committed(scope='feedback')` → строка связи.
+    Любая ошибка — отказ всей формы: обращения «с половиной скриншотов» не бывает,
+    а загруженные объекты снимаются, чтобы неудачная отправка не оставляла мусора.
+
+    Удаляются только объекты этого человека: ключ вне `p<id>/` — чужой, и трогать его
+    нельзя ни при каких условиях (иначе `object_key` становится способом стирать чужие
+    файлы). Это осознанное отличие от буквы К15, где названы «оба ключа».
+    """
+    text = " ".join(body.text.split())
+    if len(text) < 3:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_ENTITY, "feedback_text_empty")
+    participant_id = int(who["id"])
+    own_keys = [item.object_key for item in body.attachments
+                if _attachment_key_own(item.object_key, participant_id)]
+    stored: list[dict] = []
+    done = False
+    try:
+        with core.pool.connection() as conn:
+            row = conn.execute("""
+                insert into feedback (participant_id, kind, text, context)
+                values (%s, %s, %s, %s) returning id, created_at""",
+                (participant_id, body.kind, text,
+                 json.dumps(body.context or {}, ensure_ascii=False))).fetchone()
+            for position, item in enumerate(body.attachments):
+                if not _attachment_key_own(item.object_key, participant_id):
+                    raise ApiError(status.HTTP_403_FORBIDDEN, "Некорректный ключ загрузки.",
+                                   code="file_key_foreign")
+                head = files_store.head_of(item.object_key)
+                if head is None:
+                    raise ApiError(status.HTTP_404_NOT_FOUND,
+                                   "Скриншот не долетел до хранилища — пришлите его ещё раз.",
+                                   code="file_not_uploaded")
+                size, content_type = head
+                if size <= 0:
+                    files_store.delete_object(item.object_key)
+                    raise ApiError(status.HTTP_400_BAD_REQUEST, "Пустой файл.",
+                                   code="file_empty")
+                if size > files_store.FEEDBACK_MAX_BYTES:
+                    files_store.delete_object(item.object_key)
+                    raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                                   files_store.FEEDBACK_TOO_LARGE_MESSAGE,
+                                   code="file_too_large")
+                head16 = files_store.head_bytes(item.object_key)
+                try:
+                    kind = files_store.detect_kind(item.name, item.mime, head16)
+                except files_store.FileRejected as exc:
+                    files_store.delete_object(item.object_key)
+                    raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                   files_store.FEEDBACK_TYPE_MESSAGE,
+                                   code="file_type_not_allowed") from exc
+                if kind != "image":
+                    files_store.delete_object(item.object_key)
+                    raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                                   files_store.FEEDBACK_TYPE_MESSAGE,
+                                   code="file_type_not_allowed")
+                saved = files_store.save_committed(
+                    conn, participant_id, item.name, item.mime or content_type, size,
+                    item.sha256, item.object_key, head16, via="webapp",
+                    scope=files_store.FEEDBACK_SCOPE)
+                conn.execute("insert into feedback_attachment (feedback_id, file_id, position)"
+                             " values (%s, %s, %s)", (row["id"], saved.id, position))
+                stored.append({"id": saved.id, "name": saved.name,
+                               "mime": item.mime or content_type,
+                               "size_bytes": saved.size_bytes})
+            core.audit(conn, "human", participant_id, "feedback.create", "feedback",
+                       str(row["id"]),
+                       after={"kind": body.kind, "text": text[:200],
+                              "attachments": len(stored)})
+        done = True
+    finally:
+        # Сторож `tests/unit/test_narrow_except.py` запрещает широкий `except`: чистим
+        # через `finally` с флагом, а исключение пусть идёт наверх как обычно.
+        if not done:
+            for key in own_keys:
+                files_store.delete_object(key)
+    return {"ok": True, "id": row["id"], "status": "new",
+            "kind_title": core.FEEDBACK_KINDS[body.kind], "notified": 0,
+            "attachments": stored}
+
+
 
 @router.get("/tools/feedback/mine")
 def feedback_mine(limit: int = Query(default=10, ge=1, le=50),
                   who: dict = Depends(core.current)) -> dict:
-    """Свои обращения и их статусы."""
+    """Свои обращения и их статусы; у каждого — вложения (Э6, К12)."""
     with core.pool.connection() as conn:
         rows = conn.execute("""
             select id, kind, text, status, resolution, created_at
             from feedback where participant_id = %s
             order by created_at desc limit %s""", (who["id"], limit)).fetchall()
-    return {"ok": True, "data": [dict(row) for row in rows]}
+        items = [dict(row) for row in rows]
+        attachments = files_store.feedback_attachments(conn, [item["id"] for item in items])
+    for item in items:
+        item["attachments"] = attachments.get(int(item["id"]), [])
+    return {"ok": True, "data": items}
 
 
 
@@ -182,7 +299,11 @@ def feedback_list(status: str | None = None,
                   open_only: bool = False,
                   limit: int = Query(default=20, ge=1, le=100),
                   who: dict = Depends(core.require("feedback.triage"))) -> dict:
-    """Очередь обращений; open_only — только открытые (new, seen, planned)."""
+    """Очередь обращений; open_only — только открытые (new, seen, planned).
+
+    К каждой строке — `attachments` (пустой список, если вложений нет): очередь Mini App
+    и мост dev получают одну форму ответа, поэтому считает её здесь один код (§3.4).
+    """
     with core.pool.connection() as conn:
         rows = conn.execute("""
             select f.id, f.kind, f.text, f.status, f.resolution,
@@ -191,9 +312,13 @@ def feedback_list(status: str | None = None,
             where (%s::text is null or f.status = %s::text)
               and (not %s::boolean or f.status in ('new', 'seen', 'planned'))
             order by f.created_at desc limit %s""", (status, status, open_only, limit)).fetchall()
+        items = [dict(row) for row in rows]
+        attachments = files_store.feedback_attachments(conn, [item["id"] for item in items])
         counts = {r["status"]: r["n"] for r in conn.execute(
             "select status, count(*) n from feedback group by status").fetchall()}
-    return {"ok": True, "data": [dict(row) for row in rows], "counts": counts}
+    for item in items:
+        item["attachments"] = attachments.get(int(item["id"]), [])
+    return {"ok": True, "data": items, "counts": counts}
 
 
 
@@ -729,28 +854,40 @@ def admin_reconcile(body: ReconcileIn, who: dict = Depends(core.require("budget.
 
 
 @router.post("/webapp/feedback")
-def webapp_feedback(body: FeedbackIn, who: dict = Depends(core.webapp_actor)) -> dict:
+def webapp_feedback(body: WebappFeedbackIn, who: dict = Depends(core.webapp_actor)) -> dict:
     """Обращение из Mini App — по праву `feedback.send`, как у `/tools/feedback` в чате.
 
     Проверка здесь, а не на странице: экран может только не рисовать форму,
     отказ обязан прийти с сервера (docs/development/91 принципы 9, Б3).
+
+    Со скриншотами путь другой — `_feedback_with_attachments`: обращение и связи с
+    файлами пишутся одной транзакцией, иначе на секунду существовало бы обращение
+    без вложения, которое очередь успела бы показать (D3).
     """
-    return feedback_create(body, core._webapp_require(who, "feedback.send"))
+    viewer = core._webapp_require(who, "feedback.send")
+    if body.attachments:
+        return _feedback_with_attachments(body, viewer)
+    return feedback_create(body, viewer)
 
 
 
 @router.get("/webapp/feedback/mine")
 def webapp_feedback_mine(limit: int = Query(default=10, ge=1, le=50),
                          who: dict = Depends(core.webapp_actor)) -> dict:
-    """Свои обращения и право отправки одним ответом.
+    """Свои обращения, право отправки и пределы вложения одним ответом.
 
     `can_send` — это `feedback.send`, посчитанный на сервере: у мастера его нет
     (`db/init/031`, docs/141 §3). Страница берёт право отсюда и не выводит его
     из роли сама (док. 86 §7: недоступное не приходит в браузер вовсе).
+    `limits` — числа вложения (3 файла, 8 МБ, четыре типа): страница берёт их
+    отсюда, а не из своей разметки, иначе экран и сервер разойдутся молча (Э6 §3.3).
     """
     viewer = core._webapp_viewer(who)
     answer = feedback_mine(limit, viewer)
     answer["can_send"] = page_layout.has(viewer.get("caps"), "feedback.send")
+    answer["limits"] = {"files": files_store.FEEDBACK_MAX_FILES,
+                        "bytes": files_store.FEEDBACK_MAX_BYTES,
+                        "mime": list(files_store.FEEDBACK_MIME)}
     return answer
 
 

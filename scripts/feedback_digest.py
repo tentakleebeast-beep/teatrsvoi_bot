@@ -36,13 +36,19 @@ def open_feedback(conn) -> list[dict]:
 
     Возраст считается по `now()` базы, а не по моменту запуска: дайджест
     планируется заранее, и «старше 6 часов» — свойство обращения, а не запуска.
+
+    `has_attachment` — есть ли у обращения живой скриншот (Э6, К21): админ видит это
+    до открытия обращения, а не после. Удалённый файл метку не ставит.
     """
     return conn.execute("""
         select f.id, f.kind, f.text, f.status,
                coalesce(p.display_name, 'участник') as author,
                (extract(epoch from now() - f.created_at) / 3600)::int as age_hours,
                not exists (select 1 from feedback_answer a
-                            where a.feedback_id = f.id) as unanswered
+                            where a.feedback_id = f.id) as unanswered,
+               exists (select 1 from feedback_attachment fa
+                         join file_object fo on fo.id = fa.file_id
+                        where fa.feedback_id = f.id and fo.deleted_at is null) as has_attachment
         from feedback f left join participant p on p.id = f.participant_id
         where f.status = any(%s)
         order by f.id""", (list(OPEN_STATUSES),)).fetchall()
@@ -62,7 +68,8 @@ def recipients(conn) -> list[dict]:
 def _line(item: dict) -> str:
     first = " ".join(item["text"].split())[:90]
     kind = KINDS.get(item["kind"], item["kind"])
-    return "№{} · {} · {}: {}".format(item["id"], kind, item["author"], first)
+    mark = " · со скриншотом" if item.get("has_attachment") else ""
+    return "№{} · {}{} · {}: {}".format(item["id"], kind, mark, item["author"], first)
 
 
 def needs_attention(item: dict) -> bool:

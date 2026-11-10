@@ -8,6 +8,8 @@
 
     GET  /tools/feedback/open    — что ещё не разобрано (нет строки в журнале)
     POST /tools/feedback/triage  — разобрать пачку: ответить или доставить
+    POST /webapp/feedback/presign — ссылка на загрузку скриншота обращения (Э6)
+    GET  /tools/feedback/{id}/attachment/{file_id} — байты скриншота для разбора (Э6)
 
 Оба требуют `feedback.triage`: это та же возможность, что у ручного разбора,
 поэтому серверный таймер ходит тем же ключом, что и человек.
@@ -21,10 +23,12 @@ dev-среда.
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, status
+from fastapi.responses import StreamingResponse
 from pydantic import Field
 
-from .. import core, feedback_triage, llm, router_llm
+from .. import cold, core, feedback_triage, files_store, llm, router_llm
+from ..errors import ApiError
 from . import admin
 
 router = APIRouter()
@@ -72,6 +76,102 @@ def feedback_open(limit: int = Query(default=20, ge=1, le=100),
     with core.pool.connection() as conn:
         rows = open_rows(conn, limit)
     return {"ok": True, "count": len(rows), "data": rows}
+
+
+class FeedbackPresignIn(core.ApiIn):
+    """Запрос ссылки на загрузку скриншота: имя, тип и размер до отправки байтов."""
+
+    name: str = Field(min_length=1, max_length=200)
+    mime: str = Field(default="application/octet-stream", max_length=120)
+    size: int = Field(default=0, ge=0)
+
+
+@router.post("/webapp/feedback/presign")
+def feedback_presign(body: FeedbackPresignIn,
+                     who: dict = Depends(core.webapp_actor)) -> dict:
+    """Ссылка на прямую загрузку скриншота в хранилище (Э6 §3.1).
+
+    Право — `feedback.send`, а не `files.access`: у мастера первое есть, второго нет
+    (`db/init/031`, docs/141 §3), и скриншот — часть обращения, а не «Файлов студии».
+
+    Квота не проверяется (V-055 (а)): `used_bytes` здесь не вызывается вовсе — иначе
+    человек с забитыми 2 ГБ не смог бы сообщить о дефекте.
+
+    Тип проверяем до загрузки мегабайтов: не-картинка узнаётся сразу, а не после того,
+    как телефон потратит трафик. `<input accept>` на экране — удобство, не защита.
+    """
+    viewer = core._webapp_require(who, "feedback.send")
+    try:
+        kind = files_store.detect_kind(body.name, body.mime, b"")
+    except files_store.FileRejected as exc:
+        raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                       files_store.FEEDBACK_TYPE_MESSAGE,
+                       code="file_type_not_allowed") from exc
+    if kind != "image":
+        raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                       files_store.FEEDBACK_TYPE_MESSAGE,
+                       code="file_type_not_allowed")
+    if body.size and body.size > files_store.FEEDBACK_MAX_BYTES:
+        raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                       files_store.FEEDBACK_TOO_LARGE_MESSAGE, code="file_too_large")
+    data = files_store.presign_put(int(viewer["id"]), body.name, body.mime)
+    return {"ok": True, **data,
+            "max_files": files_store.FEEDBACK_MAX_FILES,
+            "max_bytes": files_store.FEEDBACK_MAX_BYTES}
+
+
+@router.get("/tools/feedback/{feedback_id}/attachment/{file_id}")
+def feedback_attachment(feedback_id: int, file_id: int,
+                        who: dict = Depends(core.require("feedback.triage"))):
+    """Байты скриншота обращения — для моста dev и разбора (Э6 §3.5).
+
+    Порядок проверок важен: сначала «этот файл приложен к этому обращению», потом
+    «файл виден читателю». Иначе чужой `file_id` подставлялся бы к любому обращению,
+    и правило «файл приложен к обращению» перестало бы что-то значить.
+
+    Отдаём потоком, а не presigned-ссылкой: проверка прав и запись в аудит остаются
+    в одном месте, а dev-машине не нужно уметь ходить в хранилище прода. Холодный
+    файл возвращается в горячий бакет до выдачи; нет холодной копии — 410.
+    """
+    with core.pool.connection() as conn:
+        pair = conn.execute(
+            "select 1 from feedback_attachment where feedback_id = %s and file_id = %s",
+            (feedback_id, file_id)).fetchone()
+        if pair is None:
+            raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.",
+                           code="file_not_found")
+        row, as_admin = files_store.file_for_reader(conn, file_id, who)
+        if row is None or not row["object_key"]:
+            raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.",
+                           code="file_not_found")
+        restored = False
+        if row.get("cold_at"):
+            try:
+                restored = cold.restore(conn, file_id)
+            except FileNotFoundError as exc:
+                raise ApiError(status.HTTP_410_GONE,
+                               "Файл не найден ни в хранилище, ни в архиве.",
+                               code="file_cold_missing") from exc
+        conn.execute("update file_object set last_access_at = now() where id = %s",
+                     (file_id,))
+        core.audit(conn, "human", who["id"], "file.view", "file_object", str(file_id),
+                   after={"via": "feedback", "as_admin": as_admin,
+                          "feedback_id": feedback_id, "restored": restored})
+
+    body, mime, size = files_store.open_stream(row["object_key"])
+
+    def chunks():
+        while True:
+            chunk = body.read(64 * 1024)
+            if not chunk:
+                break
+            yield chunk
+
+    return StreamingResponse(
+        chunks(), media_type=mime,
+        headers={"Content-Length": str(size),
+                 "Content-Disposition": files_store.attachment_header(row["name"]),
+                 "X-File-Id": str(file_id)})
 
 
 async def _model_answer(item: dict) -> tuple[str | None, dict | None]:

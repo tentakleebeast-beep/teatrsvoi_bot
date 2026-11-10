@@ -701,15 +701,78 @@ def broadcast_preview(request: Request) -> JSONResponse:
 
 
 # Право `feedback.send` есть у admin/org/troupe, у мастера его нет
-# (`db/init/031`, docs/141 §3). Стенд отвечает как прод после карты t_4f0c64d6:
-# право приходит полем `can_send` в данных, а POST без права — 403.
+# (`db/init/031`, docs/141 §3). Стенд отвечает как прод после карт t_4f0c64d6 и
+# t_f00525ab: право приходит полем `can_send`, пределы вложения — полем `limits`
+# (страница берёт числа оттуда, а не из своей разметки), POST без права — 403.
+FEEDBACK_LIMITS = {"files": 3, "bytes": 8 * 1024 * 1024,
+                   "mime": ["image/png", "image/jpeg", "image/webp", "image/gif"]}
+
+#: Очередь «моих сообщений»: одно обращение со скриншотом и одно без — иначе зелёный
+#: тест доказывает разметку формы ответа, которой сервер не производит (§4.8).
+FEEDBACK_ITEMS = [
+    {"id": 37, "kind": "bug", "text": "Чёрный экран на «Неделе»", "status": "new",
+     "resolution": None, "created_at": "2026-11-09T10:00:00",
+     "attachments": [{"id": 91, "name": "IMG_0421.png", "mime": "image/png",
+                      "size_bytes": 1834921}]},
+    {"id": 38, "kind": "wish", "text": "Хочу отчёт за месяц", "status": "seen",
+     "resolution": None, "created_at": "2026-11-09T11:00:00",
+     "attachments": []},
+]
+
+#: Журнал вложений (Э6, К24): по нему видно порядок presign → PUT → POST и тело
+#: отправки. Сбрасывается фикстурой теста, как и FEEDBACK_EVENTS.
+FEEDBACK_CALLS: list[str] = []
+FEEDBACK_POSTS: list[dict] = []
+#: Подменяемые коды ответов: 500 на отправке и 403 на presign — сценарии К24.
+FEEDBACK_SEND_STATUS = 200
+FEEDBACK_PRESIGN_STATUS = 200
+FEEDBACK_UPLOADED: dict[str, bytes] = {}
+
+
 @app.get("/webapp/feedback/mine")
 async def feedback_mine(request: Request):
     denied = _guard(request)
     if denied is not None:
         return denied
-    allowed = (request.headers.get(ROLE_HEADER) or "").strip().lower() != "master"
-    return JSONResponse({"ok": True, "data": [], "can_send": allowed})
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    return JSONResponse({"ok": True, "data": FEEDBACK_ITEMS,
+                         "can_send": role != "master", "limits": FEEDBACK_LIMITS})
+
+
+@app.post("/webapp/feedback/presign")
+async def feedback_presign(request: Request):
+    """Ссылка на загрузку скриншота: `upload_url` ведёт на приёмник PUT этого стенда.
+
+    Право — `feedback.send`, как в бою: у мастера его нет. Квота не проверяется
+    (V-055 (а)), поэтому ответ не зависит от занятого места.
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    FEEDBACK_CALLS.append("presign")
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    if role == "master":
+        return JSONResponse({"detail": "capability required: feedback.send"},
+                            status_code=403)
+    if FEEDBACK_PRESIGN_STATUS != 200:
+        return JSONResponse({"detail": "capability required: feedback.send"},
+                            status_code=FEEDBACK_PRESIGN_STATUS)
+    body = await request.json()
+    name = str(body.get("name") or "shot.png").lower()
+    suffix = pathlib.Path(name).suffix or ".png"
+    key = f"p30/stand{len(FEEDBACK_CALLS)}{suffix}"
+    return JSONResponse({"ok": True, "upload_url": f"/stand/upload/{key}",
+                         "object_key": key, "expires_in": 900,
+                         "max_files": FEEDBACK_LIMITS["files"],
+                         "max_bytes": FEEDBACK_LIMITS["bytes"]})
+
+
+@app.put("/stand/upload/{object_key:path}")
+async def stand_upload(object_key: str, request: Request):
+    """Приёмник PUT: хранилище стенда. Запоминает байты и факт загрузки."""
+    FEEDBACK_CALLS.append("PUT")
+    FEEDBACK_UPLOADED[object_key] = await request.body()
+    return JSONResponse({"ok": True})
 
 
 @app.post("/webapp/feedback")
@@ -720,8 +783,18 @@ async def feedback_send(request: Request):
     if (request.headers.get(ROLE_HEADER) or "").strip().lower() == "master":
         return JSONResponse({"detail": "capability required: feedback.send"},
                             status_code=403)
+    FEEDBACK_CALLS.append("feedback")
+    body = await request.json()
+    FEEDBACK_POSTS.append(body)
+    if FEEDBACK_SEND_STATUS != 200:
+        return JSONResponse({"detail": "внутренняя ошибка"},
+                            status_code=FEEDBACK_SEND_STATUS)
     return JSONResponse({"ok": True, "id": 1, "status": "new",
-                         "kind_title": "Вопрос", "notified": 0})
+                         "kind_title": "Вопрос", "notified": 0,
+                         "attachments": [
+                             {"id": 91, "name": item.get("name"),
+                              "mime": item.get("mime"), "size_bytes": 1834921}
+                             for item in (body.get("attachments") or [])]})
 
 
 ADMIN_OVERVIEW = {
@@ -823,6 +896,21 @@ FEEDBACK_EVENTS: list[str] = []
 
 NO_FEEDBACK_TRIAGE_ROLES = {"participant", "org", "master", "troupe"}
 
+#: Образец очереди для теста скриншота (К25): одно обращение со скриншотом, одно без.
+#: По умолчанию очередь стенда пуста — пустое состояние проверяет
+#: `test_miniapp_feedback_rights.py`, и его нельзя ломать чужой фикстурой (§4.8).
+FEEDBACK_QUEUE_SAMPLE: list[dict] = [
+    {"id": 37, "kind": "bug", "text": "Чёрный экран на «Неделе»", "status": "new",
+     "resolution": None, "created_at": "2026-11-09T10:00:00", "resolved_at": None,
+     "author": "Валерий",
+     "attachments": [{"id": 91, "name": "IMG_0421.png", "mime": "image/png",
+                      "size_bytes": 1834921}]},
+    {"id": 38, "kind": "wish", "text": "Хочу отчёт за месяц", "status": "new",
+     "resolution": None, "created_at": "2026-11-09T11:00:00", "resolved_at": None,
+     "author": "Валерий", "attachments": []},
+]
+FEEDBACK_QUEUE: list[dict] = []
+
 
 @app.get("/webapp/admin/feedback")
 def admin_feedback_queue(request: Request) -> JSONResponse:
@@ -834,8 +922,8 @@ def admin_feedback_queue(request: Request) -> JSONResponse:
     if role in NO_FEEDBACK_TRIAGE_ROLES:
         return JSONResponse({"detail": "capability required: feedback.triage"},
                             status_code=403)
-    return JSONResponse({"ok": True, "data": [],
-                         "counts": {"new": 0, "seen": 0, "planned": 0,
+    return JSONResponse({"ok": True, "data": FEEDBACK_QUEUE,
+                         "counts": {"new": len(FEEDBACK_QUEUE), "seen": 0, "planned": 0,
                                     "done": 0, "rejected": 0}})
 
 
@@ -1076,6 +1164,12 @@ VIEW_FILES = {
     52: {"ok": True, "id": 52, "url": "/stand/image.png", "expires_in": 900, "kind": "image",
          "name": "Сцена.png", "mime": "image/png", "size_bytes": 120 * 1024,
          "ext": "png", "folder": "Спектакль/Афиши", "as_admin": False, "cold_restored": False},
+    # Скриншот обращения (Э6): миниатюра в очереди разбора ведёт на экран файла, а
+    # картинку берёт из этого ответа — без записи строка осталась бы без миниатюры.
+    91: {"ok": True, "id": 91, "url": "/stand/image.png", "expires_in": 900,
+         "kind": "image", "name": "IMG_0421.png", "mime": "image/png",
+         "size_bytes": 1834921, "ext": "png", "folder": None, "as_admin": True,
+         "cold_restored": False},
 }
 
 #: 1×1 прозрачный PNG: больше для проверки «картинка нарисовалась» не нужно.
