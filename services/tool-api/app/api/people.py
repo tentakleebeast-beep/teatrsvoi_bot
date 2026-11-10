@@ -438,6 +438,10 @@ def webapp_profile(who: dict = Depends(core.webapp_actor)) -> dict:
         projects = conn.execute(
             "select id, name, kind from project where status <> 'archive' order by name"
         ).fetchall()
+        # Дисциплины — только чтение (D1 дизайна V-037): правит их администратор
+        # в карточке, а мастер видит свои и предупреждение о пустом списке.
+        disciplines = core.disciplines_out(conn, who["id"])
+        roles = core.resolve_roles(conn, who["id"])
 
     return {"ok": True,
             "profile": {"id": person["id"], "name": person["display_name"],
@@ -451,7 +455,11 @@ def webapp_profile(who: dict = Depends(core.webapp_actor)) -> dict:
                                           if a["alias_kind"] in ("short", "name")],
                         "roles": [dict(a) for a in aliases if a["alias_kind"] == "role"],
                         "aliases": [dict(a) for a in aliases]},
-            "projects": [dict(p) for p in projects]}
+            "projects": [dict(p) for p in projects],
+            # ключи верхнего уровня: `profile` — состояние формы, дисциплины в ней
+            # не редактируются, а предупреждение нужно анкете отдельно (D5)
+            "disciplines": disciplines,
+            "warnings": core.discipline_warnings(roles, disciplines, audience="self")}
 
 
 

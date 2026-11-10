@@ -127,7 +127,10 @@ def test_роль_без_права_не_выдаётся(client):
                     json={"participant_id": target, "role": "admin", "enabled": True},
                     headers=headers)
     assert r.status_code == 403
-    assert "participants.manage" in r.json()["detail"]
+    # Отказ сказан словами (Б3): человек знает, кто меняет роли, а код остаётся
+    # машинным для клиента (V-037, D4).
+    assert r.json()["code"] == "participants_manage_forbidden"
+    assert r.json()["detail"] == "Роли и дисциплины педагога меняет администратор."
 
 
 def test_тариф_ставится_из_панели(client):

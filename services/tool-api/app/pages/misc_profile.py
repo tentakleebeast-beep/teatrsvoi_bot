@@ -47,6 +47,11 @@ _BODY_PROFILE = """
 
 <button class="ui-btn ui-btn--primary ui-btn--block" id="save" type="button">Сохранить</button>
 <div class="ui-alert" id="error" hidden></div>
+
+<section class="ui-section" id="disciplines-section" hidden>
+  <div class="ui-section__head"><h2 class="ui-section__title">Дисциплины</h2></div>
+  <div class="ui-card ui-card--flat" id="disciplines-box"></div>
+</section>
 """
 
 _SCRIPT_PROFILE = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/more\";\n" + _JS_COMMON + r"""
@@ -136,6 +141,24 @@ _SCRIPT_PROFILE = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BA
     return { roles: roles, bad: bad };
   }
 
+  /* Дисциплины мастера — только чтение: правит их администратор в карточке
+     (D1, D7 дизайна V-037). Блок стоит под «Сохранить»: над формой он уводил
+     единственное действие экрана за край окна (замер дизайна §2.4). */
+  function drawDisciplines(data) {
+    var section = $("disciplines-section");
+    var box = $("disciplines-box");
+    var names = (data.disciplines || []).map(function (item) { return item.name; });
+    var warnings = data.warnings || [];
+    box.textContent = "";
+    if (!names.length && !warnings.length) { section.hidden = true; return; }
+    section.hidden = false;
+    if (warnings.length) {
+      box.appendChild(make("p", "ui-small ui-alert ui-alert--warn", warnings[0].text));
+      return;
+    }
+    box.appendChild(make("p", "ui-small", "Вы ведёте: " + names.join(", ")));
+  }
+
   async function load() {
     var result = await api("/webapp/profile");
     if (result.status === 401) {
@@ -152,6 +175,7 @@ _SCRIPT_PROFILE = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BA
     }
     projects = result.body.projects || [];
     render(result.body.profile || {});
+    drawDisciplines(result.body);
   }
 
   $("add-role").addEventListener("click", function () { addRole(null); });
