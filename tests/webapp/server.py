@@ -213,13 +213,6 @@ def _data(payload: dict):
     return handler
 
 
-app.add_api_route("/webapp/profile", _data({
-    "ok": True,
-    "profile": {"name": "Тестовый Участник", "short_aliases": ["тест"],
-                "ai_manifest": "", "travel_minutes": 60, "roles": ["troupe"]},
-    "projects": [],
-}), methods=["GET"])
-
 app.add_api_route("/webapp/categories", _data({
     "ok": True,
     "categories": sorted(CATEGORIES["income"] + CATEGORIES["expense"]),
@@ -379,6 +372,12 @@ def reset_events() -> dict:
     SHEET_LOADED.clear()
     FOLDER_ORDER_CALLS.clear()
     LINK_CALLS.clear()
+    # Дисциплины и роли V-037: состояние и журналы тел запросов — к исходному.
+    DISCIPLINES_STATE.clear()
+    ROLES_STATE.clear()
+    ROLES_STATE.update({1: ["admin"], 2: ["troupe"], 30: ["troupe"]})
+    GRANT_EVENTS.clear()
+    DISCIPLINE_EVENTS.clear()
     return {"ok": True}
 
 
@@ -405,6 +404,8 @@ def slots_people(request: Request) -> JSONResponse:
         "ok": True,
         "people": [{"id": 30, "display_name": "Тестовый Участник", "self": True},
                    {"id": 31, "display_name": "Второй Участник", "self": False}],
+        "my_disciplines": _disciplines_of(30),
+        "warnings": _warnings_of(30, "self"),
     })
 
 
@@ -884,6 +885,173 @@ async def _admin_overview(request: Request) -> JSONResponse:
 
 
 app.add_api_route("/webapp/admin/overview", _admin_overview, methods=["GET"])
+
+
+# ------------------------------------------------ V-037: дисциплины и роли педагога
+# Стенд знает те же четыре дисциплины и в том же порядке, что `db/init/029`, и
+# отвечает по правилам `api/admin.py` после V-037: роль педагога выдаётся без
+# дисциплины, а состояние «нет дисциплины» приходит предупреждением (`warnings`).
+# Журналы тел запросов нужны браузерному сценарию: он доказывает форму — что
+# нарисовано и что ушло на сервер (карта t_6e49e144).
+DISCIPLINE_CATALOGUE = [
+    {"code": "acting", "name": "Актёрское мастерство"},
+    {"code": "music", "name": "Музыка"},
+    {"code": "dance", "name": "Танец"},
+    {"code": "speech", "name": "Сценическая речь"},
+]
+
+#: Кто какие коды ведёт и какие роли у людей. Сценарий меняет их запросами.
+DISCIPLINES_STATE: dict[int, list[str]] = {}
+ROLES_STATE: dict[int, list[str]] = {1: ["admin"], 2: ["troupe"], 30: ["troupe"]}
+GRANT_EVENTS: list[dict] = []
+DISCIPLINE_EVENTS: list[dict] = []
+
+#: Тексты предупреждения стенда — те же, что `core.DISCIPLINE_WARNING_TEXTS`:
+#: форма ответа одна, иначе браузерный тест был бы зелёным на словах, которых
+#: сервер не производит.
+WARNING_TEXTS = {
+    "admin": "У педагога нет дисциплины: назначить тренинг он не сможет, "
+             "пока не выберете.",
+    "self": "Дисциплина не выбрана: назначить тренинг не получится. "
+            "Поменять её может администратор.",
+}
+
+MANAGE_FORBIDDEN = {"code": "participants_manage_forbidden",
+                    "detail": "Роли и дисциплины педагога меняет администратор."}
+
+
+def _role_of(request: Request) -> str:
+    return (request.headers.get(ROLE_HEADER) or "admin").strip().lower()
+
+
+def _disciplines_of(participant_id: int) -> list[dict]:
+    """Дисциплины человека в порядке справочника (`sort_order`), а не вставки."""
+    codes = DISCIPLINES_STATE.get(participant_id, [])
+    return [dict(item) for item in DISCIPLINE_CATALOGUE if item["code"] in codes]
+
+
+def _warnings_of(participant_id: int, audience: str) -> list[dict]:
+    roles = ROLES_STATE.get(participant_id, [])
+    if "master" not in roles or DISCIPLINES_STATE.get(participant_id):
+        return []
+    return [{"code": "master_without_discipline", "text": WARNING_TEXTS[audience]}]
+
+
+@app.get("/webapp/form-data")
+def stand_form_data(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    return JSONResponse({"ok": True, "disciplines": DISCIPLINE_CATALOGUE,
+                         "my_disciplines": _disciplines_of(30)})
+
+
+@app.get("/webapp/profile")
+def stand_profile(request: Request) -> JSONResponse:
+    """Анкета: у мастера — свои дисциплины и предупреждение, у остальных пусто."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    role = _role_of(request)
+    roles = list(ROLES_STATE.get(30, [role]))
+    if role in ("master", "admin", "org", "troupe") and role not in roles:
+        roles.append(role)
+    disciplines = _disciplines_of(30)
+    return JSONResponse({
+        "ok": True,
+        "profile": {"name": "Тестовый Участник", "short_aliases": ["тест"],
+                    "ai_manifest": "", "travel_minutes": 60, "roles": ["troupe"]},
+        "projects": [],
+        "disciplines": disciplines,
+        "warnings": [] if "master" not in roles else _warnings_of(30, "self"),
+    })
+
+
+@app.post("/webapp/admin/discipline")
+async def stand_admin_discipline(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _role_of(request) != "admin":
+        return JSONResponse(MANAGE_FORBIDDEN, status_code=403)
+    body = await request.json()
+    DISCIPLINE_EVENTS.append(body)
+    try:
+        participant_id = int(body["participant_id"])
+    except (KeyError, TypeError, ValueError):
+        return JSONResponse({"detail": "validation_failed"}, status_code=422)
+    code = body.get("discipline")
+    if code not in {item["code"] for item in DISCIPLINE_CATALOGUE}:
+        return JSONResponse({"detail": "unknown_discipline"}, status_code=400)
+    current = DISCIPLINES_STATE.setdefault(participant_id, [])
+    if body.get("enabled", True):
+        if code not in current:
+            current.append(code)
+    elif code in current:
+        current.remove(code)
+    disciplines = _disciplines_of(participant_id)
+    return JSONResponse({"ok": True, "participant_id": participant_id,
+                         "disciplines": disciplines,
+                         "warnings": _warnings_of(participant_id, "admin")})
+
+
+@app.post("/webapp/admin/grant")
+async def stand_admin_grant(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _role_of(request) != "admin":
+        return JSONResponse(MANAGE_FORBIDDEN, status_code=403)
+    body = await request.json()
+    GRANT_EVENTS.append(body)
+    participant_id = int(body["participant_id"])
+    roles = ROLES_STATE.setdefault(participant_id, ["troupe"])
+    role = body.get("role")
+    if role and body.get("enabled", True):
+        if role not in roles:
+            roles.append(role)
+        for code in body.get("disciplines") or []:
+            current = DISCIPLINES_STATE.setdefault(participant_id, [])
+            if code not in current:
+                current.append(code)
+    elif role and role in roles:
+        roles.remove(role)
+    return JSONResponse({"ok": True, "roles": list(roles), "capabilities": [],
+                         "warnings": _warnings_of(participant_id, "admin")})
+
+
+def _person_card_payload(participant_id: int) -> dict:
+    """Карточка человека на стенде: те же ключи, что `core._person_card`."""
+    known = {person["id"]: person for person in ADMIN_OVERVIEW["blocks"]["people"]["data"]}
+    person = known.get(participant_id, {"display_name": "Тестовый Участник"})
+    return {
+        "id": participant_id,
+        "display_name": person.get("display_name"),
+        "roles": list(ROLES_STATE.get(participant_id, ["troupe"])),
+        "status": person.get("status", "active"),
+        "disciplines": _disciplines_of(participant_id),
+        "warnings": _warnings_of(participant_id, "admin"),
+        "phone": "+7 900 000-00-00",
+        "tariff": {"tariff": 5000},
+    }
+
+
+@app.api_route("/webapp/admin/person", methods=["GET", "POST"])
+async def stand_admin_person(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    # У труппы нет `participants.view`: карточку она не открывает (как в бою).
+    if _role_of(request) == "troupe":
+        return JSONResponse({"detail": "capability required: participants.view"},
+                            status_code=403)
+    if request.method == "POST":
+        body = await request.json()
+    else:
+        body = {"participant_id": request.query_params.get("participant_id")}
+    raw = body.get("participant_id")
+    participant_id = int(raw) if raw not in (None, "") else 2
+    return JSONResponse({"ok": True, "data": _person_card_payload(participant_id)})
 
 
 # Очередь обращений: право `feedback.triage` есть только у администратора (V-005:

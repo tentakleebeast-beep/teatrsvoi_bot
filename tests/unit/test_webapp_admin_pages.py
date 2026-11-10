@@ -15,6 +15,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
 from app.pages import admin  # noqa: E402
+from app.pages.admin_disciplines import DISCIPLINES_SCRIPT  # noqa: E402
 
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]")
 
@@ -275,3 +276,48 @@ def test_аудит_без_права_говорит_нет_доступа_а_н
     assert "ERRORS.admin_panel_forbidden" in html, "слова не из общего словаря ядра"
     assert html.index('indexOf("audit")') < html.index("var audit = BLOCKS.audit"), \
         "проверка права стоит после чтения журнала — пустое состояние успеет отрисоваться"
+
+
+# ------------------------------------------- V-037: дисциплины педагога (карта t_6e49e144)
+def test_лист_дисциплин_это_список_а_не_тумблеры():
+    """D2-D3 дизайна V-037: отмеченное строками, остальное — выпадающим списком.
+
+    Четыре строки-тумблера заменены: каждое действие пишет сразу и не закрывает
+    лист (`closeSheet` в `setDiscipline` нет), поле выбора исчезает, когда
+    добавлять нечего.
+    """
+    assert "ui-select" in DISCIPLINES_SCRIPT
+    assert "discipline-add" in admin.PEOPLE_PAGE, "кнопки добавления нет на экране"
+    assert "discipline-add" in DISCIPLINES_SCRIPT
+    assert "Добавить ещё" in DISCIPLINES_SCRIPT
+    assert "Все дисциплины отмечены" in DISCIPLINES_SCRIPT
+    assert "issue.disabled = true" not in DISCIPLINES_SCRIPT, "кнопка выдачи блокируется"
+    assert "Педагогу нужна хотя бы одна" not in DISCIPLINES_SCRIPT
+    # Лист не закрывается после отметки: закрытие — только кнопкой внизу
+    body = DISCIPLINES_SCRIPT.split("function setDiscipline", 1)[1].split("loadCatalogue", 1)[0]
+    assert "closeSheet" not in body, "действие закрывает лист"
+
+
+def test_отказ_по_правам_людей_сказан_словами():
+    """Б3 (docs/development/141 §4.2): отказ без права — словами, а не «не хватает прав».
+
+    `master_discipline_required` больше не возвращается ни одним путём (D1),
+    поэтому его текста в словаре экрана тоже нет. Словарь `ERRORS` живёт в JS ядра,
+    поэтому проверяется отрисованная страница (`admin_core.ERRORS` — не переменная
+    Python).
+    """
+    html = admin.PEOPLE_PAGE
+    assert '"participants_manage_forbidden": "Роли и дисциплины педагога меняет ' \
+           'администратор."' in html
+    assert '"master_discipline_required":' not in html
+    assert '"master_without_discipline":' not in html, \
+        "предупреждение — не ошибка: текст приходит с сервера"
+
+
+def test_карточка_рисует_предупреждение_из_ответа():
+    """D3: текст предупреждения приходит с сервера, своих слов в JS нет."""
+    html = admin.PEOPLE_PAGE
+    assert "card.warnings" in html
+    assert "ui-alert--warn" in html
+    assert "тренинг назначить не сможет" not in html, "текст предупреждения вписан в JS"
+    assert "нет ни одной" in html, "поле «Дисциплины» в карточке пропало"

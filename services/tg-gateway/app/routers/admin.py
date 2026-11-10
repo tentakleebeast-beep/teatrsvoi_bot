@@ -322,8 +322,8 @@ async def panel_person_roles(cb: CallbackQuery) -> None:
     rows = [[(f"{'✓ ' if role in current else '· '}{texts.ROLE_TITLES.get(role, role)}",
               f"panel:role:{participant_id}:{role}:{0 if role in current else 1}")]
             for role in ("admin", "org", "troupe")]
-    # Педагог выдаётся только с дисциплиной, поэтому ведёт не прямое переключение,
-    # а экран дисциплин: роль без дисциплины сервер всё равно отклонит (140 §2.2).
+    # Педагог ведёт не прямое переключение, а экран дисциплин: там выбирают
+    # предметы. Без них роль тоже выдаётся — с предупреждением (V-037).
     rows.append([(f"{'✓ ' if 'master' in current else '· '}{texts.ROLE_TITLES['master']}",
                   f"panel:mroles:{participant_id}")])
     await cb.message.edit_text(
@@ -369,9 +369,10 @@ async def _card_of(cb: CallbackQuery, participant_id: int) -> dict | None:
 async def panel_person_master(cb: CallbackQuery) -> None:
     """Дисциплины педагога: отметить предмет, выдать или снять роль (140 §4.1–4.3).
 
-    Кнопка «Педагог» ведёт сюда, а не прямо в выдачу роли: у роли нет смысла без
-    дисциплины, и сервер отклонил бы выдачу без неё (`master_discipline_required`).
-    Здесь же снимается предметная связь — роль при этом не отзывается (140 §1).
+    Кнопка «Педагог» ведёт сюда: дисциплину можно отметить до выдачи роли, но роль
+    выдаётся и без неё — сервер отвечает предупреждением `master_without_discipline`
+    (V-037, 08.11.2026). Здесь же снимается предметная связь — роль при этом не
+    отзывается (140 §1).
     """
     participant_id = _pid_of(cb.data)
     if participant_id is None:
@@ -387,7 +388,7 @@ async def panel_person_master(cb: CallbackQuery) -> None:
     rows = [[(f"{'✓ ' if item['code'] in have else '· '}{texts._fit(item['name'], 28)}",
               f"panel:mrel:{participant_id}:{item['code']}:{0 if item['code'] in have else 1}")]
             for item in catalog.get("disciplines", [])]
-    if have and not is_master:
+    if not is_master:
         rows.append([("Выдать роль педагога", f"panel:mgrant:{participant_id}")])
     if is_master:
         rows.append([("Снять роль педагога",
@@ -395,7 +396,7 @@ async def panel_person_master(cb: CallbackQuery) -> None:
     lines = [f"{card.get('display_name')}: дисциплины педагога. "
              "Нажатие отмечает или снимает предмет.", ""]
     lines.append("Отмечено: " + ", ".join(have.values()) if have
-                 else "Дисциплин нет: без них роль педагога не выдаётся.")
+                 else "Дисциплин нет: тренинг назначить не сможет.")
     await cb.message.edit_text(
         "\n".join(lines), parse_mode=None,
         reply_markup=keyboards.kb(rows + [[("К ролям", f"panel:proles:{participant_id}")],
@@ -415,11 +416,15 @@ async def panel_person_master_link(cb: CallbackQuery) -> None:
                          {"participant_id": int(participant_id), "discipline": code,
                           "enabled": flag == "1"}, cb.message.chat.id)
     if not res.get("ok"):
-        # 409 master_without_discipline приходит здесь: последнюю дисциплину у
-        # педагога снять нельзя — человек видит причину, а данные не меняются.
         await cb.answer("Не удалось: " + errors.error_text(res), show_alert=True)
         return
-    await cb.answer("Дисциплина отмечена" if flag == "1" else "Дисциплина снята")
+    # После снятия последней дисциплины сервер отвечает предупреждением, а не
+    # отказом: человек видит последствие словами (V-037, D2).
+    warnings = res.get("warnings") or []
+    if warnings:
+        await cb.answer(warnings[0].get("text") or "Дисциплина снята", show_alert=True)
+    else:
+        await cb.answer("Дисциплина отмечена" if flag == "1" else "Дисциплина снята")
     await panel_person_master(cb)
 
 
@@ -435,16 +440,20 @@ async def panel_person_master_grant(cb: CallbackQuery) -> None:
         await cb.answer("Карточка недоступна", show_alert=True)
         return
     codes = [item["code"] for item in (card.get("disciplines") or [])]
-    if not codes:
-        await cb.answer("Сначала отметьте дисциплину", show_alert=True)
-        return
-    res = await core.api("/admin/grant",
-                         {"participant_id": participant_id, "role": "master",
-                          "enabled": True, "disciplines": codes}, cb.message.chat.id)
+    payload = {"participant_id": participant_id, "role": "master", "enabled": True}
+    # Дисциплины необязательны: роль выдаётся и без них, ответ несёт предупреждение
+    if codes:
+        payload["disciplines"] = codes
+    res = await core.api("/admin/grant", payload, cb.message.chat.id)
     if not res.get("ok"):
         await cb.answer("Не удалось: " + errors.error_text(res), show_alert=True)
         return
-    await cb.answer("Роль педагога выдана")
+    warnings = res.get("warnings") or []
+    if warnings:
+        await cb.answer("Роль педагога выдана. "
+                        + (warnings[0].get("text") or ""), show_alert=True)
+    else:
+        await cb.answer("Роль педагога выдана")
     await panel_person_roles(cb)
 
 
