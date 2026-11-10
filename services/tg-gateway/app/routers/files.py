@@ -558,9 +558,11 @@ async def cmd_zip(message: Message) -> None:
                              "повторите через минуту.")
         return
     if len(data) > parsers.FILES_IN_CHAT_LIMIT:
+        # V-052 (а): архива в Mini App больше нет — там можно забрать только
+        # отдельные файлы, поэтому «откройте архив в Mini App» стало бы ложью.
         pages = webapp_base_url(WEBAPP_BASE_URL)
-        hint = (f"Откройте Mini App: {pages}/webapp/folder?id={folder_id}"
-                if pages else "Скачайте архив в Mini App — целиком в чат он не влезает.")
+        hint = (f"Качайте по файлам в Mini App: {pages}/webapp/folder?id={folder_id}"
+                if pages else "Качайте по файлам в Mini App — целиком в чат он не влезает.")
         await message.answer(f"Архив {parsers.human_size(len(data))} — в чат столько не влезет.\n{hint}")
         return
     await message.answer_document(

@@ -5,7 +5,8 @@
 (`docs/development/150` §1). Здесь проверяется то, что видно без базы и браузера:
 
 * экран собран тем же каркасом, что остальные, и не тащит свой файл стилей;
-* адрес данных — `GET /webapp/files/{id}/view`, скачивания (тема Б) в экране нет;
+* адрес данных — `GET /webapp/files/{id}/view`; «Скачать» берёт отдельную ссылку
+  `GET /webapp/files/{id}/link` (Б2, V-053 а) и открывает её браузером;
 * отказы 403/404/410 написаны словами из спецификации, без сырых кодов;
 * истёкшая ссылка повторяется ровно один раз, «Открыть в браузере» берёт свежую;
 * 5xx и обрыв не заводят своей кнопки «Повторить» — это делает оболочка (V-047 а);
@@ -45,10 +46,11 @@ def test_нет_эмодзи_и_таблиц():
     assert "<table" not in PAGE
 
 
-def test_данные_берутся_из_view_а_скачивания_в_экране_нет():
-    """`/view` отдаёт ссылку и вид; `/link` — тема Б и сюда не входит (§3.2)."""
+def test_данные_из_view_а_скачивание_берёт_отдельную_ссылку():
+    """`/view` даёт ссылку и вид; «Скачать» зовёт `/link` (Б2, §5, V-053 а)."""
     assert 'api("/webapp/files/" + fileId + "/view")' in PAGE
-    assert "/link" not in PAGE, "экран сам зовёт скачивание — это отдельная карта"
+    assert 'api("/webapp/files/" + fileId + "/link")' in PAGE
+    assert "tg.openLink(res.body.url)" in PAGE
     assert "object_key" not in PAGE, "ключ объекта наружу не отдаётся"
 
 
@@ -58,8 +60,10 @@ def test_отказы_написаны_словами_из_спецификац�
     assert "Файл не найден. Возможно, его удалили." in PAGE
     assert "Файл не найден ни в хранилище, ни в архиве." in PAGE
     assert "К файлам" in PAGE and 'href="/webapp/files"' in PAGE
+    # Сырой код живёт только в условии ветки: в текст человека он не попадает (Б2 §6).
     for raw in ("file_not_found", "file_cold_missing", "file_not_uploaded"):
-        assert raw not in PAGE, f"на экране сырой код {raw}"
+        assert not re.search(rf'showNote\("[^"]*{raw}', PAGE), \
+            f"на экран печатается сырой код {raw}"
 
 
 def test_без_номера_файла_экран_не_тупик():
@@ -76,9 +80,9 @@ def test_виды_ведут_себя_по_таблице():
     assert "Документ откроется в браузере телефона" in PAGE
     assert "Текст откроется в браузере телефона" in PAGE
     assert "Файл откроется в браузере телефона" in PAGE
-    # У звука нет «Открыть в браузере»: единственное действие — плеер.
+    # У звука нет «Открыть в браузере»: плеер и «Скачать» (Б2 §5).
     audio = PAGE[PAGE.index("function showAudio("):PAGE.index("function showCard(")]
-    assert "setActions([])" in audio and "Открыть в браузере" not in audio
+    assert "setActions([downloadButton()])" in audio and "Открыть в браузере" not in audio
 
 
 def test_текст_внутри_mini_app_не_читается():

@@ -74,9 +74,9 @@ def test_данные_файлов_закрыты_правом_files_access():
     assert '"admin.panel"' not in MAIN, "файлы снова закрыты админ-панелью"
     for endpoint in ("webapp_files_list", "webapp_files_presign", "webapp_files_commit",
                      "webapp_file_delete",
-                     "webapp_folder_files", "webapp_folder_order", "webapp_folder_zip"):
+                     "webapp_folder_files", "webapp_folder_order", "webapp_file_link"):
         start = MAIN.index(f"def {endpoint}(")
-        block = MAIN[start:start + 1200]
+        block = MAIN[start:start + 2000]
         assert 'files.access' in block, f"{endpoint} без проверки прав"
 
 
@@ -108,9 +108,10 @@ def test_удаление_файла_кнопкой_с_подтверждени�
     assert 'if (res.status === 403)' in page, "без права экран не рисует список"
 
 
-def test_папка_играет_подряд_и_качает_архив():
+def test_папка_играет_подряд_и_скачивает_один_файл():
+    """Б2 (V-052/V-053): строка папки отдаёт один файл, архива в Mini App нет."""
     page = files.FOLDER_PAGE
-    assert "/webapp/folder/" in page and "/zip" in page
+    assert "/webapp/folder/" in page
     assert "addEventListener(\"ended\"" in page, "треки должны идти подряд"
     # Плеер создаётся скриптом, когда в папке есть звук: папка из одних pdf не
     # должна заводить ни кнопки, ни элемента `<audio>` (А3 §6.1–6.2).
@@ -118,6 +119,37 @@ def test_папка_играет_подряд_и_качает_архив():
     assert 'id="player-slot"' in page, "нет контейнера, куда скрипт ставит плеер"
     assert 'document.createElement("audio")' in page
     assert 'toggle($("play-all"), hasAudio)' in page
+
+    # Кнопка «Скачать» в каждой строке: 44×44, SVG вместо U+2B07, свежая ссылка.
+    assert 'setAttribute("aria-label", "Скачать")' in page
+    assert 'ui-btn ui-btn--sm ui-btn--icon' in page
+    assert "<svg" in page and 'aria-hidden="true"' in page
+    assert "downloadOne(track)" in page
+    assert '"/webapp/files/" + track.id + "/link"' in page
+    assert "tg.openLink" in page
+
+    # Архива нет: ни кнопки, ни функции, ни blob-пути, который даёт чёрный экран.
+    assert 'id="zip"' not in page
+    assert "Скачать архивом" not in page
+    assert "function download()" not in page
+    assert "createObjectURL" not in page
+    assert "a.click()" not in page
+
+
+def test_кнопка_скачать_на_экране_файла():
+    """Б2 §5: вторая кнопка «Скачать» на всех четырёх состояниях экрана файла."""
+    page = files.FILE_PAGE
+    assert "Скачать" in page
+    assert '"/webapp/files/" + fileId + "/link"' in page
+    assert "function downloadFile()" in page
+    assert "tg.openLink" in page
+    # Ни байтов через fetch, ни blob: — это путь чёрного экрана (151 §2.3–2.4).
+    assert "createObjectURL" not in page
+    assert "a.click()" not in page
+    # Кнопка есть в картинке, звуке и карточке документа; главной остаётся просмотр.
+    assert 'setActions([action("Открыть в браузере", false, openInBrowser), downloadButton()])' in page
+    assert 'setActions([downloadButton()])' in page
+    assert 'setActions([action("Открыть в браузере", true, openInBrowser), downloadButton()])' in page
 
 
 def test_строка_списка_открывает_файл_а_не_молчит():
