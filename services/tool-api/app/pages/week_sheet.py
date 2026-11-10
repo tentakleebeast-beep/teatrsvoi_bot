@@ -135,6 +135,10 @@ _SCRIPT_WEEK_SHEET = r"""
       row.querySelector(".ui-day__state").textContent = stateWord(day);
       var meta = hours(day);
       if (day.note) { meta = meta ? meta + " · " + day.note : day.note; }
+      /* Отдельной кнопки отметки больше нет: пустая вторая строка сегодняшнего дня
+         говорит, что строка нажимается (V-048 пересмотр, док. 149 D11). Подсказка
+         занимает только пустое место — часы и комментарий она не вытесняет. */
+      if (!meta && !day.marked && day.day === today) { meta = "нажмите, чтобы отметить"; }
       row.querySelector(".ui-row__meta").textContent = meta;
       row.setAttribute("data-state",
         !day.marked ? "empty" : (day.status || "busy"));

@@ -153,7 +153,6 @@ _SCRIPT_WEEK_TEMPLATE = r"""
 
   $("prev-week").onclick = function () { load(shiftWeek(start || todayIso(), -1)); };
   $("next-week").onclick = function () { load(shiftWeek(start || todayIso(), 1)); };
-  $("mark-today").onclick = markToday;
   $("save-template").onclick = rememberWeek;
   $("fill-template").onclick = fillTemplate;
   $("clear-week").onclick = function () {
