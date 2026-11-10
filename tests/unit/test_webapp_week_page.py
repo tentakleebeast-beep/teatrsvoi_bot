@@ -180,9 +180,13 @@ def test_fr_h9_отказ_на_сводке_назван_а_не_списан_н
     assert html.count("Проверьте сеть и повторите") == 1
 
     week_html = week.WEEK_PAGE
-    assert '"/webapp/nav"' in week_html, "неделя не спрашивает права у сервера"
-    assert 'var row = $("to-summary")' in week_html, "строка сводки не скрывается"
-    assert "schedule.read.all" in week_html
+    # Строку «Сводка занятости» прячет оболочка по `data-svoi-cap` (карта
+    # t_f279a0eb): своего запроса прав на неделе больше нет — иначе признак прав
+    # приходил двумя ответами, и строка исчезала уже после снятия скелета.
+    assert 'id="to-summary"' in week_html, "строки сводки нет в разметке"
+    assert 'data-svoi-cap="schedule.read.all"' in week_html, "строка не помечена правом"
+    assert 'api("/webapp/nav")' not in week_html and 'fetch("/webapp/nav")' not in week_html, \
+        "неделя снова спрашивает права сама"
 
 
 def test_сетка_месяца_только_читается() -> None:

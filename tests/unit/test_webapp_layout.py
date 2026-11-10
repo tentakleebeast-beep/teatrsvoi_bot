@@ -40,12 +40,13 @@ def test_щипок_включён_только_у_экрана_с_флагом_
     assert "maximum-scale=5" in zoomed and "user-scalable=yes" in zoomed
     assert "maximum-scale=1" not in zoomed and "user-scalable=no" not in zoomed
     assert "viewport-fit=cover" in zoomed
-    assert zoomed.split("\n", 1)[1].startswith('<html lang="ru" data-svoi-zoom="1">')
+    assert zoomed.split("\n", 1)[1].startswith(
+        '<html lang="ru" data-svoi-zoom="1" data-svoi-rights="pending">')
 
     plain = layout.page("Деньги", "", tab="money", caps=[])
     assert plain.count('name="viewport"') == 1
     assert "maximum-scale=1, user-scalable=no, viewport-fit=cover" in plain
-    assert '<html lang="ru">' in plain
+    assert '<html lang="ru" data-svoi-rights="pending">' in plain
     assert "data-svoi-zoom" not in plain
 
     # Экран файла в продукте получает флаг: иначе щипок не включится нигде.

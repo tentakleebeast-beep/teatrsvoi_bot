@@ -511,10 +511,35 @@ app.add_api_route("/webapp/admin/agent", _data({
 
 @app.get("/webapp/nav")
 def nav(request: Request) -> JSONResponse:
-    """Признаки оболочки по правам: подпись вкладки, строка сводки, кнопка сверки."""
+    """Признаки оболочки по правам: подпись вкладки, строка сводки, кнопка сверки, возможности.
+
+    `caps` добавлены картой t_f279a0eb: оболочка прячет по ним элементы с
+    `data-svoi-cap`, и без этого ключа браузерный тест не видел ни одного скрытия —
+    стенд отвечал «всё можно» любой роли. Список берётся из той же матрицы, что
+    отдаёт «Управление → Права» (`ADMIN_OVERVIEW.blocks.rights.matrix`), чтобы два
+    набора прав в стенде не разъезжались; роль без заголовка — сервисный токен
+    (`*`, видит всё), как и было до карты.
+
+    `screens` стенд намеренно не отдаёт: оболочка по нему уводит на «Главную», а
+    тесты открывают ролью без права экран, чтобы проверить отказ самого экрана
+    (`/webapp/broadcast`, `/webapp/person` и другие).
+    """
     participant = _is_participant(request)
     return JSONResponse({"ok": True, "staff": not participant,
-                         "summary": not participant, "reconcile": not participant})
+                         "summary": not participant, "reconcile": not participant,
+                         "caps": _caps_of(request)})
+
+
+def _caps_of(request: Request) -> list[str]:
+    """Возможности роли стенда: из матрицы прав, а не отдельным списком."""
+    role = (request.headers.get(ROLE_HEADER) or "").strip().lower()
+    if role not in {"admin", "org", "master", "troupe", "participant"}:
+        return ["*"]
+    wanted = "troupe" if role == "participant" else role
+    for row in ADMIN_OVERVIEW["blocks"]["rights"]["matrix"]:
+        if row["role"] == wanted:
+            return list(row["caps"])
+    return []
 
 app.add_api_route("/webapp/home/data", _data({
     "ok": True, "name": "Тестовый Админ", "role": "admin", "role_label": "администратор",

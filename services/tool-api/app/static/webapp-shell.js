@@ -302,7 +302,10 @@
     if (!Object.keys(failed).length) hide();
   }
 
-  function banner() {
+  /* `message` и `onRetry` — для тех, кто знает причину точнее сети: проверка прав
+     (`screenRights` ниже) говорит, что не приехало, и повторяет свой запрос, а не
+     перезагружает экран. Без аргументов — прежнее поведение обрыва. */
+  function banner(message, onRetry) {
     if (shown) return;
     shown = true;
     var box = document.createElement("div");
@@ -313,12 +316,16 @@
       "-apple-system,system-ui,sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.25);display:flex;" +
       "gap:10px;align-items:center;justify-content:space-between";
     var text = document.createElement("span");
-    text.textContent = MESSAGE;
+    text.textContent = message || MESSAGE;
     var retry = document.createElement("button");
     retry.textContent = "Повторить";
     retry.style.cssText = "border:0;border-radius:9px;padding:8px 12px;background:#fff;" +
       "color:#c0392b;font:inherit;font-weight:600";
-    retry.onclick = function () { location.reload(); };
+    retry.onclick = function () {
+      // Повтор по причине снимает сообщение сам: иначе второй отказ не покажет
+      // ничего (флаг `shown` уже стоит) — и человек останется без объяснения.
+      if (onRetry) { hide(); onRetry(); } else { location.reload(); }
+    };
     box.appendChild(text);
     box.appendChild(retry);
     document.body.appendChild(box);
@@ -328,6 +335,13 @@
     var box = document.getElementById("net-error");
     if (box) box.remove();
     shown = false;
+  }
+
+  // Один механизм сообщения об отказе на весь Mini App: им пользуется и проверка
+  // прав, когда `/webapp/nav` не ответил (свой текст и свой повтор).
+  if (window.SVOI) {
+    window.SVOI.netBanner = function (message, onRetry) { banner(message, onRetry); };
+    window.SVOI.netHide = hide;
   }
 
   var original = window.fetch.bind(window);
@@ -524,52 +538,61 @@
 })();
 
 
-/* Подпись четвёртой вкладки. Страница — публичная константа, поэтому «Управление»
-   вместо «Ещё» доезжает отдельным запросом уже после обмена initData на токен
-   (docs/architecture/11 §9: данные закрыты на сервере, здесь только слово).
-   Оболочка подключена в <head> и выполняется раньше <body>: без ожидания DOM
-   ссылки вкладки ещё нет, `link` пуст, и вкладка навсегда остаётся «Ещё»
-   (найдено 04.11.2026: подпись не приезжала никому, включая администратора). */
-(function navLabel() {
-  function start() {
-    var appTg = window.Telegram && window.Telegram.WebApp;
-    // Только вкладка: `a[href="/webapp/more"]` без области цепляет ещё и «‹» в шапке
-    // вложенного экрана — её ссылка ведёт туда же, и подпись перетирала стрелку
-    // («авлениеАудит» в шапке, 08.11.2026).
-    var link = document.querySelector('.ui-tabbar a[href="/webapp/more"]');
-    if (!appTg || !link) { return; }
-    function relabel() {
-      fetch("/webapp/nav").then(function (r) { return r.json(); }).then(function (body) {
-        if (body && body.ok && body.staff) { link.textContent = "Управление"; }
-      }).catch(function () { /* остаётся личная вкладка «Ещё» */ });
-    }
-    relabel();
-  }
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
-  }
-})();
-
-
 /* Права на экран и на действие: решает сервер, оболочка только исполняет.
    Правило владельца 08.11.2026 — «не показываем вход туда, куда действие
    недоступно». Плитки хаба отбирает `sections_for()`, а прямой адрес экрана и
    кнопки внутри него открывались всем: страница — публичная константа, и право
    всплывало отказом 403 после нажатия.
 
-   `/webapp/nav` отдаёт два признака: `screens` — можно ли открыть этот адрес, и
-   `caps` — возможности человека. Первый уводит с чужого экрана на «Главную»
-   (там всё уже отобрано по правам), второй прячет элементы, помеченные
-   `data-svoi-cap` (кнопка, строка, ссылка). Ничего не решаем на странице: без
-   ответа сервера не прячем и не уводим — сломанный nav не должен отнимать
-   у человека его же экран (так же решены строка сводки и кнопка сверки). */
+   `/webapp/nav` отдаёт три признака: `screens` — можно ли открыть этот адрес,
+   `caps` — возможности человека, `staff` — подпись четвёртой вкладки. Первый
+   уводит с чужого экрана на «Главную» (там всё уже отобрано по правам), второй
+   прячет элементы, помеченные `data-svoi-cap` (кнопка, строка, ссылка), третий
+   заменяет «Ещё» на «Управление».
+
+   Запрос один на всю страницу и состояние загрузки одно (карта t_f279a0eb).
+   До его ответа `<html>` несёт `data-svoi-rights="pending"` (его ставит
+   `layout.page`): по этой пометке CSS держит помеченные `data-svoi-cap` элементы
+   скелетом того же вида, что полосы на Главной, — поэтому кнопка не появляется
+   готовой и не исчезает через долю секунды. Ответ переводит признак в `ready`
+   ровно один раз и только после того, как лишние элементы уже скрыты: кадра, где
+   кнопка видна, а права уже применены, не бывает. Отказ — `error`: скелет не
+   вечный, элементы остаются как в разметке (право всё равно проверит сервер на
+   вызове), а сообщение и повтор даёт баннер сети — тот же, что при обрыве.
+
+   До карты nav спрашивали два независимых скрипта (подпись вкладки и права), и
+   страница ходила в один адрес дважды; теперь ответ один на всех потребителей —
+   `window.SVOI.nav()`. */
 (function screenRights() {
+  var PENDING = "pending";
+  var READY = "ready";
+  var FAILED = "error";
+  // Текст отказа: называет причину, а не «сайт недоступен» при живом сайте.
+  var FAIL_TEXT = "Не удалось проверить права. Кнопки могут оказаться недоступны.";
+  var promise = null;
+
   function path() {
     var value = location.pathname || "";
     return value.length > 1 && value.charAt(value.length - 1) === "/"
       ? value.slice(0, -1) : value;
+  }
+
+  // Признак живёт на <html>: CSS читает его на первом кадре, до любого скрипта
+  // страницы. `documentElement` берём в момент вызова — оболочка подключена в
+  // <head>, и на момент её вычисления дерево ещё может быть неполным.
+  function state(status) {
+    document.documentElement.setAttribute("data-svoi-rights", status);
+  }
+
+  /* Подпись четвёртой вкладки: страница — публичная константа, поэтому
+     «Управление» вместо «Ещё» приезжает этим же ответом (docs/architecture/11 §9).
+     Только вкладка: `a[href="/webapp/more"]` без области цепляет ещё и «‹» в шапке
+     вложенного экрана — её ссылка ведёт туда же, и подпись перетирала стрелку
+     («авлениеАудит» в шапке, 08.11.2026). */
+  function relabelTab(staff) {
+    if (!staff) { return; }
+    var link = document.querySelector('.ui-tabbar a[href="/webapp/more"]');
+    if (link) { link.textContent = "Управление"; }
   }
 
   /* Чужие вкладки не показываем: у педагога нет денег, у студийца — управления.
@@ -606,24 +629,65 @@
     }
   }
 
-  function start() {
-    var appTg = window.Telegram && window.Telegram.WebApp;
-    if (!appTg && !(window.SVOI && window.SVOI.token)) { return; }
-    fetch("/webapp/nav").then(function (r) { return r.json(); }).then(function (body) {
-      if (!body || body.ok !== true) { return; }
-      var here = path();
-      if (body.screens && body.screens[here] === false) {
-        location.replace("/webapp/home");
-        return;
-      }
-      hideDeniedScreens(body.screens);
-      hideByCaps(body.caps);
-    }).catch(function () { /* nav не ответил — ничего не прячем */ });
+  function apply(body) {
+    var here = path();
+    if (body.screens && body.screens[here] === false) {
+      // Чужой экран: уводим на Главную. Признак загрузки не снимаем — страница
+      // уезжает, и кадр с кнопками на чужом экране человеку не нужен.
+      location.replace("/webapp/home");
+      return;
+    }
+    hideDeniedScreens(body.screens);
+    hideByCaps(body.caps);
+    relabelTab(body.staff);
+    state(READY);   // именно после меток: кадра с лишней кнопкой нет
   }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", start, { once: true });
-  } else {
-    start();
+  function fail() {
+    // nav не ответил: скелет снимаем — вечная загрузка хуже лишней кнопки, а
+    // настоящее «нельзя» всё равно скажет сервер отказом на самом вызове.
+    state(FAILED);
+    if (window.SVOI && window.SVOI.netBanner) {
+      window.SVOI.netBanner(FAIL_TEXT, retry);
+    }
   }
+
+  function request() {
+    if (promise) { return promise; }
+    promise = fetch("/webapp/nav").then(function (response) {
+      if (!response.ok) { throw new Error("nav " + response.status); }
+      return response.json();
+    }).then(function (body) {
+      if (!body || body.ok !== true) { throw new Error("nav без ответа"); }
+      apply(body);
+      return body;
+    }).catch(function () {
+      fail();
+      return null;
+    });
+    return promise;
+  }
+
+  function retry() {
+    promise = null;
+    state(PENDING);      // «Повторить» возвращает тот же скелет, что был на входе
+    request();
+  }
+
+  function start() {
+    // Спрашиваем на DOMContentLoaded, а не сразу: ответ может прийти раньше, чем
+    // распарсен <body>, а вкладку и кнопки без разметки не спрятать.
+    if (document.readyState === "loading") {
+      document.addEventListener("DOMContentLoaded", request, { once: true });
+    } else {
+      request();
+    }
+  }
+
+  if (window.SVOI) {
+    // Общий ответ на всех потребителей: страницы, которым нужен один признак
+    // (сводка, сверка), больше не делают свой запрос в тот же адрес.
+    window.SVOI.nav = function () { return request(); };
+  }
+  start();
 })();

@@ -172,24 +172,11 @@ _SCRIPT_WEEK_TEMPLATE = r"""
     };
   });
 
-  /* «Сводка занятости» закрыта правом `schedule.read.all` (FR-H9): экран недели —
-     публичная константа, поэтому «есть ли право» приезжает отдельным запросом
-     `/webapp/nav` уже после входа (docs/architecture/25 §9.2: оболочка может
-     только не показывать кнопку). Убираем строку лишь по явному отказу сервера:
-     без ответа или при сбое она остаётся, иначе сломанный nav отнимал бы сводку
-     у организатора. Карта t_70a6d8e5. */
-  function applyNav(body) {
-    if (!body || body.ok !== true || typeof body.summary !== "boolean") { return; }
-    var row = $("to-summary");
-    if (row) { row.hidden = !body.summary; }
-  }
-
-  async function caps() {
-    try {
-      var answer = await api("/webapp/nav");
-      applyNav(answer.body);
-    } catch (e) { /* строка остаётся: отказ должен быть явным */ }
-  }
+  /* «Сводка занятости» закрыта правом `schedule.read.all` (FR-H9). Строка помечена
+     `data-svoi-cap` в разметке, и её прячет оболочка ответом на `/webapp/nav` —
+     один признак прав на всю страницу (карта t_f279a0eb). Свой запрос здесь был
+     вторым: пока он шёл, оболочка уже сняла скелет, и строка исчезала на глазах.
+     До ответа nav строка стоит скелетом, поэтому нажать её участник не успевает. */
 
   (async function boot() {
     var denied = await auth();
@@ -197,9 +184,6 @@ _SCRIPT_WEEK_TEMPLATE = r"""
       $("status").textContent = denied;
       return;
     }
-    /* Сначала права оболочки: строку сводки убираем до загрузки недели,
-       чтобы участник не успел увидеть и нажать её. */
-    await caps();
     if (!(await load(start))) {
       $("progress").textContent = "Не удалось загрузить неделю.";
     }

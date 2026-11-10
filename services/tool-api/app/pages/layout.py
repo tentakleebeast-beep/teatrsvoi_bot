@@ -13,6 +13,9 @@
   хоть одно право из управленческих, иначе «Ещё»;
 * экран-вкладка без шапки, вложенный экран — с шапкой и «‹»;
 * ссылка на CSS стоит в разметке (а не появляется из JS), иначе первый кадр пустой;
+* экран рождается с признаком `data-svoi-rights="pending"`: права на момент отдачи
+  HTML неизвестны, и до ответа `/webapp/nav` элементы с `data-svoi-cap` стоят
+  скелетом, а не готовыми кнопками (карта t_f279a0eb);
 * весь текст экранируется: HTML собирается на сервере из данных базы.
 """
 
@@ -182,7 +185,17 @@ def page(title: str, body: str, *, tab: str = "", back: str = "",
     header = appbar(title, back=back, action=action) if back else ""
     footer = tabbar(tab, caps) if tab else ""
     viewport = ZOOM_VIEWPORT if zoom else NOZOOM_VIEWPORT
-    html_open = '<html lang="ru" data-svoi-zoom="1">' if zoom else '<html lang="ru">'
+    # `data-svoi-rights="pending"` — один признак загрузки прав на всю оболочку:
+    # сервер не знает возможностей человека (страницы — публичные константы),
+    # поэтому каждый экран рождается в состоянии «права неизвестны». Оболочка
+    # (`static/webapp-shell.js`) переводит его в `ready` одним ответом
+    # `/webapp/nav`, а `webapp-ui.css` держит помеченные `data-svoi-cap` элементы
+    # скелетом, пока это состояние не снято, — иначе кнопка появлялась готовой и
+    # исчезала через долю секунды (карта t_f279a0eb, замечание 10.11.2026).
+    # Флаг `data-svoi-zoom` ставится рядом: признаков на <html> теперь два, и оба
+    # читает оболочка.
+    html_open = ('<html lang="ru" data-svoi-zoom="1" data-svoi-rights="pending">'
+                 if zoom else '<html lang="ru" data-svoi-rights="pending">')
     return (
         "<!doctype html>\n"
         f"{html_open}\n<head>\n"
