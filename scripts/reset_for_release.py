@@ -74,6 +74,7 @@ WIPE = (
     "approval_request",
     "slot_proposal",
     "event_plan",
+    "feedback_attachment",
     "feedback_answer",
     "feedback",
     "category_candidate",

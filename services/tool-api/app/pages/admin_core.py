@@ -17,6 +17,17 @@ _STYLE = """
 <style>
   .admin-row--stack { flex-direction: column; align-items: stretch; gap: var(--ui-s2); }
   .admin-row--stack .ui-row__main { width: 100%; }
+  /* Обращение со скриншотом (Э6, D6): текст и миниатюра в одной строке, кнопки — ниже.
+     Третьим ребёнком `.admin-row--stack` миниатюра уходила под текст и добавляла 64 px
+     впустую (замер дизайна: 108 → 172 px строки). */
+  .feedback-row { flex-direction: column; align-items: stretch; gap: var(--ui-s1);
+                  padding-top: var(--ui-s1); padding-bottom: var(--ui-s1); }
+  .feedback-row .ui-row__main { gap: 0; }
+  .feedback-top { display: flex; align-items: center; gap: var(--ui-s2); }
+  .feedback-top .ui-row__main { flex: 1 1 auto; min-width: 240px; }
+  .feedback-shot { flex: none; width: 56px; height: 56px; border-radius: var(--ui-r-sm);
+                   overflow: hidden; background: var(--ui-surface-2); }
+  .feedback-shot img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .admin-actions--split .ui-btn { flex: 1; }
   .admin-caps { margin: 0; overflow-wrap: anywhere; }
   .ui-dl__value { overflow-wrap: anywhere; }

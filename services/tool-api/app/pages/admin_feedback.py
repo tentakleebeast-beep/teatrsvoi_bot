@@ -51,17 +51,56 @@ _SCRIPT_FEEDBACK_QUEUE = r"""
     ]);
   }
 
+  /* Обращение со скриншотом (Э6, D6): своя строка, а не третий ребёнок
+     `.admin-row--stack`. Тот — `flex-direction: column`, поэтому миниатюра уходила под
+     текст и добавляла 64 px впустую (замер: 108 → 172 px). Здесь `ui-row` с `row`:
+     текстовая колонка слева, миниатюра 56×56 справа, кнопки — своей строкой ниже.
+     Миниатюра ведёт на существующий экран файла (`/webapp/file?id=`, А3): админ
+     открывает его по `files.access` и праву `feedback.triage` (D4). */
+  function shotThumb(shot) {
+    var link = el("a", "feedback-shot");
+    link.href = "/webapp/file?id=" + shot.id;
+    link.setAttribute("aria-label", "Скриншот " + (shot.name || "обращения"));
+    return link;
+  }
+
+  function loadThumb(link, shot) {
+    /* Ссылка на файл приходит своим маршрутом (`/webapp/files/{id}/view`). Нет ответа
+       или 404 — миниатюры не будет, а строка и метка «со скриншотом» останутся:
+       очередь не должна падать из-за одного недоступного файла (К25). */
+    api("/webapp/files/" + shot.id + "/view").then(function (res) {
+      if (!(res.status === 200 && res.body && res.body.url)) { link.remove(); return; }
+      var image = document.createElement("img");
+      image.src = res.body.url;
+      image.alt = shot.name || "Скриншот";
+      link.appendChild(image);
+    }, function () { link.remove(); });
+  }
+
   function itemRow(item) {
-    var row = el("div", "ui-row admin-row--stack");
+    var shots = item.attachments || [];
+    var row = el("div", shots.length ? "ui-row feedback-row" : "ui-row admin-row--stack");
     var main = el("span", "ui-row__main");
     main.appendChild(el("span", "ui-row__title", KIND[item.kind] || item.kind || "обращение"));
     var meta = ["№" + item.id];
     if (item.author) meta.push(item.author);
     if (item.created_at) meta.push(when(item.created_at));
+    if (shots.length) meta.push("со скриншотом");
     meta.push(FB_STATUS[item.status] || item.status || "");
     main.appendChild(el("span", "ui-row__meta", meta.filter(Boolean).join(" · ")));
     main.appendChild(el("span", "ui-row__meta", item.text || ""));
-    row.appendChild(main);
+    if (shots.length) {
+      /* Миниатюра рядом с текстом, кнопки — ниже: в один ряд три элемента на 390 px
+         не встают, а `column` без обёртки уводил миниатюру под текст (замер 108 → 172). */
+      var top = el("div", "feedback-top");
+      top.appendChild(main);
+      var link = shotThumb(shots[0]);
+      top.appendChild(link);
+      row.appendChild(top);
+      loadThumb(link, shots[0]);
+    } else {
+      row.appendChild(main);
+    }
     var actions = el("div", "ui-actions admin-actions--split");
     var more = el("button", "ui-btn ui-btn--sm", "Решить");
     more.type = "button";
