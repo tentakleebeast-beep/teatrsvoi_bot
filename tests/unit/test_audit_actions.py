@@ -95,6 +95,25 @@ def test_path_matching_is_segment_wise():
     assert mod.path_match("/agent/actions/{id}/apply", "/agent/actions/{id}/{verb}") == 2
 
 
+def test_client_api_prefix_is_not_part_of_route():
+    """Ведущий `/api` — префикс клиента, а не сегмент маршрута (INT-018, карта t_7cfd5675).
+
+    Скрипты выгрузки собирают адрес как `f"{base}/api/tools/intent/sheet"` и
+    `f"{base}/api/tools/feedback"`: базовый адрес клиента (`scripts/feedback_sync.py`)
+    оканчивается на `/api`, поэтому инвентарь не находил потребителя у живых маршрутов.
+    Снимается только ведущий сегмент `api`; `/tools/y` по-прежнему не совпадение.
+    """
+    sys.path.insert(0, str(ROOT / "scripts"))
+    import audit_actions as mod
+
+    assert mod.path_match("/tools/x", "/api/tools/x") == 1
+    assert mod.path_match("/webapp/x", "/api/webapp/x") == 1
+    assert mod.path_match("/tools/y", "/api/tools/x") == 0
+    # Не ведущий `api` — часть адреса, а не префикс клиента.
+    assert mod.path_match("/tools/api/x", "/tools/api/x") == 1
+    assert mod.path_match("/tools/x", "/tools/api/x") == 0
+
+
 def test_js_paths_rebuild_concatenation_and_tell_call_from_link():
     """Вёрстка экранов склеивает адрес из строк — склейка и ссылка различаются."""
     sys.path.insert(0, str(ROOT / "scripts"))

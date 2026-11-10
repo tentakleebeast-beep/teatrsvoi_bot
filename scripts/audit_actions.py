@@ -144,9 +144,18 @@ def path_match(route_path: str, ref_path: str) -> int:
     Шаблон — когда в коде подставляется переменная на месте постоянного сегмента
     (`f"/agent/actions/{action_id}/{verb}"`): такие адреса считаются вызовом,
     но помечаются, потому что по файлу не доказать, какая ветка выбрана.
+
+    Клиентский префикс `api` снимается с адреса вызова, если он ведущий сегмент
+    (`f"{base}/api/tools/intent/sheet"` → `/tools/intent/sheet`): это часть базового
+    адреса клиента (`scripts/feedback_sync.py`), а не сегмент маршрута tool-api.
+    Снимается только ведущий `api`, не любое вхождение в пути, и только когда
+    маршрут сам не начинается с `api` — иначе маршрут `/api/...` перестал бы
+    находить свои вызовы.
     """
     route = split_path(route_path)
     ref = split_path(ref_path)
+    if len(ref) > 1 and ref[0] == "api" and (not route or route[0] != "api"):
+        ref = ref[1:]
     if not ref or len(ref) != len(route):
         return 0
     exact = True

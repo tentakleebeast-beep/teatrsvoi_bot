@@ -37,7 +37,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | Действий с правом, проверенным в теле через `core._webapp_require(…)` | 51 |
 | Действий с правом, проверенным в теле через «*» в caps | 2 |
 | Маршрутов с сервисным Bearer-токеном на входе | 4 |
-| Эндпоинтов, которые не зовёт ни один интерфейс | 30 |
+| Эндпоинтов, которые не зовёт ни один интерфейс | 29 |
 | Экранов Mini App | 31 |
 | Обработчиков чата (команды, кнопки, тексты) | 129 |
 | Инструментов агента | 13 |
@@ -128,9 +128,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/tools/events/move` | `services/tool-api/app/api/events.py:639` | чат: _load, _move (по шаблону) | schedule.write | test_cm03_slots.py, test_event_move.py | — |
 | POST `/tools/events/preview` | `services/tool-api/app/api/events.py:315` | чат: _load, preview (по шаблону) | schedule.write | test_disciplines.py, test_events_assign.py, test_events_choose.py (+6) | — |
 | GET `/tools/events/{event_id}` | `services/tool-api/app/api/events.py:763` | чат: _cancel, _load, _move, assign_confirm, assign_pick, preview | schedule.write | test_cm03_slots.py, test_disciplines.py, test_event_cancel.py (+10) | — |
-| GET `/tools/feedback` | `services/tool-api/app/api/admin.py:297` | чат: feedback_triage, panel_feedback, send_feedback | feedback.triage | test_cm06_feedback.py, test_feedback.py, test_feedback_attachment.py (+2) | — |
-| POST `/tools/feedback` | `services/tool-api/app/api/admin.py:166` | чат: feedback_triage, panel_feedback, send_feedback | любой активный | test_cm06_feedback.py, test_feedback.py, test_feedback_attachment.py (+2) | — |
-| POST `/tools/feedback/decide` | `services/tool-api/app/api/admin.py:342` | чат: feedback_decide; скрипты: decide | feedback.triage | test_cm06_feedback.py, test_feedback.py, test_feedback_digest.py | — |
+| GET `/tools/feedback` | `services/tool-api/app/api/admin.py:297` | чат: feedback_triage, panel_feedback, send_feedback; скрипты: cmd_pull | feedback.triage | test_cm06_feedback.py, test_feedback.py, test_feedback_attachment.py (+2) | — |
+| POST `/tools/feedback` | `services/tool-api/app/api/admin.py:166` | чат: feedback_triage, panel_feedback, send_feedback; скрипты: cmd_pull | любой активный | test_cm06_feedback.py, test_feedback.py, test_feedback_attachment.py (+2) | — |
+| POST `/tools/feedback/decide` | `services/tool-api/app/api/admin.py:342` | чат: feedback_decide; скрипты: cmd_decide, decide | feedback.triage | test_cm06_feedback.py, test_feedback.py, test_feedback_digest.py | — |
 | GET `/tools/feedback/mine` | `services/tool-api/app/api/admin.py:280` | — | любой активный | test_cm06_feedback.py | никто не зовёт |
 | GET `/tools/feedback/open` | `services/tool-api/app/api/feedback.py:72` | — | feedback.triage | test_feedback_triage.py | никто не зовёт |
 | POST `/tools/feedback/triage` | `services/tool-api/app/api/feedback.py:211` | скрипты: main | feedback.triage | test_feedback_triage.py | — |
@@ -144,7 +144,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/intent/categories` | `services/tool-api/app/api/admin.py:746` | — | любой активный | test_intent_log.py | никто не зовёт |
 | GET `/tools/intent/report` | `services/tool-api/app/api/admin.py:794` | — | audit.view | test_intent_log.py, test_smoke_api_fixes.py | никто не зовёт |
 | POST `/tools/intent/resolve` | `services/tool-api/app/api/admin.py:756` | — | любой активный | test_intent_log.py | никто не зовёт |
-| GET `/tools/intent/sheet` | `services/tool-api/app/api/admin.py:811` | — | admin.panel | test_intent_sheet.py | никто не зовёт |
+| GET `/tools/intent/sheet` | `services/tool-api/app/api/admin.py:811` | скрипты: cmd_pull | admin.panel | test_intent_sheet.py | — |
 | GET `/tools/me/capabilities` | `services/tool-api/app/api/people.py:686` | чат: caps_of | любой активный | test_admin_people_actions.py, test_cm01_login.py | — |
 | GET `/tools/notes` | `services/tool-api/app/api/notes.py:235` | чат: note_confirm | notes.write | test_cm07_files.py, test_cm12_audit_cleanup.py, test_gateway_notes.py (+1) | — |
 | POST `/tools/notes` | `services/tool-api/app/api/notes.py:244` | чат: note_confirm | notes.write | test_cm07_files.py, test_cm12_audit_cleanup.py, test_gateway_notes.py (+1) | — |
@@ -662,7 +662,6 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/intent/categories` | `services/tool-api/app/api/admin.py:746` | любой активный | test_intent_log.py |
 | GET `/tools/intent/report` | `services/tool-api/app/api/admin.py:794` | audit.view | test_intent_log.py, test_smoke_api_fixes.py |
 | POST `/tools/intent/resolve` | `services/tool-api/app/api/admin.py:756` | любой активный | test_intent_log.py |
-| GET `/tools/intent/sheet` | `services/tool-api/app/api/admin.py:811` | admin.panel | test_intent_sheet.py |
 | POST `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:253` | notes.write | test_notes_api.py |
 | GET `/tools/participants/find` | `services/tool-api/app/api/people.py:632` | participants.view | test_find_person.py |
 | GET `/tools/venues` | `services/tool-api/app/api/events.py:818` | любой активный | test_venues_api.py |
