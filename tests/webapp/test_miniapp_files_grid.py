@@ -23,6 +23,7 @@ import pytest
 
 WIDTHS = {
     "390": {"width": 390, "height": 844, "cell": 173},
+    "360": {"width": 360, "height": 800, "cell": 158},
     "320": {"width": 320, "height": 693, "cell": 138},
 }
 
