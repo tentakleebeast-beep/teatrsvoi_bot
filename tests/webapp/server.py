@@ -385,6 +385,20 @@ def reset_events() -> dict:
 # из запроса, чтобы браузерный тест видел разницу: репетиция — окна по людям,
 # аренда — свободный зал, и никаких людей в карточке.
 SLOTS_EVENTS: list[tuple[str, dict]] = []
+# Журнал решений по ролям и дисциплинам (Г16): запросы экрана видно тесту.
+GRANT_EVENTS: list[dict] = []
+
+# Дисциплины актора в «Поиске окон»: заголовок стенда для Э1-тестов.
+# Пустой заголовок — администратор: поведение прежнее (DISCIPLINES_STATE).
+MY_DISCIPLINES_HEADER = "x-svoi-my-disciplines"
+STAND_DISCIPLINES = {"music": "Музыка", "acting": "Актёрское мастерство"}
+
+
+def _my_disciplines(request: Request) -> list[dict]:
+    raw = (request.headers.get(MY_DISCIPLINES_HEADER) or "").strip()
+    codes = [code.strip() for code in raw.split(",") if code.strip()]
+    return [{"code": code, "name": STAND_DISCIPLINES.get(code, code)} for code in codes]
+
 
 @app.get("/webapp/slots/people")
 def slots_people(request: Request) -> JSONResponse:
@@ -404,7 +418,7 @@ def slots_people(request: Request) -> JSONResponse:
         "ok": True,
         "people": [{"id": 30, "display_name": "Тестовый Участник", "self": True},
                    {"id": 31, "display_name": "Второй Участник", "self": False}],
-        "my_disciplines": _disciplines_of(30),
+        "my_disciplines": _my_disciplines(request) if request.headers.get(MY_DISCIPLINES_HEADER) else _disciplines_of(30),
         "warnings": _warnings_of(30, "self"),
     })
 
@@ -1659,6 +1673,58 @@ app.add_api_route("/webapp/admin/services", _data({
          "meta": "1 строк не записано — откройте «Сверку листов»", "status": "warn"},
     ],
 }), methods=["GET"])
+
+
+# Админский экран «Люди» для проверки выдачи роли педагога (Г16). Справочник
+# дисциплин тот же, что в «Поиске окон»; карточка человека — без роли master,
+# чтобы кнопка «Выдать педагога» была на месте.
+PEOPLE_ADMIN = [{"id": 30, "display_name": "Тестовый Участник", "roles": ["troupe"],
+                 "status": "active", "capabilities": ["schedule.read.all"]}]
+
+app.add_api_route("/webapp/admin/overview", _data({
+    "ok": True,
+    "actions": {"manage_rights": True, "set_tariff": True, "accrue_dues": False},
+    "blocks": {"people": {"data": PEOPLE_ADMIN,
+                          "counts": {"active": len(PEOPLE_ADMIN), "pending": 0}}},
+}), methods=["GET"])
+
+app.add_api_route("/webapp/admin/person", _data({
+    "ok": True,
+    "data": {"display_name": "Тестовый Участник", "roles": ["troupe"], "status": "active",
+             "capabilities": ["schedule.read.all"], "disciplines": [],
+             "phone": None, "tariff": {"tariff": None}},
+}), methods=["POST"])
+
+app.add_api_route("/webapp/form-data", _data({
+    "ok": True,
+    "people": [{"id": 30, "name": "Тестовый Участник", "roles": ["troupe"]}],
+    "projects": [], "venues": [],
+    "disciplines": [{"code": code, "name": name}
+                    for code, name in STAND_DISCIPLINES.items()],
+    "my_disciplines": [], "defaults": {"kind": "rehearsal", "min_hours": 2, "days": 7,
+                                       "venue": "stage"},
+}), methods=["GET"])
+
+
+@app.post("/webapp/admin/grant")
+async def admin_grant(request: Request) -> JSONResponse:
+    """Журнал выдач роли: тест проверяет, что запрос без дисциплины не уходит вовсе."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    GRANT_EVENTS.append(body)
+    return JSONResponse({"ok": True, "role": body.get("role"), "enabled": body.get("enabled")})
+
+
+@app.post("/webapp/admin/discipline")
+async def admin_discipline(request: Request) -> JSONResponse:
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    GRANT_EVENTS.append(dict(body, action="discipline"))
+    return JSONResponse({"ok": True, "discipline": body.get("discipline")})
 
 
 @app.get("/__health")
