@@ -73,7 +73,7 @@
 | FR-C8 | Запрос занятости рассылкой с кнопками | P2 | не начато | — |
 | FR-B16 | Тарифы взносов в админ-панели Mini App: кто сколько вносит, с какого месяца | P1 | не начато | источник данных — ручной ввод администратора; после релиза тарифы пересоздаются (ответ заказчика 29.10.2026) |
 | FR-C10 | «Обычная неделя»: шаблон занятости по дням недели; кнопка «Сохранить шаблон недели» запоминает неделю, кнопка «Заполнить по шаблону» показывает лист предпросмотра и заполняет пустые дни | P1 | готово | `availability_template.py`, миграция `db/init/040`; API: `GET/POST /tools/availability/template`, `POST .../template/from-week` (З8), `POST .../template/apply` (З5 — при `apply: false` это предпросмотр); Mini App те же три маршрута делегируют в канон, логика одна; экран `/webapp/week`: две кнопки под неделей, отметки дня автосохраняются при закрытии листа; тесты: `test_availability_template.py` (6), `test_availability_week.py` (+3, в т.ч. сохранение и применение разными действиями), `tests/webapp/test_miniapp_week_autosave.py` (7) |
-| FR-C9 | Занятость карточкой дня: состояние, две границы, комментарий; запись в лист каноном, перенос правок человека обратно в базу | P1 | готово | `availability_card.py` (модель и канон, корпус 63 формулировок), `schedule_sheet.py` (адреса листа, снимок `svoi`); запись `availability_hour` — один путь, `app/availability_store.py` (З1): через него идут отметка по часам, карточка дня, сетка, сверка и очистка; API: `GET/POST /tools/availability/week`, `POST /tools/availability/commit`, `POST /tools/availability/sheet`, `GET .../sheet/mismatches`, `POST /tools/availability/reconcile`; тесты: `test_availability_card.py` (34), `test_availability_week.py` (10, в т.ч. «два входа дают одинаковые строки»), `test_availability_store.py` (7), `test_schedule_sheet.py` (9), `test_availability_sheet.py` (6); сверка сравнивает смысл («занят до 19:00» = «свободен с 19:00») через часы дня и комментарий; экран: `/webapp/week` (`WEEK_PAGE`), API Mini App: `GET/POST /webapp/availability/week`, `POST /webapp/availability/sheet`; кнопка «Открыть неделю» в боте появляется при заданном `WEBAPP_BASE_URL` (M-1, `webapp_links.py` + тест `test_webapp_url.py`) |
+| FR-C9 | Занятость карточкой дня: состояние, две границы, комментарий; запись в лист каноном, перенос правок человека обратно в базу | P1 | частично | **Запись в лист отложена (V-058)**; мост — загрузка из листа (Э5, docs/development/149). `availability_card.py` (модель и канон, корпус 63 формулировок), `schedule_sheet.py` (адреса листа, снимок `svoi`); запись `availability_hour` — один путь, `app/availability_store.py` (З1): через него идут отметка по часам, карточка дня, сетка, сверка и очистка; API: `GET/POST /tools/availability/week`, `POST /tools/availability/commit`, `POST /tools/availability/sheet`, `GET .../sheet/mismatches`, `POST /tools/availability/reconcile`; тесты: `test_availability_card.py` (34), `test_availability_week.py` (10, в т.ч. «два входа дают одинаковые строки»), `test_availability_store.py` (7), `test_schedule_sheet.py` (9), `test_availability_sheet.py` (6); сверка сравнивает смысл («занят до 19:00» = «свободен с 19:00») через часы дня и комментарий; экран: `/webapp/week` (`WEEK_PAGE`), API Mini App: `GET/POST /webapp/availability/week`, `POST /webapp/availability/sheet`; кнопка «Открыть неделю» в боте появляется при заданном `WEBAPP_BASE_URL` (M-1, `webapp_links.py` + тест `test_webapp_url.py`) |
 
 ## D. Календарь
 
@@ -164,14 +164,14 @@
 |---|---:|---:|---:|---:|
 | A. Доступ и люди | 11 | 10 | 1 | 0 |
 | B. Бюджет | 15 | 12 | 2 | 1 |
-| C. Занятость | 9 | 6 | 2 | 1 |
+| C. Занятость | 9 | 5 | 3 | 1 |
 | D. Календарь | 25 | 17 | 2 | 6 |
 | E. Ассистент | 10 | 7 | 2 | 1 |
 | F. Отчёты и файлы | 7 | 5 | 1 | 1 |
 | G. Уведомления | 16 | 7 | 3 | 6 |
 | H. Эксплуатация | 16 | 9 | 4 | 3 |
 | I. Обратная связь | 2 | 2 | 0 | 0 |
-| **Итого** | **111** | **75** | **17** | **19** |
+| **Итого** | **111** | **74** | **18** | **19** |
 
 Снято решением (в сводке не считается): 2 — FR-B5 «второе подтверждение крупных сумм»
 (решение 30.10.2026, остатки убраны 04.11.2026) и FR-G6 «подтверждение крупных трат»
