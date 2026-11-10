@@ -1,8 +1,7 @@
 """Лист «Чего не умеем»: снимок, карточки, статус и решение владельца (V-035).
 
-Обоснование: V-035 (`docs/reports/74-questions.md`). Дизайн потока живёт в ветке
-`wt/v035-intent-sheet-design` (`docs/development/156`, в `main` не слит), поэтому
-контракт взят из тела карты. Проверяется решение, а не запуск:
+Обоснование: V-035 (`docs/reports/74-questions.md`). Дизайн потока — `docs/development/156`
+(влит в `main`), поэтому контракт сверяется с документом. Проверяется решение, а не запуск:
 сеть подменяется ответом прода, `hermes` — записью аргументов, и по журналу вызовов
 видно, что именно скрипт сделал и чего не сделал.
 """
@@ -230,6 +229,30 @@ def test_V_035_cards_создаёт_specifier_в_triage(monkeypatch, tmp_path):
     assert "worker-feature" not in args
     assert fake.bodies[0].startswith(
         f"Источник: лист «Чего не умеем», строка {rid}; V-035")
+
+
+def test_V_035_тело_карточки_требует_блокировки(monkeypatch, tmp_path):
+    """V-035: тело созданной карточки велит specifier поставить blocked/needs_input.
+
+    Проверяется именно тело, записанное `cards --apply` (файл `--body-file`),
+    а не докстринг: без шага блокировки `decide` откажет и владелец не увидит
+    карточку в очереди согласования.
+    """
+    phrase = "кто завтра свободен?"
+    _state(monkeypatch, tmp_path, _snapshot([_row(phrase)]))
+    _questions(monkeypatch, tmp_path, _question_row("ffffffff"))
+    fake = FakeKanban()
+    monkeypatch.setattr(SHEET, "kanban", fake)
+
+    assert SHEET.main(["cards", "--apply"]) == 0
+
+    body = fake.bodies[0]
+    assert "blocked" in body
+    assert "kind=needs_input" in body
+    assert "согласовать с Виктором: V-NNN" in body
+    assert "docs/reports/74-questions.md" in body
+    assert "decide --decision yes" in body
+    assert "только после" in body
 
 
 def test_V_035_повторный_прогон_не_плодит_карточки(monkeypatch, tmp_path, capsys):
