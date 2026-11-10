@@ -12,6 +12,11 @@
 Разметка и скрипт подставляются в общую страницу `files.FILES_PAGE`; помощники
 (`$`, `el`, `api`, `problem`, `status`) приходят из CORE — скрипт выполняется в том же
 замыкании, что и код страницы.
+
+Дерево папок собрано в `files_tree.py`, плитка файла — в `files_grid.py`: файл был ровно
+400 строк, а порог на модуль страниц — 400 (`tests/unit/test_webapp_pages_split.py`).
+Здесь остались действия: создать, переименовать маршрутом, закрыть, доступ, теги,
+удаление файла кнопкой.
 """
 
 from __future__ import annotations
@@ -66,7 +71,7 @@ BODY = """
     <h2 class="ui-section__title">Папки</h2>
     <span class="ui-section__meta" id="folder-count"></span>
   </div>
-  <div class="ui-list" id="folders"></div>
+  <ul class="ui-tree" id="folders"></ul>
   <div class="ui-field">
     <label class="ui-field__label" for="folder-name">Новая папка</label>
     <input class="ui-input" id="folder-name" type="text" maxlength="100"
@@ -121,103 +126,14 @@ SCRIPT = r"""
     box.className = bad ? "ui-alert" : "ui-small ui-muted";
   }
 
-  function folderRow(folder) {
-    var node = el("div", "ui-row");
-    var main = el("span", "ui-row__main");
-    main.appendChild(el("span", "ui-row__title", folder.name));
-    main.appendChild(el("span", "ui-row__meta", folder.path));
-    node.appendChild(main);
-
-    var actions = el("span", "ui-track__order");
-
-    var open = el("button", "ui-btn ui-btn--sm", "Открыть");
-    open.type = "button";
-    open.addEventListener("click", function () {
-      location.href = "/webapp/folder?id=" + folder.id;
-    });
-    actions.appendChild(open);
-
-    var rename = el("button", "ui-btn ui-btn--sm", "Имя");
-    rename.type = "button";
-    rename.setAttribute("aria-label", "Переименовать папку");
-    rename.addEventListener("click", function () { askRename(node, folder); });
-    actions.appendChild(rename);
-
-    var remove = el("button", "ui-btn ui-btn--sm", "Закрыть");
-    remove.type = "button";
-    remove.setAttribute("aria-label", "Закрыть папку");
-    var armed = false;
-    remove.addEventListener("click", function () {
-      if (!armed) {
-        armed = true;
-        remove.textContent = "Точно?";
-        return;
-      }
-      closeFolder(folder);
-    });
-    actions.appendChild(remove);
-
-    node.appendChild(actions);
-    return node;
-  }
-
-  function askRename(node, folder) {
-    var box = el("div", "ui-field");
-    var input = el("input", "ui-input");
-    input.type = "text";
-    input.maxLength = 100;
-    input.value = folder.name;
-    var save = el("button", "ui-btn ui-btn--sm ui-btn--primary", "Сохранить");
-    save.type = "button";
-    save.addEventListener("click", function () {
-      var name = (input.value || "").trim();
-      if (!name) { folderNote("Название не может быть пустым.", true); return; }
-      api("/webapp/folders/" + folder.id + "/rename", { name: name })
-        .then(function (res) {
-          if (res.status !== 200) { folderNote(problem(res), true); return; }
-          folderNote("Папка переименована: " + res.body.path, false);
-          loadFolders();
-        });
-    });
-    var cancel = el("button", "ui-btn ui-btn--sm", "Отмена");
-    cancel.type = "button";
-    cancel.addEventListener("click", function () { loadFolders(); });
-    box.appendChild(input);
-    box.appendChild(save);
-    box.appendChild(cancel);
-    clear(node);
-    node.appendChild(box);
-  }
-
   function closeFolder(folder) {
     api("/webapp/folders/" + folder.id + "/delete", {})
       .then(function (res) {
-        if (res.status !== 200) { folderNote(problem(res), true); return; }
+        if (res.status !== 200) { toast(problem(res)); return; }
+        closeSheet();
         folderNote("Папка закрыта. Файлы остались — они в «Без папки».", false);
         loadFolders();
       });
-  }
-
-  function renderFolders(rows) {
-    var list = $("folders");
-    clear(list);
-    $("folder-count").textContent = rows.length
-      ? rows.length + " " + plural(rows.length, "папка", "папки", "папок") : "";
-    if (!rows.length) {
-      list.appendChild(empty("Папок пока нет",
-        "Создайте первую — общие папки видят все, но правит только администратор."));
-      return;
-    }
-    rows.forEach(function (folder) { list.appendChild(folderRow(folder)); });
-  }
-
-  function loadFolders() {
-    return api("/webapp/folders").then(function (res) {
-      if (res.status === 403) { renderFolders([]); return []; }
-      if (res.status !== 200) { folderNote(problem(res), true); return []; }
-      renderFolders(res.body.data || []);
-      return res.body.data || [];
-    });
   }
 
   function createFolder() {
@@ -381,13 +297,16 @@ SCRIPT = r"""
   }
 
   function deleteFileButton(file, holder) {
-    var remove = el("button", "ui-btn ui-btn--sm", "Удалить");
+    // Кнопка-иконка 44×44 в клетке плитки: подпись для скринридера несёт имя файла,
+    // иначе в списке из двадцати кнопок «Удалить» не различить.
+    var remove = el("button", "ui-grid__remove");
     remove.type = "button";
-    remove.setAttribute("aria-label", "Удалить файл");
+    remove.setAttribute("aria-label", "Удалить файл: " + file.name);
+    remove.appendChild(iconSvg("ui-i-trash"));
     remove.addEventListener("click", function (event) {
-      // Строка файла в папке открывает папку по нажатию — удаление кликом не должно
-      // уводить на другой экран.
+      // Плитка — ссылка на файл; удаление не должно уводить на другой экран.
       event.stopPropagation();
+      event.preventDefault();
       askDeleteFile(file);
     });
     holder.appendChild(remove);

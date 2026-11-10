@@ -367,13 +367,14 @@ hint `#707579` на карточке `#f4f4f5` даёт 4.24 при пороге
 | Класс | Геометрия | Правило |
 |---|---|---|
 | `.ui-tree` | surface, r=12, `list-style:none` | корневой `<ul>` |
+| `.ui-tree__node` | `display:block`, `list-style:none` | `<li>` узла: строка + дети; flex-строка не может быть самим `<li>`, иначе вложенный `<ul>` встаёт колонкой |
 | `.ui-tree__row` | min-h 56, padding 8/12/8/8, gap 8 | одна папка |
 | `.ui-tree__row--l2`, `--l3` | `padding-left` 8+16 / 8+32 | глубже третьего — как `--l3` |
 | `.ui-tree__toggle` | 44×44 | `aria-expanded`, `aria-controls`; у листа `disabled`, слот остаётся |
 | `.ui-tree__chevron` | знак `›`, поворот 90° при `aria-expanded="true"` | типографский знак |
 | `.ui-tree__body`, `__name`, `__meta` | как `.ui-row__main`/`__title`/`__meta` | `__meta` — только у сироты: полный путь |
 | `.ui-tree__more` | 44×44 | лист действий над папкой |
-| `.ui-tree__children` | `border-left: 2px solid var(--ui-line)` | глубина видна линией, а не отступом |
+| `.ui-tree__children` | `list-style:none; margin:0; padding:0` | без отступа и без линии: глубину даёт `padding-left` строки (`--l2`/`--l3`), иначе отступ компаундится на каждом уровне |
 | `.ui-tree__row--rootless` | без переключателя и `…` | «Без папки» — фильтр |
 
 По умолчанию дерево **раскрыто**: свёрнутое по умолчанию прячет имена, которые человек
