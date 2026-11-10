@@ -16,8 +16,9 @@
   * в очереди разбора обращение со скриншотом — своя строка с миниатюрой справа,
     метка «со скриншотом», нажатие ведёт на экран файла; без скриншота разметка
     прежняя; 404 на файл не роняет очередь (К25);
-  * на узком устройстве (Galaxy S9+, 320 px) блок не выдавливает «Отправить»
-    за экран и миниатюры не наезжают друг на друга (К28).
+  * на узком устройстве (Galaxy S9+, 320 px) блок не ломает экран: миниатюры не
+    наезжают друг на друга, горизонтальной прокрутки нет, «Отправить» не ниже замера
+    (К28); первый экран «Отправить» — 390×844 (К23).
 
     SVOI_WEBAPP_TESTS=1 .venv/bin/python -m pytest \\
         tests/webapp/test_miniapp_feedback_screenshot.py -q --browser chromium
@@ -300,7 +301,7 @@ def test_очередь_переживает_недоступный_файл(app
 
 
 def test_узкий_экран_не_ломает_блок(device_page) -> None:
-    """К28: 320 px — «Отправить» не выдавливается за экран, миниатюры не наезжают."""
+    """К28: 320 px — блок не ломает экран; «Отправить» не ниже замера (815 px, 10.11.2026)."""
     page = device_page(FEEDBACK, device="Galaxy S9+")
     page.wait_for_load_state("networkidle")
     page.set_input_files("#shot-file", [_png(f"shot{i}.png") for i in range(3)])
@@ -316,4 +317,10 @@ def test_узкий_экран_не_ломает_блок(device_page) -> None:
         "node => node.scrollWidth <= node.clientWidth + 1"), "миниатюры шире экрана"
     assert page.locator("#shot-pick").bounding_box()["x"] + \
         page.locator("#shot-pick").bounding_box()["width"] <= 320 + 0.5
+
+    box = page.locator("#send").bounding_box()
+    bottom = box["y"] + box["height"]
+    assert bottom <= 823, (
+        f"«Отправить» на 320 px уехала ниже замера: низ {bottom:.0f} px "
+        "(замер 10.11.2026 — 815, окно 658)")
     assert page.svoi_errors == [], page.svoi_errors
