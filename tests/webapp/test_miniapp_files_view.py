@@ -4,7 +4,8 @@
 обработчика, а pdf в папке уходил в `<audio src>`. Здесь проверяется поведение
 живьём — в настоящем HTML/CSS/JS проекта через стенд `tests/webapp/server.py`:
 
-* строка «Файлов» открывает экран файла, «Удалить» и шеврон остаются отдельными целями;
+* плитка «Файлов» открывает экран файла, «Удалить» остаётся отдельной целью, а стрелки
+  в папку на плитке нет — вход в папку один, из дерева папок;
 * картинка укладывается в экран без прокрутки при имени в одну и в две строки;
 * документ и текст показывают карточку и «Открыть в браузере» (свежая ссылка + openLink);
 * строка папки ведёт в файл, который действительно открывается: картинка рисуется,
@@ -31,7 +32,7 @@ import pytest
 
 def _rows(page) -> None:
     page.wait_for_function(
-        "() => document.querySelectorAll('#list .ui-row').length > 0", timeout=10_000)
+        "() => document.querySelectorAll('#list .ui-grid__cell').length > 0", timeout=10_000)
 
 
 def _file_screen(page) -> None:
@@ -73,32 +74,37 @@ def _opened_file(page, file_id: int) -> None:
 
 
 def test_строка_списка_открывает_экран_файла(app_page) -> None:
-    """К1: нажатие на имя файла уводит на `/webapp/file?id=N`."""
+    """К1: нажатие на плитку уводит на `/webapp/file?id=N` — это ссылка, не обработчик."""
     page = app_page("/webapp/files")
     _rows(page)
 
-    page.locator("#list .ui-row").nth(1).locator(".ui-row__main").click()
+    tile = page.locator("#list .ui-grid__tile").nth(1)
+    assert tile.get_attribute("href") == "/webapp/file?id=2", tile.get_attribute("href")
+    tile.click()
     page.wait_for_url("**/webapp/file?id=2", timeout=10_000)
     _file_screen(page)
     assert "документ" in page.inner_text("#scene"), page.inner_text("#scene")
     assert not page.svoi_errors, page.svoi_errors
 
 
-def test_удаление_и_шеврон_не_открывают_файл(app_page) -> None:
-    """К1, §5.2: три нажатия на одной строке — три разных исхода, не один."""
+def test_удаление_не_открывает_файл_и_папка_только_текстом(app_page) -> None:
+    """К1, §5.2, 155 §3 D3: две цели в клетке — два исхода; второго пути в папку нет."""
     page = app_page("/webapp/files")
     _rows(page)
 
-    page.locator("#list .ui-row").nth(2).locator("button:has-text('Удалить')").click()
+    cell = page.locator("#list .ui-grid__cell").nth(2)
+    remove = cell.locator(".ui-grid__remove")
+    assert remove.get_attribute("aria-label") == "Удалить файл: 01 Увертюра.mp3"
+    remove.click()
     page.wait_for_selector(".ui-sheet", timeout=5_000)
     assert page.url.split("#")[0].endswith("/webapp/files"), "«Удалить» увела на экран файла"
     page.locator(".ui-sheet button:has-text('Отмена')").click()
 
-    page.locator("#list .ui-row").nth(2).locator(".ui-row__chevron").click()
-    page.wait_for_url("**/webapp/folder?id=7", timeout=10_000)
-    # Адрес папки — не доказательство: на новом экране должны быть её строки.
-    _tracks(page, 3)
-    assert "Спектакль/Музыка" in page.inner_text("#subtitle"), page.inner_text("#subtitle")
+    # Папка у файла — строка подписи, а не действие: второго входа в папку нет.
+    meta = cell.locator(".ui-grid__meta").inner_text()
+    assert "Спектакль/Музыка" in meta, meta
+    assert page.locator("#list .ui-row__chevron").count() == 0, "стрелка в папку вернулась"
+    assert "›" not in cell.locator(".ui-grid__tile").inner_text(), "плитка снова ведёт в папку"
     assert not page.svoi_errors, page.svoi_errors
 
 

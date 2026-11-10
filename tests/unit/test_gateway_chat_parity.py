@@ -447,10 +447,10 @@ def test_Э1_админ_не_теряет_ни_одного_пункта(gw):
 
 
 def test_Э1_роли_педагога_открываются_через_дисциплины(gw, fake_api, caps):
-    """FR-A1: «Педагог» в ролях ведёт на экран дисциплин, а не в выдачу без них.
+    """FR-A1: экран дисциплин открывает выдачу роли и без отмеченных дисциплин.
 
-    Сервер отклонил бы выдачу без дисциплины (`master_discipline_required`), поэтому
-    оболочка не отправляет запрос, который заведомо провалится (140 §2.2).
+    Роль педагога выдаётся и без дисциплин (V-037, 08.11.2026): экран говорит
+    предупреждением, а не запретом (140 §2.2).
     """
     caps["caps"] = MANAGER
     fake_api.answers["/tools/participants/2/card"] = {
@@ -467,7 +467,8 @@ def test_Э1_роли_педагога_открываются_через_дис�
     asyncio.run(gw.panel_person_master(cb))
     markup = cb.message.answers[-1][1]
     assert "panel:mrel:2:music:1" in datas(markup)
-    assert "panel:mgrant:2" not in datas(markup), "без отмеченной дисциплины роли нет"
+    assert "panel:mgrant:2" in datas(markup), "без дисциплины роль не выдаётся"
+    assert "Дисциплин нет: тренинг назначить не сможет." in cb.message.answers[-1][0]
 
 
 def test_Э1_выдача_педагога_уходит_с_дисциплинами(gw, fake_api, caps):
@@ -485,15 +486,42 @@ def test_Э1_выдача_педагога_уходит_с_дисциплина�
     assert "Роль педагога выдана" in cb.alerts
 
 
+def test_Э1_выдача_педагога_без_дисциплины_уходит_и_предупреждает(gw, fake_api, caps):
+    """FR-A1: без дисциплин запрос уходит без `disciplines`, текст берётся из `warnings`."""
+    caps["caps"] = MANAGER
+    fake_api.answers["/tools/participants/2/card"] = {
+        "ok": True, "data": {"id": 2, "display_name": "Арина", "roles": ["troupe"],
+                             "capabilities": [], "disciplines": []}}
+    fake_api.answers["/admin/grant"] = {
+        "ok": True, "roles": ["master"], "capabilities": [],
+        "warnings": [{"code": "master_without_discipline",
+                      "text": "У педагога нет дисциплины."}]}
+    cb = FakeCb("panel:mgrant:2")
+    asyncio.run(gw.panel_person_master_grant(cb))
+
+    assert ("/admin/grant", {"participant_id": 2, "role": "master", "enabled": True},
+            "POST") in fake_api.calls
+    assert any("У педагога нет дисциплины." in alert for alert in cb.alerts), cb.alerts
+
+
 def test_Э1_снятие_последней_дисциплины_показано_словами(gw, fake_api, caps):
-    """FR-A1: отказ `master_without_discipline` из чата виден человеку (Г4)."""
+    """FR-A1: снятие последней дисциплины — предупреждение, а не «Не удалось» (Г4)."""
     caps["caps"] = MANAGER
     fake_api.answers["/admin/participant/discipline"] = {
-        "ok": False, "code": "master_without_discipline"}
+        "ok": True, "participant_id": 2, "disciplines": [],
+        "warnings": [{"code": "master_without_discipline",
+                      "text": "У педагога нет дисциплины."}]}
+    fake_api.answers["/tools/participants/2/card"] = {
+        "ok": True, "data": {"id": 2, "display_name": "Арина", "roles": ["master"],
+                             "capabilities": [], "disciplines": [],
+                             "warnings": [{"code": "master_without_discipline",
+                                           "text": "У педагога нет дисциплины."}]}}
+    fake_api.answers["/tools/disciplines"] = {"ok": True, "disciplines": []}
     cb = FakeCb("panel:mrel:2:music:0")
     asyncio.run(gw.panel_person_master_link(cb))
 
     assert ("/admin/participant/discipline",
             {"participant_id": 2, "discipline": "music", "enabled": False},
             "POST") in fake_api.calls
-    assert cb.alerts and "Не удалось" in cb.alerts[0], "отказ сервера не должен молчать"
+    assert cb.alerts and "У педагога нет дисциплины." in cb.alerts[0], cb.alerts
+    assert not any("Не удалось" in alert for alert in cb.alerts)

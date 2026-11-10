@@ -166,29 +166,30 @@ def check_cron_no_deploy(root: pathlib.Path | None = None) -> int:
 
 
 def check_master_disciplines() -> int:
-    """Мастер без дисциплины — нарушение, а не предупреждение (140 §2.2, V-037 вариант а).
+    """Мастер без дисциплины — предупреждение, а не падение (V-037, D6/D7).
 
-    `CHECK` этого не поймает: роль живёт в `participant_role`, связь — в
-    `participant_discipline`. Поэтому нарушители собираются view
-    `v_master_without_discipline` (db/init/061), а здесь читается только счётчик:
-    определение `v_invariant_checks` остаётся в `005`/`006`, копия в 150 строк — лишний
-    риск для проверки из трёх строк.
+    Решение владельца 08.11.2026: роль `master` выдаётся без дисциплины, мастер
+    работает сразу, а недостающее называется словами на экранах. Поэтому состояние
+    «мастер без дисциплины» печатается как `WARN M1` со списком и **не** останавливает
+    деплой. Единственное определение нарушения остаётся прежним — view
+    `v_master_without_discipline` (db/init/061).
+
+    Отсутствие view — по-прежнему `FAIL`: это не «инвариант выполнен», а непрокатанная
+    миграция; молчать значило бы показывать зелёный гейт без проверки вовсе.
     """
     try:
         with psycopg.connect(DB, row_factory=dict_row) as conn:
             rows = conn.execute("select participant_id, display_name "
                                 "from v_master_without_discipline order by display_name").fetchall()
     except psycopg.Error as exc:
-        # Миграция 061 ещё не накатана (старая база) — это не «инвариант выполнен»:
-        # молчать здесь значило бы показывать зелёный гейт без проверки вовсе.
         print(f"FAIL M1  {'мастер без дисциплины':52} view нет: {str(exc).splitlines()[0][:60]}")
         return 1
     for row in rows:
-        print(f"FAIL M1  {'мастер без дисциплины':52} "
+        print(f"WARN M1  {'мастер без дисциплины':52} "
               f"№{row['participant_id']} {row['display_name']}")
     if not rows:
         print(f"OK   M1  {'у каждого мастера есть дисциплина':52} проверено: view пуст")
-    return len(rows)
+    return 0
 
 
 def static_checks(root: pathlib.Path | None = None) -> int:

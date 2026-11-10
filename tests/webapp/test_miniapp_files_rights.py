@@ -34,9 +34,9 @@ def test_с_правом_экран_показывает_файлы_и_мест�
     page = app_page("/webapp/files", headers=headers)
     page.wait_for_selector("#quota-text", timeout=10_000)
     page.wait_for_function(
-        "() => document.querySelectorAll('#list .ui-row').length > 0", timeout=10_000)
+        "() => document.querySelectorAll('#list .ui-grid__cell').length > 0", timeout=10_000)
 
-    assert page.locator("#list .ui-row").count() >= 1, "список файлов пуст там, где право есть"
+    assert page.locator("#list .ui-grid__cell").count() >= 1, "список файлов пуст там, где право есть"
     assert "Раздел доступен" not in page.inner_text("body"), "право есть, а экран отказал"
     assert page.locator("#upload").is_enabled() is False  # до выбора файлов кнопка ждёт
     assert not page.svoi_errors, page.svoi_errors
@@ -62,10 +62,10 @@ def test_кнопка_удаления_есть_у_роли_с_правом(app_
     """
     page = app_page("/webapp/files", headers=headers)
     page.wait_for_function(
-        "() => document.querySelectorAll('#list .ui-row').length > 0", timeout=10_000)
+        "() => document.querySelectorAll('#list .ui-grid__cell').length > 0", timeout=10_000)
 
-    assert page.locator("#list .ui-row button:has-text('Удалить')").count() >= 1, \
-        "в строке файла нет кнопки удаления"
+    assert page.locator("#list .ui-grid__remove").count() >= 1, \
+        "в плитке файла нет кнопки удаления"
     assert not page.svoi_errors, page.svoi_errors
 
 
@@ -74,20 +74,20 @@ def test_без_права_кнопки_удаления_нет(app_page) -> Non
     page = app_page("/webapp/files", headers={"X-SVOI-Role": "troupe"})
     page.wait_for_selector("#status", timeout=10_000)
 
-    assert page.locator("button:has-text('Удалить')").count() == 0
+    assert page.locator("#list .ui-grid__remove").count() == 0
 
 
 def test_кнопка_удаления_спрашивает_подтверждение(app_page) -> None:
     """FR-L8: удаление не срабатывает первым нажатием — открывается лист с вопросом."""
     page = app_page("/webapp/files")
     page.wait_for_function(
-        "() => document.querySelectorAll('#list .ui-row').length > 0", timeout=10_000)
+        "() => document.querySelectorAll('#list .ui-grid__cell').length > 0", timeout=10_000)
 
-    page.locator("#list .ui-row button:has-text('Удалить')").first.click()
+    page.locator("#list .ui-grid__remove").first.click()
     page.wait_for_selector(".ui-sheet", timeout=5_000)
     text = page.inner_text(".ui-sheet")
     assert "Удалить файл?" in text, text
     assert "Отмена" in text and "Удалить" in text
     # До подтверждения файл остаётся в списке.
-    assert page.locator("#list .ui-row").count() >= 1
+    assert page.locator("#list .ui-grid__cell").count() >= 1
     assert not page.svoi_errors, page.svoi_errors

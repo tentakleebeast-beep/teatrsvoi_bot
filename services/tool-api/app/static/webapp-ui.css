@@ -635,3 +635,110 @@ body.ui-page {
 @media (prefers-reduced-motion: reduce) {
   .ui-fade-in { animation: none; }
 }
+
+/* ---------- сетка плиток: «Мои файлы» (docs/development/155 §2.2, 91 §4.11) ----------
+   Две колонки, а не три: при трёх на 390 px плитка 111 px и в неё влезает 11 знаков
+   названия в строке — имя в 67 знаков всё равно не читается. Длинное имя получает всю
+   строку (`--wide`), но решает это раскладка (`fitTiles`), а не длина строки. */
+.ui-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--ui-s3);
+}
+.ui-grid__cell { position: relative; min-width: 0; }
+.ui-grid__cell--wide { grid-column: 1 / -1; }
+.ui-grid__tile {
+  display: flex; flex-direction: column; gap: var(--ui-s2);
+  min-width: 0; padding: var(--ui-s3);
+  background: var(--ui-surface); border-radius: var(--ui-r);
+  color: inherit; text-decoration: none;
+}
+.ui-grid__tile--wide {
+  flex-direction: row; align-items: center;
+  /* Место под кнопку удаления: в широкой плите она стоит в той же строке, что имя. */
+  padding-right: calc(var(--ui-tap) + var(--ui-s3));
+}
+.ui-grid__icon {
+  flex: none; width: 44px; height: 44px;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ui-muted);
+}
+.ui-grid__icon .ui-icon { width: 28px; height: 28px; }
+.ui-grid__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ui-grid__name {
+  font-size: var(--ui-text); line-height: 1.3; font-weight: 500;
+  overflow-wrap: anywhere;
+  display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 3; overflow: hidden;
+}
+.ui-grid__tile--wide .ui-grid__name { -webkit-line-clamp: 4; }
+.ui-grid__meta { font-size: var(--ui-text-sm); color: var(--ui-muted); overflow-wrap: anywhere; }
+.ui-grid__remove {
+  position: absolute; top: 0; right: 0;
+  width: var(--ui-tap); height: var(--ui-tap);
+  display: flex; align-items: center; justify-content: center;
+  color: var(--ui-muted); background: none; border: 0;
+}
+/* Пустое состояние и ошибка внутри сетки иначе сжимаются в одну колонку. */
+.ui-grid > .ui-empty, .ui-grid > .ui-alert, .ui-grid > .files-retry { grid-column: 1 / -1; }
+/* Фокус виден у всех новых целей: своих правил фокуса у сетки и дерева нет. */
+.ui-grid__tile:focus-visible, .ui-grid__remove:focus-visible,
+.ui-tree__body:focus-visible, .ui-tree__toggle:focus-visible, .ui-tree__more:focus-visible {
+  outline: 2px solid var(--ui-accent); outline-offset: 2px; border-radius: 6px;
+}
+
+/* ---------- дерево папок: «Мои файлы» (155 §2.3, 91 §4.12) ----------
+   Глубину показывает padding-left строки, а не отступ вложенного списка: вложенный
+   <ul> не может одновременно стоять без отступа и рисовать линию уровня — отступ
+   компаундится на каждом уровне. 16 px на уровень, не глубже третьего: на 320 px
+   третий уровень оставляет названию 132 px. */
+.ui-tree {
+  list-style: none; margin: 0; padding: 0;
+  background: var(--ui-surface); border-radius: var(--ui-r); overflow: hidden;
+}
+.ui-tree__node { display: block; list-style: none; }
+.ui-tree__row {
+  display: flex; align-items: center; gap: var(--ui-s2);
+  min-height: 56px; padding: var(--ui-s2) var(--ui-s3) var(--ui-s2) var(--ui-s2);
+}
+.ui-tree__row--l2 { padding-left: calc(var(--ui-s2) + 16px); }
+.ui-tree__row--l3 { padding-left: calc(var(--ui-s2) + 32px); }
+.ui-tree__toggle {
+  flex: none; width: var(--ui-tap); height: var(--ui-tap);
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; color: var(--ui-muted);
+}
+/* У листа слот переключателя остаётся, но пустой: названия в одном столбце. */
+.ui-tree__toggle:disabled { cursor: default; }
+.ui-tree__chevron { font-size: 18px; line-height: 1; transition: transform 120ms; }
+.ui-tree__toggle[aria-expanded="true"] .ui-tree__chevron { transform: rotate(90deg); }
+.ui-tree__body {
+  flex: 1; min-width: 0;
+  display: flex; flex-direction: column; gap: 2px;
+  color: inherit; text-decoration: none;
+  /* Ссылка — цель нажатия: высота строки, а не высота текста (минимум 44 px). */
+  min-height: var(--ui-tap); justify-content: center;
+}
+.ui-tree__name { font-size: var(--ui-text); font-weight: 500; overflow-wrap: anywhere; }
+.ui-tree__meta { font-size: var(--ui-text-sm); color: var(--ui-muted); overflow-wrap: anywhere; }
+.ui-tree__more {
+  flex: none; width: var(--ui-tap); height: var(--ui-tap);
+  display: flex; align-items: center; justify-content: center;
+  background: none; border: 0; color: var(--ui-muted);
+}
+/* Без отступа и без линии: глубину даёт padding-left строки (91 §4.12). */
+.ui-tree__children { list-style: none; margin: 0; padding: 0; }
+.ui-tree__children[hidden] { display: none; }
+.ui-tree__empty { list-style: none; }
+@media (prefers-reduced-motion: reduce) {
+  .ui-tree__chevron { transition: none; }
+}
+
+/* ---------- иконки: спрайт (155 §3 D4, 91 §4.13) ----------
+   Один набор на систему: `layout.SPRITE` вставляет <symbol>, разметка ссылается
+   через <use href="#ui-i-…">. Иконка декоративна (aria-hidden), смысл несут слова. */
+.ui-icon {
+  flex: none; width: 24px; height: 24px;
+  fill: none; stroke: currentColor; stroke-width: 2;
+  stroke-linecap: round; stroke-linejoin: round;
+}
+.ui-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
