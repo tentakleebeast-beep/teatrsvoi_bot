@@ -101,7 +101,10 @@ def test_удаление_файла_кнопкой_с_подтверждени�
     зовёт чат — второй копии удаления нет.
     """
     page = files.FILES_PAGE
-    assert "deleteFileButton(file" in page, "в строке файла нет кнопки удаления"
+    assert "deleteFileButton(file" in page, "в плитке файла нет кнопки удаления"
+    # Кнопка-иконка: подпись для скринридера несёт имя файла (155 §5.1, 91 §4.11).
+    assert 'setAttribute("aria-label", "Удалить файл: " + file.name)' in page
+    assert 'el("button", "ui-grid__remove")' in page
     assert 'api("/webapp/files/" + file.id, { method: "DELETE" })' in page
     assert 'sheet("Удалить файл?"' in page and '"Отмена"' in page
     assert "Файл удалён" in page
@@ -153,16 +156,18 @@ def test_кнопка_скачать_на_экране_файла():
 
 
 def test_строка_списка_открывает_файл_а_не_молчит():
-    """А3 §5: у строки файла появился обработчик — до этого она была мёртвой зоной.
+    """А3 §5, 155 §5.1: у файла появилась цель во всю площадь — ссылка в плитке.
 
-    Обработчик висит на `.ui-row__main`, а не на строке: «Удалить» и шеврон папки
-    остаются отдельными целями и не срабатывают вместе с переходом.
+    Раньше строка была мёртвой зоной, потом обработчик висел на `.ui-row__main`.
+    Теперь плитка — настоящая `<a href="/webapp/file?id=N">`: клавиатурный фокус и
+    площадь нажатия без обработчика, а «Удалить» — сосед ссылки, не её потомок.
     """
     page = files.FILES_PAGE
-    assert 'main.addEventListener("click", function () {' in page
-    assert 'location.href = "/webapp/file?id=" + file.id' in page
-    assert 'chevron.addEventListener("click"' in page
-    assert 'location.href = "/webapp/folder?id=" + file.folder_id' in page
+    assert 'link.href = "/webapp/file?id=" + file.id' in page
+    assert 'link = el("a", "ui-grid__tile")' in page
+    assert "cell.appendChild(link)" in page
+    assert 'main.addEventListener("click"' not in page, "обработчик на мёртвой зоне вернулся"
+    assert "ui-row__chevron" not in page, "второй путь в ту же папку вернулся"
 
 
 def test_слово_вида_одно_на_списки_и_экран():

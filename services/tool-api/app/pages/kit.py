@@ -50,6 +50,112 @@ _BODY = """
   {rows}
 </div>
 
+<h2 class="ui-section__title">Файлы плиткой</h2>
+<div class="ui-grid">
+  <div class="ui-grid__cell">
+    <a class="ui-grid__tile" href="/webapp/files">
+      <span class="ui-grid__icon" aria-hidden="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-audio"></use></svg></span>
+      <span class="ui-grid__body">
+        <span class="ui-grid__name">Репетиция 12 октября.m4a</span>
+        <span class="ui-grid__meta">18,0 МБ · аудио · 44:40</span>
+      </span>
+    </a>
+    <button class="ui-grid__remove" type="button" aria-label="Удалить файл: Репетиция 12 октября.m4a">
+      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-trash"></use></svg>
+    </button>
+  </div>
+  <div class="ui-grid__cell">
+    <a class="ui-grid__tile" href="/webapp/files">
+      <span class="ui-grid__icon" aria-hidden="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-document"></use></svg></span>
+      <span class="ui-grid__body">
+        <span class="ui-grid__name">Гаммы для хора.pdf</span>
+        <span class="ui-grid__meta">420 КБ · документ</span>
+      </span>
+    </a>
+    <button class="ui-grid__remove" type="button" aria-label="Удалить файл: Гаммы для хора.pdf">
+      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-trash"></use></svg>
+    </button>
+  </div>
+  <div class="ui-grid__cell">
+    <a class="ui-grid__tile" href="/webapp/files">
+      <span class="ui-grid__icon" aria-hidden="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-image"></use></svg></span>
+      <span class="ui-grid__body">
+        <span class="ui-grid__name">Афиша.png</span>
+        <span class="ui-grid__meta">1,1 МБ · картинка · Личное/Фото</span>
+      </span>
+    </a>
+    <button class="ui-grid__remove" type="button" aria-label="Удалить файл: Афиша.png">
+      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-trash"></use></svg>
+    </button>
+  </div>
+  <div class="ui-grid__cell ui-grid__cell--wide">
+    <a class="ui-grid__tile ui-grid__tile--wide" href="/webapp/files">
+      <span class="ui-grid__icon" aria-hidden="true"><svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-text"></use></svg></span>
+      <span class="ui-grid__body">
+        <span class="ui-grid__name">Монолог_Гамлета_«Быть_или_не_быть,_вот_в_чём_вопрос»_VIKENT_RU.png</span>
+        <span class="ui-grid__meta">1,1 МБ · картинка · Спектакль/Музыка</span>
+      </span>
+    </a>
+    <button class="ui-grid__remove" type="button" aria-label="Удалить файл: монолог Гамлета">
+      <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-trash"></use></svg>
+    </button>
+  </div>
+</div>
+
+<h2 class="ui-section__title">Папки деревом</h2>
+<ul class="ui-tree">
+  <li class="ui-tree__node">
+    <div class="ui-tree__row">
+      <button class="ui-tree__toggle" type="button" aria-expanded="true" aria-controls="kit-kids-1" aria-label="Свернуть папку Спектакли"><span class="ui-tree__chevron" aria-hidden="true">&#8250;</span></button>
+      <a class="ui-tree__body" href="/webapp/files"><span class="ui-tree__name">Спектакли</span></a>
+      <button class="ui-tree__more" type="button" aria-label="Действия с папкой Спектакли">
+        <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-more"></use></svg>
+      </button>
+    </div>
+    <ul class="ui-tree__children" id="kit-kids-1">
+      <li class="ui-tree__node">
+        <div class="ui-tree__row ui-tree__row--l2">
+          <button class="ui-tree__toggle" type="button" aria-expanded="true" aria-controls="kit-kids-2" aria-label="Свернуть папку Бунин"><span class="ui-tree__chevron" aria-hidden="true">&#8250;</span></button>
+          <a class="ui-tree__body" href="/webapp/files"><span class="ui-tree__name">Бунин</span></a>
+          <button class="ui-tree__more" type="button" aria-label="Действия с папкой Бунин">
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-more"></use></svg>
+          </button>
+        </div>
+        <ul class="ui-tree__children" id="kit-kids-2">
+          <li class="ui-tree__node">
+            <div class="ui-tree__row ui-tree__row--l3">
+              <button class="ui-tree__toggle" type="button" disabled aria-hidden="true" tabindex="-1"></button>
+              <a class="ui-tree__body" href="/webapp/files"><span class="ui-tree__name">заметки</span></a>
+              <button class="ui-tree__more" type="button" aria-label="Действия с папкой заметки">
+                <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-more"></use></svg>
+              </button>
+            </div>
+          </li>
+        </ul>
+      </li>
+      <li class="ui-tree__node">
+        <div class="ui-tree__row ui-tree__row--l2">
+          <button class="ui-tree__toggle" type="button" disabled aria-hidden="true" tabindex="-1"></button>
+          <a class="ui-tree__body" href="/webapp/files"><span class="ui-tree__name">музыка</span></a>
+          <button class="ui-tree__more" type="button" aria-label="Действия с папкой музыка">
+            <svg class="ui-icon" aria-hidden="true" focusable="false"><use href="#ui-i-more"></use></svg>
+          </button>
+        </div>
+      </li>
+    </ul>
+  </li>
+</ul>
+<div class="ui-card">
+  <div class="ui-empty">
+    <div class="ui-empty__title">Файлов пока нет</div>
+    <div class="ui-empty__text">Загрузите первый — он появится здесь и в папке, если вы её указали.</div>
+  </div>
+  <div class="ui-empty">
+    <div class="ui-empty__title">Папок пока нет</div>
+    <div class="ui-empty__text">Создайте первую — общую папку видят все, но правит только администратор.</div>
+  </div>
+</div>
+
 <h2 class="ui-section__title">Пары «термин — значение»</h2>
 <div class="ui-card">
   <dl class="ui-dl">

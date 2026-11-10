@@ -149,6 +149,23 @@ ZOOM_VIEWPORT = ("width=device-width, initial-scale=1, maximum-scale=5, "
                  "user-scalable=yes, viewport-fit=cover")
 
 
+# Спрайт иконок: один `<svg>` со `symbol` на документ (docs/development/91 §4.13,
+# docs/development/155). В разметке — ссылка `<use href="#ui-i-audio">`, поэтому
+# рисунок не копируется по странице и не грузится отдельным файлом.
+# Обводка задаётся классом `.ui-icon` (fill/stroke), символы описывают только путь;
+# `ui-i-more` — исключение: три точки залиты цветом, иначе при `fill:none` их нет.
+SPRITE = """<svg class="ui-sprite" aria-hidden="true" focusable="false">
+<symbol id="ui-i-audio" viewBox="0 0 24 24"><path d="M9 18V6l10-2v12"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="16" r="2"/></symbol>
+<symbol id="ui-i-image" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="2"/><circle cx="9" cy="10" r="1.6"/><path d="M3 17l5-5 4 4 3-3 6 6"/></symbol>
+<symbol id="ui-i-document" viewBox="0 0 24 24"><path d="M6 3h7l5 5v13H6z"/><path d="M13 3v5h5"/></symbol>
+<symbol id="ui-i-text" viewBox="0 0 24 24"><path d="M6 3h7l5 5v13H6z"/><path d="M13 3v5h5"/><path d="M9 12h6"/><path d="M9 16h6"/></symbol>
+<symbol id="ui-i-file" viewBox="0 0 24 24"><path d="M6 3h7l5 5v13H6z"/><path d="M13 3v5h5"/><path d="M10 12a2 2 0 1 1 3.2 1.6c-.7.5-1.2 1-1.2 1.9"/><circle cx="12" cy="18" r=".9"/></symbol>
+<symbol id="ui-i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6"/><path d="M14 11v6"/></symbol>
+<symbol id="ui-i-more" viewBox="0 0 24 24"><circle cx="5" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="12" cy="12" r="1.7" fill="currentColor" stroke="none"/><circle cx="19" cy="12" r="1.7" fill="currentColor" stroke="none"/></symbol>
+</svg>
+"""
+
+
 def page(title: str, body: str, *, tab: str = "", back: str = "",
          action: str = "", caps: list[str] | tuple[str, ...] | set[str] | None = None,
          head: str = "", scripts: str = "", zoom: bool = False) -> str:
@@ -193,6 +210,9 @@ def page(title: str, body: str, *, tab: str = "", back: str = "",
         f"{header}"
         f'<main class="{screen_class}">{body}</main>\n'
         f"{footer}"
+        # Спрайт стоит один раз на документ и до скриптов: символы уже в дереве,
+        # когда скрипт рисует первую плитку.
+        f"{SPRITE}"
         f"{scripts}"
         "</body>\n</html>"
     )

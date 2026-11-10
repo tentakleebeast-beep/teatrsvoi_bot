@@ -12,6 +12,9 @@
   44×44, «Скачать архивом» — своей строкой под списком, а не в ряд с плеером.
 * **Своё — только то, чего нет в системе:** полоса места и порядок треков на
   `.ui-meter` и `.ui-btn--icon`; всё прочее — классы `.ui-*`.
+* **Файлы — плиткой, папки — деревом (155).** Сетка в две колонки с иконкой вида и
+  широкой плиткой для длинного имени; иерархия папок собирается на клиенте из плоского
+  ответа `folders.tree`. Плитка — `files_grid.py`, дерево — `files_tree.py`.
 
 Загрузка идёт мимо сервера: `presign → PUT в хранилище → commit`. Поэтому тут нет
 `<form>` и `multipart`: телефон отдаёт файл прямо в объектное хранилище, а сервер
@@ -20,7 +23,7 @@
 
 from __future__ import annotations
 
-from app.pages import files_actions, files_file, files_folder, layout
+from app.pages import files_actions, files_file, files_folder, files_grid, files_tree, layout
 from app.pages.admin_core import CORE
 
 _BODY_FILES = """
@@ -50,7 +53,7 @@ _BODY_FILES = """
     <h2 class="ui-section__title">Мои файлы</h2>
     <span class="ui-section__meta" id="count"></span>
   </div>
-  <div class="ui-list" id="list"></div>
+  <div class="ui-grid" id="list"></div>
 </section>
 """
 
@@ -86,36 +89,6 @@ _SCRIPT_FILES = r"""
       : percent >= 75 ? " ui-meter__fill--warn" : "");
   }
 
-  function fileRow(file) {
-    var node = el("div", "ui-row");
-    var main = el("span", "ui-row__main");
-    main.appendChild(el("span", "ui-row__title", file.name));
-    var meta = [humanSize(file.size_bytes), kindWord(file.kind, file.name)];
-    if (file.duration_sec) meta.push(mmss(file.duration_sec));
-    if (file.folder) meta.push(file.folder);
-    main.appendChild(el("span", "ui-row__meta", meta.join(" · ")));
-    // Нажатие на имя открывает файл (А3): до этого строка была мёртвой зоной —
-    // нажать можно было только «Удалить». Обработчик на `.ui-row__main`, а не на
-    // строке: «Удалить» и шеврон папки остаются отдельными целями (150 §5.1).
-    main.addEventListener("click", function () {
-      location.href = "/webapp/file?id=" + file.id;
-    });
-    node.appendChild(main);
-    // Удаление — только человек и кнопкой (FR-L8); подтверждение спрашивает лист.
-    var actions = el("span", "ui-track__order");
-    deleteFileButton(file, actions);
-    node.appendChild(actions);
-    if (file.folder_id) {
-      var chevron = el("span", "ui-row__chevron", "\u203a");
-      chevron.addEventListener("click", function (event) {
-        event.stopPropagation();
-        location.href = "/webapp/folder?id=" + file.folder_id;
-      });
-      node.appendChild(chevron);
-    }
-    return node;
-  }
-
   function renderFiles(data) {
     renderQuota(data.quota);
     var rows = data.data || [];
@@ -128,7 +101,10 @@ _SCRIPT_FILES = r"""
         "Загрузите первый — он появится здесь и в папке, если вы её указали."));
       return;
     }
-    rows.forEach(function (file) { list.appendChild(fileRow(file)); });
+    rows.forEach(function (file) { list.appendChild(fileTile(file)); });
+    // Широкая плитка выбирается по раскладке, а не по длине имени: после вставки
+    // браузер уже знает, какое имя не влезло в три строки (155 §2.2).
+    fitTiles(list);
   }
 
   function refresh() {
@@ -144,7 +120,17 @@ _SCRIPT_FILES = r"""
         $("count").textContent = "";
         return null;
       }
-      if (res.status !== 200) { status(problem(res), true); return null; }
+      if (res.status !== 200) {
+        // Своей кнопки «Повторить» нет: плашка `networkGuard` оболочки уже даёт её
+        // и на обрыве, и на 5xx. Экран говорит только, чего нет в этом месте.
+        clear($("list"));
+        $("count").textContent = "";
+        $("list").appendChild(empty("Файлы не загрузились",
+          res.status === 0 || res.status >= 500
+            ? "Сервер не ответил. Повторите, когда появится связь."
+            : problem(res)));
+        return null;
+      }
       renderFiles(res.body);
       return res.body;
     });
@@ -241,8 +227,9 @@ _SCRIPT_FILES = r"""
 
 FILES_PAGE = layout.page(
     "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=files_actions.STYLE,
-    scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FILES
-            + files_actions.SCRIPT + "\n})();\n</script>")
+    scripts="<script>\n" + CORE + files_actions.KIND_WORD + files_grid.ICON_FOR
+            + files_grid.SCRIPT + files_tree.TREE_BUILD + files_tree.SCRIPT
+            + _SCRIPT_FILES + files_actions.SCRIPT + "\n})();\n</script>")
 
 # Экран папки живёт своим модулем (`files_folder.py`): порог ~400 строк на модуль страниц.
 FOLDER_PAGE = files_folder.FOLDER_PAGE

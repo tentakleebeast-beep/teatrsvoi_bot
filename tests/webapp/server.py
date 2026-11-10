@@ -1059,6 +1059,27 @@ app.add_api_route("/webapp/files/list", _files_data({
          "duration_sec": None, "folder": None, "folder_id": None},
         {"id": 3, "name": "01 Увертюра.mp3", "kind": "audio", "size_bytes": 6 * 1024 * 1024,
          "duration_sec": 184, "folder": "Спектакль/Музыка", "folder_id": 7},
+        # Шесть имён с подчёркиваниями — стенд для сетки плиток (155 §2.2): самое
+        # длинное 67 знаков. Первые три и их порядок не меняются: на них опираются
+        # `nth(1)`/`nth(2)` в тестах просмотра.
+        {"id": 4, "name": "Смета_на_реквизит_«Пурга»_вторая_редакция_согласованная.xlsx",
+         "kind": "text", "size_bytes": 96 * 1024, "duration_sec": None,
+         "folder": "Спектакли/Пурга", "folder_id": 4},
+        {"id": 5, "name": "Монолог_Гамлета_«Быть_или_не_быть,_вот_в_чём_вопрос»_VIKENT_RU.png",
+         "kind": "image", "size_bytes": 1169163, "duration_sec": None,
+         "folder": "Спектакли/Бунин", "folder_id": 2},
+        {"id": 6, "name": "Запись_репетиции_второго_состава_полный_прогон_акт_первый.m4a",
+         "kind": "audio", "size_bytes": 14 * 1024 * 1024, "duration_sec": 3620,
+         "folder": "Спектакли/Бунин", "folder_id": 2},
+        {"id": 7, "name": "Программа_концерта_2026_финальная_версия_для_печати.pdf",
+         "kind": "text", "size_bytes": 512 * 1024, "duration_sec": None,
+         "folder": "Архив 2024", "folder_id": 5},
+        {"id": 8, "name": "Афиша_осеннего_сезона_вариант_с_текстом_без_логотипа.png",
+         "kind": "image", "size_bytes": 2 * 1024 * 1024, "duration_sec": None,
+         "folder": None, "folder_id": None},
+        {"id": 9, "name": "Список_реквизита_к_спектаклю_с_пометками_цеха.txt",
+         "kind": "text", "size_bytes": 12 * 1024, "duration_sec": None,
+         "folder": "Спектакли/Бунин/заметки", "folder_id": 3},
     ],
     "quota": {"used": 25 * 1024 * 1024, "total": 1024 * 1024 * 1024, "left": 999 * 1024 * 1024},
 }))
@@ -1364,10 +1385,19 @@ def _data_tag(payload: dict):
 
 app.add_api_route("/webapp/folders", _data({
     "ok": True,
-    "count": 2,
+    "count": 6,
+    # Шесть папок стенда для дерева (155 §4): два корня, второй уровень, третий
+    # уровень и настоящая сирота — ребёнок папки, которой нет в ответе (`folders.tree`
+    # фильтрует `deleted_at is null`, поэтому закрытая папка приходит с `parent_id`
+    # в никуда). Цикл в стенд не кладём: сервер такой формы не производит, цикл
+    # проверяется юнит-тестом.
     "data": [
-        {"id": 11, "parent_id": None, "name": "Спектакли", "path": "Спектакли", "depth": 1},
-        {"id": 12, "parent_id": 11, "name": "Пурга", "path": "Спектакли/Пурга", "depth": 2},
+        {"id": 1, "parent_id": None, "name": "Спектакли", "path": "Спектакли", "depth": 1},
+        {"id": 2, "parent_id": 1, "name": "Бунин", "path": "Спектакли/Бунин", "depth": 2},
+        {"id": 3, "parent_id": 2, "name": "заметки", "path": "Спектакли/Бунин/заметки", "depth": 3},
+        {"id": 4, "parent_id": 2, "name": "музыка", "path": "Спектакли/Бунин/музыка", "depth": 3},
+        {"id": 5, "parent_id": None, "name": "Архив 2024", "path": "Архив 2024", "depth": 1},
+        {"id": 6, "parent_id": 999, "name": "старое", "path": "Архив 2024/старое", "depth": 2},
     ],
 }), methods=["GET"])
 
@@ -1384,6 +1414,10 @@ app.add_api_route("/webapp/folders/{folder_id}/rename", _data_folder({
 app.add_api_route("/webapp/folders/{folder_id}/delete", _data_folder({
     "ok": True, "id": 13, "folders_closed": 1, "files_detached": 0,
 }), methods=["POST"])
+
+app.add_api_route("/webapp/files/{file_id}", _data_file({
+    "ok": True, "id": 1, "deleted": 1,
+}), methods=["DELETE"])
 
 app.add_api_route("/webapp/files/{file_id}/access", _data_file({
     "ok": True, "grant_id": 1, "owner_id": 2, "ttl_hours": 24,
