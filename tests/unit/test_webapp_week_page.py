@@ -65,11 +65,34 @@ def test_сводка_открывается_строкой_а_не_сегмен
 
 
 def test_одна_главная_кнопка_на_экран() -> None:
-    assert week.WEEK_PAGE.count("ui-btn--primary") == 1
-    assert "Отметить сегодня" in week.WEEK_PAGE
+    """V-048 (пересмотр 09.11.2026): на неделе главной кнопки нет.
+
+    Носитель главного действия — строка сегодняшнего дня: её нажатие открывает
+    тот же лист дня, что открывала кнопка «Отметить сегодня». Правило «одна
+    главная кнопка» не отменено, а уточнено: на сводке она осталась.
+    """
+    assert week.WEEK_PAGE.count("ui-btn--primary") == 0
+    assert "Отметить сегодня" not in week.WEEK_PAGE
+    assert "mark-today" not in week.WEEK_PAGE
+    assert "markToday" not in week.WEEK_PAGE
     assert week.SUMMARY_PAGE.count("ui-btn--primary") == 1
     # Кнопки «Сохранить неделю» больше нет: сохраняется сразу после листа.
     assert "Сохранить неделю" not in week.WEEK_PAGE
+
+
+def test_скрипт_не_держит_удалённый_обработчик() -> None:
+    """К22: разметку убрали — привязку и функцию тоже, иначе экран умирает.
+
+    `$("mark-today")` на отсутствующем элементе вернул бы `null`, и
+    `null.onclick` под `"use strict"` оборвал бы IIFE: ниже не выполнились бы
+    `‹`/`›`, шаблон, очистка, привязка строк дней и `boot()`.
+    """
+    html = week.WEEK_PAGE
+    assert '$("mark-today")' not in html
+    assert "markToday" not in html
+    # Скрипт не обрезан: ключевые функции недели на месте.
+    for name in ("openDay", "flush", "fillTemplate", "rememberWeek", "clearWeek"):
+        assert name in html, f"в скрипте недели нет {name}"
 
 
 def test_загрузка_из_листа_на_месте_шаблона() -> None:

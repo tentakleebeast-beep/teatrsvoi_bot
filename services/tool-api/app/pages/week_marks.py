@@ -221,15 +221,4 @@ _SCRIPT_WEEK_MARKS = r"""
     await load(week.start);
     SVOI.toast("Вернул как было.");
   }
-
-  async function markToday() {
-    if (!week) { return; }
-    var find = function () {
-      return week.days.findIndex(function (item) { return item.day === todayIso(); });
-    };
-    var index = find();
-    /* «Сегодня» вне показанной недели — сначала открываем текущую. */
-    if (index < 0) { if (!(await load(""))) { return; } index = find(); }
-    if (index >= 0) { openDay(index); }
-  }
 """
