@@ -18,6 +18,7 @@ import re
 import shutil
 import subprocess
 import sys
+import types
 
 import pytest
 import yaml
@@ -224,3 +225,56 @@ def test_докстринг_скрипта_знает_новые_флаги():
     """Флаги живут в докстринге: по нему дежурный выбирает команду."""
     text = SCRIPT.read_text(encoding="utf-8")
     assert "--check-code" in text and "--code-root" in text
+
+
+def test_итоговая_версия_учёта_не_уходит_назад():
+    """Учёт не понижается: цель из `--files` старше записанной версии — остаётся версия.
+
+    Именно поэтому сверять с кодом надо итог, а не запрошенную цель: старый файл в
+    списке `repair-schema` не отменяет уже уехавшую вперёд `alembic_version`.
+    """
+    module = _module()
+    chain_list = ["063_feedback_attachment", "062_files_studio_access", "061_master_role"]
+    order = {rev: index for index, rev in enumerate(chain_list)}
+
+    assert module.resulting_version("062_files_studio_access",
+                                    "063_feedback_attachment", order) == "063_feedback_attachment"
+    assert module.resulting_version("062_files_studio_access",
+                                    "061_master_role", order) == "062_files_studio_access"
+    assert module.resulting_version("062_files_studio_access", None, order) == "062_files_studio_access"
+
+
+def test_залипший_учёт_впереди_кода_отклоняется_и_повторным_накатом(tmp_path, capsys):
+    """Учёт уже впереди кода, оператор повторяет накат со старым файлом — отказ, не exit 0.
+
+    Состояние после инцидента v0.10.0: `alembic_version` = 063 (голова раннера), на диске
+    выкачен код с головой 062, в `--files` назван 062. Без сверки итоговой версии скрипт
+    видел «цель позади кода», молчал и выходил по раннему «версия равна head» — зелёный
+    workflow при службе в `activating (auto-restart)`. База не нужна: подменяем чтение
+    версии и проверку структуры.
+    """
+    old_code = _code_tree(tmp_path, drop=1)
+    head = _head_revision()
+    older = _previous_revision()
+    module = _module()
+
+    class _Conn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *exc):
+            return False
+
+    module.structure_gaps = lambda url: ([], [])  # type: ignore[method-assign]
+    module.current_version = lambda conn: head  # type: ignore[assignment]
+    module.psycopg = types.SimpleNamespace(connect=lambda url: _Conn())  # type: ignore[assignment]
+
+    code = module.stamp_head(DEAD_DB, ROOT, [f"db/init/{older}.sql"], old_code, True)
+    out = capsys.readouterr().out
+
+    assert code == 1, out
+    assert "НОВАЯ МИГРАЦИЯ ВПЕРЁД ВЫКАЧЕННОГО КОДА" in out, out
+    assert head in out and older in out, "отказ обязан назвать и учёт, и голову кода"
+    assert "Нужен тег" in out
+    assert "учёт актуален" not in out, "ранний выход не должен срабатывать раньше сверки"
+

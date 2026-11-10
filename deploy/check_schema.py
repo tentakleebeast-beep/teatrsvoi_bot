@@ -38,9 +38,11 @@
 (`--code-root`, по умолчанию `/opt/svoi`) и отказывается ставить версию вперёд неё: такой
 миграции работающий код не знает, и `tool-api` не поднимется (`RuntimeError: схема не
 применена`). Случай выката v0.10.0 (10.11.2026): 063 накатили из `main` вперёд тега v0.9.2,
-чья голова — 062, служба ушла в `activating (auto-restart)` на три минуты. Расхождение
-видно в обе стороны: цель позади головы кода — сообщение «схема отстаёт», её лечит накат
-миграций из выкаченного тега.
+чья голова — 062, служба ушла в `activating (auto-restart)` на три минуты. Сверяется не
+запрошенная цель из `--files`, а **итоговая** версия учёта: назад версия не идёт, поэтому
+уже записанная ревизия впереди кода видна и при повторном накате со старым файлом — иначе
+скрипт рапортовал бы зелёным в сломанном состоянии. Расхождение видно в обе стороны: цель
+позади головы кода — сообщение «схема отстаёт», её лечит накат миграций из выкаченного тега.
 
 `--check-code` — та же сверка без базы: read-only проверка «файлы из `--files` не новее
 головы выкаченного кода» до наката SQL. Ею workflow `repair-schema.yml` валится раньше,
@@ -242,6 +244,19 @@ def code_note(relation: str, target: str, deployed_head: str, tag: str | None,
         f"Порядок выката: docs/infrastructure/35 §10.2.")
 
 
+def resulting_version(target: str, version: str | None, order: dict[str, int]) -> str:
+    """Какая ревизия останется в `alembic_version` после наката.
+
+    Назад учёт не идёт: если записанная версия новее цели из `--files`, остаётся она.
+    Поэтому сверять с головой кода надо не запрошенную цель, а итог: при уже залипшем
+    состоянии версия впереди кода не видна по списку старых файлов. Ревизию, которой
+    нет в цепочке этого checkout, понизить нельзя — тоже остаётся она.
+    """
+    if version is None or version not in order:
+        return target
+    return version if order[version] < order[target] else target
+
+
 def guard_code(target: str, code_root: Path | None, explicit: bool) -> bool:
     """True — версию ставить нельзя: цель впереди головы выкаченного кода.
 
@@ -281,10 +296,11 @@ def stamp_head(url: str, root: Path, files: list[str], code_root: Path | None = 
     chain_list = chain(root)
     head = chain_list[0]
     try:
-        target, unknown = target_revision(chain_list, files) if files else (head, [])
+        wanted, unknown = target_revision(chain_list, files) if files else (head, [])
     except ValueError as exc:
         print(str(exc))
         return 1
+    target = wanted
     for item in unknown:
         print(f"файл {item} не меняет версию схемы: ревизии с таким id в цепочке нет")
 
@@ -308,19 +324,29 @@ def stamp_head(url: str, root: Path, files: list[str], code_root: Path | None = 
     print(version_line(version, head))
 
     order = {rev: index for index, rev in enumerate(chain_list)}
+    # Сверка с выкаченным кодом идёт и здесь, по ИТОГОВОЙ версии учёта: назад версия
+    # не идёт, поэтому при уже залипшем состоянии (v0.10.0: в alembic_version 063, а код
+    # на диске знает 062) расхождение задаёт записанная version, а не цель из `--files`.
+    # Без этой сверки повторный накат со списком старого файла рапортовал зелёным,
+    # а `tool-api` после рестарта снова уходил в `activating (auto-restart)`.
+    final = resulting_version(target, version, order)
+    if guard_code(final, code_root, code_root_explicit):
+        return 1
+    target = final
+
     if version == head:
         print("версия схемы уже равна head: учёт актуален, ничего не меняю")
         return 0
-    if version in order:
-        if order[version] < order[target]:
-            # Назад версия не идёт: применённый позже файл не отменяет учёт.
-            print(f"версия уже впереди цели {target}: оставляю {version}")
-            target = version
-        elif order[version] > order[target]:
-            print(f"ставлю версию {target} (было {version})")
-    else:
-        print(f"версия {version or 'отсутствует'} в цепочке этого checkout "
+    if version is None:
+        print(f"ставлю версию {target}: учёта версии не было")
+    elif version not in order:
+        print(f"версия {version} в цепочке этого checkout "
               f"не найдена — ставлю {target} после сверки структуры")
+    elif order[version] < order[wanted]:
+        # Назад версия не идёт: применённый позже файл не отменяет учёт.
+        print(f"версия уже впереди цели {wanted}: оставляю {version}")
+    elif order[version] > order[wanted]:
+        print(f"ставлю версию {wanted} (было {version})")
 
     if version != target:
         stamp(url, root, target)
