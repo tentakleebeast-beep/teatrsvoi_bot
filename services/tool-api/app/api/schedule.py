@@ -1039,8 +1039,11 @@ def webapp_slots_people(who: dict = Depends(core.webapp_actor)) -> dict:
             "select id, display_name from participant "
             "where status <> 'archived' order by display_name").fetchall()
         disciplines = core.disciplines_out(conn, viewer["id"])
+        roles = core.resolve_roles(conn, viewer["id"])
     return {"ok": True, "people": [dict(row) for row in rows],
-            "my_disciplines": disciplines}
+            "my_disciplines": disciplines,
+            # предупреждение вместо молча скрытой секции дисциплины (D3, D7)
+            "warnings": core.discipline_warnings(roles, disciplines, audience="self")}
 
 
 

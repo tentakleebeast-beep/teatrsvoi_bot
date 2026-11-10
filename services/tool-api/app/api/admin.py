@@ -442,8 +442,8 @@ class GrantIn(core.ApiIn):
     allowed: bool | None = None
     reason: str | None = None
     # Коды дисциплин, которые педагог ведёт (`discipline.code`, как в `AssignIn.discipline`
-    # и `GET /tools/disciplines`). Обязательны при выдаче `master`: роль без дисциплины
-    # не может выполнить свою работу (140 §2.2, V-037 вариант а).
+    # и `GET /tools/disciplines`). Необязательны: роль без дисциплины выдаётся, ответ
+    # несёт предупреждение `master_without_discipline` (V-037, 08.11.2026).
     disciplines: list[str] | None = None
 
 
@@ -460,14 +460,15 @@ def capability_catalog(who: dict = Depends(core.require("participants.view"))) -
 
 
 def _disciplines_to_teach(conn, body: GrantIn) -> list[str]:
-    """Дисциплины педагога из тела запроса: непустой список существующих кодов.
+    """Дисциплины педагога из тела запроса: список существующих кодов, можно пустой.
 
-    Отказ до записи: роль без дисциплины не попадает в базу, связь не создаётся
-    (140 §2.2, V-037 вариант а — «запрещать выдачу»).
+    Пустой список — не отказ: роль выдаётся, мастер работает сразу, а недостающее
+    называется предупреждением в ответе (V-037). Неизвестный код по-прежнему отказ
+    **до записи**: роль не должна появиться, если запрос был с опечаткой.
     """
     codes = [code.strip() for code in (body.disciplines or []) if code and code.strip()]
     if not codes:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST, "master_discipline_required")
+        return []
     rows = conn.execute("select code from discipline where code = any(%s)",
                         (codes,)).fetchall()
     known = {row["code"] for row in rows}
@@ -498,7 +499,8 @@ def grant(body: GrantIn, who: dict = Depends(core.require("participants.manage")
         if person is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "participant_not_found")
 
-        # Выдача педагога: дисциплина обязательна и проверяется до записи.
+        # Выдача педагога: дисциплины необязательны, но проверяются до записи —
+        # опечатка в коде не должна оставить роль в базе (V-037).
         teaching = (_disciplines_to_teach(conn, body)
                     if body.role == "master" and body.enabled else [])
 
@@ -568,7 +570,9 @@ def grant(body: GrantIn, who: dict = Depends(core.require("participants.manage")
 
         roles = core.resolve_roles(conn, body.participant_id)
         caps = core.resolve_caps(conn, body.participant_id)
-    return {"ok": True, "roles": roles, "capabilities": caps}
+        disciplines = core.disciplines_out(conn, body.participant_id)
+    return {"ok": True, "roles": roles, "capabilities": caps,
+            "warnings": core.discipline_warnings(roles, disciplines, audience="admin")}
 
 
 
@@ -586,7 +590,8 @@ def participant_discipline(body: DisciplineIn,
     Право — `participants.manage`, как у `/admin/grant`: это правка связей человека, а не
     расписания. Связь предметная: роль `master` при снятии дисциплины **не** отзывается
     (140 §1) — доступ снимается отдельным отзывом роли. Последнюю дисциплину у мастера
-    снять нельзя: роль без дисциплины не может выбрать тренинг (V-037 вариант а).
+    снять можно: ответ несёт предупреждение `master_without_discipline` вместо `409`
+    (V-037, 08.11.2026).
     """
     with core.pool.connection() as conn:
         person = conn.execute("select id, display_name from participant where id = %s",
@@ -603,14 +608,6 @@ def participant_discipline(body: DisciplineIn,
             core.audit(conn, "human", who.get("id"), "rbac.discipline.grant", "participant",
                        str(body.participant_id), after={"discipline": body.discipline})
         else:
-            if "master" in core.resolve_roles(conn, body.participant_id):
-                left = conn.execute(
-                    "select count(*) as n from participant_discipline "
-                    "where participant_id = %s and relation = 'teacher' "
-                    "and discipline_id <> %s",
-                    (body.participant_id, discipline["id"])).fetchone()["n"]
-                if left == 0:
-                    raise HTTPException(status.HTTP_409_CONFLICT, "master_without_discipline")
             conn.execute("delete from participant_discipline "
                          "where participant_id = %s and discipline_id = %s "
                          "and relation = 'teacher'",
@@ -619,7 +616,9 @@ def participant_discipline(body: DisciplineIn,
                        str(body.participant_id), after={"discipline": body.discipline})
 
         disciplines = core.disciplines_out(conn, body.participant_id)
-    return {"ok": True, "participant_id": body.participant_id, "disciplines": disciplines}
+        roles = core.resolve_roles(conn, body.participant_id)
+    return {"ok": True, "participant_id": body.participant_id, "disciplines": disciplines,
+            "warnings": core.discipline_warnings(roles, disciplines, audience="admin")}
 
 
 
@@ -982,7 +981,9 @@ def webapp_admin_approve(body: ApproveIn, who: dict = Depends(core.webapp_actor)
 @router.post("/webapp/admin/grant")
 def webapp_admin_grant(body: GrantIn, who: dict = Depends(core.webapp_actor)) -> dict:
     """Выдать или отозвать роль/возможность из Mini App (`participants.manage`)."""
-    return grant(body, who=core._webapp_require(who, "participants.manage"))
+    return grant(body, who=core._webapp_require(
+        who, "participants.manage", deny_code=core.MANAGE_FORBIDDEN_CODE,
+        deny_text=core.MANAGE_FORBIDDEN_TEXT))
 
 
 
@@ -990,7 +991,9 @@ def webapp_admin_grant(body: GrantIn, who: dict = Depends(core.webapp_actor)) ->
 def webapp_admin_discipline(body: DisciplineIn,
                             who: dict = Depends(core.webapp_actor)) -> dict:
     """Дисциплины педагога из Mini App: тот же обработчик и то же право, что у чата."""
-    return participant_discipline(body, who=core._webapp_require(who, "participants.manage"))
+    return participant_discipline(body, who=core._webapp_require(
+        who, "participants.manage", deny_code=core.MANAGE_FORBIDDEN_CODE,
+        deny_text=core.MANAGE_FORBIDDEN_TEXT))
 
 
 

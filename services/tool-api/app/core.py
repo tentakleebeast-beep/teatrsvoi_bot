@@ -211,6 +211,37 @@ def disciplines_out(conn, participant_id: int) -> list[dict]:
 
 
 
+# Тексты предупреждения «мастер без дисциплины» — единственное место, где они живут.
+# Клиенты (JS Mini App, чат) печатают `warnings[].text` как есть и не выводят состояние
+# из роли сами: иначе экран и сервер разойдутся молча (D3 дизайна V-037).
+DISCIPLINE_WARNING_TEXTS = {
+    "admin": "У педагога нет дисциплины: назначить тренинг он не сможет, "
+             "пока не выберете.",
+    "self": "Дисциплина не выбрана: назначить тренинг не получится. "
+            "Поменять её может администратор.",
+}
+
+# Отказ на админские действия в Mini App без `participants.manage` (Б3, docs/141 §4.2):
+# человек видит словами, кто это делает, а не «не хватает прав».
+MANAGE_FORBIDDEN_CODE = "participants_manage_forbidden"
+MANAGE_FORBIDDEN_TEXT = "Роли и дисциплины педагога меняет администратор."
+
+
+def discipline_warnings(roles, disciplines, *, audience: str = "admin") -> list[dict]:
+    """Предупреждения о дисциплинах педагога: `[{code, text}]`, всегда список (D5).
+
+    Мастер без единой дисциплины — не отказ, а предупреждение (решение владельца
+    V-037, 08.11.2026): роль выдаётся, а экран говорит словами, чего не хватает.
+    Для всех, кто не мастер, и для мастера с дисциплинами — пустой список.
+    """
+    if "master" not in (roles or []) or disciplines:
+        return []
+    return [{"code": "master_without_discipline",
+             "text": DISCIPLINE_WARNING_TEXTS[audience]}]
+
+
+
+
 # Схема БД описывается один раз — файлами db/init/*.sql, накат и учёт — Alembic
 # (docs/reports/132). Второго описания здесь нет намеренно: `DDL` с подмножеством
 # таблиц поднимал сервис на отставшей базе, и Mini App падал 500-й на новых колонках.
@@ -411,6 +442,8 @@ def _person_card(participant_id: int, viewer_id: int | None = None,
         "tariff_next": _tariff_state(row, _next_month_start(today)),
         "plays": row["plays"],
         "roles_note": row["roles_note"],
+        # предупреждение о дисциплине: ключ есть всегда, даже пустой (D5)
+        "warnings": discipline_warnings(roles, disciplines, audience="admin"),
         "shows": [{"id": r["id"], "title": r["title"],
                    "starts_at": r["starts_at"].isoformat(),
                    "status": r["status"]} for r in shows],
@@ -709,11 +742,14 @@ def _webapp_viewer(who: dict) -> dict:
 
 
 
-def _webapp_require(who: dict, capability: str) -> dict:
+def _webapp_require(who: dict, capability: str, *, deny_code: str | None = None,
+                    deny_text: str | None = None) -> dict:
     """Право на действие в Mini App: те же правила, что у `require()`.
 
     `require()` — зависимость FastAPI, а здесь обработчик зовётся напрямую;
     без этой проверки действие осталось бы без контроля прав.
+    `deny_code`/`deny_text` — слова отказа для конкретного действия (Б3, docs/141
+    §4.2): запись `access.denied` в аудит остаётся на месте, меняется только ответ.
     """
     viewer = _webapp_viewer(who)
     if viewer["status"] not in ("active",):
@@ -724,7 +760,9 @@ def _webapp_require(who: dict, capability: str) -> dict:
             audit(conn, "human", viewer.get("id"), "access.denied", "capability", capability,
                   after={"required": capability, "roles": viewer.get("roles", []),
                          "via": "webapp"})
-        raise HTTPException(status.HTTP_403_FORBIDDEN, f"capability required: {capability}")
+        raise ApiError(status.HTTP_403_FORBIDDEN,
+                       deny_text or f"capability required: {capability}",
+                       code=deny_code or "capability_required")
     return viewer
 
 

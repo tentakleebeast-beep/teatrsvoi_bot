@@ -109,11 +109,14 @@ _SCRIPT_PEOPLE = r"""
 
   function changeRole(person, role, enabled, disciplines) {
     var payload = { participant_id: person.id, role: role, enabled: enabled };
-    // Дисциплины передаются только при выдаче педагога: без них сервер отвечает
-    // `master_discipline_required` — отказ придёт словами, но лучше не отправлять
+    // Дисциплины передаются, только если их выбрали: роль педагога выдаётся и без
+    // них, ответ несёт предупреждение `master_without_discipline` (V-037).
     if (disciplines && disciplines.length) { payload.disciplines = disciplines; }
     api("/webapp/admin/grant", payload).then(function (res) {
       if (res.status >= 200 && res.status < 300) {
+        // Карточка перечитывается: выдача роли без дисциплины приносит
+        // предупреждение в ответе, и оно должно появиться в карточке (V-037)
+        delete cards[person.id];
         closeSheet();
         toast((enabled ? "Роль выдана: " : "Роль отозвана: ")
               + (ROLE[role] || role) + " — " + person.display_name);
@@ -218,6 +221,11 @@ _SCRIPT_PEOPLE = r"""
         ? "не назначен" : money(tariff[person.id]) + " в месяц");
       if (card.phone) pair(dl, "Телефон", card.phone);
       body.appendChild(dl);
+      // Предупреждение о дисциплине — текстом сервера, без своей копии слов (D3)
+      var warnings = card.warnings || [];
+      if (warnings.length) {
+        body.appendChild(el("div", "ui-alert ui-alert--warn", warnings[0].text));
+      }
     }
 
     if (ACTIONS.manage_rights) {

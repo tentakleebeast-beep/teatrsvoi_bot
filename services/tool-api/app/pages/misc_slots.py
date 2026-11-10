@@ -10,6 +10,8 @@ from app.pages import layout
 from app.pages.misc_common import JS_COMMON as _JS_COMMON
 from app.pages.misc_slots_denied import DENIED_BODY as _DENIED_BODY
 from app.pages.misc_slots_denied import DENIED_SCRIPT as _DENIED_SCRIPT
+from app.pages.misc_slots_discipline import DISCIPLINE_BODY as _DISCIPLINE_BODY
+from app.pages.misc_slots_discipline import DISCIPLINE_SCRIPT as _DISCIPLINE_SCRIPT
 
 _BODY_SLOTS = _DENIED_BODY + """
 <div id="search-form">
@@ -21,11 +23,7 @@ _BODY_SLOTS = _DENIED_BODY + """
     <button class="ui-chip" type="button" data-kind="rental">Аренда зала</button>
   </div>
 </section>
-
-<section class="ui-section" id="discipline-section" hidden>
-  <div class="ui-section__head"><h2 class="ui-section__title">Дисциплина</h2></div>
-  <div class="ui-chips" id="disciplines"></div>
-</section>
+""" + _DISCIPLINE_BODY + """
 
 <section class="ui-section">
   <div class="ui-section__head"><h2 class="ui-section__title">Когда</h2></div>
@@ -75,7 +73,7 @@ _BODY_SLOTS = _DENIED_BODY + """
 </div>
 """
 
-_SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/week\";\n" + _JS_COMMON + _DENIED_SCRIPT + r"""
+_SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/week\";\n" + _JS_COMMON + _DENIED_SCRIPT + _DISCIPLINE_SCRIPT + r"""
   var $ = function (id) { return document.getElementById(id); };
   var state = {};
   var people = [];
@@ -85,6 +83,9 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
   // Дисциплины мастера из `/webapp/slots/people`: у администратора и организатора
   // список пуст, тогда выбор не рисуется (140 §4.2).
   var myDisciplines = [];
+  // Предупреждение о пустом списке дисциплин: текст приходит с сервера
+  // (`warnings`, audience="self"), своих слов на экране нет (D3).
+  var warnings = [];
   var discipline = "";
   tgBoot();
 
@@ -103,23 +104,6 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
       ? "Аренда считается по залу: занятость труппы не важна."
       : "Нажатие: обязателен → желателен → не нужен.";
     drawDiscipline();
-  }
-
-  /* Дисциплина тренинга: без неё состав подтягивал бы всех педагогов и мастер
-     назначал бы чужой предмет. Одна дисциплина — выбрана заранее. */
-  function drawDiscipline() {
-    var section = $("discipline-section");
-    section.hidden = !(kind === "training" && myDisciplines.length);
-    if (section.hidden) { return; }
-    var host = $("disciplines");
-    host.textContent = "";
-    myDisciplines.forEach(function (item) {
-      var chip = make("button", "ui-chip" + (item.code === discipline ? " ui-chip--on" : ""),
-                      item.name);
-      chip.type = "button";
-      chip.addEventListener("click", function () { discipline = item.code; drawDiscipline(); });
-      host.appendChild(chip);
-    });
   }
 
   function showError(text) {
@@ -387,6 +371,7 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
       return { id: Number(person.id), display_name: person.display_name };
     });
     myDisciplines = result.body.my_disciplines || [];
+    warnings = result.body.warnings || [];
     if (myDisciplines.length === 1) { discipline = myDisciplines[0].code; }
     drawDiscipline();
     drawPeople();
