@@ -16,12 +16,11 @@
 from __future__ import annotations
 
 import base64
-import io
 import json
 import pathlib
 import struct
 import sys
-import zipfile
+from urllib.parse import quote
 
 from fastapi import FastAPI, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
@@ -379,7 +378,7 @@ def reset_events() -> dict:
     FEEDBACK_EVENTS.clear()
     SHEET_LOADED.clear()
     FOLDER_ORDER_CALLS.clear()
-    FOLDER_ZIP_CALLS.clear()
+    LINK_CALLS.clear()
     return {"ok": True}
 
 
@@ -1144,6 +1143,19 @@ VIEW_FILES = {
     6: {"ok": True, "id": 6, "url": "/stand/expired.png", "expires_in": 900, "kind": "image",
         "name": "Протухшая ссылка.png", "mime": "image/png", "size_bytes": 2048,
         "ext": "png", "folder": None, "as_admin": False, "cold_restored": False},
+    # Файлы папки 7: без них «Скачать» в строке получала 404, хотя строка есть.
+    31: {"ok": True, "id": 31, "url": "/stand/tone.wav?track=1", "expires_in": 900,
+         "kind": "audio", "name": "01 Увертюра.mp3", "mime": "audio/mpeg",
+         "size_bytes": 18 * 1024 * 1024, "ext": "mp3", "folder": "Спектакль/Музыка",
+         "as_admin": False, "cold_restored": False},
+    32: {"ok": True, "id": 32, "url": "/stand/tone.wav?track=2", "expires_in": 900,
+         "kind": "audio", "name": "02 Выход героя.mp3", "mime": "audio/mpeg",
+         "size_bytes": 9 * 1024 * 1024, "ext": "mp3", "folder": "Спектакль/Музыка",
+         "as_admin": False, "cold_restored": False},
+    33: {"ok": True, "id": 33, "url": "/stand/tone.wav?track=3", "expires_in": 900,
+         "kind": "audio", "name": "03 Финал.mp3", "mime": "audio/mpeg",
+         "size_bytes": 24 * 1024 * 1024, "ext": "mp3", "folder": "Спектакль/Музыка",
+         "as_admin": False, "cold_restored": False},
     # Длинное имя в две строки: экран обязан уложиться в высоту без прокрутки (К8).
     8: {"ok": True, "id": 8, "url": "/stand/image.png", "expires_in": 900, "kind": "image",
         "name": "Монолог Гамлета «Быть или не быть, вот в чём вопрос» — снимок экрана 09.11.2026.png",
@@ -1213,10 +1225,9 @@ def stand_view_calls(file_id: int, reset: int = 0) -> dict:
 app.add_api_route("/webapp/files/{file_id}/view", _webapp_file_view(), methods=["GET"])
 
 
-#: Журналы папки: по ним видно, что экран действительно сходил в `POST /order`
-#: и `GET /zip`, а не только переставил строки на месте (А3 §6, карта t_4e6780d1).
+#: Журналы папки: по ним видно, что экран действительно сходил в `POST /order`,
+#: а не только переставил строки на месте (А3 §6, карта t_4e6780d1).
 FOLDER_ORDER_CALLS: dict[int, list[dict]] = {}
-FOLDER_ZIP_CALLS: dict[int, int] = {}
 
 
 @app.post("/webapp/folder/{folder_id}/order")
@@ -1239,39 +1250,48 @@ def stand_folder_order(folder_id: int, reset: int = 0) -> dict:
             "last": calls[-1] if calls else None}
 
 
-def _folder_zip_bytes(folder_id: int) -> bytes:
-    """Маленький настоящий zip: важно, что экран получает поток и начинает загрузку."""
-    buffer = io.BytesIO()
-    with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr(f"папка-{folder_id}.txt", f"Папка {folder_id}\n")
-    return buffer.getvalue()
+#: Журнал выдачи ссылок на скачивание: по нему видно, что экран сходил в
+#: `GET /webapp/files/{id}/link`, а не только переставил разметку (Б2 §8).
+LINK_CALLS: dict[int, int] = {}
 
 
-@app.get("/webapp/folder/{folder_id}/zip")
-def webapp_folder_zip(folder_id: int, request: Request):
-    """Архив папки: 200 потоком, а для папки 12 — отказ 413, как у боевого потолка.
+def _webapp_file_link():
+    """Ответ стенда на `/webapp/files/{id}/link`: 200 со ссылкой, 404 и 500.
 
-    В бою `files_store.stream_folder_zip` отдаёт 413 с этой фразой в `detail`
-    (`api/files.py`), и экран печатает её словами, а не пустой экран (§6).
+    Адрес ссылки ведёт на страницу стенда с именем файла: по нему тест видит,
+    что браузеру открыли именно этот файл, а не что попало. Файл 6 — обрыв
+    связи (500), как и у `/view`, чтобы проверить баннер оболочки (Б2 §6).
     """
-    denied = _files_guard(request)
-    if denied is not None:
-        return denied
-    FOLDER_ZIP_CALLS[folder_id] = FOLDER_ZIP_CALLS.get(folder_id, 0) + 1
-    if folder_id == 12:
-        return JSONResponse({"ok": False, "code": "archive_too_large",
-                             "detail": "Архив больше 100 МБ — скачивайте по файлам."},
-                            status_code=413)
-    return Response(_folder_zip_bytes(folder_id), media_type="application/zip",
-                    headers={"Content-Disposition": f"attachment; filename=folder-{folder_id}.zip"})
+
+    async def handler(request: Request, file_id: int):
+        denied = _files_guard(request)
+        if denied is not None:
+            return denied
+        LINK_CALLS[file_id] = LINK_CALLS.get(file_id, 0) + 1
+        if file_id == 6:
+            return JSONResponse({"ok": False, "code": "storage_unavailable",
+                                 "detail": "Сервис файлов не ответил."},
+                                status_code=500)
+        payload = VIEW_FILES.get(file_id)
+        if payload is None:
+            return JSONResponse({"ok": False, "error": "file_not_found",
+                                 "detail": "Файл не найден."}, status_code=404)
+        name = payload["name"]
+        return JSONResponse({"ok": True, "url": f"/stand/download/{file_id}/{quote(name)}",
+                             "expires_in": 900, "name": name,
+                             "size_bytes": payload["size_bytes"]})
+    return handler
 
 
-@app.get("/stand/zip-calls/{folder_id}")
-def stand_zip_calls(folder_id: int, reset: int = 0) -> dict:
-    count = FOLDER_ZIP_CALLS.get(folder_id, 0)
+@app.get("/stand/link-calls/{file_id}")
+def stand_link_calls(file_id: int, reset: int = 0) -> dict:
+    count = LINK_CALLS.get(file_id, 0)
     if reset:
-        FOLDER_ZIP_CALLS[folder_id] = 0
-    return {"folder_id": folder_id, "count": count}
+        LINK_CALLS[file_id] = 0
+    return {"file_id": file_id, "count": count}
+
+
+app.add_api_route("/webapp/files/{file_id}/link", _webapp_file_link(), methods=["GET"])
 
 
 @app.get("/stand/image.png")

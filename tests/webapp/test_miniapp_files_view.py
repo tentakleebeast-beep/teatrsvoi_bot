@@ -11,7 +11,7 @@
   документ показывает карточку (не «Файл не найден»);
 * «Слушать всё» и автопереход идут только по звуку — pdf между треками очередь не ломает;
 * стрелки порядка меняют строки местами и шлют `/order` с новым списком id;
-* «Скачать архивом» отдаёт поток и пишет «Архив скачивается.», а отказ 413 — словами;
+* архива на экране папки больше нет — файл забирают кнопкой «Скачать» (Б2, V-052 а);
 * истёкшая ссылка повторяется ровно один раз, затем понятная заглушка;
 * 404/410/403 говорят словами, кнопок не предлагают;
 * папка без звука не заводит ни «Слушать всё», ни плеера.
@@ -127,7 +127,7 @@ def test_картинка_без_прокрутки(app_page, file_id) -> None:
 
 
 def test_аудио_играет_и_не_зовёт_браузер(app_page) -> None:
-    """§7.4: у звука единственное действие — плеер, «Открыть в браузере» нет.
+    """§7.4: у звука плеер и «Скачать», «Открыть в браузере» нет.
 
     Плеер ищем по элементу и свойству `controls`, а не селектором `audio[controls]`
     и не по видимости: в Linux-WebKit `<audio>` без загруженного медиа имеет
@@ -144,7 +144,8 @@ def test_аудио_играет_и_не_зовёт_браузер(app_page) -> 
         " controls: a.controls} : null; }")
     assert player == {"count": 1, "controls": True}, f"плеера с управлением нет: {player}"
 
-    assert page.locator("#file-actions button").count() == 0
+    assert page.locator("#file-actions button").count() == 1
+    assert page.locator("#file-actions button").inner_text() == "Скачать"
     assert "аудио" in page.inner_text("#file-meta")
 
 
@@ -159,7 +160,7 @@ def test_документ_открывается_в_браузере_свеже�
     before = page.request.get(f"{page.url.split('/webapp/file')[0]}/stand/view-calls/2").json()
     page.evaluate("() => { window.__opened = '';"
                   " window.Telegram.WebApp.openLink = function (url) { window.__opened = url; }; }")
-    page.locator("#file-actions button").click()
+    page.locator("#file-actions button:has-text('Открыть в браузере')").click()
     page.wait_for_function("() => window.__opened && window.__opened.length > 0", timeout=5_000)
     assert "/stand/sample.pdf" in page.evaluate("() => window.__opened")
     after = page.request.get(f"{page.url.split('/webapp/file')[0]}/stand/view-calls/2").json()
@@ -227,7 +228,7 @@ def test_папка_из_документов_без_плеера(app_page) -> N
     assert page.locator("#tracks .ui-row").count() == 2
     assert page.locator("audio").count() == 0, "папка из pdf завела плеер"
     assert page.locator("#play-all").is_visible() is False
-    assert page.locator("#zip").is_visible() is True
+    assert page.locator("#zip").count() == 0, "кнопка архива вернулась"
     assert "2 файла" in page.inner_text("#subtitle"), page.inner_text("#subtitle")
     assert "документ" in page.inner_text("#tracks")
 
@@ -319,36 +320,12 @@ def test_порядок_треков_меняет_строки_и_шлёт_order
     assert not page.svoi_errors, page.svoi_errors
 
 
-def test_архив_скачивается_и_пишет_об_этом(app_page) -> None:
-    """§6.6: «Скачать архивом» получает поток и начинает загрузку — это видно."""
-    page = app_page("/webapp/folder?id=8")
-    _tracks(page, 2)
-    _stand(page, "zip-calls/8?reset=1")
-
-    with page.expect_download(timeout=10_000) as caught:
-        page.locator("#zip").click()
-    download = caught.value
-    assert download.suggested_filename.endswith(".zip"), download.suggested_filename
-
-    page.wait_for_function(
-        "() => document.querySelector('#status').textContent.indexOf('Архив скачивается.') >= 0",
-        timeout=10_000)
-    assert _wait_stand(page, "zip-calls/8", lambda data: data["count"] >= 1)["count"] >= 1
-    assert not page.svoi_errors, page.svoi_errors
-
-
-def test_архив_413_говорит_словами_а_не_пустым_экраном(app_page) -> None:
-    """§6.6: потолок архива — отказ в `detail`, экран печатает его, а не пустое место."""
-    page = app_page("/webapp/folder?id=12")
-    _tracks(page, 1)
-    _stand(page, "zip-calls/12?reset=1")
-
-    page.locator("#zip").click()
-    page.wait_for_function(
-        "() => document.querySelector('#status').textContent"
-        ".indexOf('Архив больше 100 МБ — скачивайте по файлам.') >= 0", timeout=10_000)
-    status = page.inner_text("#status")
-    assert "Архив больше 100 МБ" in status, status
-    assert page.locator("#tracks .ui-row").count() == 1, "отказ архива стёр папку"
-    assert _wait_stand(page, "zip-calls/12", lambda data: data["count"] >= 1)
-    assert not page.svoi_errors, page.svoi_errors
+def test_архива_на_экране_папки_нет(app_page) -> None:
+    """Б2/V-052 (а): архива в Mini App больше нет — ни кнопки, ни текста, ни 413."""
+    for folder_id, count in ((8, 2), (12, 1)):
+        page = app_page(f"/webapp/folder?id={folder_id}")
+        _tracks(page, count)
+        assert page.locator("#zip").count() == 0, "кнопка архива вернулась"
+        assert "Скачать архивом" not in page.inner_text("body")
+        assert "Архив" not in page.inner_text("#status")
+        assert not page.svoi_errors, page.svoi_errors

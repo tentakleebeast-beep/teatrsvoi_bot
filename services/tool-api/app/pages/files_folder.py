@@ -11,7 +11,8 @@
   при первом воспроизведении, а в статической разметке его нет;
 * нажатие на строку `audio` играет, на любую другую — открывает `/webapp/file?id=N`;
   стрелки порядка остаются у всех строк (порядок — свойство папки, не вида);
-* «Скачать архивом» видна, если в папке есть файлы.
+* «Скачать» в строке отдаёт один файл ссылкой на хранилище; архива в Mini App нет —
+  его забирают командой `/zip` в чате (V-052 а).
 
 Помощники (`$`, `el`, `api`, `problem`, `status`, `auth`) приходят из CORE и живут в
 общем замыкании страницы — скрипт просто подклеивается к `files.py`.
@@ -29,7 +30,6 @@ _BODY_FOLDER = files_actions.EMPTY_FOLDER + """
 <div id="player-slot"></div>
 <div class="ui-actions files-actions">
   <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="play-all" hidden>Слушать всё</button>
-  <button class="ui-btn ui-btn--block" type="button" id="zip" hidden>Скачать архивом</button>
 </div>
 <p class="ui-small ui-muted" id="status"></p>
 """
@@ -74,6 +74,21 @@ _SCRIPT_FOLDER = r"""
     main.appendChild(el("span", "ui-row__meta", meta.filter(Boolean).join(" \u00b7 ")));
     node.appendChild(main);
 
+    // «Скачать» в строке: 44×44 со встроенной SVG-стрелкой в лоток. Символ U+2B07
+    // запрещён тестом на эмодзи на экранах файлов, поэтому иконка нарисована.
+    var download = el("button", "ui-btn ui-btn--sm ui-btn--icon");
+    download.type = "button";
+    download.setAttribute("aria-label", "Скачать");
+    download.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none"'
+      + ' stroke="currentColor" stroke-width="2" stroke-linecap="round"'
+      + ' stroke-linejoin="round" aria-hidden="true">'
+      + '<path d="M12 4v10M8 10l4 4 4-4M5 19h14"/></svg>';
+    download.addEventListener("click", function (event) {
+      event.stopPropagation();
+      downloadOne(track);
+    });
+    node.appendChild(download);
+
     var order = el("span", "ui-track__order");
     var up = el("button", "ui-btn ui-btn--sm ui-btn--icon", "\u2191");
     up.type = "button";
@@ -106,13 +121,11 @@ _SCRIPT_FOLDER = r"""
       list.appendChild(empty("В папке пока пусто",
         "Файлы появятся, когда их положат в папку из бота."));
       toggle($("play-all"), false);
-      toggle($("zip"), false);
       return;
     }
     tracks.forEach(function (track, index) { list.appendChild(trackRow(track, index)); });
     // Файлы есть, звука нет — папка из одних pdf: ни кнопки, ни плеера (6.1).
     toggle($("play-all"), hasAudio);
-    toggle($("zip"), true);
   }
 
   // Плеер создаётся при первом воспроизведении: папка без звука его не заводит,
@@ -165,38 +178,50 @@ _SCRIPT_FOLDER = r"""
       });
   }
 
-  function download() {
-    status("Собираю архив — это может занять минуту.", false);
-    // Архив отдаётся потоком, поэтому качаем браузером, а не через JSON-обёртку.
-    // Заголовок не ставим сами: оболочка (static/webapp-shell.js) подставляет
-    // `Authorization: Bearer *** во все запросы к `/webapp/*` и сама повторяет
-    // запрос после обновления токена. Своего хранилища токена у страницы нет.
-    fetch("/webapp/folder/" + folderId + "/zip")
-      .then(function (response) {
-        if (response.ok) return response.blob();
-        // Отказ мимо `api()`: текст берём из конверта (`refusalText` из CORE),
-        // «код N» оставляем на случай не-JSON ответа шлюза.
-        return refusalText(response).then(function (text) {
-          status(text || ("Архив не отдался: код " + response.status + "."), true);
-          return null;
-        });
-      })
-      .then(function (blob) {
-        if (!blob) return;
-        var link = document.createElement("a");
-        link.href = URL.createObjectURL(blob);
-        link.download = "папка-" + folderId + ".zip";
-        link.click();
-        setTimeout(function () { URL.revokeObjectURL(link.href); }, 10000);
-        status("Архив скачивается.", false);
-      }, function () { status("Нет связи. Проверьте сеть и повторите.", true); });
+  // Один файл открывается ссылкой на хранилище: в Telegram — `tg.openLink`,
+  // вне Telegram — новая вкладка. Ни `fetch` байтов, ни `blob:`, ни `a.click`:
+  // именно этот путь даёт чёрный экран в WKWebView (docs/development/151 §2.3–2.4).
+  // Ссылка свежая на каждое нажатие — подпись живёт 15 минут.
+  function openDownload(url) {
+    if (tg && tg.openLink) { tg.openLink(url); return; }
+    if (!window.open(url, "_blank")) {
+      status("Браузер не открыл ссылку. Нажмите «Скачать» ещё раз.", true);
+    }
+  }
+
+  // Текст отказа по коду конверта: `problem()` на 404 даёт общее «не нашли»,
+  // а человеку нужно знать, что файл удалён или не доехал до хранилища (§6).
+  function downloadRefusal(res) {
+    var code = (res.body && res.body.code) || "";
+    if (code === "file_not_found") return "Файл не найден. Возможно, его удалили.";
+    if (code === "file_not_uploaded") return "Файл не долетел до хранилища — загрузите заново.";
+    if (code === "file_cold_missing") return "Файл не найден ни в хранилище, ни в архиве.";
+    if (code === "capability_required") {
+      return "Раздел доступен администратору, организатору и мастеру.";
+    }
+    return problem(res);
+  }
+
+  function downloadOne(track) {
+    if (!track || !track.id) return;
+    api("/webapp/files/" + track.id + "/link").then(function (res) {
+      if (res.status === 200) {
+        // Наш экран не узнает, началось ли скачивание: `openLink` результата
+        // не возвращает. Поэтому «готово» не пишем — только нейтральное.
+        status("Открываю в браузере — файл сохранится в «Загрузки».", false);
+        openDownload(res.body.url);
+        return;
+      }
+      // 5xx и обрыв — одно сообщение на аварию даёт баннер оболочки (V-047 а).
+      if (res.status === 0 || res.status >= 500) { status("", false); return; }
+      status(downloadRefusal(res), true);
+    });
   }
 
   $("play-all").addEventListener("click", function () {
     var index = firstAudio();
     if (index >= 0) play(index);
   });
-  $("zip").addEventListener("click", download);
 
   auth().then(function (denied) {
     // Имя не `problem`: ниже вызывается помощник `problem(res)` — параметр

@@ -528,36 +528,6 @@ def webapp_folder_order(folder_id: int, body: FolderOrderIn,
 
 
 
-@router.get("/webapp/folder/{folder_id}/zip")
-def webapp_folder_zip(folder_id: int, who: dict = Depends(core.webapp_actor)):
-    """Архив папки для скачивания из Mini App."""
-    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
-    with core.pool.connection() as conn:
-        folder = _webapp_folder(conn, folder_id, who)
-        handle, skipped = files_store.stream_folder_zip(conn, folder,
-                                                        max_bytes=core.ZIP_MAX_BYTES)
-        core.audit(conn, "human", who.get("id"), "folder.zip", "folder", str(folder_id),
-              after={"path": folder["path"], "via": "webapp", "skipped": skipped[:20]})
-    size = files_store.stream_zip_size(handle)
-    name = files_store.folder_zip_name(folder)
-
-    def chunks():
-        try:
-            while True:
-                chunk = handle.read(64 * 1024)
-                if not chunk:
-                    break
-                yield chunk
-        finally:
-            handle.close()
-
-    return StreamingResponse(
-        chunks(), media_type="application/zip",
-        headers={"Content-Length": str(size),
-                 "Content-Disposition": files_store.attachment_header(name)})
-
-
-
 class TagIn(core.ApiIn):
     title: str = Field(min_length=1, max_length=60)
 
@@ -707,6 +677,57 @@ def webapp_file_view(file_id: int, who: dict = Depends(core.webapp_actor)) -> di
             # наружу расширение уходит без неё: `png`, а не `.png` (§3.1).
             "ext": files_store.extension(row["name"]).lstrip("."),
             "folder": row.get("folder"), "as_admin": as_admin, "cold_restored": restored}
+
+
+@router.get("/webapp/files/{file_id}/link")
+def webapp_file_link(file_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Ссылка на скачивание одного файла для Mini App (Б2, V-052/V-053).
+
+    Человеку нужен один файл, а не архив папки: экран берёт здесь свежую подпись
+    на каждое нажатие «Скачать» и отдаёт её браузеру через `tg.openLink`
+    (`window.open` вне Telegram). Байты файла через наш сервер не идут — иначе
+    `openLink` шёл бы без `Authorization`, а `fetch → blob → a.click()` даёт
+    чёрный экран в WKWebView (docs/development/151 §2.3–2.4).
+
+    Подпись `presigned_url` несёт `ResponseContentDisposition: attachment`
+    (`files_store.attachment_header`), поэтому браузер скачивает файл, а не
+    открывает его. Ключ объекта наружу не отдаётся, ссылка живёт 15 минут.
+
+    Права те же, что у просмотра: `files_store.file_for_reader` — свой файл,
+    файл общей папки, админ с активным грантом. Чужой личный и несуществующий
+    отвечают одинаково — 404 (FR-K8). Холодный файл возвращается в горячий бакет
+    до выдачи ссылки; нет холодной копии — 410.
+
+    Аудит `file.download` с `via: "webapp"` пишется на каждый 200. Честно: это
+    выдача ссылки, а не факт получения байтов — скачивание происходит уже на
+    домене хранилища (так же устроен `file.view`).
+    """
+    reader = core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
+    with core.pool.connection() as conn:
+        row, as_admin = files_store.file_for_reader(conn, file_id, reader)
+        if row is None:
+            raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.",
+                           code="file_not_found")
+        if not row["object_key"]:
+            raise ApiError(status.HTTP_404_NOT_FOUND,
+                           "Файл не долетел до хранилища — загрузите заново.",
+                           code="file_not_uploaded")
+        restored = False
+        if row.get("cold_at"):
+            try:
+                restored = cold.restore(conn, file_id)
+            except FileNotFoundError as exc:
+                raise ApiError(status.HTTP_410_GONE,
+                               "Файл не найден ни в хранилище, ни в архиве.",
+                               code="file_cold_missing") from exc
+        conn.execute("update file_object set last_access_at = now() where id = %s", (file_id,))
+        url = files_store.presigned_url(row["object_key"], row["name"] or "file",
+                                        ttl=files_store.PRESIGN_TTL)
+        core.audit(conn, "human", who["id"], "file.download", "file_object", str(file_id),
+                   after={"name": row["name"], "via": "webapp", "size": row["size_bytes"],
+                          "as_admin": as_admin, "restored": restored})
+    return {"ok": True, "url": url, "expires_in": files_store.PRESIGN_TTL,
+            "name": row["name"], "size_bytes": row["size_bytes"]}
 
 
 @router.post("/webapp/folders")

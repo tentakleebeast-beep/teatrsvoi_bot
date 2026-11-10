@@ -133,6 +133,31 @@ def test_zip_на_большой_папке_отвечает_текстом_от
     assert "папка пуста" not in answer
 
 
+def test_zip_больше_50_мб_не_обещает_архив_в_mini_app(monkeypatch):
+    """V-052 (а): архива в Mini App больше нет — подсказка зовёт по файлам.
+
+    Раньше при архиве больше 50 МБ бот говорил «Откройте Mini App»: после снятия
+    кнопки архива это обещание стало ложным. Теперь текст правдивый — «Качайте
+    по файлам в Mini App», и адрес папки остаётся, потому что по файлам правда
+    можно.
+    """
+    monkeypatch.setattr(FILES_ROUTER, "WEBAPP_BASE_URL", "https://svoi.example")
+    # Потолок чата уменьшен: 50 МБ в тесте не нужны, важна ветка «не влезает».
+    monkeypatch.setattr(FILES_ROUTER.parsers, "FILES_IN_CHAT_LIMIT", 10)
+
+    async def big(path, chat_id):
+        return b"x" * 11
+
+    monkeypatch.setattr(FILES_ROUTER, "api_bytes", big)
+
+    answer = _zip(FakeMessage("/zip 12"))
+
+    assert "Качайте по файлам в Mini App" in answer
+    assert "https://svoi.example/webapp/folder?id=12" in answer
+    assert "Откройте Mini App" not in answer
+    assert "Скачайте архив" not in answer
+
+
 def test_zip_на_недоступной_папке_объясняет_отказ_сервера(monkeypatch):
     """404 папки — слова сервера, а не «пуста или недоступна»."""
     not_found = {"code": "folder_not_found", "detail": "Папка не найдена."}

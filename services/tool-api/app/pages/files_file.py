@@ -10,7 +10,9 @@
 * документ / текст / неизвестный вид — карточка (имя, размер, слово вида) и
   «Открыть в браузере»: pdf откроется встроенным просмотрщиком телефона, docx и
   xlsx — тем приложением, которое на телефоне есть. Внутри Mini App содержимое
-  не рендерим (D4) и текст не читаем (кодировку русских `.txt` страница не угадает).
+  не рендерим (D4) и текст не читаем (кодировку русских `.txt` страница не угадает);
+* «Скачать» — вторая кнопка на всех четырёх состояниях (Б2, V-053 а): берёт ссылку
+  `GET /webapp/files/{id}/link` и открывает её в браузере телефона через `openLink`.
 
 Данные — `GET /webapp/files/{id}/view` (`api/files.py`): подпись `inline` на 15 минут и
 поле `kind`. Ссылка не хранится в БД и выдаётся на каждое нажатие «Открыть в браузере»,
@@ -106,6 +108,10 @@ _SCRIPT_FILE = r"""
     return button;
   }
 
+  function downloadButton() {
+    return action("Скачать", false, downloadFile);
+  }
+
   function fileLink() {
     var link = el("a", "ui-btn ui-btn--block", "К файлам");
     link.href = "/webapp/files";
@@ -129,9 +135,28 @@ _SCRIPT_FILE = r"""
     });
   }
 
-  function refuse(status) {
+  // «Скачать»: подпись `attachment` на 15 минут, открывается браузером телефона.
+  // Байты через наш сервер не идут: `fetch → blob → a.click` в WKWebView даёт
+  // пустой документ и чёрный экран (docs/development/151 §2.3–2.4).
+  function downloadFile() {
+    if (!fileId) return;
+    api("/webapp/files/" + fileId + "/link").then(function (res) {
+      if (res.status !== 200) { refuse(res.status, res.body && res.body.code); return; }
+      if (tg && tg.openLink) { tg.openLink(res.body.url); return; }
+      if (!window.open(res.body.url, "_blank")) {
+        showNote("Браузер не открыл ссылку. Нажмите «Скачать» ещё раз.");
+      }
+    });
+  }
+
+  function refuse(status, code) {
     setHead("Файл", "");
     setActions([]);
+    if (code === "file_not_uploaded") {
+      showNote("Файл не долетел до хранилища — загрузите заново.");
+      setActions([fileLink()]);
+      return;
+    }
     if (status === 403) {
       showNote("Раздел доступен администратору, организатору и мастеру.");
       return;
@@ -161,7 +186,7 @@ _SCRIPT_FILE = r"""
 
   function imageFailure() {
     showNote("Не удалось показать картинку. Откройте в браузере.");
-    setActions([action("Открыть в браузере", true, openInBrowser)]);
+    setActions([action("Открыть в браузере", true, openInBrowser), downloadButton()]);
   }
 
   function showImage(data) {
@@ -178,7 +203,7 @@ _SCRIPT_FILE = r"""
     });
     picture.src = data.url;
     $("scene").appendChild(picture);
-    setActions([action("Открыть в браузере", false, openInBrowser)]);
+    setActions([action("Открыть в браузере", false, openInBrowser), downloadButton()]);
   }
 
   function showAudio(data) {
@@ -196,7 +221,7 @@ _SCRIPT_FILE = r"""
     });
     player.src = data.url;
     $("scene").appendChild(player);
-    setActions([]);
+    setActions([downloadButton()]);
   }
 
   function showCard(data, word, sentence) {
@@ -207,7 +232,7 @@ _SCRIPT_FILE = r"""
       humanSize(data.size_bytes) + " \u00b7 " + word));
     card.appendChild(el("p", "ui-file__note", sentence));
     $("scene").appendChild(card);
-    setActions([action("Открыть в браузере", true, openInBrowser)]);
+    setActions([action("Открыть в браузере", true, openInBrowser), downloadButton()]);
   }
 
   function show(data) {
