@@ -82,6 +82,45 @@ def _symbols() -> list[str]:
     return re.findall(r'<symbol id="([^"]+)"', layout.SPRITE)
 
 
+# Согласованный набор (V-063, решение владельца 10.11.2026, docs/development/155 §3 D4):
+# четыре вида файла, «неизвестный», корзина и «…». Ровно семь — ни больше, ни меньше.
+EXPECTED_SYMBOLS = {
+    "ui-i-audio", "ui-i-image", "ui-i-document", "ui-i-text",
+    "ui-i-file", "ui-i-trash", "ui-i-more",
+}
+
+EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]")
+
+
+def test_набор_иконок_ровно_согласованный() -> None:
+    """V-063 (а): имена и число символов — по согласованному набору, без эмодзи.
+
+    Дизайн-система v2 запрещала пиктограммы («иконка — слово», 91), владелец разрешил
+    один штриховой набор. Проверка держит именно набор: лишний символ — это второй
+    «язык» иконок, пропавший — пустая плитка.
+    """
+    symbols = _symbols()
+    assert len(symbols) == 7, f"символов {len(symbols)}, а согласовано семь"
+    assert set(symbols) == EXPECTED_SYMBOLS, f"набор разошёлся: {sorted(set(symbols) ^ EXPECTED_SYMBOLS)}"
+    for chunk in layout.SPRITE.split("<symbol id=")[1:]:
+        assert 'viewBox="0 0 24 24"' in chunk, f"не 24×24: {chunk[:60]}"
+    assert not EMOJI.search(layout.SPRITE), "эмодзи в спрайте"
+
+
+def test_иконки_цвет_от_текста_и_без_эмодзи_на_экранах() -> None:
+    """`currentColor` из общего CSS, а в разметке файлов иконок-эмодзи нет."""
+    css = CSS.read_text(encoding="utf-8")
+    # Именно базовое правило: у плитки в сетке `.ui-grid__icon .ui-icon` задаёт 28 px,
+    # и поиск по подстроке «.ui-icon {» попадал бы в него.
+    block = css[css.index("\n.ui-icon {"):]
+    block = block[:block.index("}")]
+    assert "stroke: currentColor" in block, "иконка не наследует цвет текста"
+    assert "width: 24px" in block and "height: 24px" in block, "размер иконки не 24×24"
+    for text, name in ((files.FILES_PAGE, "files"), (files_grid.SCRIPT, "files_grid"),
+                       (files_tree.SCRIPT, "files_tree"), (layout.SPRITE, "sprite")):
+        assert not EMOJI.search(text), f"эмодзи в {name}"
+
+
 def test_все_символы_есть_в_спрайте() -> None:
     """Третий источник иконок не заводится: каждый символ из файлов есть в спрайте."""
     symbols = _symbols()
@@ -93,6 +132,7 @@ def test_все_символы_есть_в_спрайте() -> None:
     assert used, "ни одной иконки в разметке"
     missing = sorted(used - set(symbols))
     assert not missing, f"символы без рисунка: {missing}"
+    assert used == EXPECTED_SYMBOLS, f"не используются: {sorted(EXPECTED_SYMBOLS - used)}"
 
 
 def test_плитка_ссылка_а_удаление_сосед() -> None:

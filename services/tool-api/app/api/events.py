@@ -161,8 +161,13 @@ def _discipline_denied(conn, who: dict, kind: str | None,
     `who` из Mini App приходит без `caps`/`roles` (`/webapp/preview` зовёт обработчик
     напрямую, а не через `Depends`), поэтому недостающее читается из базы, а не
     считается отсутствующим: иначе мастер терял бы проверку только в приложении.
+
+    Тренинг **без** дисциплины разрешён (решение владельца V-062, 10.11.2026):
+    мастер без единой дисциплины назначает тренинг, состав подтягивает всех
+    педагогов, а карточка несёт предупреждение `discipline_missing`. Отказ остаётся
+    один — названа чужая дисциплина.
     """
-    if kind != "training":
+    if kind != "training" or not discipline:
         return None
     # 0 — владелец до bootstrap: у него нет ни ролей, ни дисциплин, проверка не про него
     actor_id = int(who.get("id") or 0)
@@ -177,13 +182,10 @@ def _discipline_denied(conn, who: dict, kind: str | None,
     if "master" not in roles:
         return None
     taught = core.teacher_disciplines(conn, actor_id)
-    if discipline and discipline in taught:
+    if discipline in taught:
         return None
     names = ", ".join(item["name"] for item in core.disciplines_out(conn, actor_id))
-    available = names or "ни одной"
-    if not discipline:
-        return f"Укажите дисциплину тренинга: вы ведёте {available}."
-    return f"Вы не ведёте эту дисциплину: доступны {available}."
+    return f"Вы не ведёте эту дисциплину: доступны {names or 'ни одной'}."
 
 
 def _prepare_assignment(body: AssignIn, who: dict | None = None

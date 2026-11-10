@@ -34,8 +34,11 @@ def _tiles(page) -> None:
 
 
 def _folders(page) -> None:
+    # Последняя строка дерева — «Без папки · N» (строка-фильтр, V-065), а не папка:
+    # считаем только узлы-папки, иначе ожидание «шесть» ловит семь.
     page.wait_for_function(
-        "() => document.querySelectorAll('#folders .ui-tree__node').length === 6", timeout=10_000)
+        "() => document.querySelectorAll('#folders .ui-tree__node:not(.ui-tree__node--nofolder)')"
+        ".length === 6", timeout=10_000)
 
 
 def _size(page, width: dict) -> None:
@@ -55,9 +58,12 @@ def _size(page, width: dict) -> None:
 
 
 def _visible_rows(page) -> int:
+    """Видимые строки папок; строка-фильтр «Без папки» в счёт не идёт (V-065)."""
     return page.evaluate(
-        "() => Array.from(document.querySelectorAll('#folders .ui-tree__row'))"
-        ".filter(function (row) { return row.offsetParent !== null; }).length")
+        "() => Array.from(document.querySelectorAll('#folders .ui-tree__node'))"
+        ".filter(function (node) { return !node.classList.contains('ui-tree__node--nofolder'); })"
+        ".map(function (node) { return node.querySelector('.ui-tree__row'); })"
+        ".filter(function (row) { return row && row.offsetParent !== null; }).length")
 
 
 @pytest.mark.parametrize("name", list(WIDTHS))
@@ -173,7 +179,7 @@ def test_дерево_раскрыто_по_умолчанию(app_page) -> None
     page = app_page("/webapp/files")
     _folders(page)
 
-    assert page.locator("#folders .ui-tree__node").count() == 6
+    assert page.locator("#folders .ui-tree__node:not(.ui-tree__node--nofolder)").count() == 6
     states = page.locator("#folders .ui-tree__toggle[aria-expanded]").evaluate_all(
         "nodes => nodes.map(node => node.getAttribute('aria-expanded'))")
     assert states and set(states) == {"true"}, states
@@ -206,7 +212,8 @@ def test_переключатель_меняет_число_видимых_ст�
     assert toggle.get_attribute("aria-expanded") == "false"
     assert toggle.get_attribute("aria-label") == "Раскрыть папку Спектакли"
     assert _visible_rows(page) == 3
-    assert page.locator("#folders .ui-tree__node").count() == 6, "свёрнутое удалило строки"
+    assert page.locator("#folders .ui-tree__node:not(.ui-tree__node--nofolder)").count() == 6, \
+        "свёрнутое удалило строки"
     assert not page.svoi_errors, page.svoi_errors
 
 
@@ -224,7 +231,8 @@ def test_состояние_переживает_перерисовку(app_page
     page.fill("#folder-name", "Реквизит")
     page.click("#folder-create")
     page.wait_for_function(
-        "() => document.querySelectorAll('#folders .ui-tree__node').length === 6", timeout=10_000)
+        "() => document.querySelectorAll"
+        "('#folders .ui-tree__node:not(.ui-tree__node--nofolder)').length === 6", timeout=10_000)
     page.wait_for_timeout(300)
 
     toggle = page.locator("#folders .ui-tree__row").filter(
@@ -254,6 +262,76 @@ def test_сирота_наверху_с_путём(app_page) -> None:
     assert orphan["top"], "сирота не на верхнем уровне"
     assert orphan["path"] == "Архив 2024/старое", orphan
     assert "--l2" not in orphan["level"], "сироте оставили отступ без видимого родителя"
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_без_папки_фильтрует_сетку(app_page) -> None:
+    """Критерий V-065: последняя строка дерева «Без папки · N» фильтрует сетку.
+
+    N — из уже загруженного списка (на стенде три файла без папки), нового запроса
+    строка не делает: сеть до и после нажатия одинакова. Повторное нажатие снимает
+    фильтр, `aria-pressed` и пояснение говорят состояние словами.
+    """
+    page = app_page("/webapp/files")
+    _tiles(page)
+    _folders(page)
+
+    # Последняя строка дерева — «Без папки · N», после всех папок.
+    last = page.locator("#folders .ui-tree__row").last
+    assert last.inner_text().startswith("Без папки · 3"), last.inner_text()
+    assert page.locator("#folders .ui-tree__node--nofolder").count() == 1
+    assert last.get_attribute("aria-pressed") == "false"
+    assert page.locator("#list .ui-grid__cell").count() == 9
+
+    # Ни одного запроса за списком: фильтр работает на уже загруженном (V-065).
+    calls: list[str] = []
+    page.on("request", lambda request: calls.append(request.url))
+    last.click()
+    page.wait_for_function(
+        "() => document.querySelectorAll('#list .ui-grid__cell').length === 3", timeout=5_000)
+
+    names = page.evaluate(
+        "() => Array.from(document.querySelectorAll('#list .ui-grid__name'))"
+        ".map(function (node) { return node.textContent; })")
+    assert set(names) == {"Репетиция 12 октября.m4a", "Гаммы для хора.pdf",
+                          "Афиша_осеннего_сезона_вариант_с_текстом_без_логотипа.png"}, names
+    assert page.locator("#no-folder-row").get_attribute("aria-pressed") == "true"
+    assert page.locator("#list-note").is_visible(), "пояснение к фильтру не показано"
+    assert "без папки" in page.inner_text("#list-note").lower()
+    assert page.inner_text("#count") == "3 файла", page.inner_text("#count")
+
+    assert not [url for url in calls if "/files" in url or "/folders" in url], \
+        f"переключение фильтра сходило в сеть: {calls}"
+
+    # Второе нажатие — снова все файлы, пояснение убрано.
+    page.locator("#no-folder-row").click()
+    page.wait_for_function(
+        "() => document.querySelectorAll('#list .ui-grid__cell').length === 9", timeout=5_000)
+    assert page.locator("#no-folder-row").get_attribute("aria-pressed") == "false"
+    assert not page.locator("#list-note").is_visible()
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_без_папки_не_ломает_имя_на_320(app_page) -> None:
+    """Строка «Без папки» встаёт в столбец названий и не даёт прокрутки вбок на 320."""
+    page = app_page("/webapp/files")
+    _tiles(page)
+    _folders(page)
+    page.set_viewport_size({"width": 320, "height": 693})
+
+    geometry = page.evaluate("""() => {
+      var row = document.getElementById('no-folder-row');
+      var name = row.querySelector('.ui-tree__name');
+      var folder = Array.from(document.querySelectorAll('#folders .ui-tree__name'))
+        .filter(function (node) { return node.textContent === 'Спектакли'; })[0];
+      return {left: name.getBoundingClientRect().left,
+              folderLeft: folder.getBoundingClientRect().left,
+              scroll: document.documentElement.scrollWidth,
+              client: document.documentElement.clientWidth};
+    }""")
+    assert abs(geometry["left"] - geometry["folderLeft"]) <= 1, \
+        f"название «Без папки» не в столбце папок: {geometry}"
+    assert geometry["scroll"] - geometry["client"] <= 1, geometry
     assert not page.svoi_errors, page.svoi_errors
 
 

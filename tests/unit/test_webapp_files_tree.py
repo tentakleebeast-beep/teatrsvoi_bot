@@ -229,6 +229,54 @@ def test_по_умолчанию_дерево_раскрыто() -> None:
     assert "kids.hidden = collapsed;" in page
 
 
+def _call_script(expr: str):
+    """Выполнить выражение в node на `files_tree.SCRIPT` (DOM не нужен: функции не вызваны)."""
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
+        fh.write(files_tree.SCRIPT + "\nconsole.log(JSON.stringify(" + expr + "));")
+        path = fh.name
+    result = subprocess.run([NODE, path], capture_output=True, text=True, check=True)
+    return json.loads(result.stdout)
+
+
+@pytest.mark.skipif(NODE is None, reason="нет node для проверки фильтра")
+def test_без_папки_это_folder_id_null() -> None:
+    """Файл без папки — ровно `folder_id = null`; число N считается по тому же правилу.
+
+    Отдельной папки в базе нет (V-065), поэтому признак один: пустой `folder_id` в
+    ответе `/webapp/files/list`. Поле `folder` (название пути) признаком не служит:
+    сервер отдаёт его же для пустой строки, и фильтр разошёлся бы с числом.
+    """
+    assert _call_script("fileWithoutFolder({folder_id: null})") is True
+    assert _call_script("fileWithoutFolder({})") is True
+    assert _call_script("fileWithoutFolder({folder_id: 7})") is False
+    assert _call_script('fileWithoutFolder({folder_id: "7"})') is False
+    assert _call_script("fileWithoutFolder(null)") is False
+    assert _call_script("""(function () {
+      allFiles = [{folder_id: null}, {folder_id: 4}, {}, {folder_id: 2}];
+      return noFolderCount();
+    })()""") == 2
+
+
+def test_без_папки_не_заводит_запроса() -> None:
+    """Строка-фильтр не ходит на сервер: ни `api(`, ни `fetch(` в её коде (V-065)."""
+    code = files_tree.SCRIPT
+    block = code[code.index("function fileWithoutFolder"):code.index("function renderFolders")]
+    assert "api(" not in block and "fetch(" not in block, "фильтр завёл запрос"
+    assert "folder_id" in block, "признак «без папки» потерян"
+    # Список файлов по-прежнему один: фильтр применяется к уже загруженному.
+    assert files.FILES_PAGE.count('api("/webapp/files/list")') == 1
+
+
+def test_без_папки_последняя_строка_дерева() -> None:
+    """Строка рисуется после папок и переключает фильтр, а не ведёт по адресу."""
+    code = files_tree.SCRIPT
+    assert "list.appendChild(noFolderRow());" in code
+    assert code.index("nodes.forEach(function (node) { list.appendChild(folderNode(node)); })") \
+        < code.index("list.appendChild(noFolderRow());"), "строка идёт не последней"
+    assert 'button.setAttribute("aria-pressed"' in code, "состояние фильтра не сообщается"
+    assert "toggleNoFolder" in code
+
+
 @pytest.mark.skipif(NODE is None, reason="нет node для проверки сборки дерева")
 def test_скрипт_страницы_парсится() -> None:
     """Собранный скрипт экрана — валидный JS: новые блоки конкатенируются в замыкание."""

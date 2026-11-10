@@ -156,3 +156,48 @@ def test_Г11_администратор_не_ограничен_дисципл�
 
     assert body["ok"] is True, body["errors"]
     assert "discipline_not_taught" not in {item["code"] for item in body["errors"]}
+
+
+def test_Г11_мастер_без_дисциплины_назначает_тренинг(client, monkeypatch):
+    """V-062 (б), решение владельца 10.11.2026: тренинг без дисциплины разрешён.
+
+    До ответа сервер отвечал «Укажите дисциплину тренинга: вы ведёте ни одной» и
+    тренинг не назначался. Теперь мастер без единой дисциплины назначает тренинг:
+    состав подтягивает всех педагогов (правило состава не менялось), карточка и
+    экран несут предупреждение `discipline_missing`, а событие пишется с пустой
+    дисциплиной. Отказ остаётся один — названная чужая дисциплина (тест выше).
+    """
+    from app import core as api
+
+    monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
+    monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
+    with psycopg.connect(_test_dsn()) as conn:
+        _participant(conn, 701004, "Мастер Без Дисциплины", role="master")
+        actor = _participant(conn, 701005, "Актёр Без Дисциплины")
+        teacher = _participant(conn, 701006, "Педагог Музыки")
+        _teach(conn, teacher, "music")
+
+    headers = {"Authorization": f"Bearer {TOKEN}", "X-Actor-Chat-Id": "701004"}
+    body = client.post("/tools/events/preview", headers=headers, json={
+        "kind": "training", "date": "2026-12-30", "from_hour": 18, "to_hour": 20,
+        "participants": [actor], "persist": True,
+    }).json()
+
+    assert body["ok"] is True, body["errors"]
+    assert "discipline_not_taught" not in {item["code"] for item in body["errors"]}
+    assert any(w["code"] == "discipline_missing" for w in body["warnings"]), body["warnings"]
+    names = {person["name"] for person in body["card"]["participants"]}
+    assert "Педагог Музыки" in names, "состав без дисциплины не собрал педагогов"
+    assert body["card"]["discipline"] is None
+    assert body["proposal_id"], "заявка не сохранилась — назначать нечего"
+
+    assigned = client.post("/tools/events/assign", headers=headers,
+                           json={"proposal_id": body["proposal_id"]})
+    assert assigned.status_code == 200, assigned.text
+    event_id = assigned.json()["event_id"]
+    with psycopg.connect(_test_dsn()) as conn:
+        row = conn.execute("select discipline_id, kind from event_plan where id = %s",
+                           (event_id,)).fetchone()
+        assert row[1] == "training"
+        assert row[0] is None, "у тренинга без дисциплины появился предмет"

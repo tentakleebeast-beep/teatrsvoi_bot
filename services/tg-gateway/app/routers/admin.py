@@ -396,7 +396,7 @@ async def panel_person_master(cb: CallbackQuery) -> None:
     lines = [f"{card.get('display_name')}: дисциплины педагога. "
              "Нажатие отмечает или снимает предмет.", ""]
     lines.append("Отмечено: " + ", ".join(have.values()) if have
-                 else "Дисциплин нет: тренинг назначить не сможет.")
+                 else "Дисциплин нет: тренинг назначится без предмета.")
     await cb.message.edit_text(
         "\n".join(lines), parse_mode=None,
         reply_markup=keyboards.kb(rows + [[("К ролям", f"panel:proles:{participant_id}")],
