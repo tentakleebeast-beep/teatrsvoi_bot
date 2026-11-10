@@ -510,3 +510,98 @@ def test_V_035_state_в_gitignore():
     result = subprocess.run(["git", "check-ignore", "-q", ".state/intent_sheet.json"],
                             cwd=str(PROJECT), check=False)
     assert result.returncode == 0
+
+
+# --- обёртка планировщика -----------------------------------------------------------
+
+def _load_wrapper():
+    path = PROJECT / "scripts" / "cron" / "intent_sheet_daily.py"
+    spec = importlib.util.spec_from_file_location("intent_sheet_daily", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+DAILY = _load_wrapper()
+
+
+class FakeRun:
+    """Журнал вызовов вместо запуска `intent_sheet.py`: обёртка проверяется по аргументам."""
+
+    def __init__(self, codes=None, payload='{"created": 0, "cards": []}'):
+        self.calls = []
+        self.codes = dict(codes or {})
+        self.payload = payload
+
+    def __call__(self, args):
+        self.calls.append(list(args))
+        code = self.codes.get(args[0], 0)
+        stdout = self.payload if args[0] == "cards" else ""
+        return SimpleNamespace(returncode=code, stdout=stdout, stderr="сбой" if code else "")
+
+
+def test_V_035_daily_dry_run_не_выгружает_лист(monkeypatch, capsys):
+    """V-035: `--dry-run` обещает «ничего не писать» — `pull` не зовётся, снимок цел."""
+    fake = FakeRun()
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run", "--board", "v035-test"]) == 0
+
+    assert [call[0] for call in fake.calls] == ["cards"], "pull в сухом прогоне не нужен"
+    assert capsys.readouterr().out == ""            # новых нет — тишина
+
+
+def test_V_035_daily_передаёт_board_в_карточки(monkeypatch):
+    """V-035: `--board` уходит в `cards`, иначе сухой прогон заводит карты на боевой доске."""
+    fake = FakeRun(payload='{"created": 1, "cards": [{"row_id": "abcd1234", "task_id": null}]}')
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run", "--board", "v035-test"]) == 0
+
+    assert fake.calls == [["cards", "--max-new", str(DAILY.MAX_NEW), "--json",
+                           "--board", "v035-test"]]
+
+
+def test_V_035_daily_без_board_поведение_прежнее(monkeypatch):
+    """V-035: без `--board` обёртка не добавляет флаг — боевая доска остаётся по умолчанию."""
+    fake = FakeRun()
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run"]) == 0
+
+    assert fake.calls == [["cards", "--max-new", str(DAILY.MAX_NEW), "--json"]]
+
+
+def test_V_035_daily_боевой_прогон_выгружает_и_создаёт(monkeypatch):
+    """V-035: без `--dry-run` сначала `pull`, затем `cards --apply` с той же доской."""
+    fake = FakeRun()
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--board", "v035-test"]) == 0
+
+    assert fake.calls == [
+        ["pull"],
+        ["cards", "--apply", "--max-new", str(DAILY.MAX_NEW), "--json",
+         "--board", "v035-test"],
+    ]
+
+
+def test_V_035_daily_пустой_лист_молчит(monkeypatch, capsys):
+    """V-035: код 4 от `pull` — «спрашивать нечего», пустой вывод и код 0."""
+    fake = FakeRun(codes={"pull": 4})
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main([]) == 0
+
+    assert fake.calls == [["pull"]]
+    assert capsys.readouterr().out == ""
+
+
+def test_V_035_daily_отказ_карточек_печатает_причину(monkeypatch, capsys):
+    """V-035: тишина не означает «сломалось» — отказ печатает причину и код."""
+    fake = FakeRun(codes={"cards": 1})
+    monkeypatch.setattr(DAILY, "run", fake)
+
+    assert DAILY.main(["--dry-run", "--board", "v035-test"]) == 1
+
+    assert "карточки не заведены — сбой" in capsys.readouterr().out

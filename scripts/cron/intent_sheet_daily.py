@@ -12,6 +12,12 @@
 
   env -u PYTHONPATH .venv/bin/python scripts/cron/intent_sheet_daily.py --dry-run
   env -u PYTHONPATH .venv/bin/python scripts/cron/intent_sheet_daily.py
+  env -u PYTHONPATH .venv/bin/python scripts/cron/intent_sheet_daily.py --dry-run --board v035-test
+
+`--dry-run` не зовёт `pull` (иначе снимок `.state/intent_sheet.json` перезаписывался бы
+вопреки обещанию «ничего не писать») и считает карточки по уже выгруженному снимку.
+`--board` уходит в `cards`: без него карточки заводятся на боевой доске из
+`intent_sheet.py`, с ним прогон можно повторить на тестовой.
 
 Установка лаунчера и расписания (регистрирует владелец, в репозитории этого нет):
 
@@ -58,18 +64,26 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Лист «Чего не умеем»: выгрузка и карточки")
     parser.add_argument("--dry-run", action="store_true",
                         help="показать, какие карточки будут заведены, и ничего не писать")
+    parser.add_argument("--board", default=None,
+                        help="доска канбана для карточек; по умолчанию — та, что в intent_sheet.py")
     args = parser.parse_args(argv)
 
-    pulled = run(["pull"])
-    if pulled.returncode == 4:
-        return 0                       # строк нет — тишина, не сбой
-    if pulled.returncode != 0:
-        print(f"лист «Чего не умеем»: выгрузка не удалась — {reason(pulled)}")
-        return pulled.returncode
+    # Сухой прогон обещает «ничего не писать», а `pull` перезаписывает снимок
+    # `.state/intent_sheet.json`. Поэтому в `--dry-run` его не зовём вовсе: карточки
+    # считаются по уже выгруженному снимку.
+    if not args.dry_run:
+        pulled = run(["pull"])
+        if pulled.returncode == 4:
+            return 0                   # строк нет — тишина, не сбой
+        if pulled.returncode != 0:
+            print(f"лист «Чего не умеем»: выгрузка не удалась — {reason(pulled)}")
+            return pulled.returncode
 
     command = ["cards", "--max-new", str(MAX_NEW), "--json"]
     if not args.dry_run:
         command.insert(1, "--apply")
+    if args.board:
+        command += ["--board", args.board]
     cards = run(command)
     if cards.returncode != 0:
         print(f"лист «Чего не умеем»: карточки не заведены — {reason(cards)}")
