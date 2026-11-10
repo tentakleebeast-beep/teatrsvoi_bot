@@ -1,0 +1,60 @@
+{
+  "390x844": {
+    "before": {
+      "save_bottom": 743,
+      "save_top": 695,
+      "doc_h": 858,
+      "travel_bottom": 419
+    },
+    "after_none": {
+      "save_bottom": 963,
+      "save_top": 915,
+      "doc_h": 1079,
+      "section_h": 205
+    },
+    "after_one": {
+      "save_bottom": 917,
+      "doc_h": 1032,
+      "section_h": 158
+    },
+    "after_tail": {
+      "save_bottom": 743,
+      "doc_h": 1000,
+      "section_top": 759,
+      "section_h": 126
+    },
+    "after_banner": {
+      "banner_h": 68,
+      "save_bottom": 826
+    }
+  },
+  "320x658": {
+    "before": {
+      "save_bottom": 761,
+      "save_top": 713,
+      "doc_h": 877,
+      "travel_bottom": 438
+    },
+    "after_none": {
+      "save_bottom": 1004,
+      "save_top": 956,
+      "doc_h": 1119,
+      "section_h": 226
+    },
+    "after_one": {
+      "save_bottom": 936,
+      "doc_h": 1051,
+      "section_h": 158
+    },
+    "after_tail": {
+      "save_bottom": 761,
+      "doc_h": 1041,
+      "section_top": 777,
+      "section_h": 148
+    },
+    "after_banner": {
+      "banner_h": 68,
+      "save_bottom": 845
+    }
+  }
+}

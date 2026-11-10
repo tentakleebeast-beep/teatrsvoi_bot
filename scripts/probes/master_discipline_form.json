@@ -1,0 +1,173 @@
+{
+  "url": "http://127.0.0.1:8799/webapp/admin/t/people",
+  "viewports": {
+    "390x844": {
+      "V0_current": {
+        "sheet_h": 491,
+        "sheet_client": 491,
+        "sheet_scroll": 491,
+        "overflow": 0,
+        "body_h": 351,
+        "body_top": 417,
+        "body_bottom": 768,
+        "primary_bottom": 768,
+        "actions_bottom": 828,
+        "select": null
+      },
+      "V1_none": {
+        "sheet_h": 351,
+        "sheet_client": 351,
+        "sheet_scroll": 351,
+        "overflow": 0,
+        "body_h": 210,
+        "body_top": 558,
+        "body_bottom": 768,
+        "primary_bottom": 768,
+        "actions_bottom": 828,
+        "select": {
+          "width": 358,
+          "scrollWidth": 356,
+          "clientWidth": 356,
+          "text": "Актёрское мастерство"
+        }
+      },
+      "V2_one": {
+        "sheet_h": 352,
+        "sheet_client": 352,
+        "sheet_scroll": 352,
+        "overflow": 0,
+        "body_h": 211,
+        "body_top": 557,
+        "body_bottom": 768,
+        "primary_bottom": 768,
+        "actions_bottom": 828,
+        "select": {
+          "width": 358,
+          "scrollWidth": 356,
+          "clientWidth": 356,
+          "text": "Актёрское мастерство"
+        }
+      },
+      "V3_many": {
+        "sheet_h": 490,
+        "sheet_client": 490,
+        "sheet_scroll": 490,
+        "overflow": 0,
+        "body_h": 349,
+        "body_top": 419,
+        "body_bottom": 768,
+        "primary_bottom": 768,
+        "actions_bottom": 828,
+        "select": {
+          "width": 358,
+          "scrollWidth": 356,
+          "clientWidth": 356,
+          "text": "Актёрское мастерство"
+        }
+      },
+      "V4_all": {
+        "sheet_h": 473,
+        "sheet_client": 473,
+        "sheet_scroll": 473,
+        "overflow": 0,
+        "body_h": 332,
+        "body_top": 436,
+        "body_bottom": 768,
+        "primary_bottom": 755,
+        "actions_bottom": 828,
+        "select": null
+      },
+      "_meta": {
+        "font": "16px -apple-system, \"system-ui\", \"SF Pro Text\", \"Segoe UI\", ",
+        "longest": "Актёрское мастерство",
+        "longest_px": 173,
+        "available_390": 322,
+        "available_320": 252
+      }
+    },
+    "320x658": {
+      "V0_current": {
+        "sheet_h": 513,
+        "sheet_client": 513,
+        "sheet_scroll": 513,
+        "overflow": 0,
+        "body_h": 374,
+        "body_top": 208,
+        "body_bottom": 582,
+        "primary_bottom": 582,
+        "actions_bottom": 642,
+        "select": null
+      },
+      "V1_none": {
+        "sheet_h": 373,
+        "sheet_client": 373,
+        "sheet_scroll": 373,
+        "overflow": 0,
+        "body_h": 232,
+        "body_top": 350,
+        "body_bottom": 582,
+        "primary_bottom": 582,
+        "actions_bottom": 642,
+        "select": {
+          "width": 288,
+          "scrollWidth": 286,
+          "clientWidth": 286,
+          "text": "Актёрское мастерство"
+        }
+      },
+      "V2_one": {
+        "sheet_h": 352,
+        "sheet_client": 352,
+        "sheet_scroll": 352,
+        "overflow": 0,
+        "body_h": 211,
+        "body_top": 371,
+        "body_bottom": 582,
+        "primary_bottom": 582,
+        "actions_bottom": 642,
+        "select": {
+          "width": 288,
+          "scrollWidth": 286,
+          "clientWidth": 286,
+          "text": "Актёрское мастерство"
+        }
+      },
+      "V3_many": {
+        "sheet_h": 490,
+        "sheet_client": 490,
+        "sheet_scroll": 490,
+        "overflow": 0,
+        "body_h": 349,
+        "body_top": 233,
+        "body_bottom": 582,
+        "primary_bottom": 582,
+        "actions_bottom": 642,
+        "select": {
+          "width": 288,
+          "scrollWidth": 286,
+          "clientWidth": 286,
+          "text": "Актёрское мастерство"
+        }
+      },
+      "V4_all": {
+        "sheet_h": 496,
+        "sheet_client": 496,
+        "sheet_scroll": 496,
+        "overflow": 0,
+        "body_h": 355,
+        "body_top": 227,
+        "body_bottom": 582,
+        "primary_bottom": 569,
+        "actions_bottom": 642,
+        "select": null
+      },
+      "_meta": {
+        "font": "16px -apple-system, \"system-ui\", \"SF Pro Text\", \"Segoe UI\", ",
+        "longest": "Актёрское мастерство",
+        "longest_px": 173,
+        "available_390": 322,
+        "available_320": 252
+      }
+    }
+  }
+}
