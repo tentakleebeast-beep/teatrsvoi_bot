@@ -2,10 +2,13 @@
 
 Что делает: поднимает стенд `tests.webapp.server` на свободном порту, открывает
 `/webapp/week` как Telegram (390×844 и 320×693, часы остановлены на 01.11.2026 —
-сегодня в фикстуре воскресенье, не отмечено), читает геометрию, затем убирает кнопку
-из живого DOM (`remove()`) и повторяет замер. Заодно проверяет поведение: нажатие на
-строку сегодняшнего дня открывает лист дня и не отправляет POST, а после выбора
-варианта и закрытия листа уходит ровно один POST.
+сегодня в фикстуре воскресенье, не отмечено), читает геометрию. Если кнопка
+`#mark-today` ещё в разметке (дерево до правки), скрипт убирает её из живого DOM
+(`remove()`) и повторяет замер — так воспроизводятся числа «до/после» §2.6.
+В сведённом дереве кнопки уже нет: скрипт фиксирует это и меряет состояние после
+правки. Заодно проверяет поведение: нажатие на строку сегодняшнего дня открывает
+лист дня и не отправляет POST, а после выбора варианта и закрытия листа уходит
+ровно один POST.
 
 Зачем: числа `docs/development/149` §2.6–2.7 должны воспроизводиться, а не жить
 в отчёте. Правка разметки — в карте реализации, здесь только измеритель.
@@ -112,10 +115,17 @@ def probe_week(browser, base: str, report: dict) -> None:
 
         item: dict = {"viewport": f"{width}x{height}"}
         item["before"] = page.evaluate(GEOM)
-        page.evaluate("document.getElementById('mark-today').remove()")
-        page.wait_for_timeout(150)
-        item["after"] = page.evaluate(GEOM)
-        item["saved_px"] = item["before"]["doc"] - item["after"]["doc"]
+        if item["before"]["#mark-today"] is None:
+            # Сведённое дерево: кнопки в разметке уже нет, убирать нечего.
+            item["button_in_markup"] = False
+            item["saved_px"] = None
+            item["after"] = item["before"]
+        else:
+            item["button_in_markup"] = True
+            page.evaluate("document.getElementById('mark-today').remove()")
+            page.wait_for_timeout(150)
+            item["after"] = page.evaluate(GEOM)
+            item["saved_px"] = item["before"]["doc"] - item["after"]["doc"]
         tab = item["after"]["tabbar"]["y"]
         item["under_tabbar_px"] = {
             key: item["after"][key]["bottom"] - tab
@@ -123,13 +133,20 @@ def probe_week(browser, base: str, report: dict) -> None:
                         "#save-template", "#clear-week")
             if item["after"][key] and item["after"][key]["bottom"] > tab
         }
-        # Подсказка в пустой второй строке сегодняшнего дня: цена в пикселях.
-        page.evaluate(
-            """() => { document.querySelector('[data-day-slot="6"] .ui-row__meta')
-                         .textContent = 'нажмите, чтобы отметить'; }""")
-        page.wait_for_timeout(150)
+        # Подсказка в пустой второй строке сегодняшнего дня: есть ли она и чего стоит.
+        item["hint_text"] = page.evaluate(
+            "() => document.querySelector('[data-day-slot=\"6\"] .ui-row__meta').textContent")
         item["hint"] = page.evaluate(GEOM)
-        item["hint"]["doc"] = page.evaluate("document.documentElement.scrollHeight")
+        item["hint_without_px"] = page.evaluate(
+            """() => {
+                 var m = document.querySelector('[data-day-slot="6"] .ui-row__meta');
+                 var keep = m.textContent;
+                 m.textContent = '';
+                 var bare = document.documentElement.scrollHeight;
+                 m.textContent = keep;
+                 return bare;
+               }""")
+        item["hint_cost_px"] = item["hint"]["doc"] - item["hint_without_px"]
 
         # Поведение: клик по строке сегодня.
         page.reload(wait_until="load")
