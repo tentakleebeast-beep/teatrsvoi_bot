@@ -12,6 +12,7 @@
     DATABASE_URL=... python3 deploy/check_schema.py --expect-head  # версия = head
     DATABASE_URL=... python3 deploy/check_schema.py --root /tmp/тег --expect-head  # head чужого дерева
     DATABASE_URL=... python3 deploy/check_schema.py --stamp-head --files "db/init/061_master_role.sql"
+    python3 deploy/check_schema.py --check-code --files "db/init/063_x.sql" --code-root /opt/svoi
 
 `--expect-head` — read-only сверка `alembic_version` с головой цепочки ревизий
 (docs/reports/132). Ею baseline после восстановления из дампа: `alembic stamp head`
@@ -33,6 +34,20 @@
 `--env-file PATH` — взять `DATABASE_URL` из файла настроек, если переменной нет в
 окружении: на сервере настройки лежат в `/opt/svoi/.env`, а не в шелле раннера.
 
+`--stamp-head` (с версии v0.10.0) сверяет ревизию с головой **выкаченного кода**
+(`--code-root`, по умолчанию `/opt/svoi`) и отказывается ставить версию вперёд неё: такой
+миграции работающий код не знает, и `tool-api` не поднимется (`RuntimeError: схема не
+применена`). Случай выката v0.10.0 (10.11.2026): 063 накатили из `main` вперёд тега v0.9.2,
+чья голова — 062, служба ушла в `activating (auto-restart)` на три минуты. Сверяется не
+запрошенная цель из `--files`, а **итоговая** версия учёта: назад версия не идёт, поэтому
+уже записанная ревизия впереди кода видна и при повторном накате со старым файлом — иначе
+скрипт рапортовал бы зелёным в сломанном состоянии. Расхождение видно в обе стороны: цель
+позади головы кода — сообщение «схема отстаёт», её лечит накат миграций из выкаченного тега.
+
+`--check-code` — та же сверка без базы: read-only проверка «файлы из `--files` не новее
+головы выкаченного кода» до наката SQL. Ею workflow `repair-schema.yml` валится раньше,
+чем структура базы уедет вперёд учёта версии.
+
 Код возврата 1, если чего-то не хватает или версия не равна head.
 """
 
@@ -40,6 +55,7 @@ from __future__ import annotations
 
 import os
 import re
+import subprocess
 import sys
 from pathlib import Path
 
@@ -47,6 +63,9 @@ import psycopg
 
 INIT_DIR = Path(__file__).resolve().parents[1] / "db" / "init"
 ROOT = INIT_DIR.parents[1]
+# Выкаченный на сервере код: его голова — контракт, с которым tool-api стартует.
+CODE_ROOT = Path("/opt/svoi")
+TAG_TIMEOUT = 5
 COLUMN_RE = re.compile(r"alter\s+table\s+(\w+)\s+add\s+column\s+if\s+not\s+exists\s+(\w+)", re.I)
 TABLE_RE = re.compile(r"create\s+table\s+if\s+not\s+exists\s+(\w+)", re.I)
 
@@ -171,6 +190,96 @@ def target_revision(chain_list: list[str], files: list[str]) -> tuple[str, list[
     return max(mapped, key=lambda rev: order[rev]), unknown
 
 
+def code_relation(target: str, code_chain: list[str]) -> str:
+    """Где цель учёта относительно головы выкаченного кода: equal, ahead или behind.
+
+    `ahead` — накатанная миграция новее кода на диске; такой ревизии этот код не знает,
+    и `tool_api` не стартует (`alembic_version` сверяется с головой своего кода).
+    Именно так упал выкат v0.10.0 10.11.2026: 063 накатили при выкаченном v0.9.2 (head 062).
+    `behind` — обратный случай (v0.8.0): код ждёт больше, чем применено.
+    """
+    if target == code_chain[0]:
+        return "equal"
+    return "behind" if target in code_chain else "ahead"
+
+
+def code_head(root: Path) -> str:
+    """Голова цепочки выкаченного кода — то, что `tool-api` потребует при старте."""
+    return head_revision(root)
+
+
+def code_tag(root: Path) -> str | None:
+    """Тег выкаченного дерева для текста отказа; git может отсутствовать — тогда None."""
+    try:
+        done = subprocess.run(
+            ["git", "-C", str(root), "describe", "--tags", "--always"],
+            capture_output=True, text=True, timeout=TAG_TIMEOUT, check=False)
+    except (OSError, subprocess.SubprocessError):
+        return None
+    return done.stdout.strip() or None
+
+
+def code_note(relation: str, target: str, deployed_head: str, tag: str | None,
+              root: Path) -> str:
+    """Текст сверки цели учёта с головой выкаченного кода — для обеих сторон."""
+    label = f"тег {tag}" if tag else "метка неизвестна (нет git в каталоге выката)"
+    where = f"{label}, {root}"
+    if relation == "ahead":
+        return (
+            f"НОВАЯ МИГРАЦИЯ ВПЕРЁД ВЫКАЧЕННОГО КОДА: ревизия {target} новее головы\n"
+            f"  работающего кода {deployed_head} ({where}, /opt/svoi).\n"
+            f"Такого файла этот код не знает: tool-api при старте откажется подниматься\n"
+            f"  (RuntimeError: версия схемы {target} ≠ head {deployed_head}) и уйдёт\n"
+            f"  в activating (auto-restart) — так было на выкате v0.10.0, 10.11.2026.\n"
+            f"Версию не двигаю. Нужен тег, чья голова цепочки — {target} или новее:\n"
+            f"  1) выкатите его (deploy/release.sh <тег> --apply),\n"
+            f"  2) накатите миграции ИЗ ЭТОГО ЖЕ тега (sudo deploy/server-deploy.sh db),\n"
+            f"  3) повторите накат файлов и --stamp-head уже под выкаченным кодом.\n"
+            f"Порядок выката: docs/infrastructure/35 §10.2.")
+    return (
+        f"СХЕМА ОТСТАЁТ ОТ ВЫКАЧЕННОГО КОДА: цель учёта {target} старше головы\n"
+        f"  работающего кода {deployed_head} ({where}, /opt/svoi).\n"
+        f"Код ждёт {deployed_head}: после наката накатите остаток из выкаченного тега\n"
+        f"  (sudo deploy/server-deploy.sh db) — иначе сервис не поднимется.\n"
+        f"Порядок выката: docs/infrastructure/35 §10.2.")
+
+
+def resulting_version(target: str, version: str | None, order: dict[str, int]) -> str:
+    """Какая ревизия останется в `alembic_version` после наката.
+
+    Назад учёт не идёт: если записанная версия новее цели из `--files`, остаётся она.
+    Поэтому сверять с головой кода надо не запрошенную цель, а итог: при уже залипшем
+    состоянии версия впереди кода не видна по списку старых файлов. Ревизию, которой
+    нет в цепочке этого checkout, понизить нельзя — тоже остаётся она.
+    """
+    if version is None or version not in order:
+        return target
+    return version if order[version] < order[target] else target
+
+
+def guard_code(target: str, code_root: Path | None, explicit: bool) -> bool:
+    """True — версию ставить нельзя: цель впереди головы выкаченного кода.
+
+    Проверка идёт до записи версии и до подключения к базе: отказ дешевле, чем
+    структура, уехавшая вперёд учёта (тогда нужен ручной stamp).
+    """
+    root = code_root or CODE_ROOT
+    if not (root / "alembic.ini").is_file():
+        if explicit:
+            print(f"нет {root / 'alembic.ini'}: сверить {target} с головой выкаченного "
+                  f"кода не с чем (--code-root PATH)")
+            return True
+        print(f"голова выкаченного кода не проверена: нет {root / 'alembic.ini'} — "
+              f"сверка с кодом пропущена (не сервер?)")
+        return False
+    code_chain = chain(root)
+    relation = code_relation(target, code_chain)
+    if relation == "equal":
+        return False
+    print(code_note(relation, target, code_chain[0], code_tag(root), root))
+    return relation == "ahead"
+
+
 def stamp(url: str, root: Path, revision: str) -> None:
     """Записать версию схемы тем же механизмом, что и деплой (`alembic stamp`)."""
     from alembic import command  # noqa: PLC0415
@@ -181,17 +290,23 @@ def stamp(url: str, root: Path, revision: str) -> None:
     command.stamp(cfg, revision)
 
 
-def stamp_head(url: str, root: Path, files: list[str]) -> int:
+def stamp_head(url: str, root: Path, files: list[str], code_root: Path | None = None,
+               code_root_explicit: bool = False) -> int:
     """Довести учёт версии до применённой структуры — после psql-наката."""
     chain_list = chain(root)
     head = chain_list[0]
     try:
-        target, unknown = target_revision(chain_list, files) if files else (head, [])
+        wanted, unknown = target_revision(chain_list, files) if files else (head, [])
     except ValueError as exc:
         print(str(exc))
         return 1
+    target = wanted
     for item in unknown:
         print(f"файл {item} не меняет версию схемы: ревизии с таким id в цепочке нет")
+
+    # Сверка с выкаченным кодом — до базы: версия вперёд его головы роняет старт сервиса.
+    if guard_code(target, code_root, code_root_explicit):
+        return 1
 
     missing_tables, missing_columns = structure_gaps(url)
     if missing_tables or missing_columns:
@@ -209,19 +324,29 @@ def stamp_head(url: str, root: Path, files: list[str]) -> int:
     print(version_line(version, head))
 
     order = {rev: index for index, rev in enumerate(chain_list)}
+    # Сверка с выкаченным кодом идёт и здесь, по ИТОГОВОЙ версии учёта: назад версия
+    # не идёт, поэтому при уже залипшем состоянии (v0.10.0: в alembic_version 063, а код
+    # на диске знает 062) расхождение задаёт записанная version, а не цель из `--files`.
+    # Без этой сверки повторный накат со списком старого файла рапортовал зелёным,
+    # а `tool-api` после рестарта снова уходил в `activating (auto-restart)`.
+    final = resulting_version(target, version, order)
+    if guard_code(final, code_root, code_root_explicit):
+        return 1
+    target = final
+
     if version == head:
         print("версия схемы уже равна head: учёт актуален, ничего не меняю")
         return 0
-    if version in order:
-        if order[version] < order[target]:
-            # Назад версия не идёт: применённый позже файл не отменяет учёт.
-            print(f"версия уже впереди цели {target}: оставляю {version}")
-            target = version
-        elif order[version] > order[target]:
-            print(f"ставлю версию {target} (было {version})")
-    else:
-        print(f"версия {version or 'отсутствует'} в цепочке этого checkout "
+    if version is None:
+        print(f"ставлю версию {target}: учёта версии не было")
+    elif version not in order:
+        print(f"версия {version} в цепочке этого checkout "
               f"не найдена — ставлю {target} после сверки структуры")
+    elif order[version] < order[wanted]:
+        # Назад версия не идёт: применённый позже файл не отменяет учёт.
+        print(f"версия уже впереди цели {wanted}: оставляю {version}")
+    elif order[version] > order[wanted]:
+        print(f"ставлю версию {wanted} (было {version})")
 
     if version != target:
         stamp(url, root, target)
@@ -235,6 +360,32 @@ def stamp_head(url: str, root: Path, files: list[str]) -> int:
               f"или выполните на сервере server-deploy.sh db --migrate")
         return 1
     print(f"учёт версии приведён к head: {head}")
+    return 0
+
+
+def check_code(root: Path, files: list[str], code_root: Path | None,
+               code_root_explicit: bool) -> int:
+    """Read-only: файлы из `--files` против головы выкаченного кода. База не нужна.
+
+    Работает до наката SQL: отказ здесь оставляет базу как была, а не в состоянии
+    «структура впереди учёта». Разные деревья (checkout раннера и выкаченный тег)
+    задаются раздельно: `--root` — цепочка из файлов, `--code-root` — код на диске.
+    """
+    if not files:
+        print("--check-code требует --files: сверять нечего")
+        return 2
+    try:
+        target, unknown = target_revision(chain(root), files)
+    except ValueError as exc:
+        print(str(exc))
+        return 1
+    for item in unknown:
+        print(f"файл {item} не меняет версию схемы: ревизии с таким id в цепочке нет")
+    if guard_code(target, code_root, code_root_explicit):
+        return 1
+    if (code_root or CODE_ROOT).joinpath("alembic.ini").is_file():
+        print(f"файлы не новее выкаченного кода: ревизия {target}, "
+              f"голова кода {code_head(code_root or CODE_ROOT)} — накат безопасен")
     return 0
 
 
@@ -282,7 +433,30 @@ def root_argument(argv: list[str]) -> Path | None:
     return None
 
 
+def code_root_argument(argv: list[str]) -> Path | None:
+    """Значение `--code-root PATH`: дерево выкаченного кода (по умолчанию /opt/svoi)."""
+    for index, arg in enumerate(argv):
+        if arg == "--code-root" and index + 1 < len(argv):
+            return Path(argv[index + 1])
+        if arg.startswith("--code-root="):
+            return Path(arg.split("=", 1)[1])
+    return None
+
+
 def main(argv: list[str]) -> int:
+    # Дерево для сверки версии: по умолчанию это сам скрипт (текущий checkout),
+    # при откате — дерево выбранного тега, вытащенное git archive.
+    root = root_argument(argv) or ROOT
+    if not (root / "alembic.ini").is_file():
+        print(f"нет {root / 'alembic.ini'}: сверять версию схемы не с чем")
+        return 2
+    code_root = code_root_argument(argv)
+    code_root_explicit = code_root is not None
+
+    # Read-only сверка с выкаченным кодом: базы не касается, DATABASE_URL не нужен.
+    if "--check-code" in argv:
+        return check_code(root, files_argument(argv), code_root, code_root_explicit)
+
     url = os.getenv("DATABASE_URL")
     if not url:
         for index, arg in enumerate(argv):
@@ -304,15 +478,9 @@ def main(argv: list[str]) -> int:
         print("DATABASE_URL не задан")
         return 2
     show_files = any(arg == "--files" or arg.startswith("--files=") for arg in argv)
-    # Дерево для сверки версии: по умолчанию это сам скрипт (текущий checkout),
-    # при откате — дерево выбранного тега, вытащенное git archive.
-    root = root_argument(argv) or ROOT
-    if not (root / "alembic.ini").is_file():
-        print(f"нет {root / 'alembic.ini'}: сверять версию схемы не с чем")
-        return 2
 
     if "--stamp-head" in argv:
-        return stamp_head(url, root, files_argument(argv))
+        return stamp_head(url, root, files_argument(argv), code_root, code_root_explicit)
 
     if "--expect-head" in argv:
         return check_expect_head(url, root)

@@ -16,6 +16,12 @@ name: ремонт схемы прода
 #
 # Пустой список файлов — только проверка состояния, база не меняется.
 # Запуск кнопкой Run workflow с явным подтверждением.
+#
+# Порядок (docs/infrastructure/35 §10.2): миграции накатываются из тега, который
+# выкатывается, и никогда не опережают выкаченный код. 10.11.2026 накат 063 из main
+# вперёд тега v0.9.2 (голова 062) уронил tool-api на старте: версия схемы была новее
+# головы кода на диске. Поэтому перед apply идёт read-only сверка файлов с головой
+# /opt/svoi (--check-code), а --stamp-head сверяется с ней же перед записью версии.
 
 on:
   workflow_dispatch:
@@ -52,6 +58,34 @@ jobs:
           ssh-keyscan -T 10 "$DEPLOY_HOST" >> ~/.ssh/known_hosts 2>/dev/null || true
           echo "DEPLOY_HOST=$DEPLOY_HOST" >> "$GITHUB_ENV"
 
+      - name: копия схемы и Alembic на сервер
+        # На сервере прошлый тег: новых ревизий в /opt/svoi ещё нет, поэтому цепочка
+        # и alembic.ini едут из checkout раннера во временный каталог с той же
+        # раскладкой (дерево читается по относительным путям, как в репозитории).
+        # Копия нужна и предпроверке, и --stamp-head, поэтому шаг идёт до наката.
+        run: |
+          set -euo pipefail
+          tmp=/tmp/svoi-schema-repair
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "rm -rf '$tmp' && mkdir -p '$tmp'"
+          tar -cf - alembic.ini db/init deploy/check_schema.py services/tool-api/migrations \
+            | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+                "tar -xf - -C '$tmp'"
+          echo "SCHEMA_DIR=$tmp" >> "$GITHUB_ENV"
+
+      - name: файлы не новее выкаченного кода
+        # Read-only и до наката: отказ здесь оставляет базу как была. Обратный порядок
+        # (накатить, потом отказаться ставить версию) рвёт контур — структура впереди
+        # учёта, и выкат останавливается на сверке версии (v0.10.0, 10.11.2026).
+        if: inputs.files != ''
+        env:
+          FILES: ${{ inputs.files }}
+        run: |
+          set -euo pipefail
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
+            "cd '$SCHEMA_DIR' && /opt/svoi/.venv/bin/python deploy/check_schema.py \
+               --check-code --files '$FILES' --code-root /opt/svoi"
+
       - name: применить миграции
         env:
           FILES: ${{ inputs.files }}
@@ -69,20 +103,6 @@ jobs:
             echo "  применено"
           done
 
-      - name: копия схемы и Alembic на сервер
-        # На сервере прошлый тег: новых ревизий в /opt/svoi ещё нет, поэтому цепочка
-        # и alembic.ini едут из checkout раннера во временный каталог с той же
-        # раскладкой (дерево читается по относительным путям, как в репозитории).
-        run: |
-          set -euo pipefail
-          tmp=/tmp/svoi-schema-repair
-          ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
-            "rm -rf '$tmp' && mkdir -p '$tmp'"
-          tar -cf - alembic.ini db/init deploy/check_schema.py services/tool-api/migrations \
-            | ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
-                "tar -xf - -C '$tmp'"
-          echo "SCHEMA_DIR=$tmp" >> "$GITHUB_ENV"
-
       - name: учёт версии схемы (alembic current = head)
         if: inputs.files != ''
         env:
@@ -91,7 +111,7 @@ jobs:
           set -euo pipefail
           ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=15 "root@$DEPLOY_HOST" \
             "cd '$SCHEMA_DIR' && /opt/svoi/.venv/bin/python deploy/check_schema.py \
-               --stamp-head --env-file /opt/svoi/.env --files '$FILES'"
+               --stamp-head --env-file /opt/svoi/.env --code-root /opt/svoi --files '$FILES'"
 
       - name: версия схемы равна head
         # Явная проверка, из-за отсутствия которой 08.11.2026 откатился выкат.
