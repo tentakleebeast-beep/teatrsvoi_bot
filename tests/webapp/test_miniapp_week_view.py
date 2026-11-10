@@ -156,6 +156,25 @@ def test_подсказка_в_строке_сегодня(app_page) -> None:
     assert meta(TODAY_SLOT) == HINT, meta(TODAY_SLOT)
     assert meta(2) == "" and meta(5) == "", (meta(2), meta(5))
 
+    # К18: подсказка занимает только пустое место и не стоит ни пикселя.
+    # Точные числа, а не диапазон: строка дня 52 px, страница 890 px — те же,
+    # что до подсказки. Допуск в 5–10 px пропустил бы рост разметки молча.
+    row_height = page.locator(f'[data-day-slot="{TODAY_SLOT}"]').bounding_box()["height"]
+    assert round(row_height, 1) == 52.0, f"строка сегодняшнего дня {row_height} px вместо 52"
+    with_hint = page.evaluate("document.documentElement.scrollHeight")
+    assert with_hint == 890, f"страница {with_hint} px с подсказкой вместо замера 890"
+
+    # Замер без подсказки: убираем текст второй строки в DOM и перечитываем.
+    page.eval_on_selector(
+        f'[data-day-slot="{TODAY_SLOT}"] .ui-row__meta',
+        "el => { el.textContent = ''; }")
+    without_hint = page.evaluate("document.documentElement.scrollHeight")
+    assert without_hint == with_hint, (
+        f"подсказка добавила {without_hint - with_hint} px: без неё {without_hint}, "
+        f"с ней {with_hint}")
+    row_without = page.locator(f'[data-day-slot="{TODAY_SLOT}"]').bounding_box()["height"]
+    assert round(row_without, 1) == 52.0, f"без подсказки строка {row_without} px вместо 52"
+
     # Второй проход: сегодняшний день отмечен — подсказки нет, стоят часы.
     SHEET_LOADED[TODAY_ISO] = "занят весь день"
     page.reload(wait_until="load")
