@@ -101,7 +101,7 @@
    "sources": [
     "docs/development/19-functional-requirements.md#L33",
     "docs/development/20-scenarios.md#L51",
-    "docs/development/92-navigation-model.md#L137"
+    "docs/development/92-navigation-model.md#L141"
    ],
    "note": "В чате — кнопки в уведомлении; в Mini App — раздел «Заявки»",
    "anchor": "| Заявки | `registration.approve` | число pending |"
@@ -123,7 +123,7 @@
    "sources": [
     "docs/development/19-functional-requirements.md#L35",
     "docs/development/20-scenarios.md#L255",
-    "docs/development/92-navigation-model.md#L140"
+    "docs/development/92-navigation-model.md#L144"
    ],
    "note": "Один путь записи `/admin/grant` (`enabled=false` — отзыв роли, `allowed=false` — отзыв возможности); отзыв роли — пометка строки, а не удаление; входы: карточка человека в чате, экраны «Люди» и «Права» в Mini App",
    "anchor": "| Права | `participants.manage` | — |"
@@ -145,7 +145,7 @@
    "sources": [
     "docs/development/19-functional-requirements.md#L36",
     "docs/development/20-scenarios.md#L62",
-    "docs/development/92-navigation-model.md#L141"
+    "docs/development/92-navigation-model.md#L145"
    ],
    "note": "Один путь записи `/admin/archive` и `…/unarchive` у чата и экрана; входы: карточка человека и раздел «Архив» в чате, раздел «Архив» в Mini App",
    "anchor": "| Архив | `participants.manage` | — |"
@@ -185,7 +185,7 @@
    "sources": [
     "docs/development/19-functional-requirements.md#L37",
     "docs/development/20-scenarios.md#L264",
-    "docs/development/92-navigation-model.md#L143"
+    "docs/development/92-navigation-model.md#L147"
    ],
    "note": "Чат: /admin → «Аудит»; Mini App: «Управление → Аудит» (FR-A11)",
    "anchor": "| Аудит | `audit.view` | — |"
@@ -204,7 +204,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L221",
-    "docs/development/92-navigation-model.md#L168",
+    "docs/development/92-navigation-model.md#L172",
     "docs/development/82-ux-navigation.md#L85"
    ],
    "note": "Имя, короткие имена, время в пути, манифест для AI",
@@ -399,7 +399,7 @@
    "sources": [
     "docs/development/19-functional-requirements.md#L56",
     "docs/development/20-scenarios.md#L248",
-    "docs/development/92-navigation-model.md#L145"
+    "docs/development/92-navigation-model.md#L149"
    ],
    "note": "Чат: кнопка «Сверить листы»; Mini App: «Управление → Сверка листов»",
    "anchor": "| Сверка листов | `budget.import` | — |"
@@ -920,7 +920,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L121",
-    "docs/development/92-navigation-model.md#L393"
+    "docs/development/92-navigation-model.md#L416"
    ],
    "note": "92 §9.1: работает у админа; FR-F5 — частично, права другим участникам позже (П-7)",
    "anchor": "«Ещё» → раздел «Личное» → **«Файлы студии»**"
@@ -939,7 +939,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L124",
-    "docs/development/92-navigation-model.md#L170"
+    "docs/development/92-navigation-model.md#L174"
    ],
    "note": "дом — Mini App «Ещё → Заметки»; в чате карточка с подтверждением",
    "anchor": "| Заметки | личные и общие заметки"
@@ -959,7 +959,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L132",
-    "docs/development/92-navigation-model.md#L169",
+    "docs/development/92-navigation-model.md#L173",
     "docs/development/82-ux-navigation.md#L205"
    ],
    "note": "Частные — в профиле, общие — в админ-панели; частные важнее (П-8)",
@@ -980,7 +980,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L131",
-    "docs/development/92-navigation-model.md#L144"
+    "docs/development/92-navigation-model.md#L148"
    ],
    "note": "Право notify.send только у админа; организатору не выдаём (П-6)",
    "anchor": "| Рассылка | `notify.send` (только у админа, П-6)"
@@ -1048,7 +1048,7 @@
    ],
    "scenarios": [],
    "sources": [
-    "docs/development/92-navigation-model.md#L146",
+    "docs/development/92-navigation-model.md#L150",
     "docs/development/93-cjm.md#L155"
    ],
    "note": "Экран /webapp/services и API есть; требование FR-H16",
@@ -1068,7 +1068,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L219",
-    "docs/development/92-navigation-model.md#L171"
+    "docs/development/92-navigation-model.md#L175"
    ],
    "note": "Обратная связь принимает и просьбу о доработке (FR-E8 слито в FR-I1)",
    "anchor": "| Обратная связь | отправить и посмотреть свои сообщения |"
@@ -1087,7 +1087,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L220",
-    "docs/development/92-navigation-model.md#L142"
+    "docs/development/92-navigation-model.md#L146"
    ],
    "note": "«Управление → Обращения»; счётчик новых — на «Главной»",
    "anchor": "| Обращения | `feedback.triage` | число новых |"
@@ -1106,7 +1106,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L40",
-    "docs/development/92-navigation-model.md#L157"
+    "docs/development/92-navigation-model.md#L161"
    ],
    "note": "Карточка и API есть; экрана «Люди» с занятостью и долгом нет",
    "anchor": "«Люди» — не только список: нажатие на человека открывает карточку"
@@ -1125,7 +1125,7 @@
    "scenarios": [],
    "sources": [
     "docs/development/19-functional-requirements.md#L137",
-    "docs/development/92-navigation-model.md#L148"
+    "docs/development/92-navigation-model.md#L152"
    ],
    "note": "Обещано 92 §2.4; экран /webapp/admin/t/notifications, маршрут /webapp/admin/notifications/settings, право admin.panel (Ш-11)",
    "anchor": "| Общие уведомления | `admin.panel` | — |"
@@ -1520,7 +1520,7 @@
   {
    "id": "FR-C9",
    "priority": "P1",
-   "status": "готово",
+   "status": "частично",
    "text": "Занятость карточкой дня: состояние, две границы, комментарий; запись в лист каноном, перенос правок человека обратно в базу",
    "source": "docs/development/19-functional-requirements.md#L76",
    "participant_action": true,
@@ -1845,7 +1845,7 @@
    "id": "FR-F5",
    "priority": "P1",
    "status": "частично",
-   "text": "Файлы студии (личные и общие): загрузка, доступ, теги, папки, архив; пока только админ, права другим участникам — позже",
+   "text": "Файлы студии (личные и общие): загрузка, удаление, доступ, теги, папки, архив; раздел открыт правом `files.access` — admin, org и master (V-039 (в)), у студийца права нет",
    "source": "docs/development/19-functional-requirements.md#L122",
    "participant_action": true,
    "actions": [
@@ -2086,7 +2086,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Отмена события: снятие из календаря, уведомление участникам, аудит; вход из чата по карточке события",
-   "source": "docs/development/19-functional-requirements.md#L209",
+   "source": "docs/development/19-functional-requirements.md#L203",
    "participant_action": true,
    "actions": [
     "ACT-033"
@@ -2097,7 +2097,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Перенос события: связь «было → стало», уведомление о новом времени; вход из чата по карточке события",
-   "source": "docs/development/19-functional-requirements.md#L210",
+   "source": "docs/development/19-functional-requirements.md#L204",
    "participant_action": true,
    "actions": [
     "ACT-034"
@@ -2108,7 +2108,7 @@
    "priority": "P1",
    "status": "не начато",
    "text": "Изменение состава после назначения с уведомлением",
-   "source": "docs/development/19-functional-requirements.md#L211",
+   "source": "docs/development/19-functional-requirements.md#L205",
    "participant_action": true,
    "actions": [
     "ACT-035"
@@ -2119,7 +2119,7 @@
    "priority": "P1",
    "status": "не начато",
    "text": "Проверка пересечения с уже назначенными событиями при назначении",
-   "source": "docs/development/19-functional-requirements.md#L212",
+   "source": "docs/development/19-functional-requirements.md#L206",
    "participant_action": false,
    "actions": [],
    "reason": "проверка пересечений — часть действия «Назначить событие»"
@@ -2129,7 +2129,7 @@
    "priority": "P2",
    "status": "частично",
    "text": "Фиксация присутствия режиссёра меняется после назначения",
-   "source": "docs/development/19-functional-requirements.md#L213",
+   "source": "docs/development/19-functional-requirements.md#L207",
    "participant_action": false,
    "actions": [],
    "reason": "правило фиксации присутствия режиссёра, отдельного шага нет"
@@ -2139,7 +2139,7 @@
    "priority": "P1",
    "status": "не начато",
    "text": "Замещение педагога на конкретную дату",
-   "source": "docs/development/19-functional-requirements.md#L214",
+   "source": "docs/development/19-functional-requirements.md#L208",
    "participant_action": true,
    "actions": [
     "ACT-036"
@@ -2150,7 +2150,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Тренинг без педагога своей дисциплины — предупреждение с подтверждением",
-   "source": "docs/development/19-functional-requirements.md#L215",
+   "source": "docs/development/19-functional-requirements.md#L209",
    "participant_action": true,
    "actions": [
     "ACT-038"
@@ -2161,7 +2161,7 @@
    "priority": "P2",
    "status": "не начато",
    "text": "Отметка «педагог провёл занятие» как основание для начисления",
-   "source": "docs/development/19-functional-requirements.md#L216",
+   "source": "docs/development/19-functional-requirements.md#L210",
    "participant_action": true,
    "actions": [
     "ACT-037"
@@ -2172,7 +2172,7 @@
    "priority": "P1",
    "status": "не начато",
    "text": "Ретенция `availability_hour`: срок и архив",
-   "source": "docs/development/19-functional-requirements.md#L217",
+   "source": "docs/development/19-functional-requirements.md#L211",
    "participant_action": false,
    "actions": [],
    "reason": "ретенция — миграция и архив"
@@ -2182,7 +2182,7 @@
    "priority": "P2",
    "status": "не начато",
    "text": "TTL непринятых заявок `slot_proposal` (7 дней)",
-   "source": "docs/development/19-functional-requirements.md#L218",
+   "source": "docs/development/19-functional-requirements.md#L212",
    "participant_action": false,
    "actions": [],
    "reason": "TTL заявок — серверное правило"
@@ -2192,7 +2192,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Уникальность псевдонимов без учёта регистра",
-   "source": "docs/development/19-functional-requirements.md#L219",
+   "source": "docs/development/19-functional-requirements.md#L213",
    "participant_action": false,
    "actions": [],
    "reason": "уникальность псевдонимов — ограничение базы"
@@ -2202,7 +2202,7 @@
    "priority": "P0",
    "status": "готово (systemd `Restart=always`, журнал journald)",
    "text": "Супервизор gateway и tool-api, ротация логов",
-   "source": "docs/development/19-functional-requirements.md#L220",
+   "source": "docs/development/19-functional-requirements.md#L214",
    "participant_action": false,
    "actions": [],
    "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
@@ -2212,7 +2212,7 @@
    "priority": "P1",
    "status": "готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь)",
    "text": "Healthcheck-агент с уведомлением админу при падении",
-   "source": "docs/development/19-functional-requirements.md#L221",
+   "source": "docs/development/19-functional-requirements.md#L215",
    "participant_action": false,
    "actions": [],
    "reason": "эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника"
@@ -2222,7 +2222,7 @@
    "priority": "P1",
    "status": "не начато",
    "text": "Сводка «кому не удалось доставить уведомление»",
-   "source": "docs/development/19-functional-requirements.md#L222",
+   "source": "docs/development/19-functional-requirements.md#L216",
    "participant_action": true,
    "actions": [
     "ACT-049"
@@ -2233,7 +2233,7 @@
    "priority": "P2",
    "status": "готово",
    "text": "Обратная связь участников, включая просьбу о доработке: кнопка меню, форма Mini App, разбор организатором, ответ автору",
-   "source": "docs/development/19-functional-requirements.md#L234",
+   "source": "docs/development/19-functional-requirements.md#L228",
    "participant_action": true,
    "actions": [
     "ACT-042",
@@ -2245,7 +2245,7 @@
    "priority": "P2",
    "status": "готово",
    "text": "Пункт «Обратная связь» в админ-панели: кто, что и когда написал, со статусами",
-   "source": "docs/development/19-functional-requirements.md#L235",
+   "source": "docs/development/19-functional-requirements.md#L229",
    "participant_action": true,
    "actions": [
     "ACT-054"
@@ -2256,7 +2256,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Профиль: имя, короткие имена, время в пути, манифест для AI; манифест попадает в промпт",
-   "source": "docs/development/19-functional-requirements.md#L236",
+   "source": "docs/development/19-functional-requirements.md#L230",
    "participant_action": true,
    "actions": [
     "ACT-009"
@@ -2267,7 +2267,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Гранулярность записи в человеческий лист — настройка по разделу (`finance_granularity`)",
-   "source": "docs/development/19-functional-requirements.md#L237",
+   "source": "docs/development/19-functional-requirements.md#L231",
    "participant_action": true,
    "actions": [
     "ACT-050"
@@ -2278,7 +2278,7 @@
    "priority": "P1",
    "status": "готово",
    "text": "Карта источников листа: «как написано» → статья и проект (`finance_source_map`)",
-   "source": "docs/development/19-functional-requirements.md#L238",
+   "source": "docs/development/19-functional-requirements.md#L232",
    "participant_action": true,
    "actions": [
     "ACT-051"
@@ -2289,7 +2289,7 @@
    "priority": "P0",
    "status": "готово",
    "text": "Идентификатор операции в скрытой колонке листа — основа идемпотентного переноса",
-   "source": "docs/development/19-functional-requirements.md#L239",
+   "source": "docs/development/19-functional-requirements.md#L233",
    "participant_action": false,
    "actions": [],
    "reason": "нет отдельного действия участника: серверное правило или расчёт"
@@ -2299,7 +2299,7 @@
    "priority": "P2",
    "status": "готово",
    "text": "Расписание в чате: группировка по дням, тип мероприятия, ссылка на календарь",
-   "source": "docs/development/19-functional-requirements.md#L240",
+   "source": "docs/development/19-functional-requirements.md#L234",
    "participant_action": true,
    "actions": [
     "ACT-030"
@@ -2310,7 +2310,7 @@
    "priority": "P1",
    "status": "частично (dry-run)",
    "text": "Перенос операций базы в лист «Финансы 2026 от 07»",
-   "source": "docs/development/19-functional-requirements.md#L241",
+   "source": "docs/development/19-functional-requirements.md#L235",
    "participant_action": true,
    "actions": [
     "ACT-018"
@@ -2321,7 +2321,7 @@
    "priority": "P1",
    "status": "готово (`scripts/read_finance_sheet.py`, dry-run по умолчанию)",
    "text": "Чтение правок из человеческого листа в базу",
-   "source": "docs/development/19-functional-requirements.md#L242",
+   "source": "docs/development/19-functional-requirements.md#L236",
    "participant_action": true,
    "actions": [
     "ACT-018"
@@ -2332,7 +2332,7 @@
    "priority": "P2",
    "status": "не начато",
    "text": "Форматирование технических листов (шапки, группировка, рамки)",
-   "source": "docs/development/19-functional-requirements.md#L243",
+   "source": "docs/development/19-functional-requirements.md#L237",
    "participant_action": false,
    "actions": [],
    "reason": "форматирование листов — скрипт"
