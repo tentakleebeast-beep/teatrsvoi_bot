@@ -39,9 +39,19 @@ def _folders(page) -> None:
 
 
 def _size(page, width: dict) -> None:
-    """Переставить окно на ширину профиля и дать `fitTiles` пересчитать плитки."""
+    """Переставить окно на ширину профиля и дать `fitTiles` пересчитать плитки.
+
+    Ждём не «примерно 300 мс», а факт пересчёта: после поворота/смены ширины
+    `fitTiles` срабатывает по debounce 100 мс, и под нагрузкой полного прогона
+    один кадр мог ещё не переставить широкую плитку (падение 360 px в гейте).
+    Условие — ни одного обрезанного имени; если `fitTiles` не сработал, будет
+    таймаут, а не ложный зелёный.
+    """
     page.set_viewport_size({"width": width["width"], "height": width["height"]})
-    page.wait_for_timeout(300)
+    page.wait_for_function(
+        "() => Array.from(document.querySelectorAll('#list .ui-grid__name'))"
+        ".every(function (node) { return node.scrollHeight - node.clientHeight <= 1; })",
+        timeout=5_000)
 
 
 def _visible_rows(page) -> int:
