@@ -84,6 +84,7 @@ test_orphan_review_covers_every_orphan` сверяет таблицу с код�
 | GET | `/tools/intent/categories` | (б) | — | Закрытый список категорий для журнала разбора (реестр Р3); AUD-8.2 |
 | GET | `/tools/intent/report` | (б) | — | Журнал разбора и очередь словаря (реестр Р3, `audit.view`); AUD-8.2 |
 | POST | `/tools/intent/resolve` | (б) | — | Каскад разбора (реестр Р2): из чата не зовётся; AUD-8.2 |
+| GET | `/tools/intent/sheet` | (б) | — | Лист «Чего не умеем» (V-035, `docs/development/156`): читает скрипт выгрузки `scripts/intent_sheet.py` из карты `t_56d3b8ed`. Интерфейса нет по решению V-035 — строки разбирает человек в карточках, а не экран; когда скрипт сольётся, маршрут перестанет быть сиротой |
 | GET | `/tools/participants/find` | (б) | — | Поиск человека с явным выбором из нескольких: админ-панель и чат; AUD-8.2 |
 | GET | `/tools/venues` | (а) | — | Дубль чтения: пространства отдаёт `GET /webapp/form-data` (и та же функция `venues_list`). AUD-8.1 |
 | GET | `/webapp/admin/invites` | (а) | — | Дубль чтения: страница инвайтов отдаёт список в разметке, создаёт код `POST /admin/invite`. AUD-8.1 |

@@ -808,6 +808,60 @@ def intent_report(days: int = Query(default=7, ge=1, le=365),
 
 
 
+@router.get("/tools/intent/sheet")
+def intent_sheet(days: int = Query(default=90, ge=1, le=365),
+                 limit: int = Query(default=200, ge=1, le=500),
+                 who: dict = Depends(core.require("admin.panel"))) -> dict:
+    """Лист «Чего не умеем» целиком: фраза, сколько раз и кто спросил, ответ, токены.
+
+    V-035 (docs/development/156): строки тянутся с прода на локальную машину, чтобы
+    по каждой завести карточку на спецификацию. Маршрут только читает: ни статуса,
+    ни решения в прод не пишет, таблицы решений нет.
+
+    Право — `admin.panel`, как у экрана разбора агента: в ответе настоящие имена
+    людей и тексты их вопросов, поэтому ни организатору, ни `audit.view` он не открыт.
+
+    Что попадает в лист, решается здесь и только здесь: агент честно отказался
+    (`agent_status = 'refusal'`) или старый вопрос, который каскад не разобрал
+    (`agent_status is null and not resolved`). Прогоны без `chat_id` — не сообщения
+    бота, их нет (V-034).
+    """
+    # Строка сырая: в регулярке `\\s+`, и обычная строка молча съела бы обратную косую.
+    sql = r"""
+    with human as (
+      select id, ts, chat_id, participant_id, text, answer, tokens
+        from intent_log
+       where ts > now() - (%s || ' days')::interval
+         and chat_id is not null
+         and (agent_status = 'refusal'
+              or (agent_status is null and not resolved))
+    ), grouped as (
+      select lower(regexp_replace(btrim(text), '\s+', ' ', 'g')) as phrase,
+             count(*) as times,
+             count(distinct participant_id) as people,
+             min(ts) as first_seen,
+             max(ts) as last_seen,
+             sum(coalesce(tokens, 0)) as tokens
+        from human
+       group by 1
+    )
+    select g.*,
+           (select string_agg(distinct coalesce(p.display_name, 'участник'), ', ')
+              from human h left join participant p on p.id = h.participant_id
+             where lower(regexp_replace(btrim(h.text), '\s+', ' ', 'g')) = g.phrase) as who,
+           (select h.answer from human h
+             where lower(regexp_replace(btrim(h.text), '\s+', ' ', 'g')) = g.phrase
+             order by h.ts desc, h.id desc limit 1) as last_answer
+      from grouped g
+     order by g.times desc, g.last_seen desc
+     limit %s
+    """
+    with core.pool.connection() as conn:
+        rows = conn.execute(sql, (days, limit)).fetchall()
+    return {"ok": True, "days": days, "count": len(rows), "rows": rows}
+
+
+
 @router.post("/admin/reconcile")
 def admin_reconcile(body: ReconcileIn, who: dict = Depends(core.require("budget.import"))) -> dict:
     """
