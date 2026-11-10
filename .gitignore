@@ -21,6 +21,8 @@ secrets/
 # имена участников, в индексе — только `participant-names.example.yaml` (Ш-03a плана 129).
 config/participant-names.yaml
 services/tool-api/data/
+# снимки прод-данных для локального разбора (внутри имена людей)
+.state/
 *.sqlite
 .hermes/
 .pytest_cache/
