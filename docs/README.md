@@ -111,6 +111,7 @@
 | 153 | [153-miniapp-feedback-screenshot.md](development/153-miniapp-feedback-screenshot.md) | 153. Скриншот в обращении «не работает» (Э6, дизайн) |
 | 154 | [154-master-discipline-profile.md](development/154-master-discipline-profile.md) | 154. Дисциплина мастера в профиле (V-037, дизайн) |
 | 155 | [155-miniapp-files-grid-and-tree.md](development/155-miniapp-files-grid-and-tree.md) | 155. Файлы сеткой с иконками и дерево папок (Б1, дизайн) |
+| 156 | [156-intent-sheet-decisions.md](development/156-intent-sheet-decisions.md) | 156. Разбор решений листа «Чего не умеем»: поток от выгрузки до запуска (V-035, дизайн) |
 
 ## Планы
 
