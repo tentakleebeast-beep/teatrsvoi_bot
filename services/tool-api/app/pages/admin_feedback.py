@@ -89,11 +89,17 @@ _SCRIPT_FEEDBACK_QUEUE = r"""
     meta.push(FB_STATUS[item.status] || item.status || "");
     main.appendChild(el("span", "ui-row__meta", meta.filter(Boolean).join(" · ")));
     main.appendChild(el("span", "ui-row__meta", item.text || ""));
-    row.appendChild(main);
     if (shots.length) {
+      /* Миниатюра рядом с текстом, кнопки — ниже: в один ряд три элемента на 390 px
+         не встают, а `column` без обёртки уводил миниатюру под текст (замер 108 → 172). */
+      var top = el("div", "feedback-top");
+      top.appendChild(main);
       var link = shotThumb(shots[0]);
-      row.appendChild(link);
+      top.appendChild(link);
+      row.appendChild(top);
       loadThumb(link, shots[0]);
+    } else {
+      row.appendChild(main);
     }
     var actions = el("div", "ui-actions admin-actions--split");
     var more = el("button", "ui-btn ui-btn--sm", "Решить");

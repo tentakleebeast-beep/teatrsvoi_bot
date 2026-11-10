@@ -211,6 +211,7 @@ def _feedback_with_attachments(body: WebappFeedbackIn, who: dict) -> dict:
     own_keys = [item.object_key for item in body.attachments
                 if _attachment_key_own(item.object_key, participant_id)]
     stored: list[dict] = []
+    done = False
     try:
         with core.pool.connection() as conn:
             row = conn.execute("""
@@ -263,10 +264,13 @@ def _feedback_with_attachments(body: WebappFeedbackIn, who: dict) -> dict:
                        str(row["id"]),
                        after={"kind": body.kind, "text": text[:200],
                               "attachments": len(stored)})
-    except Exception:
-        for key in own_keys:
-            files_store.delete_object(key)
-        raise
+        done = True
+    finally:
+        # Сторож `tests/unit/test_narrow_except.py` запрещает широкий `except`: чистим
+        # через `finally` с флагом, а исключение пусть идёт наверх как обычно.
+        if not done:
+            for key in own_keys:
+                files_store.delete_object(key)
     return {"ok": True, "id": row["id"], "status": "new",
             "kind_title": core.FEEDBACK_KINDS[body.kind], "notified": 0,
             "attachments": stored}

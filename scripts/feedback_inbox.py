@@ -46,6 +46,9 @@ KIND_TITLE = {"bug": "Дефект", "wish": "Пожелание"}
 #: Сколько раз повторяем скачивание: сеть до прода идёт через VPN и рвётся.
 DOWNLOAD_RETRIES = 3
 DOWNLOAD_TIMEOUT = 20
+#: Маршрут байтов вложения. Записан одним литералом: по нему инвентарь действий
+#: (`scripts/audit_actions.py`) видит, что маршрут не сирота.
+SHOT_PATH = "/tools/feedback/{feedback_id}/attachment/{file_id}"
 
 
 def card_exists(board: str, feedback_id: int) -> bool:
@@ -91,8 +94,8 @@ def save_shot(item: dict, shot: dict, inbox: pathlib.Path,
     файла «IMG_1.png» из разных обращений лежат в разных папках, но и в одной папке
     одинаковые имена затёрли бы друг друга — `file_id` уникален всегда.
     """
-    url = "{}/api/tools/feedback/{}/attachment/{}".format(
-        base.rstrip("/"), item["id"], shot["id"])
+    url = "{}/api{}".format(base.rstrip("/"), SHOT_PATH.format(
+        feedback_id=item["id"], file_id=shot["id"]))
     body, error = fetch_shot(url, token, chat)
     if body is None:
         return None, error

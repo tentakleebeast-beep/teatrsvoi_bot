@@ -309,7 +309,7 @@ def test_узкий_экран_не_ломает_блок(device_page) -> None:
     thumbs = page.locator("#shot-list .shot__thumb")
     assert thumbs.count() == 3
     boxes = [thumbs.nth(index).bounding_box() for index in range(3)]
-    for left, right in zip(boxes, boxes[1:]):
+    for left, right in zip(boxes, boxes[1:], strict=False):
         assert left["x"] + left["width"] <= right["x"] + 0.5, "миниатюры наехали друг на друга"
 
     assert page.locator("#shot-list").evaluate(
