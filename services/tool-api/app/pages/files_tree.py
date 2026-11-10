@@ -11,7 +11,8 @@ API не меняется: `parent_id`, `path`, `depth` уже в ответе; 
 * `TREE_BUILD` — чистая `buildFolderTree(rows)`, отдельной константой: её гоняет юнит-тест
   в node без DOM (`tests/unit/test_webapp_files_tree.py`);
 * `SCRIPT` — отрисовка (`folderNode`, `renderFolders`, `loadFolders`), лист действий над
-  папкой (`folderMenu`, `askRenameFolder`, `askCloseFolder`) и состояние раскрытия;
+  папкой (`folderMenu`, `askRenameFolder`, `askCloseFolder`), состояние раскрытия и
+  последняя строка-фильтр «Без папки · N» (V-065);
 * правила, которые нельзя потерять при правке: `aria-expanded` стоит на кнопке
   (disclosure, не `role=tree`), `aria-controls` ссылается на свой `<ul>`, дерево
   раскрыто по умолчанию, свёрнутые папки помнятся на сеанс в `sessionStorage`.
@@ -240,6 +241,62 @@ SCRIPT = r"""
     }, 0);
   }
 
+  // --- «Без папки»: последняя строка дерева — фильтр сетки (V-065) -------------
+  // Отдельной папки в базе нет: файл без папки — это `folder_id = null` в списке
+  // `/webapp/files/list`. Поэтому N считается по уже загруженному списку (`allFiles`
+  // объявлен на странице `files.py`), нового запроса нет, и число всегда совпадает
+  // с тем, что покажет сетка. Строка-переключатель, а не ссылка: адреса у неё нет.
+  function fileWithoutFolder(file) {
+    return !!file && (file.folder_id === null || file.folder_id === undefined);
+  }
+
+  function noFolderCount() {
+    var rows = typeof allFiles === "undefined" ? [] : allFiles;
+    return (rows || []).filter(fileWithoutFolder).length;
+  }
+
+  function noFolderRow() {
+    var li = el("li", "ui-tree__node ui-tree__node--nofolder");
+    var button = el("button", "ui-tree__row ui-tree__row--action");
+    button.type = "button";
+    button.id = "no-folder-row";
+    button.setAttribute("aria-pressed", noFolderOnly ? "true" : "false");
+    // Слот переключателя остаётся пустым — названия в одном столбце с папками.
+    var slot = el("span", "ui-tree__toggle");
+    slot.setAttribute("aria-hidden", "true");
+    button.appendChild(slot);
+    var body = el("span", "ui-tree__body");
+    body.appendChild(el("span", "ui-tree__name",
+      "Без папки · " + noFolderCount()));
+    body.appendChild(el("span", "ui-tree__meta",
+      noFolderCount() ? "показать только эти файлы" : "файлов вне папок нет"));
+    button.appendChild(body);
+    button.addEventListener("click", function () { toggleNoFolder(); });
+    li.appendChild(button);
+    return li;
+  }
+
+  // Перерисовка одной строки, а не всего дерева: список файлов приходит позже папок
+  // и меняется после загрузки и удаления, а раскрытие папок при этом не должно сбиться.
+  function syncNoFolderRow() {
+    var button = $("no-folder-row");
+    if (!button) return;
+    var count = noFolderCount();
+    button.setAttribute("aria-pressed", noFolderOnly ? "true" : "false");
+    button.querySelector(".ui-tree__name").textContent = "Без папки · " + count;
+    button.querySelector(".ui-tree__meta").textContent = count
+      ? "показать только эти файлы" : "файлов вне папок нет";
+  }
+
+  // Переключение фильтра: сетку перерисовывает `renderList` из `files.py`, пояснение
+  // под заголовком — `syncNoFolderNote`. Строка не знает, как рисуется плитка.
+  function toggleNoFolder() {
+    noFolderOnly = !noFolderOnly;
+    if (typeof renderList === "function") renderList();
+    if (typeof syncNoFolderNote === "function") syncNoFolderNote();
+    syncNoFolderRow();
+  }
+
   function renderFolders(rows) {
     var list = $("folders");
     clear(list);
@@ -250,9 +307,12 @@ SCRIPT = r"""
     if (!nodes.length) {
       list.appendChild(folderState("Папок пока нет",
         "Создайте первую — общую папку видят все, но правит только администратор."));
-      return;
+    } else {
+      nodes.forEach(function (node) { list.appendChild(folderNode(node)); });
     }
-    nodes.forEach(function (node) { list.appendChild(folderNode(node)); });
+    // «Без папки» — всегда последняя строка, в том числе когда папок нет вовсе:
+    // файлы вне папок существуют и без единой папки (V-065).
+    list.appendChild(noFolderRow());
   }
 
   function loadFolders() {

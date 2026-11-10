@@ -468,7 +468,7 @@ def test_Э1_роли_педагога_открываются_через_дис�
     markup = cb.message.answers[-1][1]
     assert "panel:mrel:2:music:1" in datas(markup)
     assert "panel:mgrant:2" in datas(markup), "без дисциплины роль не выдаётся"
-    assert "Дисциплин нет: тренинг назначить не сможет." in cb.message.answers[-1][0]
+    assert "Дисциплин нет: тренинг назначится без предмета." in cb.message.answers[-1][0]
 
 
 def test_Э1_выдача_педагога_уходит_с_дисциплинами(gw, fake_api, caps):

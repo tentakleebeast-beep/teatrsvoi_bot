@@ -26,10 +26,10 @@ from tests.webapp import server as stand
 MASTER = {"X-SVOI-Role": "master"}
 TROUPE = {"X-SVOI-Role": "troupe"}
 
-ADMIN_WARNING = ("У педагога нет дисциплины: назначить тренинг он не сможет, "
-                 "пока не выберете.")
-SELF_WARNING = ("Дисциплина не выбрана: назначить тренинг не получится. "
-                "Поменять её может администратор.")
+ADMIN_WARNING = ("У педагога нет дисциплины: тренинг он назначит, но без предмета — "
+                 "в состав войдут все педагоги. Выберите дисциплину в карточке.")
+SELF_WARNING = ("Дисциплина не выбрана: тренинг назначить можно, но без предмета — "
+                "в состав войдут все педагоги. Поменять её может администратор.")
 
 
 @pytest.fixture(autouse=True)
@@ -152,7 +152,7 @@ def test_снятие_последней_просит_подтверждение
     confirm.locator("button", has_text="Снять дисциплину").click()
     page.wait_for_function(
         "() => document.querySelector('.ui-sheet .ui-alert--warn') && "
-        "document.querySelector('.ui-sheet').innerText.indexOf('не сможет') >= 0",
+        "document.querySelector('.ui-sheet').innerText.indexOf('без предмета') >= 0",
         timeout=10_000)
 
     assert stand.DISCIPLINE_EVENTS[-1] == {"participant_id": 2, "discipline": "music",

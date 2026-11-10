@@ -58,6 +58,23 @@ def test_предупреждение_без_эмодзи():
         assert not EMOJI.search(text), f"{audience}: эмодзи в тексте"
 
 
+def test_V061_писать_дисциплину_умеет_один_модуль():
+    """Решение V-061 (а): связь «ведёт дисциплину» пишет только `api/admin.py`.
+
+    Владелец выбрал (10.11.2026): дисциплину ставит администратор в карточке человека,
+    самообслуживания нет — значит нет ни второго пути записи, ни права `disciplines.self`.
+    Отказ мастеру по правам закреплён тестом
+    `tests/integration/test_master_role.py::test_Г20_нет_права_на_дисциплину_словами`.
+    """
+    services = ROOT / "services"
+    writers = sorted(path.relative_to(ROOT).as_posix()
+                     for path in services.rglob("*.py")
+                     if "insert into participant_discipline" in path.read_text(encoding="utf-8"))
+    assert writers == ["services/tool-api/app/api/admin.py"], writers
+    joined = "".join(path.read_text(encoding="utf-8") for path in services.rglob("*.py"))
+    assert "disciplines.self" not in joined, "появилось право самообслуживания (V-061 б)"
+
+
 def test_отказ_по_правам_людей_на_сервере_один():
     """Текст Б3 — константа сервера: клиент не придумывает слова сам."""
     assert core.MANAGE_FORBIDDEN_CODE == "participants_manage_forbidden"

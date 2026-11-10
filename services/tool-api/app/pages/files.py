@@ -53,6 +53,7 @@ _BODY_FILES = """
     <h2 class="ui-section__title">Мои файлы</h2>
     <span class="ui-section__meta" id="count"></span>
   </div>
+  <p class="ui-small ui-muted files-hint" id="list-note" hidden></p>
   <div class="ui-grid" id="list"></div>
 </section>
 """
@@ -60,6 +61,11 @@ _BODY_FILES = """
 _SCRIPT_FILES = r"""
   var chosen = [];
   var denied = false;
+  // Список файлов и фильтр «Без папки» (V-065). Фильтр ставит строка дерева
+  // (`files_tree.py`), поэтому состояние живёт здесь, рядом с отрисовкой сетки,
+  // а строка только переключает его и зовёт `renderList`.
+  var allFiles = [];
+  var noFolderOnly = false;
 
   function humanSize(bytes) {
     var value = Number(bytes) || 0;
@@ -89,22 +95,51 @@ _SCRIPT_FILES = r"""
       : percent >= 75 ? " ui-meter__fill--warn" : "");
   }
 
-  function renderFiles(data) {
-    renderQuota(data.quota);
-    var rows = data.data || [];
+  function visibleFiles() {
+    return allFiles.filter(function (file) {
+      return !noFolderOnly || fileWithoutFolder(file);
+    });
+  }
+
+  // Пояснение под заголовком: без него сузившаяся сетка выглядит как пропавшие файлы.
+  function syncNoFolderNote() {
+    var note = $("list-note");
+    note.hidden = !noFolderOnly;
+    note.textContent = noFolderOnly
+      ? "Показаны файлы без папки (" + visibleFiles().length + "). "
+        + "Нажмите строку «Без папки» ещё раз, чтобы увидеть все."
+      : "";
+  }
+
+  function renderList() {
+    var rows = visibleFiles();
     var list = $("list");
     clear(list);
     $("count").textContent = rows.length
       ? rows.length + " " + plural(rows.length, "файл", "файла", "файлов") : "";
     if (!rows.length) {
-      list.appendChild(empty("Файлов пока нет",
-        "Загрузите первый — он появится здесь и в папке, если вы её указали."));
+      list.appendChild(noFolderOnly
+        ? empty("Файлов без папки нет",
+                "Все файлы разложены по папкам. Нажмите «Без папки» ещё раз, чтобы увидеть все.")
+        : empty("Файлов пока нет",
+                "Загрузите первый — он появится здесь и в папке, если вы её указали."));
+      syncNoFolderNote();
       return;
     }
     rows.forEach(function (file) { list.appendChild(fileTile(file)); });
     // Широкая плитка выбирается по раскладке, а не по длине имени: после вставки
     // браузер уже знает, какое имя не влезло в три строки (155 §2.2).
     fitTiles(list);
+    syncNoFolderNote();
+  }
+
+  function renderFiles(data) {
+    renderQuota(data && data.quota);
+    allFiles = (data && data.data) || [];
+    renderList();
+    // Число в строке «Без папки» считается по этому же списку: обновляем его после
+    // загрузки и удаления, не перерисовывая дерево и не сбивая раскрытие папок.
+    syncNoFolderRow();
   }
 
   function refresh() {
