@@ -455,8 +455,32 @@ body.ui-page {
   animation: ui-shimmer 1.2s linear infinite;
 }
 @keyframes ui-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+
+/* Права ещё не пришли: `/webapp/nav` в пути. Элемент, помеченный `data-svoi-cap`
+   (кнопка, строка, ссылка), стоит скелетом того же вида и тайминга, что полосы на
+   Главной (`.ui-skeleton` + `ui-shimmer`), а не готовой кнопкой: иначе человек
+   видел кнопку, а через долю секунды её не было (карта t_f279a0eb, замечание
+   владельца 10.11.2026). Заменяется весь блок целиком, поэтому его место, высота
+   и отступы не меняются — подмена не двигает соседей. Признак ставит сервер
+   (`layout.page`), снимает оболочка ответом на nav (`webapp-shell.js`): `ready` —
+   как есть, `error` — как в разметке (право всё равно проверит сервер на вызове).
+   `pointer-events: none` — скелет не нажимается; нажатие вернётся вместе с кнопкой. */
+html[data-svoi-rights="pending"] [data-svoi-cap] {
+  position: relative;
+  border-color: transparent !important;
+  color: transparent !important;
+  background: linear-gradient(90deg, var(--ui-surface), rgba(120, 128, 140, .18), var(--ui-surface));
+  background-size: 200% 100%;
+  animation: ui-shimmer 1.2s linear infinite;
+  pointer-events: none;
+  cursor: default;
+}
+/* Дети держат место, но не рисуются: высота скелета — будущая высота кнопки. */
+html[data-svoi-rights="pending"] [data-svoi-cap] > * { visibility: hidden; }
+
 @media (prefers-reduced-motion: reduce) {
-  .ui-skeleton { animation: none; }
+  .ui-skeleton,
+  html[data-svoi-rights="pending"] [data-svoi-cap] { animation: none; }
   .ui-switch::after { transition: none; }
 }
 

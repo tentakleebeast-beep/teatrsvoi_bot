@@ -224,3 +224,31 @@ def test_оболочка_прячет_по_праву_и_уводит_с_чуж
     assert "data-svoi-cap" in shell, "оболочка не прячет элементы по праву"
     assert "body.screens[here] === false" in shell, "оболочка не уводит с чужого экрана"
     assert 'location.replace("/webapp/home")' in shell
+
+
+def test_загрузка_прав_одна_на_всю_оболочку():
+    """t_f279a0eb: один запрос `/webapp/nav` и одно состояние на всю оболочку.
+
+    До карты адрес спрашивали два независимых скрипта (подпись вкладки и права на
+    экран) — два запроса и два разных момента, когда экран менялся. Теперь ответ
+    один; признак загрузки `data-svoi-rights` ставит сервер, снимает оболочка.
+    """
+    shell = (ROOT / "services" / "tool-api" / "app" / "static" / "webapp-shell.js").read_text(
+        encoding="utf-8")
+    assert shell.count('fetch("/webapp/nav")') == 1, "nav спрашивают несколько скриптов"
+    assert 'data-svoi-rights", status' in shell, "оболочка не переводит признак загрузки"
+    assert 'PENDING = "pending"' in shell and 'READY = "ready"' in shell
+    assert "netBanner" in shell, "у отказа nav нет сообщения и повтора"
+    assert "window.SVOI.nav" in shell, "общего ответа нет — страницы спросят снова"
+
+
+def test_каждый_экран_рождается_с_признаком_загрузки_прав():
+    """t_f279a0eb: экран без признака мигал бы кнопками, когда права приезжают.
+
+    Права на момент отдачи HTML неизвестны (страница — публичная константа),
+    поэтому признак стоит в каркасе, а не в отдельных экранах: пропустить его на
+    одном из 31 экрана нельзя.
+    """
+    missing = [module for module, html in _page_sources()
+               if 'data-svoi-rights="pending"' not in html]
+    assert not missing, "экраны без признака загрузки прав: " + ", ".join(sorted(missing))
