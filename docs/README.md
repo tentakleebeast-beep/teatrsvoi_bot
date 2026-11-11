@@ -11,7 +11,7 @@
 |---|---|---|
 | [Архитектура](architecture/) | модель данных, правила, алгоритмы, границы систем | 21 |
 | [Инфраструктура](infrastructure/) | Google, календари, уведомления, развёртывание | 10 |
-| [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 47 |
+| [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 49 |
 | [Планы](plans/) | роадмап, планы развития | 9 |
 | [Отчёты](reports/) | датированные срезы: чекпойнты, аудиты, покрытие, смоук-тесты | 59 |
 | [Архив](archive/) | устаревшее и историческое; не правило, а запись | 7 |
@@ -114,6 +114,8 @@
 | 154 | [154-master-discipline-profile.md](development/154-master-discipline-profile.md) | 154. Дисциплина мастера в профиле (V-037, дизайн) |
 | 155 | [155-miniapp-files-grid-and-tree.md](development/155-miniapp-files-grid-and-tree.md) | 155. Файлы сеткой с иконками и дерево папок (Б1, дизайн) |
 | 156 | [156-intent-sheet-decisions.md](development/156-intent-sheet-decisions.md) | 156. Разбор решений листа «Чего не умеем»: поток от выгрузки до запуска (V-035, дизайн) |
+| 158 | [158-google-process-research.md](development/158-google-process-research.md) | 158. Google: текущий процесс студии — исследование (E1-1) |
+| 159 | [159-google-interview-questionnaire.md](development/159-google-interview-questionnaire.md) | 159. Анкета интервью по Google-процессу (E1-1) — на согласование владельцу |
 
 ## Планы
 
