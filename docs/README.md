@@ -115,7 +115,7 @@
 | 155 | [155-miniapp-files-grid-and-tree.md](development/155-miniapp-files-grid-and-tree.md) | 155. Файлы сеткой с иконками и дерево папок (Б1, дизайн) |
 | 156 | [156-intent-sheet-decisions.md](development/156-intent-sheet-decisions.md) | 156. Разбор решений листа «Чего не умеем»: поток от выгрузки до запуска (V-035, дизайн) |
 | 160 | [160-google-process-research.md](development/160-google-process-research.md) | 160. Google: текущий процесс студии — исследование (E1-1) |
-| 161 | [161-google-interview-questionnaire.md](development/161-google-interview-questionnaire.md) | 161. Анкета интервью по Google-процессу (E1-1) — на вычитку владельцу |
+| 161 | [161-google-interview-questionnaire.md](development/161-google-interview-questionnaire.md) | 161. Анкета интервью по Google-процессу (E1-1) — версия после вычитки владельцем |
 
 ## Планы
 
