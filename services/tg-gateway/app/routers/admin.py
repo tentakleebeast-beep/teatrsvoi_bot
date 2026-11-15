@@ -616,6 +616,7 @@ async def panel_invite(cb: CallbackQuery) -> None:
         "или в ответ на запрос кода и попадает в систему с выбранной ролью.",
         parse_mode=None,
         reply_markup=keyboards.kb([[("Организатор", "inv:role:org"), ("Актёр труппы", "inv:role:troupe")],
+                         [("Педагог", "inv:role:master")],
                          [(texts.BTN_BACK, "panel:root")]]))
     await cb.answer()
 
@@ -625,7 +626,7 @@ async def invite_issue(cb: CallbackQuery) -> None:
     """Шаг 2: выпускаем код и отдаём его человеку текстом."""
     parts = (cb.data or "").split(":")
     role = parts[2] if len(parts) > 2 else ""
-    if role not in ("org", "troupe"):
+    if role not in ("org", "troupe", "master"):
         await cb.answer("Неизвестная роль", show_alert=True)
         return
     res = await core.api("/admin/invite", {"role": role, "ttl_days": 7}, cb.message.chat.id)

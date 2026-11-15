@@ -27,7 +27,9 @@ from . import people
 router = APIRouter()
 
 class InviteIn(core.ApiIn):
-    role: Literal["admin", "org", "troupe"]
+    role: Literal["admin", "org", "troupe", "master"]
+    # Дисциплина для кода педагога необязательна: спрашиваем её при регистрации (064).
+    discipline_code: Literal["acting", "music"] | None = None
     ttl_days: int = core.INVITE_TTL_DAYS
     max_uses: int = 1
     correlation_id: str | None = None
@@ -40,13 +42,16 @@ def create_invite(body: InviteIn,
     if body.role == "admin":
         raise HTTPException(status.HTTP_400_BAD_REQUEST,
                             "admin не выдаётся кодом: только через ADMIN_CHAT_ID")
+    if body.role != "master" and body.discipline_code:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                            "discipline_code допустим только для роли master")
     code = "".join(secrets.choice(core.CODE_ALPHABET) for _ in range(8))
     expires = core.now() + timedelta(days=body.ttl_days)
     with core.pool.connection() as conn:
         row = conn.execute(
-            """insert into invite_code (code, role, created_by, expires_at, max_uses)
-               values (%s,%s,%s,%s,%s) returning id""",
-            (code, body.role, who.get("id") or 0, expires, body.max_uses),
+            """insert into invite_code (code, role, discipline_code, created_by, expires_at, max_uses)
+               values (%s,%s,%s,%s,%s,%s) returning id""",
+            (code, body.role, body.discipline_code, who.get("id") or 0, expires, body.max_uses),
         ).fetchone()
         core.audit(conn, "human", who.get("id"), "invite.create", "invite_code", str(row["id"]),
               after={"role": body.role, "expires_at": expires.isoformat()},

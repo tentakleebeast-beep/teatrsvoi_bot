@@ -656,6 +656,13 @@ async def on_text(message: Message, state: FSMContext) -> None:
             return
 
         await state.update_data(code=text, role=res.get("role"))
+        if res.get("needs_discipline"):
+            # Педагог называет дисциплину до выбора себя (064): предмет — часть роли.
+            await state.set_state(Reg.await_discipline)
+            await message.answer(
+                "Код педагога принят. Какую дисциплину вы преподаёте?",
+                reply_markup=keyboards.discipline_kb())
+            return
         cands = res.get("candidates", [])
         if cands:
             await state.set_state(Reg.choose)
@@ -784,6 +791,31 @@ async def on_text(message: Message, state: FSMContext) -> None:
     )
 
 
+async def _reg_after_code(message: Message, state: FSMContext) -> None:
+    """Продолжение регистрации после выбора: список кандидатов или заявка с именем."""
+    res = await core.api("/tools/participants/search?q=", None, message.chat.id, method="GET")
+    cands = (res.get("candidates") or []) if res.get("ok") else []
+    if cands:
+        await state.set_state(Reg.choose)
+        await message.answer(
+            "Выберите себя из списка — так ваши взносы и занятость останутся на одной "
+            "записи. Начните вводить фамилию или имя: список сузится.",
+            reply_markup=keyboards._candidates_kb(cands))
+    else:
+        await state.set_state(Reg.await_name)
+        await message.answer("Напишите фамилию и имя — «Фамилия Имя».")
+
+
+@router.callback_query(Reg.await_discipline, F.data.startswith("reg:disc:"))
+async def reg_discipline(cb: CallbackQuery, state: FSMContext) -> None:
+    code = cb.data.split(":")[2]
+    await state.update_data(discipline_code=code)
+    title = {"acting": "Актёрское мастерство", "music": "Музыка"}.get(code, code)
+    await cb.message.edit_text(f"Дисциплина: {title}.")
+    await cb.answer()
+    await _reg_after_code(cb.message, state)
+
+
 @router.message(Reg.choose, F.text, ~F.text.startswith("/"))
 async def reg_filter(message: Message, state: FSMContext) -> None:
     """Ввод букв сужает список людей (Ш-46, V-006): «Смирнова» находит «Дарья Смирнова».
@@ -821,9 +853,10 @@ async def reg_pick(cb: CallbackQuery, state: FSMContext) -> None:
         await cb.answer("Начните заново: /start", show_alert=True)
         return
     pid = int(cb.data.split(":")[2])
-    res = await core.api("/tools/participants/attach",
-                    {"chat_id": cb.message.chat.id, "participant_id": pid, "code": code},
-                    cb.message.chat.id)
+    payload = {"chat_id": cb.message.chat.id, "participant_id": pid, "code": code}
+    if data.get("discipline_code"):
+        payload["discipline_code"] = data["discipline_code"]
+    res = await core.api("/tools/participants/attach", payload, cb.message.chat.id)
     if res.get("ok"):
         await state.clear()
         p = res["participant"]
@@ -850,10 +883,16 @@ async def reg_name(message: Message, state: FSMContext) -> None:
     if not code:
         await message.answer("Начните заново: /start")
         return
-    res = await core.api("/tools/participants/register",
-                    {"chat_id": message.chat.id, "code": code,
-                     "display_name": message.text.strip(), "require_approval": True},
-                    message.chat.id)
+    payload = {"chat_id": message.chat.id, "code": code,
+               "display_name": message.text.strip(), "require_approval": True}
+    if data.get("discipline_code"):
+        payload["discipline_code"] = data["discipline_code"]
+    res = await core.api("/tools/participants/register", payload, message.chat.id)
+    if res.get("ok") and res.get("status") == "need_discipline":
+        await state.set_state(Reg.await_discipline)
+        await message.answer("Какую дисциплину вы преподаёте?",
+                             reply_markup=keyboards.discipline_kb())
+        return
     if errors.error_code(res) == "person_key_taken":
         await message.answer("Такой человек уже есть. Отправьте /start и выберите себя из списка.")
         return
