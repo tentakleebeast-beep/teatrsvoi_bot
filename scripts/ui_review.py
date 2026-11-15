@@ -28,6 +28,8 @@
 Вход на стенд: `POST /webapp/auth` с initData, подписанным токеном dev-бота, —
 тот же путь, что в бою (docs/development/141 §5.2). Токены четырёх ролей либо
 передаются готовыми (`--tokens`), либо выпускаются по chat_id (`--env-file`).
+Вместе с токеном уходит заголовок `X-SVOI-Role`: им роль задаёт стенд
+`tests/webapp/server.py`, а tool-api его игнорирует (там роль в токене).
 
 Ничего не нажимает и не отправляет: скрипт открывает экран, ждёт загрузки данных,
 снимает мерки и (по флагу `--shots`) сохраняет кадр. Кнопки «Отправить», «Принять»,
@@ -62,6 +64,9 @@ ROUTES_SOURCE = TOOL_API / "app" / "pages" / "routes.py"
 STAND_SOURCE = ROOT / "tests" / "webapp" / "server.py"
 
 ROLES = ("admin", "org", "master", "troupe")
+#: Заголовок роли стенда `tests/webapp/server.py`; на проде роль приходит токеном,
+#: а неизвестный заголовок tool-api игнорирует — поэтому он безвреден в обоих случаях.
+ROLE_HEADER = "X-SVOI-Role"
 DEFAULT_WIDTHS = (390, 320)
 DEFAULT_SCHEMES = ("light", "dark")
 WIDE_WIDTH = 430
@@ -498,6 +503,11 @@ def _measure_one(browser, *, base_url: str, token: str, role: str, path: str,
                  width: int, scheme: str) -> dict:
     context = browser.new_context(viewport={"width": width, "height": 844},
                                   color_scheme=scheme, device_scale_factor=1)
+    # Роль дублируется заголовком: на стенде `tests/webapp/server.py` права приходят
+    # заголовком `X-SVOI-Role`, а не токеном (прод его не читает — там роль в токене).
+    # Без этого все четыре роли на стенде открывались бы как администратор, и ролевая
+    # матрица 141 §7 п. 4 показывала бы «есть» там, где человек читает отказ.
+    context.set_extra_http_headers({ROLE_HEADER: role})
     context.add_init_script(MODAL_INIT_SCRIPT)
     page = context.new_page()
     errors: list[str] = []
@@ -587,6 +597,7 @@ def take_shots(browser, args) -> list[str]:
                     context = browser.new_context(
                         viewport={"width": width, "height": 844},
                         color_scheme=scheme, device_scale_factor=2)
+                    context.set_extra_http_headers({ROLE_HEADER: role})
                     context.add_init_script(MODAL_INIT_SCRIPT)
                     page = context.new_page()
                     url = f"{args.base_url}{path}?dev_token={urllib.parse.quote(token)}"
