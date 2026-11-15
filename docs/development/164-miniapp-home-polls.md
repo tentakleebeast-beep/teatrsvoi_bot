@@ -275,7 +275,8 @@
 
 Серверная часть уже есть и уже без права `poll.manage`: `/tools/polls/step` отдаёт `kind`,
 `text`, `options`, `chosen`, `position`, `total`, `closed`, `done`; `/tools/polls/answer`
-принимает `action` (`o`, `y`, `x`, `f`, `next`, `back`, `skip`). Нового API не нужно —
+принимает `action` (`o` — выбор, `y`/`x` — да/нет, `text` — свободный ответ, `n`/`next`,
+`b`/`back`, `s`/`skip`). Нового API не нужно —
 нужна страница и клиентская часть. Это второй вход к тому же обработчику, что и чат:
 правило `docs/architecture/25` §9.2 п.2 соблюдено.
 
