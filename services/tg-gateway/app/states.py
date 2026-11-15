@@ -59,6 +59,16 @@ class PanelEdit(StatesGroup):
     tariff = State()
 
 
+class PollAnswer(StatesGroup):
+    """Свободный ответ опроса: в состоянии только пара (run, position).
+
+    Сами ответы и указатель живут в `poll_run`/`poll_answer` (D4): перезапуск
+    gateway не теряет прогресс, а состояние нужно ровно для того, чтобы поймать
+    следующее сообщение человека как ответ на текущий вопрос.
+    """
+    await_text = State()
+
+
 class Intro(StatesGroup):
     name = State()
     alias = State()

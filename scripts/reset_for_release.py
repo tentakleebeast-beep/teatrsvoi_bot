@@ -62,6 +62,14 @@ KEEP_PEOPLE = (
 
 # Порядок важен: сначала зависимые таблицы, потом те, на которые они ссылаются.
 WIPE = (
+    "poll_answer",
+    "poll_run",
+    "poll_option",
+    "poll_question",
+    "poll_audience",
+    "poll_person",
+    "poll_viewer",
+    "poll",
     "agent_proposal",
     "availability_template",
     "notification_pref",

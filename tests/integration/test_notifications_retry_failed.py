@@ -73,7 +73,7 @@ def test_свежая_ошибка_настройки_возвращается_�
         assert row["last_error"] == TOKEN_ERROR
 
         result = sender.deliver(conn, MOMENT, apply_changes=True,
-                                sender=lambda chat_id, text: (True, ""),
+                                sender=lambda chat_id, text, markup=None: (True, ""),
                                 out=lambda *_: None)
         assert result["sent"] == 1
 

@@ -258,6 +258,10 @@ SECTIONS: tuple[WebappSection, ...] = (
                   "/webapp/admin/t/audit", "последние события", page="AUDIT_PAGE"),
     WebappSection("broadcast", ("notify.send",), "Рассылка",
                   "/webapp/broadcast", "текст и адресаты"),
+    # E8: опросы — отдельная фича бота, право `poll.manage` (сейчас только admin, V-088).
+    # Результаты открываются отдельно: `poll.results.all` и `poll_viewer` (docs/162 §7).
+    WebappSection("polls", ("poll.manage",), "Опросы",
+                  "/webapp/polls", "конструктор, адресаты, сводка", page="POLLS_PAGE"),
     WebappSection("reconcile", ("budget.import",), "Сверка листов",
                   "/webapp/reconcile", "база против таблицы"),
     WebappSection("services", ("admin.panel",), "Сервисы",
@@ -326,6 +330,10 @@ SCREEN_CAPS: dict[str, tuple[str, ...]] = {
     "/webapp/folder": ("files.access",),
     "/webapp/file": ("files.access",),
     "/webapp/person": ("participants.view",),
+    # E8: конструктор и сводка — свои экраны того же раздела. Прав у них может быть
+    # больше, чем у строки в «Управлении»: сводку открывает и получатель результатов.
+    "/webapp/polls/edit": ("poll.manage",),
+    "/webapp/polls/results": ("poll.results.all", "poll.manage"),
 }
 
 #: Экраны разделов хаба добавляются из реестра: адрес и право описаны один раз.

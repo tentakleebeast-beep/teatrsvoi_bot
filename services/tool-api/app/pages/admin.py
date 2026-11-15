@@ -22,6 +22,7 @@ from app.pages.admin_notifications import NOTIFICATION_DEFAULTS_PAGE
 from app.pages.admin_pending import PENDING_PAGE
 from app.pages.admin_people import PEOPLE_PAGE
 from app.pages.admin_rights import RIGHTS_PAGE
+from app.pages.polls import POLLS_PAGE
 
 __all__ = [
     "PEOPLE_PAGE",
@@ -34,4 +35,5 @@ __all__ = [
     "AGENT_PAGE",
     "DUES_ADMIN_PAGE",
     "NOTIFICATION_DEFAULTS_PAGE",
+    "POLLS_PAGE",
 ]
