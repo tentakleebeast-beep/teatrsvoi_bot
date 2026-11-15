@@ -84,6 +84,13 @@ scenarios:
     expr: text
     reason: "пункты подменю из keyboards.MENU_ACTIONS: подписи проверяются поверхностью menu"
 
+  - id: scenario.discipline_kb
+    file: keyboards.py
+    function: discipline_kb
+    kind: "text=InlineKeyboardButton"
+    expr: title
+    reason: "подписи — дисциплины из keyboards.DISCIPLINES (данные каталога, 064), а не текст интерфейса"
+
 entries:
   # ---------------------------------------------------------------- экраны Mini App
   - id: screen.home

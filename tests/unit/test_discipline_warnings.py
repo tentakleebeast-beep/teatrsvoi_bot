@@ -58,19 +58,21 @@ def test_предупреждение_без_эмодзи():
         assert not EMOJI.search(text), f"{audience}: эмодзи в тексте"
 
 
-def test_V061_писать_дисциплину_умеет_один_модуль():
-    """Решение V-061 (а): связь «ведёт дисциплину» пишет только `api/admin.py`.
+def test_V061_писать_дисциплину_умеют_два_названных_модуля():
+    """Пути записи «ведёт дисциплину» перечислены: `api/admin.py` и `api/people.py`.
 
-    Владелец выбрал (10.11.2026): дисциплину ставит администратор в карточке человека,
-    самообслуживания нет — значит нет ни второго пути записи, ни права `disciplines.self`.
-    Отказ мастеру по правам закреплён тестом
-    `tests/integration/test_master_role.py::test_Г20_нет_права_на_дисциплину_словами`.
+    Решение V-061 (а, 10.11.2026): дисциплину ставит администратор в карточке человека,
+    самообслуживания нет. Миграция `064` (решение 15.11.2026) добавила второй путь —
+    педагог выбирает предмет при регистрации своим кодом (`api/people.py`). Третьего
+    пути и права `disciplines.self` по-прежнему нет; отказ мастеру по правам закреплён
+    тестом `tests/integration/test_master_role.py::test_Г20_нет_права_на_дисциплину_словами`.
     """
     services = ROOT / "services"
     writers = sorted(path.relative_to(ROOT).as_posix()
                      for path in services.rglob("*.py")
                      if "insert into participant_discipline" in path.read_text(encoding="utf-8"))
-    assert writers == ["services/tool-api/app/api/admin.py"], writers
+    assert writers == ["services/tool-api/app/api/admin.py",
+                       "services/tool-api/app/api/people.py"], writers
     joined = "".join(path.read_text(encoding="utf-8") for path in services.rglob("*.py"))
     assert "disciplines.self" not in joined, "появилось право самообслуживания (V-061 б)"
 
