@@ -1675,10 +1675,10 @@ def health() -> dict:
 
 # --- E8: опросы ---------------------------------------------------------------
 # Стенд отвечает теми же формами, что `api/polls.py` (docs/development/162 §14.2).
-# Право `poll.manage` на стенде есть только у администратора: заголовок с любой
-# другой ролью получает 403, как `core._webapp_require` на проде (V-088).
+# Право `poll.manage` на стенде есть у администратора и организатора (V-088, 066):
+# заголовок с остальными ролями получает 403, как `core._webapp_require` на проде.
 
-NO_POLL_MANAGE_ROLES = {"participant", "org", "master", "troupe"}
+NO_POLL_MANAGE_ROLES = {"participant", "master", "troupe"}
 
 POLL_KIND_LABELS = {"single": "один из списка", "multi": "несколько", "yesno": "да/нет",
                     "number": "число", "text": "текст"}
@@ -1693,8 +1693,8 @@ def _polls_denied(request: Request):
     if denied is not None:
         return denied
     if _lacks_poll_manage(request):
-        return JSONResponse({"detail": "Опросы ведёт администратор: право poll.manage "
-                                       "есть у него одного."}, status_code=403)
+        return JSONResponse({"detail": "Опросы ведут администратор и организатор: право "
+                                       "poll.manage есть у них."}, status_code=403)
     return None
 
 

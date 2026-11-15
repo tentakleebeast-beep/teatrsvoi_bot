@@ -366,7 +366,7 @@ CHAT_HTML = """<!doctype html>
          background: #eef3f9; border: 1px solid rgba(0,0,0,.08); border-radius: 8px;
          font-size: 15px; color: #1b2733; padding: 6px 8px; text-align: center; }
   .key--quiet { background: #f4f4f5; color: #4d5257; flex: 0 1 auto;
-                padding: 0 14px; }
+                padding: 0 16px; }
   .key--hint { background: #fff; color: #1459e3; border: 1px dashed rgba(20,89,227,.5); }
   .caption { font-size: 13px; color: #20313f; padding: 0 2px; }
   .chatbtns { display: flex; gap: 8px; align-items: flex-end; margin-top: 4px; }
