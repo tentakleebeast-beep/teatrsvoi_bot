@@ -135,6 +135,7 @@
 | FR-G4 | Дедупликация уведомлений | P1 | не начато | — |
 | FR-G15 | Недельный дайджест для организатора | P2 | не начато | — |
 | FR-G17 | Настройки уведомлений: общие в админ-панели, частные в профиле; частные важнее общих | P1 | готово | общие — экран `/webapp/admin/t/notifications`, `GET/POST /webapp/admin/notifications/settings` (право `admin.panel`), хранение в `app_setting`; частные — `/webapp/notifications`, `POST /webapp/notifications/settings`; приоритет — `resolve_settings` в `app/notifications.py`, очередь `scripts/send_notifications.py` и планировщик `scripts/plan_reminders.py`; тесты `test_notifications.py::test_fr_g17_*`, `tests/integration/test_notification_defaults.py` |
+| FR-G18 | Опросы в боте: конструктор (single, multi, yesno, number, text), адресаты по роли/спектаклю/вручную с исключениями и заморозкой при отправке, прохождение в чате с прогрессом, «назад», «пропустить» и черновиком в БД, приглашение через очередь `notification` с `payload.markup`, сводка и экспорт CSV/Markdown; создание — `poll.manage` (сейчас только admin, V-088), результаты — `poll.results.all` и `poll_viewer` | P1 | не начато | карта `t_1d18c635`, дизайн `docs/development/162`, миграция 065; тесты появятся с кодом — AC-1…AC-15 в 162 §8 |
 
 ## H. Эксплуатация, Mini App и процесс
 

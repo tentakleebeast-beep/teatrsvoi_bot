@@ -589,3 +589,285 @@ WebappSection("polls", ("poll.manage",), "Опросы",
 | V-088 | Кто создаёт опросы: (а) только админ, как рассылка (`notify.send` не трогаем); (б) админ и организатор — новое право `poll.manage`, выдача `org` одной строкой миграции; (в) админ и организатор, и организатор сам выбирает адресатов без ограничения |
 | V-089 | Видят ли получатели результатов, кто что ответил в свободном тексте: (а) да, с именами — иначе нельзя уточнить ответ; (б) нет, только сводка и списком без авторов; (в) по выбору при создании опроса |
 | V-090 | Куда ложится экспорт «документ исследования»: (а) Markdown-файл в `docs/development/` рядом с 160/161; (б) файл в папку Drive `СВОИ админка`; (в) оба: Markdown в репозиторий, таблица — в Drive |
+
+---
+
+## 14. Спецификация (карта `t_1d18c635`, 15.11.2026)
+
+Раздел отвечает на вопрос «чем дизайн становится в коде»: точные файлы, имена, поля,
+коды ошибок и проверки. Решения §3 не пересматриваются; где спецификация уточняет
+дизайн — это помечено словом «уточнение».
+
+### 14.1. Миграция 065: файлы, таблицы, идемпотентность
+
+| Файл | Что в нём |
+|---|---|
+| `db/init/065_polls.sql` | восемь таблиц §4 + две строки `rbac_capability` + выдача прав ролям |
+| `services/tool-api/migrations/versions/065_polls.py` | обёртка alembic; **генерируется** `scripts/gen_alembic_revisions.py`, руками не правится, SHA файла фиксируется в ревизии |
+
+Номер 065 свободен в обоих местах (максимум — `064_master_invite` и там, и там).
+Порядок: сначала SQL, потом генератор, потом `alembic upgrade head` на пустой БД.
+
+Требования к `065_polls.sql`:
+
+1. Каждый `create table` / `create index` — с `if not exists`; каждая вставка прав —
+   `insert … on conflict do nothing`. Повторный прогон файла не меняет ни строки (AC-1).
+2. Ровно семь таблиц §4: `poll`, `poll_question`, `poll_option`, `poll_audience`,
+   `poll_person`, `poll_run`, `poll_answer`, `poll_viewer` — восемь имён, семь сущностей
+   дизайна плюс `poll_viewer`; отдельной таблицы `invitation` **нет** (уточнение):
+   приглашение — это строка `poll_run` со `status='invited'` плюс запись очереди
+   `notification` (§14.6). Дублировать приглашение таблицей значило бы держать два
+   источника «кому отправлено».
+3. Права в той же миграции:
+
+```sql
+insert into rbac_capability (code, title, grp, description) values
+  ('poll.manage', 'Опросы', 'polls', 'Создать опрос, отправить, закрыть, видеть свои результаты'),
+  ('poll.results.all', 'Результаты всех опросов', 'polls', 'Видеть результаты любого опроса')
+on conflict (code) do nothing;
+
+insert into rbac_role_capability (role, capability)
+select 'admin', 'poll.manage' where not exists (
+  select 1 from rbac_role_capability where role='admin' and capability='poll.manage');
+insert into rbac_role_capability (role, capability)
+select 'admin', 'poll.results.all' where not exists (
+  select 1 from rbac_role_capability where role='admin' and capability='poll.results.all');
+```
+
+Выдача `org` **не входит** в 065, пока открыт V-088: по решению 15.11.2026 создаёт
+опросы только админ. Ответ «б» из V-088 добавляется одной строкой
+`insert into rbac_role_capability (role, capability) values ('org','poll.manage')
+on conflict do nothing;` отдельной миграцией — код при этом не меняется.
+
+4. `poll_option.code` — двухбайтовый: `a1…a9`, `b1…b9`, … (буква — десяток позиции).
+   Генератор — `app/poll_store.py:next_codes(position)`. Предел 26 × 9 = 234 варианта
+   на вопрос; при превышении сохранение отвечает `400 too_many_options`. В `065`
+   добавить `check (char_length(code) between 1 and 2)`.
+5. `poll_run.declined` в E8 **недостижим** (кнопки «Отказаться» нет, §5.1); значение
+   остаётся в `check` как резерв, статусы прохождения — `invited → in_progress → done`.
+6. Закрытие опроса (`status='closed'`, `closed_at`) не удаляет ни одной строки;
+   удаление разрешено только для `draft` и проверяется кодом, не схемой (§4 п. 4).
+
+### 14.2. Контракты API
+
+Все пути — JSON, права проверяются на данных через `core._webapp_require`; страницы
+остаются публичными константами (§7). Формат ошибки — как у рассылки:
+`HTTPException(status, "код: текст для человека")`.
+
+| Метод и путь | Вход | Ответ | Ошибки |
+|---|---|---|---|
+| `GET /webapp/polls/list` | — | `{"polls":[{"id","title","status","questions","invited","answered","created_at"}]}` — только свои, `poll.results.all` — все | `403 no_poll_manage` |
+| `POST /webapp/polls/save` | `{"poll_id": int\|null, "title": str, "intro": str\|null, "anonymous": bool, "closes_at": str\|null, "questions":[{"position","text","kind","required","free_text","max_choices","options":[{"label"}]}]}` | `{"poll_id": int, "status": "draft"}` | `400 empty_title`, `400 no_questions`, `400 bad_kind`, `400 too_many_options`, `409 poll_running` (правка не черновика) |
+| `GET /webapp/polls/edit/data?poll_id=` | — | `{"poll":{…}, "questions":[…], "can_edit": bool}` | `404 poll_not_found`, `403 alien_poll` |
+| `POST /webapp/polls/audience` | `{"poll_id": int, "rules":[{"kind":"all_active"\|"role"\|"project","role":str\|null,"project_id":int\|null}], "include":[int], "exclude":[int], "viewers":{"people":[int],"roles":[str]}}` | `{"will_send": int, "without_telegram": int, "total": int}` — счётчик до отправки, как у рассылки | `404 poll_not_found`, `400 bad_rule`, `409 poll_running` |
+| `POST /webapp/polls/start` | `{"poll_id": int}` | `{"invited": int, "skipped_no_chat": int, "status": "running"}` | `409 already_running`, `409 no_recipients`, `404 poll_not_found` |
+| `POST /webapp/polls/close` | `{"poll_id": int}` | `{"status": "closed", "closed_at": iso}` | `404 poll_not_found`, `409 already_closed` |
+| `GET /webapp/polls/results/data?poll_id=` | — | `{"poll":{…}, "answered": int, "invited": int, "questions":[{"id","position","text","kind","summary":{…},"answers":[…] }], "not_answered":[{"participant_id","display_name","position"}]}` | `403 no_results`, `404 poll_not_found` |
+| `GET /webapp/polls/export?poll_id=&format=csv\|md` | — | файл `text/csv; charset=utf-8` или `text/markdown` | `400 bad_format`, `403 no_results` |
+
+Формы `summary` по типу вопроса (уточнение к D9):
+
+* `single` / `yesno` — `{"counts":[{"code","label","n"}], "answered": int}`;
+  у `yesno` коды фиксированы `y`/`n`, подписи «Да»/«Нет»;
+* `multi` — то же плюс `"sum": int` и флаг `"sum_gt_answered": true`, когда сумма
+  больше числа ответивших (это нормально и подписано на экране);
+* `number` — `{"min","avg","max","values":[{"participant_id","display_name","value"}]}`;
+* `text` — `{"answers":[{"participant_id","display_name","text","answered_at"}]}`;
+  при `anonymous=true` поля `participant_id`/`display_name` — `null` (V-089, §14.10).
+
+`POST /webapp/polls/*` пишут в аудит (`audit()`): создание, правка, отправка, закрытие.
+Сам ответ человека в аудит не пишется — это данные опроса, не действие над системой.
+
+### 14.3. Права: кто что может
+
+| Действие | Проверка | Сейчас |
+|---|---|---|
+| список, создание, правка черновика, отправка, закрытие | `poll.manage` | только `admin` (V-088) |
+| свои результаты | автор опроса **или** `poll.results.all` | автор, админ |
+| любые результаты | `poll.results.all` | `admin` |
+| результаты конкретного опроса | `poll_viewer` (человек или роль) | по выбору автора |
+| экспорт | та же проверка, что у результатов | — |
+
+Источник истины — представление `v_participant_capabilities`, а не список ролей в коде.
+Отрицательный случай обязателен в тесте: `org` с `files.access`, но без `poll.manage`
+получает `403` на список и на `POST /webapp/polls/save` — «право есть» и «возможность
+есть» здесь не одно и то же.
+
+### 14.4. FSM и callback_data
+
+Состояние `PollAnswer.await_text` (aiogram `StatesGroup`) хранит **только** пару
+`run_id`, `position`; сами ответы и указатель — в `poll_run`/`poll_answer` (D4).
+Перезапуск gateway не теряет прогресс: после старта «Продолжить» читает `poll_run.position`.
+
+| Действие | `callback_data` | Байт (худший случай) |
+|---|---|---|
+| вариант | `p:o:<run>:<pos>:<code>` | 18 (`p:o:1234567:2:a1`) |
+| «Дальше» (`multi`) | `p:n:<run>:<pos>` | 12 |
+| «Да» / «Нет» | `p:y:<run>:<pos>` / `p:x:<run>:<pos>` | 12 |
+| «Назад» | `p:b:<run>:<pos>` | 12 |
+| «Пропустить» | `p:s:<run>:<pos>` | 12 |
+| «Другой ответ» | `p:f:<run>:<pos>` | 12 |
+| «Продолжить» из меню | `p:q:<run>` | 10 |
+
+Правила:
+
+1. Тест `test_poll_keyboard.py` собирает каждый код с семизначным `run` и двухбайтовым
+   `code` и требует `len(data.encode()) <= 18` — лимит проверяется до Telegram, а не после.
+2. Ответ пишется `insert … on conflict (run_id, question_id) do update`; повторное
+   нажатие перезаписывает и **не** двигает `position` дважды.
+3. `single` — выбор заменяет предыдущий; `multi` — нажатие переключает код в
+   `option_codes`, «Дальше» фиксирует; `free_text` разрешает `text_value` рядом с кодами
+   (и для `single`, и для `multi`).
+4. `number`: `replace(",", ".")`, `Decimal`, ошибка `Не понял число. Например: 4`,
+   состояние остаётся на том же вопросе.
+5. «Пропустить» рисуется только при `required=false`; пишется строка с `skipped=true`
+   и пустыми значениями. «Назад» есть везде, кроме `position=1`.
+6. Первый вопрос уходит push-ом через очередь; шаги 2…N — ответом на действие,
+   без тихих часов и лимита (D5).
+7. Закрытый опрос (`status='closed'` или `closes_at <= now()`) → одно сообщение
+   «Опрос закрыт <дата>, ответы больше не принимаются», без кнопок.
+
+### 14.5. Экраны Mini App: файлы, маршруты, права
+
+| Экран | Файл страницы | Маршрут | Право в `SCREEN_CAPS` |
+|---|---|---|---|
+| список + конструктор | `services/tool-api/app/pages/polls.py` (`POLLS_PAGE`) | `/webapp/polls` | `poll.manage` |
+| конструктор одного опроса | тот же модуль (`POLL_EDIT_PAGE`) | `/webapp/polls/edit` | `poll.manage` |
+| результаты | тот же модуль (`POLL_RESULTS_PAGE`) | `/webapp/polls/results` | `poll.results.all`, `poll.manage` |
+
+Регистрация — одна запись в `SECTIONS` (§7) плюс константы страниц в `pages/routes.py`;
+`SCREEN_CAPS` обновляется из `SECTIONS` автоматически. Параметр «какой опрос» — в адресе
+(`/webapp/polls/edit?poll_id=42`), как у `/webapp/file`.
+
+Что проверяется замером §6, а не «на глаз»:
+
+1. строки вопросов в конструкторе компактные — 56 px, тип значением справа; в первом
+   кадре 390×844 видно **не меньше 8** вопросов из 11 (мокап `01b`);
+2. экран адресатов при 5 наборах и 20 людях не выше 844 px: люди свёрнуты до
+   «в списке 8, показать всех», полный список — по нажатию;
+3. сводка на 11 вопросов: в первом кадре — заголовок и одна строка итога на вопрос,
+   разворот по нажатию; высота документа без разворотов ≤ 1 000 px (мокап `04`);
+4. целей нажатия меньше 44 px — 0, переполнения вбок — 0 (проба
+   `scripts/probes/e8_polls_probe.py` на новых экранах).
+
+### 14.6. Доставка приглашений
+
+`scripts/send_notifications.py`:
+
+1. `send(chat_id, text, markup=None)` — при непустом `markup` добавляет в тело
+   `reply_markup=json.dumps(markup, ensure_ascii=False)`; `disable_web_page_preview` уже есть.
+2. `deliver()` берёт `markup` из `payload["markup"]` и передаёт в `send`; поле
+   необязательное — старые записи очереди работают как раньше.
+3. Виды: `kind='poll'` — приглашение (первый вопрос), `kind='poll_reminder'` — напоминание
+   не ответившим. `dedupe_key`: `poll:<poll_id>:<participant_id>:<n>`, где `n` — номер
+   отправки (1 для приглашения, 2+ для напоминаний); повторная отправка с тем же ключом
+   не дублируется.
+4. Тихие часы и `NOTIFY_MAX_PER_HOUR=3` действуют на записи `kind in ('poll','poll_reminder')`
+   — это push. Шаги диалога в очередь **не** попадают и лимитом не ограничены.
+5. `poll_run.message_id` хранит сообщение с текущим вопросом; при шаге вперёд бот
+   редактирует его (`edit_text`), а не шлёт новое — иначе 11 вопросов дают 11 сообщений.
+
+### 14.7. Критерии приёмки (Given/When/Then)
+
+Каждый критерий — отдельный тест; имя файла указано. «Готово» без зелёного теста не считается.
+
+| № | Given | When | Then |
+|---|---|---|---|
+| AC-1 | пустая БД | `psql -f db/init/065_polls.sql` дважды подряд | второй прогон не меняет схему и данные; `alembic upgrade head` доходит до `065_polls` (`tests/integration/test_polls_schema.py`) |
+| AC-2 | опрос с пятью типами вопросов | сохранение и повторное чтение | `position` и `code` те же, варианты не потеряны, `free_text` у `yesno`/`number`/`text` запрещён (`tests/unit/test_poll_store.py`) |
+| AC-3 | правила «все org», роль `org`, галочка на человека вне роли, исключение одного | расчёт набора и отправка | набор = объединение + include − exclude; после отправки правка правил состав не меняет; повторный расчёт даёт то же (`tests/unit/test_poll_audience.py`) |
+| AC-4 | 2 chat_id, очередь пуста | `start` | обе записи `notification(kind='poll')` ушли с `reply_markup` из `payload.markup` (`tests/unit/test_send_notifications.py::test_markup`, `tests/integration/test_polls_delivery.py`) |
+| AC-5 | вопрос `single`, ответ выбран | нажатие и повторное нажатие другого варианта | в `poll_answer` одна строка, значение обновлено, дубля нет (`tests/unit/test_poll_run.py`) |
+| AC-6 | вопрос 3, есть ответ на 2 | «Назад» | снова вопрос 2 с пометкой «выбрано: …»; «Пропустить» отсутствует у `required=true` и есть у `required=false` (`tests/unit/test_poll_keyboard.py`) |
+| AC-7 | любое сообщение вопроса | сборка текста | первая строка «… · вопрос N из M», N = `poll_run.position`, M = число вопросов (`тот же тест`) |
+| AC-8 | пройдено 6 вопросов, FSM очищен (перезапуск) | «Опросы» → «Продолжить» | бот открывает вопрос 7, ответы 1–6 на месте (`tests/integration/test_polls_resume.py`) |
+| AC-9 | `org` без `poll.manage`; `troupe` вне `poll_viewer` | открытие списка, `POST /webapp/polls/save`, `GET …/results/data` | `403 no_poll_manage` и `403 no_results`; автор и `poll_viewer` видят результаты (`tests/integration/test_polls_rights.py`) |
+| AC-10 | ответы всех типов | сводка | `single`/`yesno` — счётчики; `multi` — `sum_gt_answered`; `number` — min/avg/max; `text` — список (`tests/unit/test_poll_results.py`) |
+| AC-11 | 3 ответа | CSV | 4 строки (шапка + 3), разделитель `;`, `utf-8-sig`, поля `вопрос;тип;человек;ответ;когда`; парсится обратно (`tests/unit/test_poll_export.py`) |
+| AC-12 | опрос на 11 вопросов | Markdown-экспорт | блоки «## Вопрос N», вставляются в `docs/development/161` §7 без правки (`тот же тест`, сверка структуры) |
+| AC-13 | 3 отправки за час, тихие часы 20–08 | приглашение в 21:00 и шаг диалога | приглашение перенесено на 08:00; четвёртое за час не уходит; шаг диалога уходит сразу (`tests/unit/test_poll_delivery_rules.py`) |
+| AC-14 | весь код фичи | `grep -rn sendPoll services/` | пусто; ответы приходят `callback_query`/сообщением и пишутся в БД (ревью) |
+| AC-15 | dev-бот | прогон на двух тестовых chat_id | живых рассылок нет; оба прохождения дошли до последнего вопроса (ревью + `tests/integration/test_polls_delivery.py`) |
+
+### 14.8. FR-G18 и матрица смоука
+
+Строка добавлена в `docs/development/19-functional-requirements.md`, раздел G:
+
+```
+| FR-G18 | Опросы в боте: конструктор (single, multi, yesno, number, text), адресаты
+по роли/спектаклю/вручную с исключениями и заморозкой при отправке, прохождение в чате
+с прогрессом, «назад», «пропустить» и черновиком в БД, приглашение через очередь
+`notification` с `payload.markup`, сводка и экспорт CSV/Markdown; создание — `poll.manage`
+(сейчас только admin, V-088), результаты — `poll.results.all` и `poll_viewer` | P1 |
+не начато | карта `t_1d18c635`, дизайн `docs/development/162`, миграция 065; тесты
+появятся с кодом — AC-1…AC-15 в 162 §8 |
+```
+
+Пересборка матрицы:
+
+1. строк стало **114** (было 113); в `tests/unit/test_smoke_report.py` обновлены оба
+   литерала `113` → `114` и имя теста `test_матрица_по_документу_114_строк`;
+2. `env -u PYTHONPATH .venv/bin/python scripts/test_audit.py --matrix --json` отдаёт
+   114 ключей, у `FR-G18` — пустой список (честное «нет автотеста»: код ещё не написан);
+3. в `docs/development/143-smoke-plan.md` §3.2 п. 5 добавлена пометка «на 15.11.2026 —
+   114 строк: FR-G18, карта `t_1d18c635`»; замер §1 от 08.11.2026 остаётся историческим
+   и не переписывается;
+4. отчёт собирается `scripts/smoke_report.py --out docs/reports/NNN-smoke-YYYY-MM-DD`
+   (флага `--write` у скрипта нет — проверка режима по умолчанию и `--out`), `--check`
+   на готовом JSON возвращает 0.
+
+Пустой список у `FR-G18` — не дефект отчёта: дефект «требование вне документа 19» —
+это обратный случай (ID в тестах, которого нет в 19). После кода тесты AC-1…AC-15
+проставляют ID в `tests/` и ячейка заполняется сама.
+
+### 14.9. Запись в `config/agent-features.yaml`
+
+Три записи — по одной на каждый настоящий маршрут. Кладутся **одним коммитом со
+страницами**: сторож `tests/unit/test_agent_features.py` сверяет `source` с
+`pages.routes.build_router`, и запись раньше маршрута — красный тест.
+
+```yaml
+  - id: screen.polls
+    kind: screen
+    surface: webapp
+    source: /webapp/polls
+    title: Опросы
+    not_for_agent: "опросы готовит и рассылает человек: агент не сочиняет анкеты и не пишет людям от имени студии"
+
+  - id: screen.polls_edit
+    kind: screen
+    surface: webapp
+    source: /webapp/polls/edit
+    title: Конструктор опроса
+    not_for_agent: "правка вопросов и адресатов — решение человека, агент её не делает"
+
+  - id: screen.polls_results
+    kind: screen
+    surface: webapp
+    source: /webapp/polls/results
+    title: Результаты опроса
+    not_for_agent: "сводка и экспорт — данные исследования; агент их не пересказывает без запроса человека"
+```
+
+### 14.10. Что заморожено до ответов V-089 и V-090
+
+* **V-089 (авторы свободных ответов).** Код пишет автора всегда; флаг `poll.anonymous`
+  уже в схеме. До ответа сводка показывает авторов, `anonymous` по умолчанию `false`.
+  Вариант (б) — правка одного шаблона сводки, не схемы.
+* **V-090 (куда ложится экспорт).** Реализуется только `GET …/export` (скачивание
+  файла в браузере). Запись в Drive и файл в `docs/development/` не делаются, пока
+  владелец не выбрал: у варианта (б) нет доступа к Drive в контуре, у (в) — две точки
+  записи.
+
+Оба вопроса — в `docs/reports/74-questions.md` (V-088…V-090, статус «открыт»);
+до ответа соответствующие ветки не кодируются.
+
+### 14.11. Границы спецификации
+
+* Кода в этой карте нет: миграция, роутеры и экраны пишет `worker-feature` по §14.1–14.9.
+* `contracts/openapi.json` правит реализация тем же коммитом, что и эндпоинты: файл один,
+  две карты в него одновременно не пишут.
+* Массовых отправок живым людям в этом заходе нет (граница E8, §11).
+* Нативные опросы Telegram (`sendPoll`) не используются (§D11, AC-14).
+* `poll.results.all` не даёт права создавать опросы; `poll.manage` не даёт права
+  видеть чужие результаты — это две разные возможности.
