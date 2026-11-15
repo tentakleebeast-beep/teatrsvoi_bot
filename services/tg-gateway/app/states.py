@@ -8,6 +8,7 @@ from aiogram.fsm.state import State, StatesGroup
 class Reg(StatesGroup):
     await_code = State()
     await_name = State()
+    await_discipline = State()   # педагог называет дисциплину (064)
     choose = State()        # выбор себя из списка: ввод букв сужает кнопки (Ш-46)
 
 
