@@ -27,7 +27,7 @@ _BODY = """
   </div>
 </section>
 
-<div id="form">
+<div id="form" hidden>
   <div class="ui-field">
     <label class="ui-field__label" for="title">Тема опроса</label>
     <input class="ui-input" id="title" type="text" maxlength="300"
