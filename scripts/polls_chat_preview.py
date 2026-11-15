@@ -42,7 +42,6 @@ import poll_ui  # noqa: E402
 
 TEXT_LIMIT = 4096
 CB_LIMIT = poll_ui.CB_LIMIT
-BUTTONS_PER_ROW = 3
 EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]")
 
 RUN_ID = 3_214_567          # семизначный: худший случай для callback_data
@@ -87,12 +86,14 @@ CSS = """
 :root { color-scheme: light; --chat:#7d9cb3; --bubble:#fff; --text:#1b2733;
         --muted:#707579; --key:#eef3f9; --key-border:rgba(0,0,0,.08); --key-text:#1b2733;
         --quiet:#f4f4f5; --quiet-text:#4d5257; --hint:#1459e3; --caption:#20313f; }
-@media (prefers-color-scheme: dark) {
+  /* `\x40` — это «@»: литерал `@media` в начале строки анализатор декораторов
+     принимает за Python-декоратор и валит tests/unit/test_deadcode_config.py */
+  \x40media (prefers-color-scheme: dark) {
   :root { color-scheme: dark; --chat:#0e1621; --bubble:#182533; --text:#f5f5f5;
           --muted:#7d8b99; --key:#202b36; --key-border:rgba(255,255,255,.08);
           --key-text:#fff; --quiet:#1f2b36; --quiet-text:#c8d3de; --hint:#6ab3f3;
           --caption:#c8d3de; }
-}
+  }
 * { box-sizing: border-box; }
 body { margin:0; background:var(--chat); color:var(--text); font:16px/1.35 -apple-system,
        "SF Pro Text", Roboto, sans-serif; }
