@@ -278,6 +278,20 @@
               }
             ]
           },
+          "discipline_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "acting",
+                  "music"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "participant_id": {
             "type": "integer"
           }
@@ -1241,6 +1255,20 @@
               }
             ]
           },
+          "discipline_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "acting",
+                  "music"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
           "max_uses": {
             "default": 1,
             "type": "integer"
@@ -1249,7 +1277,8 @@
             "enum": [
               "admin",
               "org",
-              "troupe"
+              "troupe",
+              "master"
             ],
             "type": "string"
           },
@@ -1698,6 +1727,20 @@
           "correlation_id": {
             "anyOf": [
               {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "discipline_code": {
+            "anyOf": [
+              {
+                "enum": [
+                  "acting",
+                  "music"
+                ],
                 "type": "string"
               },
               {
