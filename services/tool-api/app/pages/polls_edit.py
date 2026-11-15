@@ -21,9 +21,9 @@ from app.pages.polls_edit_js import SCRIPT as _SCRIPT
 _BODY = """
 <section class="ui-section" id="denied" hidden>
   <div class="ui-empty">
-    <div class="ui-empty__title">Опросы ведёт администратор</div>
-    <div class="ui-empty__text">Право poll.manage есть только у администратора — экран
-      конструктора ему и открыт. Попросите администратора создать опрос.</div>
+    <div class="ui-empty__title">Опросы ведут администратор и организатор</div>
+    <div class="ui-empty__text">Право poll.manage есть у администратора и организатора —
+      конструктор открыт им. Попросите администратора или организатора создать опрос.</div>
   </div>
 </section>
 

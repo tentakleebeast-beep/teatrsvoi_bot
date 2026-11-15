@@ -258,7 +258,7 @@ SECTIONS: tuple[WebappSection, ...] = (
                   "/webapp/admin/t/audit", "последние события", page="AUDIT_PAGE"),
     WebappSection("broadcast", ("notify.send",), "Рассылка",
                   "/webapp/broadcast", "текст и адресаты"),
-    # E8: опросы — отдельная фича бота, право `poll.manage` (сейчас только admin, V-088).
+    # E8: опросы — отдельная фича бота, право `poll.manage` (admin и org, V-088, db/init/066).
     # Результаты открываются отдельно: `poll.results.all` и `poll_viewer` (docs/162 §7).
     WebappSection("polls", ("poll.manage",), "Опросы",
                   "/webapp/polls", "конструктор, адресаты, сводка", page="POLLS_PAGE"),

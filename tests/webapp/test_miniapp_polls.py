@@ -63,7 +63,7 @@ def _height(page) -> int:
 
 
 def test_список_опросов_и_отказ_по_праву(app_page) -> None:
-    """Админ видит список; роль без `poll.manage` — слова отказа, а не сбой сети."""
+    """Админ и организатор видят список; роль без `poll.manage` — слова отказа, а не сбой."""
     page = app_page("/webapp/polls")
     page.wait_for_selector("#polls .ui-row", timeout=10_000)
     assert page.locator("#polls .ui-row").count() == 2
@@ -73,10 +73,16 @@ def test_список_опросов_и_отказ_по_праву(app_page) -> 
     _no_overflow(page)
     assert not page.svoi_errors, page.svoi_errors
 
-    denied = app_page("/webapp/polls", headers={"X-SVOI-Role": "org"})
+    # V-088 (б): организатор ведёт опросы сам — отказа на его роли быть не должно.
+    organizer = app_page("/webapp/polls", headers={"X-SVOI-Role": "org"})
+    organizer.wait_for_selector("#polls .ui-row", timeout=10_000)
+    assert organizer.locator("#denied").is_hidden()
+    assert not organizer.svoi_errors, organizer.svoi_errors
+
+    denied = app_page("/webapp/polls", headers={"X-SVOI-Role": "master"})
     denied.wait_for_selector("#denied:not([hidden])", timeout=10_000)
     body = denied.inner_text("body")
-    assert "Опросы ведёт администратор" in body, body
+    assert "Опросы ведут администратор и организатор" in body, body
     assert "Не удалось загрузить опросы" not in body, "403 подан как сбой сети"
     assert denied.locator("#form").is_hidden()
 
