@@ -51,6 +51,14 @@ def parse(data: str) -> dict | None:
             "code": parts[4] if len(parts) > 4 else None}
 
 
+#: Вопросы, у которых ответ приходит сообщением: вариантов у них нет (162 §5.2).
+FREE_KINDS = ("text", "number")
+
+#: Подпись кнопки входа в ответ сообщением. Одна на шаг и на приглашение:
+#: человек видит в тексте ту же фразу, что на кнопке.
+ANSWER_BUTTON = "Ответить сообщением"
+
+
 def question_text(step: dict) -> str:
     """Текст сообщения вопроса. Первая строка — прогресс словами (AC-7).
 
@@ -61,9 +69,9 @@ def question_text(step: dict) -> str:
     lines = [f"{step['title']} · вопрос {step['position']} из {step['total']}", ""]
     lines.append(step["text"])
     if step["kind"] == "number":
-        lines += ["", "Ответьте числом сообщением или нажмите «Пропустить»."]
+        lines += ["", f"Нажмите «{ANSWER_BUTTON}» и пришлите число."]
     elif step["kind"] == "text":
-        lines += ["", "Ответьте сообщением."]
+        lines += ["", f"Нажмите «{ANSWER_BUTTON}» и пришлите ответ."]
     chosen = _chosen_words(step)
     if chosen:
         lines += ["", f"выбрано: {chosen}"]
@@ -103,6 +111,10 @@ def keyboard_rows(step: dict) -> list[list[tuple[str, str]]]:
         rows.append([("Дальше", callback("n", run_id, position))])
     if step["free_text"]:
         rows.append([("Другое — напишу", callback("f", run_id, position))])
+    elif step["kind"] in FREE_KINDS:
+        # У `text`/`number` вариантов нет, поэтому вход в ответ сообщением — кнопкой,
+        # а не состоянием: оно ставится по нажатию и переживает перезапуск gateway.
+        rows.append([(ANSWER_BUTTON, callback("f", run_id, position))])
     nav: list[tuple[str, str]] = []
     if position > 1:
         nav.append(("Назад", callback("b", run_id, position)))
