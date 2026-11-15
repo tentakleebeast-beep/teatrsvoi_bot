@@ -51,3 +51,13 @@ def test_порядок_ветвей_стабилен_по_имени():
     names = ["wt/b", "wt/a"]
     buckets = REAP.classify([REAP.Branch(n, unique=0, scope="local") for n in names])
     assert [b.name for b in buckets["merged"]] == ["wt/a", "wt/b"]
+
+
+def test_удалённый_двойник_ветви_под_worktree_тоже_защищён():
+    """У карты в работе есть и локальная ветвь, и push на origin: уборка не должна
+    сносить удалённую копию, пока карта не закрыта."""
+    remote = REAP.Branch("wt/t_1d18c635", unique=0, scope="remote",
+                         worktree="/tmp/repo/.worktrees/t_1d18c635")
+    buckets = REAP.classify([remote])
+    assert buckets["merged"] == []
+    assert [b.scope for b in buckets["protected"]] == ["remote"]
