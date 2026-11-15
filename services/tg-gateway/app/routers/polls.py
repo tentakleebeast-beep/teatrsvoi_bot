@@ -89,15 +89,18 @@ async def poll_step(callback: CallbackQuery, state: FSMContext) -> None:
             return
         step = result["step"]
         if step.get("closed"):
+            await state.clear()
             await callback.message.answer(poll_ui.closed_text(step))
             return
         if step.get("done"):
+            await state.clear()
             await callback.message.answer(poll_ui.done_text(step))
             return
         await callback.message.answer(poll_ui.question_text(step), reply_markup=_markup(step))
         return
     if action == "f":
-        # «Другое — напишу»: следующее сообщение человека станет ответом (D4).
+        # «Другое — напишу» / «Ответить сообщением»: следующее сообщение человека
+        # станет ответом (D4). Тот же вход несёт кнопка приглашения из очереди.
         await state.set_state(PollAnswer.await_text)
         await state.update_data(run_id=parts["run_id"], position=parts["position"])
         await callback.message.answer(texts.POLL_WRITE_ANSWER)

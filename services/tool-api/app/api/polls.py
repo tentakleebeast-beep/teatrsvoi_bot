@@ -32,8 +32,8 @@ from ..errors import ApiError
 
 router = APIRouter()
 
-DENY_MANAGE_TEXT = ("Опросы ведёт администратор: право poll.manage есть у него одного. "
-                    "Если опрос нужен вам — попросите администратора.")
+DENY_MANAGE_TEXT = ("Опросы ведут администратор и организатор: право poll.manage есть у них. "
+                    "Если опрос нужен вам — попросите администратора или организатора.")
 DENY_RESULTS_TEXT = ("Результаты опроса видят его автор и те, кому он их открыл. "
                      "Доступа к чужим результатам у вас нет.")
 
@@ -423,7 +423,13 @@ class PollIdIn(core.ApiIn):
 
 
 def _invitation_markup(run_id: int, question: dict) -> dict:
-    """Первое сообщение — push: кнопки собираются здесь, чтобы их вёз `payload.markup`."""
+    """Первое сообщение — push: кнопки собираются здесь, чтобы их вёз `payload.markup`.
+
+    У `text`/`number` вариантов нет, а приглашение идёт через очередь и состояние
+    `await_text` выставить не может — поэтому вопрос свободного ввода несёт кнопку
+    входа в ответ (`p:f`), иначе человек получает пустой `inline_keyboard` и ответить
+    ему нечем (162 §5.2, §14.6).
+    """
     rows = []
     if question["kind"] in ("single", "multi"):
         for option in question["options"]:
@@ -432,6 +438,9 @@ def _invitation_markup(run_id: int, question: dict) -> dict:
     elif question["kind"] == "yesno":
         rows.append([{"text": "Да", "callback_data": f"p:y:{run_id}:{question['position']}"},
                      {"text": "Нет", "callback_data": f"p:x:{run_id}:{question['position']}"}])
+    elif question["kind"] in ("text", "number"):
+        rows.append([{"text": "Ответить сообщением",
+                      "callback_data": f"p:f:{run_id}:{question['position']}"}])
     return {"inline_keyboard": rows}
 
 

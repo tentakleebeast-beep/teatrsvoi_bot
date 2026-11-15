@@ -242,3 +242,29 @@ V-011…V-013) — они держат финальную строку свод�
   → `ok:true`, `intent=budget`, `category=«Реквизит и костюмы»`, `engine=tool-api-llm`;
   препятствие O-010 закрыто
 - доска `teatrsvoi`: 281 карта, все `done`
+
+## Состояние на 15.11.2026 18:12 +0400
+
+- версия: `v0.11.0`
+- тег: `v0.11.0`
+- git_sha: `b327e5585dcc`
+- env=prod
+- источник: выкат по SSH; GitHub Actions по-прежнему не стартует (биллинг).
+- состав: опросы в боте (E8) — миграция `065_polls`, API, FSM ответа, экраны Mini App, экспорт.
+- миграции: `064_master_invite`, `065_polls` применены; `alembic current = 065_polls = head`.
+- схема: 64 таблицы, 42 колонки, совпадает с миграциями и Alembic.
+- бэкап до выката: `/root/backups/svoi-before-v0.11.0-20261115-1810.sql.gz`.
+- проверки: `/api/health` ok, `git_sha b327e5585dcc`; smoke «контур в порядке»;
+  `/webapp/polls` — 200; в OpenAPI 12 маршрутов `polls`; таблицы `poll_*` на месте (7).
+- не вошло: 4 коммита после тега (уборка веток, `scripts/branch_reap.py`) — служебное, продукт не трогает.
+
+## Состояние на 15.11.2026 21:56 +0400
+
+- версия: `v0.11.1`, git_sha `091892648ebd`, env=prod.
+- источник: выкат по SSH (GitHub Actions по-прежнему блокирован биллингом).
+- состав: свободный ответ на вопрос текстом/числом (E8-фикс), `poll.manage` у роли `org`
+  (V-088), проверка права в конструкторе без `poll_id` (D2).
+- миграции: `066_polls_org_manage` применена; `alembic current = head = 066_polls_org_manage`.
+- бэкап до выката: `/root/backups/svoi-before-v0.11.1-20261115-2154.sql.gz`.
+- проверки: health ok; smoke «контур в порядке»; `/webapp/polls` 200;
+  `rbac_role_capability`: `poll.manage` у `admin` и `org`; обработка текстового ответа в коде на диске.

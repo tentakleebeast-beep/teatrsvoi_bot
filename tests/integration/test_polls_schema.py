@@ -1,8 +1,9 @@
-"""Миграция 065: восемь таблиц, права только админу, повторный прогон ничего не меняет (AC-1).
+"""Миграции 065 и 066: восемь таблиц опросов, права admin и org, повторный прогон не меняет (AC-1).
 
-Проверяется то, что легко потерять при правке SQL: идемпотентность файла,
-наличие `poll.manage`/`poll.results.all` у admin и их отсутствие у org (V-088),
-и то, что alembic доехал до `065_polls` — то есть схема одна и там, и там.
+Проверяется то, что легко потерять при правке SQL: идемпотентность файлов,
+наличие `poll.manage`/`poll.results.all` у admin, `poll.manage` (и только он) у org
+(V-088, 162 §3 D8) и то, что alembic доехал до `066_polls_org_manage` — то есть
+схема одна и там, и там.
 
 Обоснование: FR-G18, AC-1, `docs/development/162-bot-polls.md` §14.1.
 """
@@ -17,15 +18,16 @@ from psycopg.rows import dict_row
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SQL = ROOT / "db" / "init" / "065_polls.sql"
+SQL_066 = ROOT / "db" / "init" / "066_polls_org_manage.sql"
 
 TABLES = ("poll", "poll_question", "poll_option", "poll_audience", "poll_person",
           "poll_run", "poll_answer", "poll_viewer")
 
 
-def test_alembic_дошёл_до_065(test_db: str) -> None:
+def test_alembic_дошёл_до_066(test_db: str) -> None:
     with psycopg.connect(test_db, row_factory=dict_row) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()
-    assert head["version_num"] == "065_polls"
+    assert head["version_num"] == "066_polls_org_manage"
 
 
 def test_восемь_таблиц_на_месте(test_db: str) -> None:
@@ -51,13 +53,26 @@ def test_повторный_прогон_файла_ничего_не_меняе
     assert [row[0] for row in admin] == ["poll.manage", "poll.results.all"]
 
 
-def test_org_не_получает_право_создавать_опросы(test_db: str) -> None:
-    """V-088 открыт: до ответа создаёт только admin, строка org появится отдельной миграцией."""
-    with psycopg.connect(test_db, row_factory=dict_row) as conn:
-        row = conn.execute(
-            "select 1 from rbac_role_capability where role = 'org' and capability = 'poll.manage'"
-        ).fetchone()
-    assert row is None
+def test_org_получает_poll_manage_но_не_все_результаты(test_db: str) -> None:
+    """V-088 (б): организатор ведёт опросы сам, но чужие результаты ему не открыты (162 §3 D8)."""
+    with psycopg.connect(test_db) as conn:
+        rows = conn.execute(
+            "select capability from rbac_role_capability "
+            "where role = 'org' and capability like 'poll%%' order by capability"
+        ).fetchall()
+    assert [row[0] for row in rows] == ["poll.manage"]
+
+
+def test_повторный_прогон_066_ничего_не_добавляет(test_db: str) -> None:
+    """Идемпотентность 066: второй прогон не дублирует строку матрицы прав."""
+    sql = SQL_066.read_text(encoding="utf-8")
+    with psycopg.connect(test_db, autocommit=True) as conn:
+        for _ in range(2):
+            conn.execute(sql)
+        rows = conn.execute(
+            "select capability from rbac_role_capability "
+            "where role = 'org' and capability like 'poll%%'").fetchall()
+    assert [row[0] for row in rows] == ["poll.manage"]
 
 
 def test_свободный_ответ_запрещён_схемой_у_типов_без_списка(test_db: str) -> None:
