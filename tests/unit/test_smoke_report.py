@@ -19,11 +19,11 @@ import pytest
 from scripts import smoke_report, test_audit
 
 
-def test_матрица_по_документу_113_строк():
+def test_матрица_по_документу_114_строк():
     """К1: ровно те ID, что в документе 19, чужого не появляется."""
     rows = test_audit.requirement_rows()
     matrix = test_audit.matrix()
-    assert len(rows) == len(matrix) == 113
+    assert len(rows) == len(matrix) == 114
     assert list(matrix) == [row["id"] for row in rows]
     assert all(isinstance(items, list) for items in matrix.values())
     # у требования без теста список пустой, а не выдуманный
@@ -38,7 +38,7 @@ def test_матрица_отдаёт_json_и_код_ноль(capsys):
     """К1: `--matrix --json` печатает объект и всегда возвращает 0."""
     assert test_audit.main(["--matrix", "--json"]) == 0
     payload = json.loads(capsys.readouterr().out)
-    assert len(payload) == 113
+    assert len(payload) == 114
 
 
 def test_строки_дополнений_без_приоритета(tmp_path):
@@ -412,8 +412,8 @@ def test_источник_чисел_из_документа_19():
     rows = test_audit.requirement_rows()
     matrix = test_audit.matrix()
     block = smoke_report.source_block(rows, matrix)
-    assert block["rows"] == 113
-    assert (block["p0"], block["p1"], block["p2"], block["unset"]) == (50, 49, 14, 0)
+    assert block["rows"] == 114
+    assert (block["p0"], block["p1"], block["p2"], block["unset"]) == (50, 50, 14, 0)
     assert block["with_tests"] == 59
     assert block["unique_pairs"] == len(smoke_report.test_pairs(matrix))
     assert smoke_report.requirements_revision() == "04.11.2026"
