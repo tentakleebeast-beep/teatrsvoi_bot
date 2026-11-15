@@ -206,6 +206,27 @@ entries:
     title: Рассылка
     not_for_agent: "массовая отправка людям: агент не отправляет сообщения от имени студии"
 
+  - id: screen.polls
+    kind: screen
+    surface: webapp
+    source: /webapp/polls
+    title: Опросы
+    not_for_agent: "опросы готовит и рассылает человек: агент не сочиняет анкеты и не пишет людям от имени студии"
+
+  - id: screen.polls_edit
+    kind: screen
+    surface: webapp
+    source: /webapp/polls/edit
+    title: Конструктор опроса
+    not_for_agent: "правка вопросов и адресатов — решение человека, агент её не делает"
+
+  - id: screen.polls_results
+    kind: screen
+    surface: webapp
+    source: /webapp/polls/results
+    title: Результаты опроса
+    not_for_agent: "сводка и экспорт — данные исследования; агент их не пересказывает без запроса человека"
+
   - id: screen.ui
     kind: screen
     surface: webapp
@@ -476,6 +497,13 @@ entries:
     source: Приглашения
     title: Приглашения
     not_for_agent: "выдача доступа: агент не выпускает инвайт-коды"
+
+  - id: menu.polls
+    kind: button
+    surface: menu
+    source: Опросы
+    title: Опросы
+    not_for_agent: "прохождение опроса — ответ человека; агент не отвечает за него"
 
   - id: menu.feedback
     kind: button

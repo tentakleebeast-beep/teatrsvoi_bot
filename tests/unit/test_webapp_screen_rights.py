@@ -118,7 +118,9 @@ def _restricted(url: str) -> bool:
 def test_словарь_покрывает_ровно_экраны_маршрутов():
     """Новый экран без записи в `SCREEN_CAPS` — дырка в правиле, а не мелочь."""
     routes_found = _screen_routes()
-    assert len(routes_found) == 31, f"экранов {len(routes_found)}, ожидалось 31"
+    # 31 → 34 на 15.11.2026: экраны опросов (E8, docs/development/162 §14.5) —
+    # список, конструктор и сводка.
+    assert len(routes_found) == 34, f"экранов {len(routes_found)}, ожидалось 34"
     missing = sorted(routes_found - set(SCREEN_CAPS))
     assert not missing, "экраны без решения о правах: " + ", ".join(missing)
     extra = sorted(set(SCREEN_CAPS) - routes_found)

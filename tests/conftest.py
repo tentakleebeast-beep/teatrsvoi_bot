@@ -34,6 +34,8 @@ TOKEN = "test-token"
 # модуля больше не нужно — и нельзя: тест, выставивший окружение, влиял на соседей.
 
 TABLES = (
+    "poll_answer", "poll_run", "poll_option", "poll_question", "poll_audience",
+    "poll_person", "poll_viewer", "poll",
     "agent_proposal",
     "feedback_attachment", "feedback_answer", "feedback", "slot_proposal", "event_plan", "venue",
     "approval_request", "notification", "notification_pref",

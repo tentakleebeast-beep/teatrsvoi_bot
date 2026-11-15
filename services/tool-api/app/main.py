@@ -26,6 +26,7 @@ from .api import (
     finance,
     notes,
     people,
+    polls,
     quota,
     route,
     schedule,
@@ -277,6 +278,7 @@ app.include_router(agent_confirm.router)
 app.include_router(files.router)
 app.include_router(notes.router)
 app.include_router(quota.router)
+app.include_router(polls.router)
 app.include_router(webapp_api.router)
 
 

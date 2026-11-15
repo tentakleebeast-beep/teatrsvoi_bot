@@ -34,6 +34,12 @@ TITLE_INVITES = "Приглашения"
 TITLE_ARCHIVE = "Архив"
 TITLE_CODES = "Коды приглашений"
 TITLE_FILES = "файлы"
+TITLE_POLLS = "Опросы"
+BTN_CONTINUE = "Продолжить"
+POLL_WRITE_ANSWER = "Напишите ответ одним сообщением."
+POLL_NUMBER_ERROR = "Не понял число. Например: 4"
+POLL_FAILED = "Не получилось открыть опрос. Попробуйте ещё раз чуть позже."
+POLL_NO_RUNS = "Незаконченных опросов нет. Когда пришлют новый — он появится здесь."
 FEEDBACK_KIND_QUESTION = "Вопрос"
 FEEDBACK_KIND_BROKEN = "Не работает"
 FEEDBACK_KIND_GOOD = "Хорошо работает"
@@ -437,6 +443,7 @@ MENU_HELP: dict[str, str] = {
     TITLE_PEOPLE: "список людей; нажатие открывает профиль и тариф",
     TITLE_REQUESTS: "кто ждёт подтверждения — принять или отклонить",
     TITLE_INVITES: "выпустить код для нового человека",
+    TITLE_POLLS: "опросы: вопросы в чате, ответы в базе, сводка и экспорт",
     TITLE_ADMIN: "участники, заявки, права, приглашения, бюджет, аудит, лист бюджета",
     TITLE_FEEDBACK: "сообщить о проблеме или пожелании",
     TITLE_CAPABILITIES: "этот список",

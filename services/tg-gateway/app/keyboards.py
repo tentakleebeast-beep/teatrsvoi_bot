@@ -175,7 +175,9 @@ MENU_GROUPS: tuple[tuple[str, tuple[tuple[str, tuple[str, ...]], ...]], ...] = (
     # Админ: у организатора — заявки и приглашения; панель только у админа.
     ("Админ", ((texts.TITLE_ADMIN, PANEL_ENTRY_CAPS),
                (texts.TITLE_REQUESTS, ("registration.approve",)),
-               (texts.TITLE_INVITES, ("registration.code.issue",)))),
+               (texts.TITLE_INVITES, ("registration.code.issue",)),
+               # E8: опросы — своя фича под отдельным правом (docs/162 §14.3).
+               (texts.TITLE_POLLS, ("poll.manage",)))),
     # Ш-49, V-010: «Справка» — отдельный раздел под правом howto.read, пока только у админа.
     ("Помощь", ((texts.TITLE_FEEDBACK, ()), (texts.TITLE_CAPABILITIES, ()), (texts.TITLE_HELP, ("howto.read",)))),
 )

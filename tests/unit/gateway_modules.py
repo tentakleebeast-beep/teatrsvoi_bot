@@ -36,6 +36,7 @@ MODULES = (
     "parsers",
     "core",
     "keyboards",
+    "poll_ui",
     "routers.menu",
     "routers.assign",
     "routers.events",
@@ -49,6 +50,7 @@ MODULES = (
     "routers.agent",
     "routers.intro",
     "routers.notes",
+    "routers.polls",
     "routers.fallback",
     "main",
 )

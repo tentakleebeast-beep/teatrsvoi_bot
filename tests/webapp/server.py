@@ -31,6 +31,9 @@ sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 from app import webapp_page as pages  # noqa: E402
 from app.pages import files as files_pages  # noqa: E402
 from app.pages import home as home_pages  # noqa: E402
+from app.pages import polls as polls_pages  # noqa: E402
+from app.pages import polls_edit as polls_edit_pages  # noqa: E402
+from app.pages import polls_results as polls_results_pages  # noqa: E402
 from app.pages import services as services_page  # noqa: E402
 
 STATIC = ROOT / "services" / "tool-api" / "app" / "static"
@@ -69,6 +72,10 @@ PAGE_ROUTES = {
     "/webapp/folder": files_pages.FOLDER_PAGE,
     "/webapp/file": files_pages.FILE_PAGE,
     "/webapp/notes": pages.NOTES_PAGE,
+    # E8: опросы — список, конструктор, сводка (docs/development/162 §14.5).
+    "/webapp/polls": polls_pages.POLLS_PAGE,
+    "/webapp/polls/edit": polls_edit_pages.POLL_EDIT_PAGE,
+    "/webapp/polls/results": polls_results_pages.POLL_RESULTS_PAGE,
     "/webapp/more": home_pages.MORE_PAGE,
 }
 
@@ -1664,6 +1671,216 @@ app.add_api_route("/webapp/admin/services", _data({
 @app.get("/__health")
 def health() -> dict:
     return {"ok": True, "pages": sorted(PAGE_ROUTES)}
+
+
+# --- E8: опросы ---------------------------------------------------------------
+# Стенд отвечает теми же формами, что `api/polls.py` (docs/development/162 §14.2).
+# Право `poll.manage` на стенде есть только у администратора: заголовок с любой
+# другой ролью получает 403, как `core._webapp_require` на проде (V-088).
+
+NO_POLL_MANAGE_ROLES = {"participant", "org", "master", "troupe"}
+
+POLL_KIND_LABELS = {"single": "один из списка", "multi": "несколько", "yesno": "да/нет",
+                    "number": "число", "text": "текст"}
+
+
+def _lacks_poll_manage(request: Request) -> bool:
+    return (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_POLL_MANAGE_ROLES
+
+
+def _polls_denied(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _lacks_poll_manage(request):
+        return JSONResponse({"detail": "Опросы ведёт администратор: право poll.manage "
+                                       "есть у него одного."}, status_code=403)
+    return None
+
+
+def _poll_questions(count: int = 11) -> list[dict]:
+    """11 вопросов анкеты 161: пять типов, у двух — варианты."""
+    texts = [
+        "Какие файлы вы открываете утром?",
+        "Как вы выбираете окно для репетиции?",
+        "Что из перечисленного решает, а что подтверждает?",
+        "Сколько часов в неделю уходит на согласование?",
+        "Что улучшить в расписании?",
+        "Кто ведёт переписку со зрителями?",
+        "Как часто проверяете сообщения?",
+        "Что мешает больше всего?",
+        "Какие отчёты нужны?",
+        "Что можно автоматизировать?",
+        "Что оставить как есть?",
+    ]
+    kinds = ["single", "multi", "yesno", "number", "text",
+             "single", "single", "multi", "yesno", "text", "text"]
+    questions = []
+    for index in range(min(count, len(texts))):
+        kind = kinds[index]
+        options = []
+        if kind in ("single", "multi"):
+            options = [{"position": number, "code": f"a{number}", "label": label}
+                       for number, label in enumerate(
+                           ("Расписание студийской таблицы", "Календарь", "Звонки",
+                            "Сообщения"), start=1)]
+        questions.append({"id": 100 + index, "position": index + 1, "text": texts[index],
+                          "kind": kind, "required": index not in (4, 10),
+                          "free_text": kind in ("single", "multi") and index == 1,
+                          "max_choices": None, "options": options})
+    return questions
+
+
+def _poll_people(count: int = 20) -> list[dict]:
+    names = ["Мария Орлова", "Пётр Соколов", "Анна Ким", "Илья Дрозд", "Вера Панова",
+             "Лев Крылов", "Нина Рощина", "Олег Зайцев", "Дарья Волк", "Сергей Гром",
+             "Полина Лиса", "Матвей Нос", "Кира Свет", "Тимур Кот", "Ева Луна",
+             "Роман Ветер", "Ася Дождь", "Гриша Снег", "Зоя Лес", "Юра Поле"]
+    return [{"id": 200 + index, "display_name": names[index % len(names)],
+             "roles": ["org"] if index < 3 else ["troupe"],
+             "has_chat": index != 5, "checked": False} for index in range(count)]
+
+
+@app.get("/webapp/polls/list")
+def polls_list_stand(request: Request):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    return JSONResponse({"ok": True, "polls": [
+        {"id": 7, "title": "Анкета организаторам", "status": "running",
+         "questions": 11, "invited": 14, "answered": 6, "created_at": "2026-11-15T09:00:00"},
+        {"id": 8, "title": "Что улучшить в расписании", "status": "draft",
+         "questions": 3, "invited": 0, "answered": 0, "created_at": "2026-11-14T09:00:00"},
+    ]})
+
+
+@app.get("/webapp/polls/edit/data")
+def polls_edit_stand(request: Request, poll_id: int = 7):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    return JSONResponse({
+        "ok": True,
+        "poll": {"id": poll_id, "title": "Анкета организаторам",
+                 "intro": "Общий блок организаторам", "status": "draft",
+                 "anonymous": False, "closes_at": None},
+        "questions": _poll_questions(),
+        "can_edit": True,
+    })
+
+
+@app.get("/webapp/polls/audience/data")
+def polls_audience_stand(request: Request, poll_id: int = 7):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    people = _poll_people()
+    return JSONResponse({
+        "ok": True,
+        "poll": {"id": poll_id, "title": "Анкета организаторам", "status": "draft"},
+        "rules": [{"kind": "role", "role": "org", "project_id": None},
+                  {"kind": "role", "role": "troupe", "project_id": None}],
+        "include": [], "exclude": [], "viewers": {"people": [], "roles": ["admin"]},
+        "people": people,
+        "projects": [{"id": 10 + index, "name": f"Спектакль {index + 1}"} for index in range(5)],
+        "will_send": sum(1 for person in people if person["has_chat"]),
+        "without_telegram": sum(1 for person in people if not person["has_chat"]),
+        "total": len(people), "frozen": False,
+    })
+
+
+@app.post("/webapp/polls/audience")
+async def polls_audience_save_stand(request: Request):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    await request.json()
+    people = _poll_people()
+    return JSONResponse({"ok": True, "will_send": 19, "without_telegram": 1,
+                         "total": len(people)})
+
+
+@app.post("/webapp/polls/save")
+async def polls_save_stand(request: Request):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    return JSONResponse({"ok": True, "poll_id": body.get("poll_id") or 7,
+                         "status": "draft"})
+
+
+@app.post("/webapp/polls/start")
+async def polls_start_stand(request: Request):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    return JSONResponse({"ok": True, "invited": 19, "skipped_no_chat": 1,
+                         "status": "running"})
+
+
+@app.post("/webapp/polls/close")
+async def polls_close_stand(request: Request):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    return JSONResponse({"ok": True, "status": "closed",
+                         "closed_at": "2026-11-15T18:00:00"})
+
+
+def _poll_summary(question: dict) -> dict:
+    kind = question["kind"]
+    if kind in ("single", "multi", "yesno"):
+        options = (question["options"] or
+                   [{"code": "y", "label": "Да"}, {"code": "n", "label": "Нет"}])
+        summary = {"counts": [{"code": option["code"], "label": option["label"],
+                               "n": max(0, 6 - index)} for index, option in
+                              enumerate(options)],
+                   "answered": 6, "skipped": 1}
+        if kind == "multi":
+            summary["sum"] = 11
+            summary["sum_gt_answered"] = True
+        return summary
+    if kind == "number":
+        return {"min": 2, "avg": 3.5, "max": 6, "answered": 6, "skipped": 0,
+                "values": [{"participant_id": 200, "display_name": "Мария Орлова",
+                            "value": 4}]}
+    return {"answered": 3, "skipped": 0, "answers": [
+        {"participant_id": 200, "display_name": "Мария Орлова",
+         "text": "Расписание в таблице и календарь", "answered_at": "2026-11-15T10:00:00"},
+        {"participant_id": 201, "display_name": "Пётр Соколов",
+         "text": "Звонки", "answered_at": "2026-11-15T10:10:00"},
+    ]}
+
+
+@app.get("/webapp/polls/results/data")
+def polls_results_stand(request: Request, poll_id: int = 7):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    questions = [{"id": question["id"], "position": question["position"],
+                  "text": question["text"], "kind": question["kind"],
+                  "required": question["required"], "free_text": question["free_text"],
+                  "options": question["options"],
+                  "summary": _poll_summary(question)} for question in _poll_questions()]
+    return JSONResponse({
+        "ok": True,
+        "poll": {"id": poll_id, "title": "Анкета организаторам", "status": "running",
+                 "anonymous": False, "closes_at": None, "closed_at": None},
+        "answered": 6, "invited": 14, "questions": questions,
+        "not_answered": [{"participant_id": 205, "display_name": "Лев Крылов",
+                          "position": 7}],
+    })
+
+
+@app.get("/webapp/polls/export")
+def polls_export_stand(request: Request, poll_id: int = 7, format: str = "csv"):
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    if format == "md":
+        return PlainTextResponse("# Анкета организаторам\n", media_type="text/markdown")
+    return PlainTextResponse("\ufeffвопрос;тип;человек;ответ;когда\n", media_type="text/csv")
 
 
 def dump_state() -> str:

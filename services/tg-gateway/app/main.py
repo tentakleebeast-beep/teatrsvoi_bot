@@ -34,6 +34,7 @@ from routers import (
     intro,
     menu,
     notes,
+    polls,
     profile,
 )
 from webapp_links import page_url
@@ -84,6 +85,7 @@ def build_dispatcher() -> Dispatcher:
         agent.router,
         intro.router,
         notes.router,
+        polls.router,
         fallback.router,
     )
     return dp

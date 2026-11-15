@@ -363,6 +363,35 @@ body.ui-page {
 }
 .ui-chip--on { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
 
+/* ---------- E8: компактные строки опроса -----------------------------------
+   Конструктор открывают, чтобы поправить один вопрос, а не листать два экрана:
+   строка вопроса — 56 px, тип значением справа, подпись не переносится
+   (docs/development/162 §6 п. 1, мокапы 01 против 01b). */
+.ui-row--compact { min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
+.ui-row--compact .ui-row__main { gap: 0; }
+.ui-row--compact .ui-row__title,
+.ui-row--dense .ui-row__title {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ui-row--compact .ui-row__meta,
+.ui-row--dense .ui-row__meta {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Плотная строка списка людей: 44 px — ровно минимум нажатия, но на 8 строк
+   экономит 96 px и держит экран адресатов в одном кадре (docs/162 §6 п. 2). */
+.ui-row--dense {
+  min-height: 44px; padding-top: 2px; padding-bottom: 2px; gap: var(--ui-s2);
+}
+
+/* Сводка опроса: блок вопроса свёрнут, разворот по нажатию. 11 вопросов без
+   этого занимали 3 002 px (мокап 05, §6 п. 3). */
+.ui-acc { background: var(--ui-surface); border-bottom: 1px solid var(--ui-line); }
+.ui-acc:last-child { border-bottom: 0; }
+.ui-acc > summary { list-style: none; cursor: pointer; }
+.ui-acc > summary::-webkit-details-marker { display: none; }
+.ui-acc > .ui-list { margin: 0 var(--ui-s4) var(--ui-s3); border-radius: var(--ui-r-sm); }
+
 .ui-range { display: flex; align-items: flex-end; gap: var(--ui-s2); }
 .ui-range .ui-field { flex: 1; }
 .ui-range .ui-input { text-align: center; font-variant-numeric: tabular-nums; }

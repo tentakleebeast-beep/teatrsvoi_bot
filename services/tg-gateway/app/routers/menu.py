@@ -37,6 +37,7 @@ import routers.availability as availability_router
 import routers.budget as budget_router
 import routers.intro as intro_router
 import routers.notes as notes_router
+import routers.polls as polls_router
 import routers.profile as profile_router
 from config import ADMIN_CHAT_ID, WEBAPP_BASE_URL, log
 
@@ -289,6 +290,10 @@ async def run_menu_action(message: Message, state: FSMContext, label: str) -> No
         else:
             await message.answer("Даты, кто нужен, длительность — и покажу окна с пояснениями.",
                                  reply_markup=app_kb)
+        return
+
+    if label == texts.TITLE_POLLS:
+        await polls_router.show_runs(message, state)
         return
 
     if label == texts.TITLE_PROFILE:

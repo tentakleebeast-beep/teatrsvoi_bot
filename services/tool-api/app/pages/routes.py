@@ -33,7 +33,21 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from fastapi.responses import HTMLResponse, RedirectResponse
 
-from app.pages import admin, files, home, kit, layout, misc, money, notes, person, services, week
+from app.pages import (
+    admin,
+    files,
+    home,
+    kit,
+    layout,
+    misc,
+    money,
+    notes,
+    person,
+    polls_edit,
+    polls_results,
+    services,
+    week,
+)
 from app.webapp import page_sections
 
 # Разделы «Управления» описаны в реестре `app/webapp.py:SECTIONS`, а не здесь:
@@ -172,6 +186,22 @@ def build_router(*, actor: Callable[..., dict], caps_for: Callable[[dict], list[
     def webapp_person_page() -> str:
         """Карточка участника: старый экран, ждёт переезда в лист человека."""
         return person.PERSON_PAGE
+
+    # --- E8: опросы ----------------------------------------------------------
+
+    @router.get("/webapp/polls/edit", response_class=HTMLResponse)
+    def webapp_polls_edit_page() -> str:
+        """Конструктор опроса: вопросы и шаг адресатов (docs/162 §14.5).
+
+        «Какой опрос» — в адресе (`?poll_id=42`), как у `/webapp/file`; страница
+        публична, право `poll.manage` проверяет API и оболочка по `SCREEN_CAPS`.
+        """
+        return polls_edit.POLL_EDIT_PAGE
+
+    @router.get("/webapp/polls/results", response_class=HTMLResponse)
+    def webapp_polls_results_page() -> str:
+        """Сводка и экспорт: право — автор, `poll.results.all` или `poll_viewer`."""
+        return polls_results.POLL_RESULTS_PAGE
 
     # --- разделы «Управления» -----------------------------------------------
 

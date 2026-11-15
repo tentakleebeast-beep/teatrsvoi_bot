@@ -23,6 +23,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -67,12 +68,19 @@ def is_config_error(last_error: str | None) -> bool:
     return any(marker.lower() in text for marker in CONFIG_ERROR_MARKERS)
 
 
-def send(chat_id: int, text: str) -> tuple[bool, str]:
-    """Прямой вызов Bot API: рассылка не должна зависеть от polling-процесса."""
+def send(chat_id: int, text: str, markup: dict | None = None) -> tuple[bool, str]:
+    """Прямой вызов Bot API: рассылка не должна зависеть от polling-процесса.
+
+    `markup` — inline-клавиатура из `payload.markup` (E8, docs/162 §14.6): без неё
+    опрос не начать, потому что первый вопрос — это push с кнопками вариантов.
+    """
     if not TOKEN:
         return False, "TELEGRAM_TOKEN не задан"
-    data = urllib.parse.urlencode({"chat_id": chat_id, "text": text[:4000],
-                                   "disable_web_page_preview": "true"}).encode()
+    payload = {"chat_id": chat_id, "text": text[:4000],
+               "disable_web_page_preview": "true"}
+    if markup:
+        payload["reply_markup"] = json.dumps(markup, ensure_ascii=False)
+    data = urllib.parse.urlencode(payload).encode()
     request = urllib.request.Request(
         f"https://api.telegram.org/bot{TOKEN}/sendMessage", data=data)
     try:
@@ -183,12 +191,14 @@ def deliver(conn, moment: datetime, *, apply_changes: bool = True, limit: int = 
             continue
 
         text = message_text(item)
+        markup = (item["payload"] or {}).get("markup")
 
         if not apply_changes:
             out(f"  [dry-run] {item['display_name']}: {text.splitlines()[0]}")
             continue
 
-        ok, error = sender(item["tg_chat_id"], text)
+        ok, error = (sender(item["tg_chat_id"], text, markup) if markup
+                     else sender(item["tg_chat_id"], text))
         if ok:
             conn.execute("update notification set status='sent', sent_at=%s, "
                          "attempts=attempts+1, last_error=null where id=%s",

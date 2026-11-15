@@ -33,6 +33,7 @@ MANAGEMENT_URLS = [
     "/webapp/admin/t/feedback",
     "/webapp/admin/t/audit",
     "/webapp/broadcast",
+    "/webapp/polls",
     "/webapp/reconcile",
     "/webapp/services",
     "/webapp/admin/t/agent",
