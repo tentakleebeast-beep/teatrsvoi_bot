@@ -273,3 +273,17 @@ def intro_skip_kb() -> InlineKeyboardMarkup:
 
 def intro_confirm_kb() -> InlineKeyboardMarkup:
     return kb([[(texts.BTN_SAVE, "intro:save")], [("Отменить", "intro:cancel")]])
+
+
+DISCIPLINES = {"acting": "Актёрское мастерство", "music": "Музыка"}
+
+
+def discipline_kb() -> InlineKeyboardMarkup:
+    """Дисциплины педагога при регистрации (064): пока только две, остальные — через админа.
+
+    Подписи — данные (список дисциплин), а не текст интерфейса: место объявлено
+    сценарием `scenario.discipline_kb` в `config/agent-features.yaml`.
+    """
+    row = [InlineKeyboardButton(text=title, callback_data=f"reg:disc:{code}")
+           for code, title in DISCIPLINES.items()]
+    return InlineKeyboardMarkup(inline_keyboard=[row])
