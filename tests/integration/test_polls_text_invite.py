@@ -46,3 +46,8 @@ def test_приглашение_на_вопрос_текста_несёт_кно
         "приглашение на вопрос типа text ушло без кнопок: состояние свободного ответа "
         "выставить нечем, ответ человека уйдёт в заглушку")
     assert any(button["callback_data"].startswith("p:") for button in buttons)
+    # Лимит Telegram — 18 байт на callback_data (162 §5.2): кнопка приглашения
+    # собирается из run_id и позиции, поэтому проверяется вместе с остальными.
+    for button in buttons:
+        size = len(button["callback_data"].encode())
+        assert size <= 18, f"callback_data {button['callback_data']!r} — {size} байт, лимит 18"
