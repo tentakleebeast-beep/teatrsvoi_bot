@@ -39,6 +39,10 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     $("form").hidden = true;
   }
 
+  function showForm() {
+    $("form").hidden = false;
+  }
+
   function detailOf(result) {
     var body = result.body || {};
     var text = body.detail || body.message || "";
@@ -228,16 +232,29 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     });
   }
 
+  /* Право `poll.manage` до отрисовки конструктора: у нового опроса нет своего
+     запроса данных, поэтому спрашиваем тот же список, что и экран «Опросы».
+     Без этого экран открывался любой роли, а отказ приходил только при сохранении. */
+  async function canManage() {
+    var result = await api("/webapp/polls/list");
+    if (result.status === 403) { showDenied(); return false; }
+    if (result.status !== 200) { showForm(); showError(detailOf(result)); return false; }
+    return true;
+  }
+
   async function init() {
     bind();
     var pollId = pollIdFromUrl();
     if (!pollId) {
+      if (!(await canManage())) { return; }
+      showForm();
       addQuestion();
       return;
     }
     var result = await api("/webapp/polls/edit/data?poll_id=" + pollId);
     if (result.status === 403) { showDenied(); return; }
-    if (result.status !== 200) { showError(detailOf(result)); return; }
+    if (result.status !== 200) { showForm(); showError(detailOf(result)); return; }
+    showForm();
     var poll = result.body.poll;
     state.poll_id = poll.id;
     state.title = poll.title;
