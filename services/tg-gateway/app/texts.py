@@ -198,9 +198,11 @@ def invite_text(code: str, expires_at: str | None, role: str) -> str:
     title = escape(ROLE_TITLES.get(role, role))
     tail = f"Действует до {escape(until)}, использовать можно один раз.\n" if until else \
            "Использовать можно один раз.\n"
+    hint = ("\nЧеловек вводит код боту и выбирает дисциплину: Актёрское мастерство или Музыка.\n"
+            if role == "master" else "")
     return (f"Код приглашения для роли «{title}»:\n\n"
             f"<code>{escape(code)}</code>\n\n"
-            + tail +
+            + tail + hint +
             "Скопируйте код кнопкой ниже или нажмите на него в тексте.\n"
             "Передайте код человеку: он отправляет боту этот код и регистрируется.")
 

@@ -21,6 +21,8 @@ router = APIRouter()
 class RegisterIn(core.ApiIn):
     chat_id: int
     code: str = Field(min_length=4, max_length=16)
+    # Дисциплина обязательна для роли master (064): её называют при регистрации.
+    discipline_code: Literal["acting", "music"] | None = None
     display_name: str | None = None
     require_approval: bool = False
     correlation_id: str | None = None
@@ -38,6 +40,27 @@ def participant_card(participant_id: int,
     """
     return core._person_card(participant_id, who.get("id"), who.get("caps"))
 
+
+
+def _bind_master_discipline(conn, participant_id: int, code_role: str,
+                            discipline_code: str | None) -> str | None:
+    """Педагог выбирает дисциплину при регистрации (064).
+
+    Источник — сначала регистрация, потом поле кода. Отсутствие имени дисциплины
+    не блокирует вход: мастер без дисциплины работает, `core.discipline_warnings`
+    показывает предупреждение (V-037, 061). Неизвестный код — ошибка, а не догадка.
+    """
+    if code_role != "master" or not discipline_code:
+        return None
+    row = conn.execute("select id from discipline where code = %s", (discipline_code,)).fetchone()
+    if row is None:
+        return "unknown_discipline"
+    conn.execute(
+        """insert into participant_discipline (participant_id, discipline_id, relation)
+           values (%s, %s, 'teacher')
+           on conflict (participant_id, discipline_id) do update set relation = 'teacher'""",
+        (participant_id, row["id"]))
+    return None
 
 
 @router.post("/tools/participants/register")
@@ -81,7 +104,10 @@ def register(body: RegisterIn) -> dict:
             return {"ok": False, "error": reason}
 
         if not body.display_name:
-            return {"ok": True, "status": "need_name", "role": code_row["role"]}
+            return {"ok": True, "status": "need_name", "role": code_row["role"],
+                    "needs_discipline": code_row["role"] == "master"}
+        if code_row["role"] == "master" and not (body.discipline_code or code_row.get("discipline_code")):
+            return {"ok": True, "status": "need_discipline", "role": "master"}
 
         key = make_key(body.display_name)
         if key and conn.execute("select 1 from participant where person_key = %s",
@@ -102,6 +128,11 @@ def register(body: RegisterIn) -> dict:
              None if body.require_approval else datetime.now(core.TZ)),
         ).fetchone()
         core.ensure_role_row(conn, created["id"], code_row["role"])
+        err = _bind_master_discipline(conn, created["id"], code_row["role"],
+                                      body.discipline_code or code_row.get("discipline_code"))
+        if err:
+            raise ApiError(status.HTTP_400_BAD_REQUEST, "Неизвестная дисциплина",
+                           code=err)
         conn.execute("update invite_code set uses = uses + 1, used_by = %s where id = %s",
                      (created["id"], code_row["id"]))
         conn.execute("insert into invite_attempt (chat_id, ok) values (%s, true)",
@@ -555,6 +586,7 @@ class AttachIn(core.ApiIn):
     chat_id: int
     participant_id: int
     code: str
+    discipline_code: Literal["acting", "music"] | None = None
     correlation_id: str | None = None
 
 
@@ -607,7 +639,9 @@ def check_code(body: CheckCodeIn) -> dict:
                     "participant": core._participant_out(existing)}
 
         rows = _search_candidates(conn, body.q or "")
-    return {"ok": True, "role": code_row["role"], "candidates": rows}
+    return {"ok": True, "role": code_row["role"],
+            "needs_discipline": code_row["role"] == "master",
+            "candidates": rows}
 
 
 
@@ -659,7 +693,12 @@ def attach(body: AttachIn) -> dict:
         if person["tg_chat_id"] is not None:
             return {"ok": False, "error": "already_bound"}
 
-        rank = {"troupe": 2, "org": 3, "admin": 4}
+        chosen_discipline = body.discipline_code or code_row.get("discipline_code")
+        if code_row["role"] == "master" and chosen_discipline and conn.execute(
+                "select 1 from discipline where code = %s", (chosen_discipline,)).fetchone() is None:
+            return {"ok": False, "error": "unknown_discipline"}
+
+        rank = {"troupe": 2, "master": 2, "org": 3, "admin": 4}
         role = code_row["role"]
         if rank.get(person["role"], 0) > rank.get(role, 0) and person["role"] != "admin":
             role = person["role"]
@@ -671,6 +710,7 @@ def attach(body: AttachIn) -> dict:
                 where id = %s returning *""",
             (body.chat_id, role, f"TG_{body.chat_id}", body.participant_id)).fetchone()
         core.ensure_role_row(conn, body.participant_id, role)
+        _bind_master_discipline(conn, body.participant_id, code_row["role"], chosen_discipline)
         conn.execute("update invite_code set uses = uses + 1, used_by = %s where id = %s",
                      (body.participant_id, code_row["id"]))
         conn.execute("insert into invite_attempt (chat_id, ok) values (%s, true)",
