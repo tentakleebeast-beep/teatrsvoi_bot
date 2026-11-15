@@ -37,9 +37,6 @@ SMALL_TARGETS = """
   const found = [];
   document.querySelectorAll('a, button, input, select, textarea').forEach((node) => {
     if (node.closest('[hidden]')) { return; }
-    // Галочку внутри строки-подписи нажимают всей строкой: цель — label, а не сам
-    // input 13 px. Иначе проверка требовала бы 44 px у системного чекбокса.
-    if (node.tagName === 'INPUT' && node.closest('label')) { return; }
     const rect = node.getBoundingClientRect();
     if (!rect.width || !rect.height) { return; }
     if (rect.height < min - 0.5) {

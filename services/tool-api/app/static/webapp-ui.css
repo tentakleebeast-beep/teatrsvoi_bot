@@ -219,6 +219,34 @@ body.ui-page {
 .ui-row__chevron { color: var(--ui-muted); font-size: 18px; line-height: 1; }
 .ui-row--attention .ui-row__title { font-weight: 600; }
 
+/* ---------- флажок в строке ------------------------------------------------
+   Нативный чекбокс — 13 px, а цель нажатия в Mini App не меньше 44 px
+   (`tests/webapp/test_miniapp_system.py`, docs/development/91; на t_e7de39a3
+   проверка поймала 13 px на экране конструктора опроса). Поэтому само поле
+   растянуто до 44×44, а квадрат 24 px и галочка рисуются внутри: строка
+   остаётся плотной, палец попадает в неё целиком. */
+.ui-row > input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  position: relative; flex: none;
+  width: var(--ui-tap); height: var(--ui-tap); margin: 0;
+  border: 0; background: none;
+}
+.ui-row > input[type="checkbox"]::after {
+  content: ""; position: absolute; inset: 10px;
+  border: 2px solid var(--ui-line); border-radius: 6px;
+  background: var(--ui-surface-2);
+}
+.ui-row > input[type="checkbox"]::before {
+  content: ""; position: absolute; left: 19px; top: 15px;
+  width: 5px; height: 11px; border: 2px solid var(--ui-on-accent);
+  border-top: 0; border-left: 0; border-radius: 1px;
+  transform: rotate(45deg); opacity: 0;
+}
+.ui-row > input[type="checkbox"]:checked::after {
+  border-color: var(--ui-accent); background: var(--ui-accent);
+}
+.ui-row > input[type="checkbox"]:checked::before { opacity: 1; }
+
 /* ---------- строка дня недели: состояние видно цветом и словом ----------
    Владелец (V-028/в, V-029/а): семь строк выглядели одинаково, состояние
    читалось только мелким текстом. Полоса слева, мягкий фон и слово справа
