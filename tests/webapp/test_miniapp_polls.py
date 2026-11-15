@@ -81,6 +81,38 @@ def test_список_опросов_и_отказ_по_праву(app_page) -> 
     assert denied.locator("#form").is_hidden()
 
 
+def test_конструктор_без_poll_id_отказ_без_no_poll_manage(app_page) -> None:
+    """Новый опрос: конструктор только с правом `poll.manage`, иначе отказ словами.
+
+    Дефект D2 отчёта 163: `/webapp/polls/edit` без `poll_id` не проверял право вообще,
+    конструктор открывался любой роли, а отказ приходил только при сохранении (403).
+    Ожидание для `org` читаем из стенда: карта D1 (`t_d9dd65d7`) добавляет ему
+    `poll.manage`, и тогда тот же тест должен ждать конструктор, а не отказ.
+    """
+    from tests.webapp.server import NO_POLL_MANAGE_ROLES
+
+    allowed = app_page("/webapp/polls/edit")
+    allowed.wait_for_selector("#questions .ui-row", timeout=10_000)
+    assert allowed.locator("#denied").is_hidden()
+    assert "Добавить вопрос" in allowed.inner_text("#form")
+
+    for role in ("troupe", "master"):
+        denied = app_page("/webapp/polls/edit", headers={"X-SVOI-Role": role})
+        denied.wait_for_selector("#denied:not([hidden])", timeout=10_000)
+        assert denied.locator("#form").is_hidden(), f"{role}: конструктор виден без права"
+        body = denied.inner_text("body")
+        assert "Опросы ведёт администратор" in body, body
+        assert "Не удалось загрузить" not in body, "403 подан как сбой сети"
+
+    org = app_page("/webapp/polls/edit", headers={"X-SVOI-Role": "org"})
+    if "org" in NO_POLL_MANAGE_ROLES:
+        org.wait_for_selector("#denied:not([hidden])", timeout=10_000)
+        assert org.locator("#form").is_hidden()
+    else:
+        org.wait_for_selector("#questions .ui-row", timeout=10_000)
+        assert org.locator("#denied").is_hidden()
+
+
 def test_конструктор_компактные_строки(app_page) -> None:
     """56 px, тип справа, 8 вопросов в первом кадре — как на мокапе `01b`."""
     page = app_page("/webapp/polls/edit?poll_id=7")
