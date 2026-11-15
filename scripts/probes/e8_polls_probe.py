@@ -396,8 +396,9 @@ CHAT_HTML = """<!doctype html>
   <div class="bubble bubble--in" id="q-text">
     <div class="progress">Анкета организаторам · вопрос 5 из 11</div>
     <div class="topic">Сколько часов в неделю уходит на согласование окон?</div>
-    <div style="font-size:13px;color:#707579">Ответьте числом сообщением или нажмите «Пропустить».</div>
+    <div style="font-size:13px;color:#707579">Нажмите «Ответить сообщением» и пришлите число.</div>
     <div class="keys">
+      <div class="row"><div class="key key--hint">Ответить сообщением</div></div>
       <div class="row"><div class="key key--quiet">Назад</div>
         <div class="key key--quiet">Пропустить</div></div>
     </div>
@@ -409,7 +410,7 @@ CHAT_HTML = """<!doctype html>
     <div class="topic">Какие события вы заводите в календарь?</div>
     <div class="draft">Черновик: отвечено 6 из 11 · вопрос 7</div>
     <div class="keys">
-      <div class="row"><div class="key key--hint">Написать ответ</div></div>
+      <div class="row"><div class="key key--hint">Ответить сообщением</div></div>
       <div class="row"><div class="key key--quiet">Назад</div>
         <div class="key key--quiet">Пропустить</div></div>
     </div>

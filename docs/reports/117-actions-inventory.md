@@ -479,8 +479,8 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | сообщение `cmd_notes` | Command('заметки', 'notes') | `services/tg-gateway/app/routers/notes.py:104` | — | нет | `/webapp/notes` |
 | кнопка `note_confirm` | F.data.startswith('note:') | `services/tg-gateway/app/routers/notes.py:112` | notes.write | test_gateway_notes.py | `/tools/notes` |
 | сообщение `cmd_note` | Command('заметка', 'note') | `services/tg-gateway/app/routers/notes.py:98` | — | test_gateway_command_hints.py, test_gateway_notes.py | — |
-| кнопка `poll_step` | F.data.startswith('p:') | `services/tg-gateway/app/routers/polls.py:102` | — | нет | `/tools/polls/step` |
-| сообщение `poll_free_text` | PollAnswer.await_text, F.text | `services/tg-gateway/app/routers/polls.py:141` | — | нет | `/tools/polls/answer` |
+| сообщение `poll_free_text` | PollAnswer.await_text, F.text | `services/tg-gateway/app/routers/polls.py:114` | — | нет | `/tools/polls/answer` |
+| кнопка `poll_step` | F.data.startswith('p:') | `services/tg-gateway/app/routers/polls.py:76` | — | нет | `/tools/polls/step` |
 | кнопка `my_dues` | F.data == 'sar:dues' | `services/tg-gateway/app/routers/profile.py:114` | — | нет | `/tools/dues/me` |
 | сообщение `cmd_dues` | Command('dues') | `services/tg-gateway/app/routers/profile.py:55` | — | нет | `/tools/dues/me` |
 | сообщение `profile_cmd` | Command('profile') | `services/tg-gateway/app/routers/profile.py:64` | — | нет | `/tools/profile/me`, `/webapp` |
