@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Мокап: вопрос в чате</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #7d9cb3; font: 16px/1.35 -apple-system, "SF Pro Text", Roboto, sans-serif; }
+  .wrap { padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+  .bubble { background: #fff; border-radius: 12px; padding: 10px 12px; max-width: 330px;
+            box-shadow: 0 1px 1px rgba(0,0,0,.12); }
+  .bubble--in { align-self: flex-start; }
+  .progress { font-size: 13px; color: #707579; margin-bottom: 6px; }
+  .topic { font-weight: 600; margin-bottom: 8px; }
+  .keys { display: flex; flex-direction: column; gap: 6px; margin-top: 10px; }
+  .keys .row { display: flex; gap: 6px; }
+  .key { flex: 1; min-height: 44px; display: flex; align-items: center; justify-content: center;
+         background: #eef3f9; border: 1px solid rgba(0,0,0,.08); border-radius: 8px;
+         font-size: 15px; color: #1b2733; padding: 6px 8px; text-align: center; }
+  .key--quiet { background: #f4f4f5; color: #4d5257; flex: 0 1 auto;
+                padding: 0 14px; }
+  .key--hint { background: #fff; color: #1459e3; border: 1px dashed rgba(20,89,227,.5); }
+  .caption { font-size: 13px; color: #20313f; padding: 0 2px; }
+  .chatbtns { display: flex; gap: 8px; align-items: flex-end; margin-top: 4px; }
+  .chatbtn { flex: 1; min-height: 44px; border-radius: 8px; background: #eef3f9;
+             display: flex; align-items: center; justify-content: center; font-size: 15px; }
+  .draft { background: rgba(255,255,255,.92); border-radius: 10px; padding: 8px 10px;
+           font-size: 14px; color: #20313f; }
+</style></head>
+<body><div class="wrap">
+
+  <div class="caption">Состояние 1: вопрос с вариантами (тип «один из списка»)</div>
+  <div class="bubble bubble--in" id="q-single">
+    <div class="progress">Анкета организаторам · вопрос 2 из 11</div>
+    <div class="topic">Как вы выбираете окно для репетиции? Что из этого решает,
+      а что подтверждает?</div>
+    <div class="keys">
+      <div class="row"><div class="key">Расписание студийцы</div></div>
+      <div class="row"><div class="key">Календарь</div><div class="key">Звонки</div></div>
+      <div class="row"><div class="key">Сообщения</div></div>
+      <div class="row"><div class="key key--hint">Другое — напишу</div></div>
+      <div class="row"><div class="key key--quiet">Назад</div>
+        <div class="key key--quiet">Пропустить</div></div>
+    </div>
+  </div>
+
+  <div class="caption">Состояние 2: свободный ввод (тип «текст»), после «Другое» или ответа числом</div>
+  <div class="bubble bubble--in" id="q-text">
+    <div class="progress">Анкета организаторам · вопрос 5 из 11</div>
+    <div class="topic">Сколько часов в неделю уходит на согласование окон?</div>
+    <div style="font-size:13px;color:#707579">Ответьте числом сообщением или нажмите «Пропустить».</div>
+    <div class="keys">
+      <div class="row"><div class="key key--quiet">Назад</div>
+        <div class="key key--quiet">Пропустить</div></div>
+    </div>
+  </div>
+
+  <div class="caption">Состояние 3: человек закрыл чат и вернулся — ответы уже сохранены</div>
+  <div class="bubble bubble--in" id="q-resume">
+    <div class="progress">Анкета организаторам · вопрос 7 из 11</div>
+    <div class="topic">Какие события вы заводите в календарь?</div>
+    <div class="draft">Черновик: отвечено 6 из 11 · вопрос 7</div>
+    <div class="keys">
+      <div class="row"><div class="key key--hint">Написать ответ</div></div>
+      <div class="row"><div class="key key--quiet">Назад</div>
+        <div class="key key--quiet">Пропустить</div></div>
+    </div>
+  </div>
+
+</div></body></html>
