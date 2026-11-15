@@ -22,6 +22,7 @@
   env -u PYTHONPATH .venv/bin/python scripts/branch_reap.py --json           # машинный
   env -u PYTHONPATH .venv/bin/python scripts/branch_reap.py --delete         # убрать merged
   env -u PYTHONPATH .venv/bin/python scripts/branch_reap.py --remote --delete  # и на origin
+  env -u PYTHONPATH .venv/bin/python scripts/branch_reap.py --no-fetch       # без сети
 
 Тест: tests/unit/test_branch_reap.py. Правило: `docs/development/26` §7a п.8, §7c.
 """
@@ -116,8 +117,10 @@ def collect(base: str, remote: str | None = None) -> list[Branch]:
             short = name.split("/", 1)[1]
             if short == "HEAD":
                 continue
+            # Удалённый двойник ветви под worktree — это ветвь идущей карты: удалять нельзя.
             branches.append(Branch(short, int(_git("rev-list", "--count",
-                                                   f"{base}..{name}").strip() or 0), "remote"))
+                                                   f"{base}..{name}").strip() or 0), "remote",
+                                   worktrees.get(short)))
     return branches
 
 
@@ -147,10 +150,17 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--remote", default="origin", help="удалённый репозиторий; пусто — не смотреть")
     parser.add_argument("--delete", action="store_true", help="удалить влитые ветви (сначала печатает список)")
     parser.add_argument("--json", action="store_true", help="машинный отчёт")
+    parser.add_argument("--no-fetch", action="store_true",
+                        help="не обновлять remote-tracking ссылки (иначе fetch --prune)")
     parser.add_argument("--quiet-when-clean", action="store_true",
                         help="молчать, когда удалять нечего (для задания планировщика)")
     args = parser.parse_args(argv)
 
+    if args.remote and not args.no_fetch:
+        # Без prune удалённая ветвь живёт в отчёте как «merged»: её уже нет на GitHub,
+        # а локальная ссылка осталась. Отчёт должен показывать то, что есть в GitHub.
+        subprocess.run(["git", "fetch", "--prune", args.remote], cwd=ROOT,
+                       capture_output=True, text=True)
     branches = collect(args.base, args.remote or None)
     buckets = classify(branches)
     deleted: list[str] = []
