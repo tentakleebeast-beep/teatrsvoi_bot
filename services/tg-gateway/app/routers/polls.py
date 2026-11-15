@@ -34,32 +34,58 @@ def _markup(step: dict) -> InlineKeyboardMarkup:
     return kb(poll_ui.keyboard_rows(step))
 
 
-async def _send_step(message: Message, step: dict) -> None:
+#: Вопросы, у которых ответ приходит сообщением: вариантов у них нет (162 §5.2).
+FREE_KINDS = ("text", "number")
+
+
+async def _expect_text(step: dict, state: FSMContext) -> None:
+    """Показанный вопрос свободного ввода сразу ждёт сообщение (D4, §5.2).
+
+    Иначе вход в `PollAnswer.await_text` был ровно один — кнопка «Другое — напишу»,
+    а её собирает флаг `free_text`, которого у `text`/`number` не бывает по схеме
+    (`db/init/065_polls.sql:39`). Человек читал «Ответьте сообщением», отвечал — и
+    ответ уходил в `fallback.state_fallback_text`, то есть терялся (блокер анкеты 161:
+    там 35 вопросов из 35 типа `text`). Состояние ставится на показе вопроса, потому
+    что приглашение из очереди состояние выставить не может — там кнопка `p:f`.
+    """
+    if step.get("kind") in FREE_KINDS and not step.get("closed") and not step.get("done"):
+        await state.set_state(PollAnswer.await_text)
+        await state.update_data(run_id=int(step["run_id"]), position=int(step["position"]))
+        return
+    # Вопрос с вариантами: старое ожидание текста снимаем, иначе сообщение человека
+    # уйдёт ответом на вопрос, который он уже прошёл.
+    await state.clear()
+
+
+async def _send_step(message: Message, step: dict, state: FSMContext) -> None:
     """Один вопрос — одно сообщение: шаг вперёд правит его, а не шлёт новое (D6)."""
     if step.get("closed"):
+        await state.clear()
         await message.edit_text(poll_ui.closed_text(step))
         return
     if step.get("done"):
+        await state.clear()
         await message.edit_text(poll_ui.done_text(step))
         return
     await message.edit_text(poll_ui.question_text(step), reply_markup=_markup(step))
+    await _expect_text(step, state)
 
 
-async def _render(callback: CallbackQuery, payload: dict) -> None:
+async def _render(callback: CallbackQuery, payload: dict, state: FSMContext) -> None:
     """Показать ответ сервера на действие: закрыт, пройден или следующий вопрос."""
     if not payload.get("ok"):
         await callback.message.answer(payload.get("detail") or texts.POLL_FAILED)
         return
     if payload.get("closed"):
-        await _send_step(callback.message, payload["step"])
+        await _send_step(callback.message, payload["step"], state)
         return
     if payload.get("done"):
-        await _send_step(callback.message, payload["step"])
+        await _send_step(callback.message, payload["step"], state)
         return
     if payload.get("retry"):
         await callback.message.answer(payload.get("message") or texts.POLL_NUMBER_ERROR)
         return
-    await _send_step(callback.message, payload["step"])
+    await _send_step(callback.message, payload["step"], state)
 
 
 async def _answer(callback: CallbackQuery, run_id: int, position: int | None,
@@ -89,22 +115,26 @@ async def poll_step(callback: CallbackQuery, state: FSMContext) -> None:
             return
         step = result["step"]
         if step.get("closed"):
+            await state.clear()
             await callback.message.answer(poll_ui.closed_text(step))
             return
         if step.get("done"):
+            await state.clear()
             await callback.message.answer(poll_ui.done_text(step))
             return
         await callback.message.answer(poll_ui.question_text(step), reply_markup=_markup(step))
+        await _expect_text(step, state)
         return
     if action == "f":
-        # «Другое — напишу»: следующее сообщение человека станет ответом (D4).
+        # «Другое — напишу» / «Ответить сообщением»: следующее сообщение человека
+        # станет ответом (D4). Этот же вход несёт кнопка приглашения из очереди.
         await state.set_state(PollAnswer.await_text)
         await state.update_data(run_id=parts["run_id"], position=parts["position"])
         await callback.message.answer(texts.POLL_WRITE_ANSWER)
         return
     payload = await _answer(callback, parts["run_id"], parts["position"], action,
                             parts.get("code"))
-    await _render(callback, payload)
+    await _render(callback, payload, state)
 
 
 @router.message(PollAnswer.await_text, F.text)
@@ -130,6 +160,7 @@ async def poll_free_text(message: Message, state: FSMContext) -> None:
         await message.answer(poll_ui.done_text(step))
         return
     await message.answer(poll_ui.question_text(step), reply_markup=_markup(step))
+    await _expect_text(step, state)
 
 
 async def show_runs(message: Message, state: FSMContext) -> None:
