@@ -188,7 +188,11 @@ def test_вопрос_один_шаг_и_переход_вперёд(app_page, w
     page.wait_for_selector("#step:has-text('вопрос 2 из 11')", timeout=10_000)
 
     page.get_by_role("button", name="Календарь").click()
-    page.wait_for_selector("#step button.ui-btn--primary", timeout=10_000)
+    # Ровно одна выбранная: ждём перерисовку списка, иначе следующий клик
+    # попадает в узел, который вот-вот заменят, и теряется (флак webkit в CI).
+    page.wait_for_function(
+        "() => document.querySelectorAll('#step button.ui-btn--primary').length === 1",
+        timeout=10_000)
     page.get_by_role("button", name="Звонки").click()
     page.wait_for_function(
         "() => document.querySelectorAll('#step button.ui-btn--primary').length === 2",
@@ -210,7 +214,11 @@ def test_число_не_понял_и_пропуск_у_необязатель�
     page.get_by_role("button", name="Расписание студийской таблицы").click()
     page.wait_for_selector("#step:has-text('вопрос 2 из 11')", timeout=10_000)
     page.get_by_role("button", name="Календарь").click()
-    page.wait_for_selector("#step button.ui-btn--primary", timeout=10_000)
+    # Ровно одна выбранная: ждём перерисовку списка, иначе следующий клик
+    # попадает в узел, который вот-вот заменят, и теряется (флак webkit в CI).
+    page.wait_for_function(
+        "() => document.querySelectorAll('#step button.ui-btn--primary').length === 1",
+        timeout=10_000)
     page.get_by_role("button", name="Дальше").click()
     page.wait_for_selector("#step:has-text('вопрос 3 из 11')", timeout=10_000)
     page.get_by_role("button", name="Да").click()
