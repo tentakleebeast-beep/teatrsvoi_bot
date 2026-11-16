@@ -761,10 +761,17 @@ Authorization (обращение №44), поэтому страница не �
 | список + конструктор | `services/tool-api/app/pages/polls.py` (`POLLS_PAGE`) | `/webapp/polls` | `poll.manage` |
 | конструктор одного опроса | тот же модуль (`POLL_EDIT_PAGE`) | `/webapp/polls/edit` | `poll.manage` |
 | результаты | тот же модуль (`POLL_RESULTS_PAGE`) | `/webapp/polls/results` | `poll.results.all`, `poll.manage` |
+| мои опросы (адресат) | `services/tool-api/app/pages/polls_mine.py` (`POLLS_MINE_PAGE`) | `/webapp/polls/mine` | `()` — открыт всем, показывает только свои прохождения (`docs/development/164` §12.4) |
+| вопрос (адресат) | `services/tool-api/app/pages/polls_answer.py` (`POLLS_ANSWER_PAGE`) | `/webapp/polls/answer?run_id=` | `()` — владение прохождением проверяет `_run_or_404` (`docs/development/164` §12.5) |
 
 Регистрация — одна запись в `SECTIONS` (§7) плюс константы страниц в `pages/routes.py`;
 `SCREEN_CAPS` обновляется из `SECTIONS` автоматически. Параметр «какой опрос» — в адресе
 (`/webapp/polls/edit?poll_id=42`), как у `/webapp/file`.
+
+Экраны адресата — исключение из этого правила: записи в `SECTIONS` у них **нет** (запись с пустым
+`caps` не видна никому, а с чужим правом дала бы адресату вторую строку и четвёртую вкладку), они
+живут двумя строками `SCREEN_CAPS` и маршрутами. Причина и проверка — `docs/development/164`
+§12.2. Вход в них — строка «Мои опросы» на Главной, а не «Управление».
 
 Что проверяется замером §6, а не «на глаз»:
 
@@ -793,6 +800,14 @@ Authorization (обращение №44), поэтому страница не �
    — это push. Шаги диалога в очередь **не** попадают и лимитом не ограничены.
 5. `poll_run.message_id` хранит сообщение с текущим вопросом; при шаге вперёд бот
    редактирует его (`edit_text`), а не шлёт новое — иначе 11 вопросов дают 11 сообщений.
+6. Отмена отложенного приглашения (V-096, `docs/development/164` §12.7): когда человек начинает
+   или заканчивает прохождение, неотправленная запись `kind='poll'` этого прохождения получает
+   `status='cancelled'` (`sent_at` пуст, причина в `last_error`). Отменяются `scheduled` и
+   `failed` — второе важно, потому что `retry_failed` возвращает `failed` в очередь; после
+   отмены `deliver()` её не видит (он берёт только `scheduled`). Новый статус не заводится:
+   `cancelled` уже в `check` таблицы `notification` (`db/init/001_schema.sql`), миграции нет.
+   Повторно приглашение не создаётся: единственный его источник — `polls_start` (закрыт
+   `409 already_running`), и на `notification` стоит `unique (dedupe_key, recipient_id)`.
 
 ### 14.7. Критерии приёмки (Given/When/Then)
 
