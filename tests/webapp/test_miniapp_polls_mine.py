@@ -74,23 +74,27 @@ def _tap_targets(page) -> None:
     assert not small, "целей нажатия меньше 44 px: " + "; ".join(small)
 
 
-def _choose(page, name: str, chosen: int) -> None:
-    """Нажать вариант и дождаться, что он выбран.
+SELECTED = """(name) => [...document.querySelectorAll('#step button')]
+  .some((node) => node.textContent === name && node.className.includes('ui-btn--primary'))"""
 
-    Список вариантов перерисовывается целиком (`replaceChild` в `polls_answer.py`),
-    поэтому клик, попавший в узел перед заменой, теряется — в CI на webkit это
-    ловилось как таймаут. Повторяем клик, пока состояние не совпадёт.
+
+def _choose(page, name: str) -> None:
+    """Нажать вариант и дождаться, что выбран именно он.
+
+    Считать выбранные по числу `ui-btn--primary` нельзя: у `multi` этот класс
+    носит и «Дальше», поэтому условие срабатывало до ответа сервера, а следующий
+    клик терялся в `sending`-защите. Список вариантов при этом перерисовывается
+    целиком (`replaceChild` в `polls_answer.py`), так что потерянный клик
+    повторяем.
     """
     for _ in range(3):
         page.get_by_role("button", name=name).click()
         try:
-            page.wait_for_function(
-                f"() => document.querySelectorAll('#step button.ui-btn--primary').length === {chosen}",
-                timeout=3_000)
+            page.wait_for_function(SELECTED, arg=name, timeout=3_000)
             return
         except Exception:  # noqa: BLE001 — клик потерян, повторяем
             continue
-    raise AssertionError(f"вариант «{name}» не выбрался: ждали {chosen} выбранных")
+    raise AssertionError(f"вариант «{name}» не выбрался")
 
 
 def test_строка_ведёт_в_список_своих_опросов(app_page) -> None:
@@ -206,8 +210,8 @@ def test_вопрос_один_шаг_и_переход_вперёд(app_page, w
     page.get_by_role("button", name="Расписание студийской таблицы").click()
     page.wait_for_selector("#step:has-text('вопрос 2 из 11')", timeout=10_000)
 
-    _choose(page, "Календарь", 1)
-    _choose(page, "Звонки", 2)
+    _choose(page, "Календарь")
+    _choose(page, "Звонки")
     page.get_by_role("button", name="Дальше").click()
     page.wait_for_selector("#step:has-text('вопрос 3 из 11')", timeout=10_000)
     # У вопроса да/нет — две кнопки, и «Назад» уже есть.
@@ -224,7 +228,7 @@ def test_число_не_понял_и_пропуск_у_необязатель�
     # До вопроса 4 (число) доходим ответами: single, multi, да/нет.
     page.get_by_role("button", name="Расписание студийской таблицы").click()
     page.wait_for_selector("#step:has-text('вопрос 2 из 11')", timeout=10_000)
-    _choose(page, "Календарь", 1)
+    _choose(page, "Календарь")
     page.get_by_role("button", name="Дальше").click()
     page.wait_for_selector("#step:has-text('вопрос 3 из 11')", timeout=10_000)
     page.get_by_role("button", name="Да").click()
