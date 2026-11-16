@@ -116,7 +116,7 @@
 | 156 | [156-intent-sheet-decisions.md](development/156-intent-sheet-decisions.md) | 156. Разбор решений листа «Чего не умеем»: поток от выгрузки до запуска (V-035, дизайн) |
 | 158 | [158-miniapp-home-dom.md](development/158-miniapp-home-dom.md) | 158. «Дом»: личное на главной (E2, дизайн) |
 | 160 | [160-google-process-research.md](development/160-google-process-research.md) | 160. Google: текущий процесс студии — исследование (E1-1) |
-| 161 | [161-google-interview-questionnaire.md](development/161-google-interview-questionnaire.md) | 161. Анкета интервью по Google-процессу (E1-1) — версия 6 после четырёх сессий улучшения |
+| 161 | [161-google-interview-questionnaire.md](development/161-google-interview-questionnaire.md) | 161. Анкета интервью по Google-процессу (E1-1) — версия 7 после четырёх сессий улучшения |
 | 162 | [162-bot-polls.md](development/162-bot-polls.md) | 162. Опросы в боте: конструктор, адресаты, результаты (E8, дизайн) |
 | 164 | [164-miniapp-home-polls.md](development/164-miniapp-home-polls.md) | 164. Открытые опросы на Главной: адресат видит, что опрос ему назначен (E8-D3, дизайн) |
 
