@@ -217,7 +217,8 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     step = next;
     var host = $("step");
     prepare(host);
-    var when = humanDate(next.closes_at);
+    // Дата — когда опрос закрыли; у закрытого по сроку её место занимает срок.
+    var when = humanDate(next.closed_at || next.closes_at);
     host.appendChild(make("h2", "ui-h2", when
       ? "Опрос закрыт " + when + ", ответы больше не принимаются"
       : "Опрос закрыт, ответы больше не принимаются"));

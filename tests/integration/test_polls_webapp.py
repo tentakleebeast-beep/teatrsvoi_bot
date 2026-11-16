@@ -175,6 +175,12 @@ def test_пройденный_и_закрытый_не_попадают_в_дв�
     assert "опрос закрыт" in groups["closed"][0]["meta"]
     assert first_poll != second_poll
 
+    # Экран вопроса на закрытом прохождении: дата — из `closed_at`, а не из срока.
+    step = client.get(f"/webapp/polls/step?run_id={closed_run}", headers=actor)
+    assert step.status_code == 200, step.text
+    assert step.json()["step"]["closed"] is True
+    assert step.json()["step"]["closed_at"], "дата закрытия не доехала до экрана"
+
 
 def test_multi_выбор_дальше_и_назад_с_обоими(client) -> None:
     """AC-14: два выбранных варианта переживают «Дальше» и видны после «Назад»."""

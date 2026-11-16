@@ -602,7 +602,7 @@ def polls_export(poll_id: int = Query(ge=1), fmt: str = Query(default="csv", ali
 # ----------------------------------------------------------------- диалог в чате
 def _run_or_404(conn, run_id: int, participant_id: int) -> dict:
     row = conn.execute(
-        """select r.*, p.title, p.intro, p.status as poll_status, p.closes_at
+        """select r.*, p.title, p.intro, p.status as poll_status, p.closes_at, p.closed_at
              from poll_run r join poll p on p.id = r.poll_id
             where r.id = %s and r.participant_id = %s""",
         (run_id, participant_id)).fetchone()
@@ -643,6 +643,9 @@ def _step(conn, run: dict, position: int | None = None) -> dict:
             "chosen": chosen, "chosen_text": chosen_text, "number_value": number_value,
             "closed": _closed(poll),
             "closes_at": _iso(run.get("closes_at")),
+            # Когда опрос закрыл организатор: срок `closes_at` у такого опроса может
+            # быть пустым, а подпись «Опрос закрыт 12 ноября» — с датой (164 §12.5).
+            "closed_at": _iso(run.get("closed_at")),
             "done": run["status"] == "done"}
 
 

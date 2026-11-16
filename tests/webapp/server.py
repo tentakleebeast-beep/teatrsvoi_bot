@@ -1967,7 +1967,7 @@ def _stand_step(position: int | None = None) -> dict:
             "chosen": list(POLL_STATE["chosen"].get(question["id"], [])),
             "chosen_text": POLL_STATE["texts"].get(question["id"]),
             "number_value": POLL_STATE["numbers"].get(question["id"]),
-            "closed": POLL_STATE["closed"], "closes_at": None,
+            "closed": POLL_STATE["closed"], "closes_at": None, "closed_at": None,
             "done": POLL_STATE["done"]}
 
 
