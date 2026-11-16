@@ -218,6 +218,28 @@ SCRIPT = """
     node.appendChild(line);
   }
 
+  function pollsEntry(polls) {
+    // Строка-вход «Мои опросы» (E8-D4, docs/development/164 §12.6): опрос адресован
+    // лично, поэтому она стоит выше «Требует внимания», сразу под именем.
+    // Бейдж — только при ненулевом счётчике: «0» на строке ничего не сообщает, а
+    // пройденные должны остаться открываемыми — строка есть при любом прохождении.
+    var section = el("section", "ui-section");
+    section.id = "polls-entry";
+    var list = el("div", "ui-list");
+    var row = document.createElement("a");
+    row.className = "ui-row";
+    row.href = polls.url || "/webapp/polls/mine";
+    var body = el("span", "ui-row__main");
+    body.appendChild(el("span", "ui-row__title", "Мои опросы"));
+    if (polls.meta) { body.appendChild(el("span", "ui-row__meta", polls.meta)); }
+    row.appendChild(body);
+    if (polls.count) { row.appendChild(el("span", "ui-badge", polls.count)); }
+    row.appendChild(el("span", "ui-row__chevron", "\\u203A"));
+    list.appendChild(row);
+    section.appendChild(list);
+    return section;
+  }
+
   function replace(node) {
     var current = main
       ? (main.querySelector("#home-loading") || main.querySelector(".ui-home"))
@@ -237,6 +259,8 @@ SCRIPT = """
   function renderReady(data) {
     var node = root();
     personLines(node, data);
+    // Опрос адресован лично — строка стоит сразу под именем, выше «Требует внимания».
+    if (data.polls) { node.appendChild(pollsEntry(data.polls)); }
     var attention = data.attention || [];
     if (attention.length) { node.appendChild(attentionBlock(attention)); }
     if (data.today && data.today.event) { node.appendChild(todayCard(data.today)); }

@@ -301,7 +301,7 @@ def page_sections() -> tuple[WebappSection, ...]:
     return tuple(section for section in SECTIONS if section.page)
 
 
-#: Права на каждый экран Mini App — все 31 HTML-страница, не только разделы хаба.
+#: Права на каждый экран Mini App — все 36 HTML-страниц, не только разделы хаба.
 #:
 #: Правило владельца (08.11.2026): если действие человеку недоступно, вход в него
 #: не показываем — ни плитку в хабе, ни строку, ни кнопку, ни прямой адрес. Реестр
@@ -334,6 +334,11 @@ SCREEN_CAPS: dict[str, tuple[str, ...]] = {
     # больше, чем у строки в «Управлении»: сводку открывает и получатель результатов.
     "/webapp/polls/edit": ("poll.manage",),
     "/webapp/polls/results": ("poll.results.all", "poll.manage"),
+    # E8-D4: свои прохождения — экран открыт всем (пустой кортеж). Право `poll.manage`
+    # здесь не проверяется: экран показывает только свои прохождения, их отбирает
+    # `participant_id` в `/webapp/polls/mine/data` (docs/development/164 §12.1).
+    "/webapp/polls/mine": (),
+    "/webapp/polls/answer": (),
 }
 
 #: Экраны разделов хаба добавляются из реестра: адрес и право описаны один раз.

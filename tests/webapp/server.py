@@ -32,7 +32,9 @@ from app import webapp_page as pages  # noqa: E402
 from app.pages import files as files_pages  # noqa: E402
 from app.pages import home as home_pages  # noqa: E402
 from app.pages import polls as polls_pages  # noqa: E402
+from app.pages import polls_answer as polls_answer_pages  # noqa: E402
 from app.pages import polls_edit as polls_edit_pages  # noqa: E402
+from app.pages import polls_mine as polls_mine_pages  # noqa: E402
 from app.pages import polls_results as polls_results_pages  # noqa: E402
 from app.pages import services as services_page  # noqa: E402
 
@@ -76,6 +78,9 @@ PAGE_ROUTES = {
     "/webapp/polls": polls_pages.POLLS_PAGE,
     "/webapp/polls/edit": polls_edit_pages.POLL_EDIT_PAGE,
     "/webapp/polls/results": polls_results_pages.POLL_RESULTS_PAGE,
+    # E8-D4: свои прохождения и экран вопроса (docs/development/164 §12.1).
+    "/webapp/polls/mine": polls_mine_pages.POLLS_MINE_PAGE,
+    "/webapp/polls/answer": polls_answer_pages.POLLS_ANSWER_PAGE,
     "/webapp/more": home_pages.MORE_PAGE,
 }
 
@@ -548,7 +553,7 @@ def _caps_of(request: Request) -> list[str]:
             return list(row["caps"])
     return []
 
-app.add_api_route("/webapp/home/data", _data({
+HOME_DATA = ({
     "ok": True, "name": "Тестовый Админ", "role": "admin", "role_label": "администратор",
     "staff": True, "can_record": True,
     "attention": [
@@ -571,7 +576,34 @@ app.add_api_route("/webapp/home/data", _data({
         {"title": "Файлы студии", "meta": "записи, фонограммы, тексты", "url": "/webapp/files"},
         {"title": "Заметки", "meta": "личные и общие, с тегами", "url": "/webapp/notes"},
     ]},
-}), methods=["GET"])
+})
+
+
+# «Мои опросы» на Главной (E8-D4, docs/development/164 §12.6): три формы ответа —
+# нет прохождений, есть открытые, только пройденные. Страница спрашивает
+# `/webapp/home/data` без параметров, поэтому вариант задаётся заголовком
+# `X-SVOI-Polls`: один стенд проверяет все три состояния без перезапуска.
+POLLS_ENTRY = {
+    "open": {"count": 2, "open": 2, "done": 3, "meta": "2 ждут ответа · 3 пройдено",
+             "url": "/webapp/polls/mine"},
+    "one": {"count": 1, "open": 1, "done": 0, "meta": "1 ждёт ответа",
+            "url": "/webapp/polls/mine"},
+    "done": {"count": 0, "open": 0, "done": 1, "meta": "1 пройдено",
+             "url": "/webapp/polls/mine"},
+}
+
+
+@app.get("/webapp/home/data")
+def home_data_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    payload = dict(HOME_DATA)
+    # По умолчанию прохождений нет: остальные экраны стенда сняты без этой строки,
+    # и лишняя строка меняла бы их замеры.
+    key = (request.headers.get("x-svoi-polls") or "").strip().lower()
+    payload["polls"] = POLLS_ENTRY.get(key)
+    return JSONResponse(payload)
 
 @app.post("/webapp/admin/reconcile")
 async def reconcile(request: Request):
@@ -1881,6 +1913,166 @@ def polls_export_stand(request: Request, poll_id: int = 7, format: str = "csv"):
     if format == "md":
         return PlainTextResponse("# Анкета организаторам\n", media_type="text/markdown")
     return PlainTextResponse("\ufeffвопрос;тип;человек;ответ;когда\n", media_type="text/csv")
+
+
+# --- E8-D4: «Мои опросы» и прохождение (docs/development/164 §12.3) -------------
+# Формы ответа сняты с настоящих `_step`/`_advance` (`api/polls.py`), а не придуманы:
+# экран рисует ровно то, что получит на проде. Права `poll.manage` здесь нет —
+# адресат видит свои прохождения без него.
+
+POLL_MINE = {
+    "open": [
+        {"run_id": 12, "poll_id": 1, "title": "Что по опросам?", "status": "invited",
+         "position": 1, "total": 3, "meta": "3 вопроса · не начат",
+         "url": "/webapp/polls/answer?run_id=12"},
+        {"run_id": 13, "poll_id": 1, "title": "Анкета организаторам", "status": "in_progress",
+         "position": 3, "total": 11, "meta": "вопрос 3 из 11 · продолжить",
+         "url": "/webapp/polls/answer?run_id=13"},
+    ],
+    "done": [
+        {"run_id": 9, "poll_id": 3, "title": "Анкета организаторам", "position": 11,
+         "total": 11, "meta": "пройден 14 ноября · 11 из 11"},
+    ],
+    "closed": [
+        {"run_id": 7, "poll_id": 2, "title": "Опрос про зал",
+         "meta": "опрос закрыт 12 ноября"},
+    ],
+}
+
+#: Прохождение стенда: 11 вопросов `_poll_questions()` — все пять типов, у 5-го и
+#: 11-го `required = false`, у 2-го есть свободный ответ.
+POLL_STATE: dict = {}
+
+
+def _polls_reset() -> None:
+    POLL_STATE.clear()
+    POLL_STATE.update({"position": 1, "chosen": {}, "texts": {}, "numbers": {},
+                       "done": False, "closed": False})
+
+
+_polls_reset()
+
+
+def _stand_step(position: int | None = None) -> dict:
+    """Шаг прохождения в форме `_step`: экран вопроса не вычисляет ничего своего."""
+    questions = _poll_questions()
+    total = len(questions)
+    pos = max(1, min(int(position if position is not None else POLL_STATE["position"]), total))
+    question = questions[pos - 1]
+    return {"run_id": 12, "position": pos, "total": total,
+            "title": "Анкета организаторам", "intro": "",
+            "kind": question["kind"], "text": question["text"],
+            "required": question["required"], "free_text": question["free_text"],
+            "max_choices": question["max_choices"], "options": question["options"],
+            "chosen": list(POLL_STATE["chosen"].get(question["id"], [])),
+            "chosen_text": POLL_STATE["texts"].get(question["id"]),
+            "number_value": POLL_STATE["numbers"].get(question["id"]),
+            "closed": POLL_STATE["closed"], "closes_at": None, "closed_at": None,
+            "done": POLL_STATE["done"]}
+
+
+def _stand_advance() -> dict:
+    total = len(_poll_questions())
+    if POLL_STATE["position"] >= total:
+        POLL_STATE["done"] = True
+        return {"ok": True, "closed": False, "done": True, "step": _stand_step(total)}
+    POLL_STATE["position"] += 1
+    return {"ok": True, "closed": False, "done": False, "step": _stand_step()}
+
+
+def _polls_fail(text: str, code: str, status_code: int) -> JSONResponse:
+    return JSONResponse({"detail": text, "code": code}, status_code=status_code)
+
+
+@app.get("/webapp/polls/mine/data")
+def polls_mine_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    # Пусто — «Опросов пока нет»: заголовок `X-SVOI-Polls: none`.
+    if (request.headers.get("x-svoi-polls") or "").strip().lower() == "none":
+        return JSONResponse({"ok": True, "open": [], "done": [], "closed": []})
+    return JSONResponse({"ok": True, **POLL_MINE})
+
+
+@app.get("/webapp/polls/step")
+def polls_step_stand(request: Request, run_id: int = 12, position: int | None = None):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if run_id == 999:
+        return _polls_fail("Прохождение не найдено.", "run_not_found", 404)
+    return JSONResponse({"ok": True, "step": _stand_step(position)})
+
+
+@app.post("/webapp/polls/answer")
+async def polls_answer_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    if body.get("run_id") == 999:
+        return _polls_fail("Прохождение не найдено.", "run_not_found", 404)
+    step = _stand_step(body.get("position"))
+    if POLL_STATE["closed"]:
+        return JSONResponse({"ok": True, "closed": True, "done": False, "step": step})
+    if POLL_STATE["done"]:
+        return JSONResponse({"ok": True, "closed": False, "done": True, "step": step})
+    question = _poll_questions()[step["position"] - 1]
+    qid = question["id"]
+    action = (body.get("action") or "").strip()
+    if action == "o":
+        code = body.get("code") or (body.get("codes") or [""])[0]
+        if question["kind"] == "multi":
+            merged = list(POLL_STATE["chosen"].get(qid, []))
+            if code in merged:
+                merged.remove(code)
+            else:
+                merged.append(code)
+            POLL_STATE["chosen"][qid] = merged
+            return JSONResponse({"ok": True, "closed": False, "done": False,
+                                 "step": _stand_step(step["position"])})
+        POLL_STATE["chosen"][qid] = [code]
+        return JSONResponse(_stand_advance())
+    if action in ("y", "x"):
+        POLL_STATE["chosen"][qid] = ["y" if action == "y" else "n"]
+        return JSONResponse(_stand_advance())
+    if action == "s":
+        if question["required"]:
+            return _polls_fail("Этот вопрос обязательный: его нельзя пропустить.",
+                               "required_question", 409)
+        POLL_STATE["chosen"][qid] = []
+        return JSONResponse(_stand_advance())
+    if action == "b":
+        POLL_STATE["position"] = max(1, step["position"] - 1)
+        return JSONResponse({"ok": True, "closed": False, "done": False,
+                             "step": _stand_step()})
+    if action == "n":
+        if not POLL_STATE["chosen"].get(qid):
+            return _polls_fail("Сначала выберите варианты.", "no_choice", 409)
+        return JSONResponse(_stand_advance())
+    if action == "text":
+        text = (body.get("text") or "").strip()
+        if not text:
+            return _polls_fail("Пустой ответ.", "empty_text", 400)
+        if question["kind"] == "number":
+            try:
+                POLL_STATE["numbers"][qid] = float(text.replace(",", "."))
+            except ValueError:
+                return JSONResponse({"ok": True, "closed": False, "done": False,
+                                     "retry": True, "message": "Не понял число. Например: 4",
+                                     "step": _stand_step(step["position"])})
+            return JSONResponse(_stand_advance())
+        POLL_STATE["texts"][qid] = text
+        return JSONResponse(_stand_advance())
+    return _polls_fail("Неизвестное действие.", "bad_action", 400)
+
+
+@app.post("/__polls/reset")
+def polls_reset_stand():
+    """Сброс прохождения стенда: один стенд на сессию, тесты идут по очереди."""
+    _polls_reset()
+    return {"ok": True}
 
 
 def dump_state() -> str:

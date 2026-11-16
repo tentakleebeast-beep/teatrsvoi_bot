@@ -8,7 +8,7 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import Response
 
-from .. import core, notification_store, ui_texts
+from .. import core, notification_store, poll_store, ui_texts
 from ..errors import ApiError
 from ..external import DB_ERRORS, GOOGLE_API_ERRORS
 from ..notifications import resolve_settings
@@ -289,6 +289,25 @@ def attention_rows(caps, counts: dict[str, int]) -> list[dict]:
     return rows
 
 
+def _polls_block(conn, participant_id: int) -> dict | None:
+    """Строка-вход «Мои опросы» для Главной: счётчики и подпись (docs/164 §12.2).
+
+    Считается тем же `poll_store.my_runs`, а не отдельным `count(*)`: два запроса
+    разошлись бы в том, что считать открытым. `count` — открытые непройденные, он
+    идёт бейджем; `polls = null` — у человека нет ни одного прохождения, и строка
+    ему не нужна (как `debt = null`).
+    """
+    runs = poll_store.my_runs(conn, participant_id)
+    if not runs:
+        return None
+    grouped = poll_store.groups(runs)
+    open_count = len(grouped["open"])
+    done_count = len(grouped["done"])
+    return {"count": open_count, "open": open_count, "done": done_count,
+            "meta": poll_store.entry_meta({"open": open_count, "done": done_count}),
+            "url": "/webapp/polls/mine"}
+
+
 @router.get("/webapp/home/data")
 def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
     """Данные «Главной» и «Управления» одним ответом (контракт — в pages/home.py).
@@ -310,6 +329,7 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
                 "select count(*) as n from feedback where status in ('new', 'seen', 'planned')"
             ).fetchone()["n"]
         week = _week_block(conn, who["id"])
+        polls = _polls_block(conn, who["id"])
 
     attention = attention_rows(caps, counts)
     management = management_rows(caps, counts)
@@ -345,6 +365,9 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
         "today": _today_block(),
         "week": week,
         "debt": debt,
+        # «Мои опросы»: строка-вход на Главной и счётчик бейджа (docs/164 §12.6).
+        # `null` — у человека нет ни одного прохождения: узла в DOM не будет вовсе.
+        "polls": polls,
         "more": {"management": management, "personal": personal_rows(caps)},
         "counts": counts,
     }

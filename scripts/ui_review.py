@@ -110,6 +110,9 @@ SCREEN_LABELS: dict[str, tuple[int, str, str]] = {
     "/webapp/polls": (32, "polls", "Опросы"),
     "/webapp/polls/edit": (33, "polls-edit", "Конструктор опроса"),
     "/webapp/polls/results": (34, "polls-results", "Результаты опроса"),
+    # E8-D4: свои прохождения и экран вопроса (docs/development/164 §12.1).
+    "/webapp/polls/mine": (35, "polls-mine", "Мои опросы"),
+    "/webapp/polls/answer": (36, "polls-answer", "Вопрос опроса"),
 }
 
 # Редиректы: старый адрес → новый, критерий А10 «301 и цель открывается».
@@ -354,7 +357,7 @@ def screen_slug(path: str) -> str:
 
 
 def build_inventory() -> list[str]:
-    """Список 34 экранов в порядке чек-листа 141 §2."""
+    """Список 36 экранов в порядке чек-листа 141 §2."""
     screens = inventory_from_code()
     order = sorted(screens, key=lambda p: (SCREEN_LABELS.get(p, (999, "", ""))[0], p))
     return order

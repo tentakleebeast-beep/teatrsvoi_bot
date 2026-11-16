@@ -36,7 +36,8 @@ def review():
 def test_инвентарь_из_кода_совпадает_со_стендом(review):
     inventory = review.build_inventory()
     stand = set(review.stand_inventory())
-    assert len(inventory) == 34, f"экранов {len(inventory)}, а в чек-листе 34"
+    # 34 → 36 на 16.11.2026: «Мои опросы» и экран вопроса (E8-D4, docs/development/164 §12.1).
+    assert len(inventory) == 36, f"экранов {len(inventory)}, а в чек-листе 36"
     assert set(inventory) == stand, "код и стенд описывают разные экраны"
     assert review.verify_inventory() == 0
 
@@ -46,9 +47,9 @@ def test_у_каждого_экрана_есть_номер_чеклиста(rev
     assert inventory == set(review.SCREEN_LABELS), (
         "нет номера: " + ", ".join(sorted(inventory - set(review.SCREEN_LABELS))))
     numbers = [value[0] for value in review.SCREEN_LABELS.values()]
-    assert sorted(numbers) == list(range(1, 35)), "номера идут не подряд 1…34"
+    assert sorted(numbers) == list(range(1, 37)), "номера идут не подряд 1…36"
     slugs = [value[1] for value in review.SCREEN_LABELS.values()]
-    assert len(set(slugs)) == 34, "имена снимков повторяются"
+    assert len(set(slugs)) == 36, "имена снимков повторяются"
 
 
 def test_десять_экранов_которых_нет_в_ux_audit(review):

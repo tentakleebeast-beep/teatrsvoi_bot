@@ -602,7 +602,7 @@ def polls_export(poll_id: int = Query(ge=1), fmt: str = Query(default="csv", ali
 # ----------------------------------------------------------------- диалог в чате
 def _run_or_404(conn, run_id: int, participant_id: int) -> dict:
     row = conn.execute(
-        """select r.*, p.title, p.intro, p.status as poll_status, p.closes_at
+        """select r.*, p.title, p.intro, p.status as poll_status, p.closes_at, p.closed_at
              from poll_run r join poll p on p.id = r.poll_id
             where r.id = %s and r.participant_id = %s""",
         (run_id, participant_id)).fetchone()
@@ -643,16 +643,26 @@ def _step(conn, run: dict, position: int | None = None) -> dict:
             "chosen": chosen, "chosen_text": chosen_text, "number_value": number_value,
             "closed": _closed(poll),
             "closes_at": _iso(run.get("closes_at")),
+            # Когда опрос закрыл организатор: срок `closes_at` у такого опроса может
+            # быть пустым, а подпись «Опрос закрыт 12 ноября» — с датой (164 §12.5).
+            "closed_at": _iso(run.get("closed_at")),
             "done": run["status"] == "done"}
 
 
 def _set_position(conn, run: dict, position: int, *, done: bool = False) -> None:
+    """Сдвинуть прохождение и отменить отложенное приглашение (V-096).
+
+    Отмена живёт здесь, а не в обработчике ответа: шаг из чата проходит через ту же
+    функцию, и для чата это пустая операция — приглашение уже `sent`. Правило одно
+    независимо от входа.
+    """
     conn.execute(
         """update poll_run set position = %s, status = %s, updated_at = now(),
                   started_at = coalesce(started_at, now()),
                   finished_at = case when %s then now() else finished_at end
             where id = %s""",
         (position, "done" if done else "in_progress", done, run["id"]))
+    poll_store.cancel_invites(conn, run["id"], run["participant_id"])
 
 
 def _save_answer(conn, run: dict, question: dict, *, codes: list[str],
@@ -673,16 +683,19 @@ def _save_answer(conn, run: dict, question: dict, *, codes: list[str],
 
 @router.get("/tools/polls/mine")
 def polls_mine(who: dict = Depends(core.current)) -> dict:
-    """Незаконченные прохождения человека — для кнопки «Опросы» и «Продолжить» (D4)."""
+    """Незаконченные прохождения человека — для кнопки «Опросы» и «Продолжить» (D4).
+
+    Чтение одно на три потребителя (`poll_store.my_runs`, docs/development/164 §12.2),
+    а отбор здесь свой и прежний: только открытые опросы и прежний набор полей —
+    иначе чат увидел бы пройденные (регресс AC-18).
+    """
     with core.pool.connection() as conn:
-        rows = conn.execute(
-            """select r.id as run_id, r.status, r.position, p.id as poll_id, p.title,
-                      (select count(*) from poll_question q where q.poll_id = p.id) as total
-                 from poll_run r join poll p on p.id = r.poll_id
-                where r.participant_id = %s and p.status = 'running'
-                  and r.status in ('invited', 'in_progress')
-                order by p.created_at desc""", (who["id"],)).fetchall()
-    return {"ok": True, "runs": [dict(row) for row in rows]}
+        runs = poll_store.my_runs(conn, who["id"])
+    return {"ok": True, "runs": [
+        {"run_id": run["run_id"], "status": run["status"], "position": run["position"],
+         "poll_id": run["poll_id"], "title": run["title"], "total": run["total"]}
+        for run in runs
+        if run["status"] in ("invited", "in_progress") and run["poll_status"] == "running"]}
 
 
 @router.get("/tools/polls/step")
@@ -705,108 +718,129 @@ class PollAnswerIn(core.ApiIn):
 
 @router.post("/tools/polls/answer")
 def polls_answer(body: PollAnswerIn, who: dict = Depends(core.current)) -> dict:
+    """Шаг ответа из чата: та же логика шага, что у приложения (D5, AC-13)."""
+    with core.pool.connection() as conn:
+        return _apply_answer(conn, who, body)
+
+
+@router.post("/webapp/polls/answer")
+def webapp_polls_answer(body: PollAnswerIn, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Шаг ответа из Mini App: тот же `_apply_answer`, другой вход (docs/164 §12.3).
+
+    Адрес отдельный не по вкусу: `/tools/polls/*` закрыт сервисным токеном и
+    заголовком `X-Actor-Chat-Id`, а у браузера вход другой — `webapp_actor`.
+    Второй обработчик ответа означал бы два поведения на один опрос.
+    """
+    with core.pool.connection() as conn:
+        return _apply_answer(conn, who, body)
+
+
+def _apply_answer(conn, who: dict, body: PollAnswerIn) -> dict:
     """Шаг ответа: выбор, «Дальше», «Да/Нет», «Назад», «Пропустить», свободный ввод.
 
     Шаг не идёт через очередь уведомлений: человек только что нажал кнопку, значит
     это ответ на его действие, а не неожиданное сообщение (D5, AC-13).
+
+    `who` — человек, чьё прохождение двигаем: и чат (`core.current`), и приложение
+    (`core.webapp_actor`) отдают `id` участника, а `_run_or_404` отбирает по нему —
+    поэтому чужой `run_id` получает `404 run_not_found` из обоих входов.
     """
-    with core.pool.connection() as conn:
-        run = _run_or_404(conn, body.run_id, who["id"])
-        step = _step(conn, run, body.position)
-        if step["closed"]:
-            return {"ok": True, "closed": True, "done": False, "step": step}
-        if step["done"]:
-            return {"ok": True, "closed": False, "done": True, "step": step}
-        questions = _questions(conn, run["poll_id"])
-        question = next((item for item in questions if item["position"] == step["position"]),
-                        None)
-        if question is None:
-            raise ApiError(status.HTTP_409_CONFLICT, "Вопрос не найден.",
-                           code="bad_position")
-        action = (body.action or "").strip()
-        codes = list(body.codes or [])
-        if body.code:
-            codes = [body.code]
-        if action in ("o", "choose"):
-            if question["kind"] not in ("single", "multi", "yesno"):
-                raise ApiError(status.HTTP_400_BAD_REQUEST, "У вопроса нет вариантов.",
-                               code="bad_action")
-            if question["kind"] == "multi":
-                current = conn.execute(
-                    "select option_codes from poll_answer where run_id=%s and question_id=%s",
-                    (run["id"], question["id"])).fetchone()
-                merged = list((current["option_codes"] if current else []) or [])
-                for code in codes:
-                    merged = poll_store.merge_choice(
-                        "multi", merged, code,
-                        allowed=[option["code"] for option in question["options"]],
-                        max_choices=question["max_choices"])
-                text_value = None
-                existing = conn.execute(
-                    "select text_value from poll_answer where run_id=%s and question_id=%s",
-                    (run["id"], question["id"])).fetchone()
-                if existing:
-                    text_value = existing["text_value"]
-                _save_answer(conn, run, question, codes=merged, text_value=text_value,
-                             number_value=None, skipped=False)
-                return {"ok": True, "closed": False, "done": False,
-                        "step": _step(conn, run, step["position"])}
-            _save_answer(conn, run, question, codes=codes, text_value=None,
-                         number_value=None, skipped=False)
-            return _advance(conn, run, question, questions, step["position"])
-        if action in ("y", "yes", "x", "no"):
-            code = "y" if action in ("y", "yes") else "n"
-            _save_answer(conn, run, question, codes=[code], text_value=None,
-                         number_value=None, skipped=False)
-            return _advance(conn, run, question, questions, step["position"])
-        if action in ("s", "skip"):
-            if question["required"]:
-                raise ApiError(status.HTTP_409_CONFLICT,
-                               "Этот вопрос обязательный: его нельзя пропустить.",
-                               code="required_question")
-            _save_answer(conn, run, question, codes=[], text_value=None,
-                         number_value=None, skipped=True)
-            return _advance(conn, run, question, questions, step["position"])
-        if action in ("b", "back"):
-            position = max(1, step["position"] - 1)
-            _set_position(conn, run, position)
-            return {"ok": True, "closed": False, "done": False,
-                    "step": _step(conn, run, position)}
-        if action in ("n", "next"):
-            existing = conn.execute(
-                "select option_codes, text_value from poll_answer "
-                "where run_id=%s and question_id=%s", (run["id"], question["id"])).fetchone()
-            if existing is None:
-                raise ApiError(status.HTTP_409_CONFLICT, "Сначала выберите варианты.",
-                               code="no_choice")
-            return _advance(conn, run, question, questions, step["position"])
-        if action in ("text", "free"):
-            text = (body.text or "").strip()
-            if not text:
-                raise ApiError(status.HTTP_400_BAD_REQUEST, "Пустой ответ.",
-                               code="empty_text")
-            if question["kind"] == "number":
-                number = poll_store.parse_number(text)
-                if number is None:
-                    return {"ok": True, "closed": False, "done": False,
-                            "retry": True, "message": "Не понял число. Например: 4",
-                            "step": _step(conn, run, step["position"])}
-                _save_answer(conn, run, question, codes=[], text_value=None,
-                             number_value=number, skipped=False)
-                return _advance(conn, run, question, questions, step["position"])
-            if question["kind"] in ("single", "multi") and not question["free_text"]:
-                raise ApiError(status.HTTP_409_CONFLICT,
-                               "У вопроса нет свободного ответа.", code="bad_action")
-            existing = conn.execute(
+    run = _run_or_404(conn, body.run_id, who["id"])
+    step = _step(conn, run, body.position)
+    if step["closed"]:
+        return {"ok": True, "closed": True, "done": False, "step": step}
+    if step["done"]:
+        return {"ok": True, "closed": False, "done": True, "step": step}
+    questions = _questions(conn, run["poll_id"])
+    question = next((item for item in questions if item["position"] == step["position"]),
+                    None)
+    if question is None:
+        raise ApiError(status.HTTP_409_CONFLICT, "Вопрос не найден.",
+                       code="bad_position")
+    action = (body.action or "").strip()
+    codes = list(body.codes or [])
+    if body.code:
+        codes = [body.code]
+    if action in ("o", "choose"):
+        if question["kind"] not in ("single", "multi", "yesno"):
+            raise ApiError(status.HTTP_400_BAD_REQUEST, "У вопроса нет вариантов.",
+                           code="bad_action")
+        if question["kind"] == "multi":
+            current = conn.execute(
                 "select option_codes from poll_answer where run_id=%s and question_id=%s",
                 (run["id"], question["id"])).fetchone()
-            codes = list((existing["option_codes"] if existing else []) or [])
-            _save_answer(conn, run, question, codes=codes,
-                         text_value=poll_store.clean_text(text, limit=2000),
+            merged = list((current["option_codes"] if current else []) or [])
+            for code in codes:
+                merged = poll_store.merge_choice(
+                    "multi", merged, code,
+                    allowed=[option["code"] for option in question["options"]],
+                    max_choices=question["max_choices"])
+            text_value = None
+            existing = conn.execute(
+                "select text_value from poll_answer where run_id=%s and question_id=%s",
+                (run["id"], question["id"])).fetchone()
+            if existing:
+                text_value = existing["text_value"]
+            _save_answer(conn, run, question, codes=merged, text_value=text_value,
                          number_value=None, skipped=False)
+            return {"ok": True, "closed": False, "done": False,
+                    "step": _step(conn, run, step["position"])}
+        _save_answer(conn, run, question, codes=codes, text_value=None,
+                     number_value=None, skipped=False)
+        return _advance(conn, run, question, questions, step["position"])
+    if action in ("y", "yes", "x", "no"):
+        code = "y" if action in ("y", "yes") else "n"
+        _save_answer(conn, run, question, codes=[code], text_value=None,
+                     number_value=None, skipped=False)
+        return _advance(conn, run, question, questions, step["position"])
+    if action in ("s", "skip"):
+        if question["required"]:
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "Этот вопрос обязательный: его нельзя пропустить.",
+                           code="required_question")
+        _save_answer(conn, run, question, codes=[], text_value=None,
+                     number_value=None, skipped=True)
+        return _advance(conn, run, question, questions, step["position"])
+    if action in ("b", "back"):
+        position = max(1, step["position"] - 1)
+        _set_position(conn, run, position)
+        return {"ok": True, "closed": False, "done": False,
+                "step": _step(conn, run, position)}
+    if action in ("n", "next"):
+        existing = conn.execute(
+            "select option_codes, text_value from poll_answer "
+            "where run_id=%s and question_id=%s", (run["id"], question["id"])).fetchone()
+        if existing is None:
+            raise ApiError(status.HTTP_409_CONFLICT, "Сначала выберите варианты.",
+                           code="no_choice")
+        return _advance(conn, run, question, questions, step["position"])
+    if action in ("text", "free"):
+        text = (body.text or "").strip()
+        if not text:
+            raise ApiError(status.HTTP_400_BAD_REQUEST, "Пустой ответ.",
+                           code="empty_text")
+        if question["kind"] == "number":
+            number = poll_store.parse_number(text)
+            if number is None:
+                return {"ok": True, "closed": False, "done": False,
+                        "retry": True, "message": "Не понял число. Например: 4",
+                        "step": _step(conn, run, step["position"])}
+            _save_answer(conn, run, question, codes=[], text_value=None,
+                         number_value=number, skipped=False)
             return _advance(conn, run, question, questions, step["position"])
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Неизвестное действие.",
-                       code="bad_action")
+        if question["kind"] in ("single", "multi") and not question["free_text"]:
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "У вопроса нет свободного ответа.", code="bad_action")
+        existing = conn.execute(
+            "select option_codes from poll_answer where run_id=%s and question_id=%s",
+            (run["id"], question["id"])).fetchone()
+        codes = list((existing["option_codes"] if existing else []) or [])
+        _save_answer(conn, run, question, codes=codes,
+                     text_value=poll_store.clean_text(text, limit=2000),
+                     number_value=None, skipped=False)
+        return _advance(conn, run, question, questions, step["position"])
+    raise ApiError(status.HTTP_400_BAD_REQUEST, "Неизвестное действие.",
+                   code="bad_action")
 
 
 def _advance(conn, run: dict, question: dict, questions: list[dict], position: int) -> dict:
@@ -821,3 +855,46 @@ def _advance(conn, run: dict, question: dict, questions: list[dict], position: i
     updated = _run_or_404(conn, run["id"], run["participant_id"])
     return {"ok": True, "closed": False, "done": False,
             "step": _step(conn, updated, position + 1)}
+
+
+# ------------------------------------------------- «Мои опросы» в Mini App (E8-D4)
+# Адреса отдельные от `/tools/polls/*`: те закрыты сервисным токеном и заголовком
+# `X-Actor-Chat-Id` (core.py:331-340), а у браузера вход другой — `webapp_actor`.
+# Права `poll.manage` здесь нет намеренно: экран показывает только свои прохождения,
+# и отбирает их `participant_id`, а не возможность (docs/development/164 §12.1, §12.8).
+
+def _mine_row(run: dict, group: str) -> dict:
+    """Строка списка в форме ответа: у открытых есть адрес, у остальных только подпись."""
+    row = {"run_id": run["run_id"], "poll_id": run["poll_id"], "title": run["title"],
+           "meta": poll_store.run_meta(run)}
+    if group == "open":
+        row.update({"status": run["status"], "position": run["position"],
+                    "total": run["total"],
+                    "url": f"/webapp/polls/answer?run_id={run['run_id']}"})
+    elif group == "done":
+        row.update({"position": run["position"], "total": run["total"]})
+    return row
+
+
+@router.get("/webapp/polls/mine/data")
+def webapp_polls_mine_data(who: dict = Depends(core.webapp_actor)) -> dict:
+    """Три группы «Моих опросов»: ждут ответа, пройденные, закрытые (docs/164 §12.3)."""
+    with core.pool.connection() as conn:
+        runs = poll_store.my_runs(conn, who["id"])
+    grouped = poll_store.groups(runs)
+    return {"ok": True,
+            **{group: [_mine_row(run, group) for run in grouped[group]]
+               for group in ("open", "done", "closed")}}
+
+
+@router.get("/webapp/polls/step")
+def webapp_polls_step(run_id: int = Query(ge=1), position: int | None = Query(default=None),
+                      who: dict = Depends(core.webapp_actor)) -> dict:
+    """Текущий вопрос прохождения из приложения: форма шага та же, что у чата.
+
+    `position` в адресе страницы нет — он живёт в `poll_run.position`: перезапуск
+    Mini App возвращает человека на тот же вопрос (AC-17).
+    """
+    with core.pool.connection() as conn:
+        run = _run_or_404(conn, run_id, who["id"])
+        return {"ok": True, "step": _step(conn, run, position)}

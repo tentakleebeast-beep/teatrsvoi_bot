@@ -27,6 +27,8 @@
                 "event": {"time": "19:00", "title": "Репетиция", "place": "Зал"}},
       "week": {"title": "26 октября — 1 ноября", "marked": 4, "days": 7},
       "debt": {"period": "октябрь 2026", "rest": 3000, "due": 5000},
+      "polls": {"count": 2, "open": 2, "done": 3, "meta": "2 ждут ответа · 3 пройдено",
+                "url": "/webapp/polls/mine"},
       "can_record": true,
       "more": {"management": [{"title": "Заявки", "meta": "ждут решения",
                                "url": "/webapp/admin/t/pending", "count": 2}],

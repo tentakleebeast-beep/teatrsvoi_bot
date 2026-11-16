@@ -9,6 +9,8 @@ AC-2 (`docs/development/162-bot-polls.md` §14.7): опрос с пятью ти
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 from app import poll_store
 
@@ -88,3 +90,105 @@ def test_число_принимается_с_запятой_и_точкой():
     assert poll_store.parse_number("четыре") is None
     assert poll_store.parse_number("") is None
     assert poll_store.parse_number("NaN") is None
+
+
+# --- «Мои опросы»: одно чтение и подписи (E8-D4, docs/development/164 §12.2) ----
+
+NOW = datetime(2026, 11, 16, 12, 0, tzinfo=UTC)
+
+
+def _run(**overrides) -> dict:
+    item = {"run_id": 12, "poll_id": 1, "title": "Что по опросам?", "status": "invited",
+            "position": 1, "total": 3, "poll_status": "running",
+            "closes_at": None, "closed_at": None, "finished_at": None}
+    item.update(overrides)
+    return item
+
+
+class _FakeConn:
+    """Соединение-пустышка: проверяем текст запроса, а не Postgres (он в integration)."""
+
+    def __init__(self, rows=()):
+        self.rows = list(rows)
+        self.sql = ""
+        self.params = None
+
+    def execute(self, sql, params=None):
+        self.sql = " ".join(sql.split())
+        self.params = params
+        return self
+
+    def fetchall(self):
+        return self.rows
+
+
+def test_чтение_одно_и_без_фильтра_по_статусу():
+    """Один `select` на три потребителя: фильтруют они, а не запрос (D5)."""
+    conn = _FakeConn(rows=[_run(), _run(run_id=9, status="done")])
+    runs = poll_store.my_runs(conn, 42)
+    assert [run["run_id"] for run in runs] == [12, 9]
+    assert "participant_id = %s" in conn.sql and conn.params == (42,)
+    assert "order by p.created_at desc, r.id" in conn.sql
+    # Условий по статусу прохождения и опроса в запросе нет — иначе чат и
+    # приложение разошлись бы в том, какой опрос считать открытым.
+    assert "r.status in" not in conn.sql and "p.status =" not in conn.sql
+
+
+def test_группы_раскладывают_прохождения_по_одной_строке():
+    runs = [
+        _run(run_id=1),
+        _run(run_id=2, status="in_progress", position=3, total=11),
+        _run(run_id=3, status="done", position=11, total=11,
+             finished_at=datetime(2026, 11, 14, 18, 0, tzinfo=UTC)),
+        _run(run_id=4, poll_status="closed", closed_at=datetime(2026, 11, 12, 9, 0, tzinfo=UTC)),
+        _run(run_id=5, closes_at=datetime(2026, 11, 10, 9, 0, tzinfo=UTC)),
+        _run(run_id=6, status="declined"),
+        # Пройденный опрос, закрытый потом: для человека он остаётся пройденным.
+        _run(run_id=7, status="done", poll_status="closed"),
+    ]
+    grouped = poll_store.groups(runs, NOW)
+    assert [run["run_id"] for run in grouped["open"]] == [1, 2]
+    assert [run["run_id"] for run in grouped["done"]] == [3, 7]
+    assert [run["run_id"] for run in grouped["closed"]] == [4, 5, 6]
+
+
+def test_подпись_открытого_различает_не_начат_и_продолжить():
+    """`invited` и `in_progress` различаются словами, а не цветом (AC-2)."""
+    assert poll_store.run_meta(_run(total=3), NOW) == "3 вопроса · не начат"
+    assert poll_store.run_meta(_run(total=1), NOW) == "1 вопрос · не начат"
+    assert poll_store.run_meta(_run(total=5), NOW) == "5 вопросов · не начат"
+    assert poll_store.run_meta(_run(status="in_progress", position=3, total=11),
+                               NOW) == "вопрос 3 из 11 · продолжить"
+
+
+def test_подпись_пройденного_и_закрытого_с_датой():
+    done = _run(status="done", position=11, total=11,
+                finished_at=datetime(2026, 11, 14, 18, 0, tzinfo=UTC))
+    assert poll_store.run_meta(done, NOW) == "пройден 14 ноября · 11 из 11"
+    closed = _run(poll_status="closed", closed_at=datetime(2026, 11, 12, 9, 0, tzinfo=UTC))
+    assert poll_store.run_meta(closed, NOW) == "опрос закрыт 12 ноября"
+    # Закрыт по сроку: дата берётся из срока, отдельного `closed_at` нет.
+    expired = _run(closes_at=datetime(2026, 11, 12, 9, 0, tzinfo=UTC))
+    assert poll_store.run_meta(expired, NOW) == "опрос закрыт 12 ноября"
+    # Резерв `declined` — без даты: её у такого прохождения нет.
+    assert poll_store.run_meta(_run(status="declined"), NOW) == "опрос закрыт"
+
+
+def test_подпись_входа_на_главной_без_нулевых_частей():
+    """«2 ждут ответа · 3 пройдено»; нулевая часть не печатается (AC-1, AC-4)."""
+    assert poll_store.entry_meta({"open": 2, "done": 3}) == "2 ждут ответа · 3 пройдено"
+    assert poll_store.entry_meta({"open": 1, "done": 0}) == "1 ждёт ответа"
+    assert poll_store.entry_meta({"open": 5, "done": 1}) == "5 ждут ответа · 1 пройдено"
+    assert poll_store.entry_meta({"open": 0, "done": 1}) == "1 пройдено"
+    assert poll_store.entry_meta({"open": 0, "done": 0}) == ""
+
+
+def test_отмена_приглашения_трогает_только_неотправленное():
+    """V-096: `scheduled`/`failed` без `sent_at` — в `cancelled`, остальное не трогаем."""
+    conn = _FakeConn()
+    poll_store.cancel_invites(conn, 12, 42)
+    assert "update notification set status = 'cancelled'" in conn.sql
+    assert "sent_at is null" in conn.sql
+    assert "status in ('scheduled', 'failed')" in conn.sql
+    assert "payload->>'run_id' = %s" in conn.sql
+    assert conn.params == (42, "12")
