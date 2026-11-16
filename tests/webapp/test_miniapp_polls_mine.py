@@ -74,6 +74,25 @@ def _tap_targets(page) -> None:
     assert not small, "целей нажатия меньше 44 px: " + "; ".join(small)
 
 
+def _choose(page, name: str, chosen: int) -> None:
+    """Нажать вариант и дождаться, что он выбран.
+
+    Список вариантов перерисовывается целиком (`replaceChild` в `polls_answer.py`),
+    поэтому клик, попавший в узел перед заменой, теряется — в CI на webkit это
+    ловилось как таймаут. Повторяем клик, пока состояние не совпадёт.
+    """
+    for _ in range(3):
+        page.get_by_role("button", name=name).click()
+        try:
+            page.wait_for_function(
+                f"() => document.querySelectorAll('#step button.ui-btn--primary').length === {chosen}",
+                timeout=3_000)
+            return
+        except Exception:  # noqa: BLE001 — клик потерян, повторяем
+            continue
+    raise AssertionError(f"вариант «{name}» не выбрался: ждали {chosen} выбранных")
+
+
 def test_строка_ведёт_в_список_своих_опросов(app_page) -> None:
     """AC-1, AC-2: бейдж «1», подпись «1 ждёт ответа», переход в «Ждут ответа»."""
     page = app_page("/webapp/home", headers={"X-SVOI-Polls": "one"})
@@ -187,12 +206,8 @@ def test_вопрос_один_шаг_и_переход_вперёд(app_page, w
     page.get_by_role("button", name="Расписание студийской таблицы").click()
     page.wait_for_selector("#step:has-text('вопрос 2 из 11')", timeout=10_000)
 
-    page.get_by_role("button", name="Календарь").click()
-    page.wait_for_selector("#step button.ui-btn--primary", timeout=10_000)
-    page.get_by_role("button", name="Звонки").click()
-    page.wait_for_function(
-        "() => document.querySelectorAll('#step button.ui-btn--primary').length === 2",
-        timeout=10_000)
+    _choose(page, "Календарь", 1)
+    _choose(page, "Звонки", 2)
     page.get_by_role("button", name="Дальше").click()
     page.wait_for_selector("#step:has-text('вопрос 3 из 11')", timeout=10_000)
     # У вопроса да/нет — две кнопки, и «Назад» уже есть.
@@ -209,8 +224,7 @@ def test_число_не_понял_и_пропуск_у_необязатель�
     # До вопроса 4 (число) доходим ответами: single, multi, да/нет.
     page.get_by_role("button", name="Расписание студийской таблицы").click()
     page.wait_for_selector("#step:has-text('вопрос 2 из 11')", timeout=10_000)
-    page.get_by_role("button", name="Календарь").click()
-    page.wait_for_selector("#step button.ui-btn--primary", timeout=10_000)
+    _choose(page, "Календарь", 1)
     page.get_by_role("button", name="Дальше").click()
     page.wait_for_selector("#step:has-text('вопрос 3 из 11')", timeout=10_000)
     page.get_by_role("button", name="Да").click()
