@@ -53,6 +53,7 @@ _BODY = """
 _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
   var $ = function (id) { return document.getElementById(id); };
   tgBoot();
+  var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
   var KIND_TITLE = { single: "один из списка", multi: "несколько", yesno: "да/нет",
                      number: "число", text: "текст" };
 
@@ -142,6 +143,32 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     return block;
   }
 
+  /* Экспорт: сначала ссылка (право проверяет сервер), потом браузер телефона.
+     `href` на файл не годится: переход верхнего уровня в WKWebView не несёт
+     Authorization, и человек получал JSON 401 вместо файла (обращение №44). */
+  function exportFile(kind) {
+    var pollId = pollIdFromUrl();
+    if (!pollId) { showError("Не выбран опрос."); return; }
+    api("/webapp/polls/export/link?poll_id=" + pollId + "&format=" + kind)
+      .then(function (res) {
+        if (res.status !== 200) {
+          showError("Не получилось подготовить файл. Повторите позже.");
+          return;
+        }
+        var url = (res.body && res.body.url) || "";
+        if (url.charAt(0) === "/") { url = window.location.origin + url; }
+        if (tg && tg.openLink) { tg.openLink(url); return; }
+        window.open(url, "_blank");
+      });
+  }
+
+  ["csv", "md"].forEach(function (kind) {
+    $(kind).addEventListener("click", function (event) {
+      event.preventDefault();
+      exportFile(kind);
+    });
+  });
+
   async function load() {
     var pollId = pollIdFromUrl();
     if (!pollId) { showError("Не выбран опрос."); return; }
@@ -181,9 +208,6 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
       row.appendChild(main);
       missedHost.appendChild(row);
     });
-
-    $("csv").href = "/webapp/polls/export?poll_id=" + pollId + "&format=csv";
-    $("md").href = "/webapp/polls/export?poll_id=" + pollId + "&format=md";
 
     /* Закрытие — не удаление: строки остаются, ответы больше не принимаются (D10).
        Кнопка только у идущего опроса: у закрытого действие уже сделано. */

@@ -24,11 +24,12 @@ import json
 from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, Query, status
-from fastapi.responses import Response
+from fastapi.responses import HTMLResponse, Response
 from pydantic import Field
 
-from .. import core, files_store, poll_store
+from .. import core, files_store, poll_store, webapp
 from ..errors import ApiError
+from ..webapp import InitDataError
 
 router = APIRouter()
 
@@ -567,10 +568,36 @@ def polls_results_data(poll_id: int = Query(ge=1),
             "questions": out, "not_answered": not_answered}
 
 
-@router.get("/webapp/polls/export")
-def polls_export(poll_id: int = Query(ge=1), fmt: str = Query(default="csv", alias="format"),
-                 who: dict = Depends(core.webapp_actor)) -> Response:
-    """Файл результатов: CSV для таблицы, Markdown для журнала исследования (V-090: скачивание)."""
+LINK_EXPIRED_PAGE = """<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Ссылка устарела</title>
+</head>
+<body style="margin:0;padding:24px;font-family:-apple-system,system-ui,sans-serif;line-height:1.5">
+<h1 style="font-size:20px;margin:0 0 12px">Ссылка устарела, откройте результаты заново</h1>
+<p style="margin:0;color:#555">Файл выдаётся по короткой ссылке на 15 минут. Вернитесь в Mini App,
+откройте результаты опроса и нажмите «Экспорт» ещё раз.</p>
+</body>
+</html>
+"""
+
+
+def _link_expired_response() -> HTMLResponse:
+    """Отказ по ссылке — страницей со словами, а не JSON: её показывает браузер телефона."""
+    return HTMLResponse(LINK_EXPIRED_PAGE, status_code=status.HTTP_401_UNAUTHORIZED,
+                        headers={"Cache-Control": "no-store"})
+
+
+@router.get("/webapp/polls/export/link")
+def polls_export_link(poll_id: int = Query(ge=1), fmt: str = Query(default="csv", alias="format"),
+                      who: dict = Depends(core.webapp_actor)) -> dict:
+    """Короткая ссылка на файл результатов: право проверяется здесь, а не в браузере.
+
+    Ссылку открывает `tg.openLink` — браузер телефона не присылает Authorization,
+    поэтому `polls_export` верит подписи этой ссылки (15 минут, предмет внутри).
+    """
     if fmt not in ("csv", "md"):
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Формат: csv или md.",
                        code="bad_format")
@@ -578,6 +605,37 @@ def polls_export(poll_id: int = Query(ge=1), fmt: str = Query(default="csv", ali
     with core.pool.connection() as conn:
         poll = _poll_or_404(conn, poll_id)
         _require_results(conn, viewer, poll)
+    token = webapp.issue_export_link(poll_id, fmt, core.WEBAPP_SECRET)
+    return {"ok": True, "expires_in": webapp.LINK_TTL_SECONDS,
+            "url": f"/webapp/polls/export?poll_id={poll_id}&format={fmt}&token={token}"}
+
+
+@router.get("/webapp/polls/export")
+def polls_export(poll_id: int = Query(ge=1), fmt: str = Query(default="csv", alias="format"),
+                 token: str = Query(default=""),
+                 who: dict | None = Depends(core.webapp_actor_optional)) -> Response:
+    """Файл результатов: CSV для таблицы, Markdown для журнала исследования (V-090: скачивание).
+
+    Два входа: с токеном Mini App (заголовок) и по подписанной ссылке из `export/link`
+    (браузер телефона заголовков не носит). Право проверено на выдаче ссылки.
+    """
+    if fmt not in ("csv", "md"):
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Формат: csv или md.",
+                       code="bad_format")
+    viewer = None
+    if who is None:
+        try:
+            link = webapp.verify_export_link(token, core.WEBAPP_SECRET)
+        except InitDataError:
+            return _link_expired_response()
+        if link["poll_id"] != poll_id or link["fmt"] != fmt:
+            return _link_expired_response()
+    else:
+        viewer = core._webapp_viewer(who)
+    with core.pool.connection() as conn:
+        poll = _poll_or_404(conn, poll_id)
+        if viewer is not None:
+            _require_results(conn, viewer, poll)
         questions = _questions(conn, poll_id)
         answers = _answer_rows(conn, poll_id)
     people = {answer["participant_id"]: answer["display_name"] for answer in answers}

@@ -683,7 +683,14 @@ on conflict do nothing;` отдельной миграцией — код при
 | `POST /webapp/polls/start` | `{"poll_id": int}` | `{"invited": int, "skipped_no_chat": int, "status": "running"}` | `409 already_running`, `409 no_recipients`, `404 poll_not_found` |
 | `POST /webapp/polls/close` | `{"poll_id": int}` | `{"status": "closed", "closed_at": iso}` | `404 poll_not_found`, `409 already_closed` |
 | `GET /webapp/polls/results/data?poll_id=` | — | `{"poll":{…}, "answered": int, "invited": int, "questions":[{"id","position","text","kind","summary":{…},"answers":[…] }], "not_answered":[{"participant_id","display_name","position"}]}` | `403 no_results`, `404 poll_not_found` |
-| `GET /webapp/polls/export?poll_id=&format=csv\|md` | — | файл `text/csv; charset=utf-8` или `text/markdown` | `400 bad_format`, `403 no_results` |
+| `GET /webapp/polls/export?poll_id=&format=csv\|md` | `token` (из ссылки) | файл `text/csv; charset=utf-8` или `text/markdown`; без заголовка нужна подписанная ссылка | `400 bad_format`, `403 no_results` (по заголовку), `401` страницей «Ссылка устарела» (истёкшая или чужая подпись) |
+| `GET /webapp/polls/export/link?poll_id=&format=csv\|md` | — | `{"url": "…/export?…&token=…", "expires_in": 900}` — подпись на 15 минут, право проверяется здесь | `400 bad_format`, `403 no_results`, `404 poll_not_found` |
+
+Почему ссылка: переход верхнего уровня в Telegram WKWebView не несёт заголовок
+Authorization (обращение №44), поэтому страница не ходит по голому `href`, а берёт
+короткую подписанную ссылку и открывает её через `tg.openLink` — скачивает браузер
+телефона, Mini App остаётся на экране результатов (образец — скачивание файлов,
+`docs/development/151` §2).
 
 Формы `summary` по типу вопроса (уточнение к D9):
 

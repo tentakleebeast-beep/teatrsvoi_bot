@@ -13,7 +13,9 @@ import csv
 import io
 from datetime import UTC, datetime, timezone
 
+import pytest
 from app import poll_store
+from app.webapp import InitDataError, issue_export_link, issue_token, verify_export_link
 
 NOW = datetime(2026, 11, 15, 10, 30, tzinfo=UTC)
 
@@ -84,3 +86,30 @@ def test_markdown_анонимный_не_называет_автора():
                                       {9: poll_store.summarize(question, rows)},
                                       anonymous=True)
     assert "- Ок" in data and "Аня" not in data
+
+
+# --- ссылка на скачивание: срок и подпись (обращение №44) ---------------------
+def test_ссылка_на_экспорт_годна_и_несёт_опрос_с_форматом():
+    token = issue_export_link(44, "csv", "secret-key", now=1_000)
+    assert verify_export_link(token, "secret-key", now=1_100) == {"poll_id": 44, "fmt": "csv"}
+
+
+def test_ссылка_на_экспорт_живёт_15_минут():
+    token = issue_export_link(44, "md", "secret-key", now=1_000)
+    assert verify_export_link(token, "secret-key", now=1_000 + 900)["fmt"] == "md"
+    with pytest.raises(InitDataError) as expired:
+        verify_export_link(token, "secret-key", now=1_000 + 901)
+    assert str(expired.value) == "token_expired"
+
+
+def test_ссылка_с_чужой_подписью_не_пускает():
+    token = issue_export_link(44, "csv", "secret-key", now=1_000)
+    with pytest.raises(InitDataError) as foreign:
+        verify_export_link(token, "other-secret", now=1_100)
+    assert str(foreign.value) == "bad_token_signature"
+
+
+def test_токен_mini_app_не_подходит_вместо_ссылки_на_экспорт():
+    """Оси разные: токен человека — пропуск в Mini App, а не ссылка на файл."""
+    with pytest.raises(InitDataError):
+        verify_export_link(issue_token(7, "secret-key", now=1_000), "secret-key", now=1_000)
