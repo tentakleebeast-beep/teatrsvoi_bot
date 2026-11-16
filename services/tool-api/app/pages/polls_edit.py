@@ -36,6 +36,8 @@ _BODY = """
   </div>
 
   <section id="step-questions">
+    <p class="ui-small ui-muted" id="save-hint">Черновик сохранится, когда нажмёте
+      «Сохранить черновик».</p>
     <p class="ui-small ui-muted">Вопросы идут сверху вниз — так человек их увидит в чате.</p>
     <div class="ui-list" id="questions"></div>
     <div class="ui-actions">
@@ -72,7 +74,10 @@ _BODY = """
     </div>
 
     <div class="ui-actions ui-actions--bottom">
-      <button class="ui-btn ui-btn--primary ui-btn--block" id="to-audience" type="button">
+      <button class="ui-btn ui-btn--ghost" id="save-draft" type="button">
+        Сохранить черновик
+      </button>
+      <button class="ui-btn ui-btn--primary" id="to-audience" type="button">
         Дальше: кому отправить
       </button>
     </div>

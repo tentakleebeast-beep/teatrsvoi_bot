@@ -19,7 +19,11 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
   var state = { poll_id: null, title: "", intro: null, anonymous: false, closes_at: null,
                 questions: [], rules: [], include: [], exclude: [],
                 viewers: { people: [], roles: [] },
-                people: [], projects: [], frozen: false, editing: -1, shown: 8 };
+                people: [], projects: [], frozen: false, editing: -1, shown: 8,
+                dirty: false };
+  var EXIT_TEXT = "Выйти без сохранения? Черновик не сохранён.";
+  var COPY_NOTE = "Копия сохранена как черновик. Адресаты не перенесены: " +
+                  "выберите их заново.";
   tgBoot();
 
   function showError(text) {
@@ -48,6 +52,12 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     var text = body.detail || body.message || "";
     return text || "Не получилось. Повторите позже.";
   }
+
+  /* «Есть несохранённые правки»: ставится там же, где меняется state, и снимается
+     после успешного сохранения. Стрелка «‹» по флагу спрашивает, а не теряет ввод
+     молча (166 §1 D1). Автосохранения нет намеренно: в WebView нет надёжного
+     события «ухожу», а неудавшийся запрос при уходе — та же тихая потеря. */
+  function markDirty() { state.dirty = true; }
 
   function pollIdFromUrl() {
     var match = /[?&]poll_id=(\d+)/.exec(window.location.search || "");
@@ -118,6 +128,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     }
     showError("");
     state.questions[state.editing] = item;
+    markDirty();
     renumber();
     renderQuestions();
     $("editor").hidden = true;
@@ -131,6 +142,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     if ($("editor").hidden === false) { editorDone(); }
     state.questions.push({ position: state.questions.length + 1, text: "", kind: "single",
                            required: true, free_text: false, max_choices: null, options: [] });
+    markDirty();
     renderQuestions();
     openEditor(state.questions.length - 1);
   }
@@ -139,6 +151,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     if (state.editing < 0) { return; }
     state.questions.splice(state.editing, 1);
     state.editing = -1;
+    markDirty();
     renumber();
     renderQuestions();
     $("editor").hidden = true;
@@ -173,8 +186,19 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
       return false;
     }
     state.poll_id = result.body.poll_id;
+    state.dirty = false;
     showError("");
     return true;
+  }
+
+  /* «Сохранить черновик»: сохраняет и остаётся на месте (166 §1 D1). Повторное
+     нажатие правит тот же опрос — `state.poll_id` уже заполнен ответом. */
+  async function saveDraftOnly() {
+    var button = $("save-draft");
+    button.disabled = true;
+    var ok = await saveDraft();
+    button.disabled = false;
+    if (ok) { showNote("Черновик сохранён"); }
   }""" + _AUDIENCE_JS + r"""
   /* ------------------------------------------------------------ шаги */
 
@@ -205,6 +229,9 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     $("q-kind").addEventListener("change", syncKindFields);
     $("q-done").addEventListener("click", editorDone);
     $("q-delete").addEventListener("click", deleteQuestion);
+    $("save-draft").addEventListener("click", saveDraftOnly);
+    $("title").addEventListener("input", markDirty);
+    bindExit();
     $("to-audience").addEventListener("click", toAudience);
     $("back-to-questions").addEventListener("click", async function () {
       showStep("questions");
@@ -232,6 +259,23 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     });
   }
 
+  /* Стрелка «‹» значит «выйти»: она не сохраняет и не блокирует, но и не теряет
+     ввод молча — при несохранённых правках спрашивает нативным диалогом Telegram.
+     В браузере стенда хоста нет: без `Telegram.WebApp` уход без вопроса (166 §1). */
+  function bindExit() {
+    var back = document.querySelector("a.ui-appbar__back");
+    if (!back) { return; }
+    back.addEventListener("click", function (event) {
+      if (!state.dirty) { return; }
+      var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+      if (!tg || !tg.showConfirm) { return; }
+      event.preventDefault();
+      tg.showConfirm(EXIT_TEXT, function (ok) {
+        if (ok) { window.location.href = back.getAttribute("href"); }
+      });
+    });
+  }
+
   /* Право `poll.manage` до отрисовки конструктора: у нового опроса нет своего
      запроса данных, поэтому спрашиваем тот же список, что и экран «Опросы».
      Без этого экран открывался любой роли, а отказ приходил только при сохранении. */
@@ -249,6 +293,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
       if (!(await canManage())) { return; }
       showForm();
       addQuestion();
+      state.dirty = false;
       return;
     }
     var result = await api("/webapp/polls/edit/data?poll_id=" + pollId);
@@ -269,6 +314,9 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
       showNote("Опрос уже отправлен: вопросы и адресаты заморожены.");
       $("add-question").hidden = true;
     }
+    /* Метка `note=copy` — только показ полосы: правил она не меняет, и по прямой
+       ссылке без метки полосы нет (166 §1 D5, §5.6). */
+    if (/[?&]note=copy/.test(window.location.search || "")) { showNote(COPY_NOTE); }
     if (/[#&]audience/.test(window.location.href)) {
       await loadAudience();
       showStep("audience");

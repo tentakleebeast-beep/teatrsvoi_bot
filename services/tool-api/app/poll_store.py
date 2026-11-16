@@ -34,6 +34,15 @@ YESNO_CODES = (("y", "Да"), ("n", "Нет"))
 #: Колонка CSV. Порядок полей — часть контракта (AC-11): по нему читает LibreOffice.
 CSV_HEADER = ("вопрос", "тип", "человек", "ответ", "когда")
 
+#: Предел темы опроса (`save` зовёт `clean_text(body.title, limit=300)`).
+TITLE_LIMIT = 300
+
+#: Суффикс темы копии (166 §2, D3): «Анкета организатору — копия».
+COPY_SUFFIX = " — копия"
+
+#: Длина, до которой срезается тема источника: суффикс входит в предел 300 (166 §2).
+COPY_TITLE_LIMIT = 290
+
 
 class DraftError(ValueError):
     """Черновик опроса не проходит проверку. `code` — код ошибки контракта."""
@@ -123,6 +132,51 @@ def validate_questions(raw: Iterable[dict]) -> list[dict]:
     if len(set(positions)) != len(positions):
         raise DraftError("bad_position", "Два вопроса с одинаковым порядком")
     return sorted(questions, key=lambda question: question["position"])
+
+
+def draft_copy(source: dict, questions: Iterable[dict]) -> dict:
+    """Тело `PollSaveIn` для копии опроса: только наполнение анкеты (166 §2, D3).
+
+    Переносится тема с суффиксом « — копия», `intro`, `anonymous` и вопросы
+    с вариантами — порядок, тип, обязательность, свободный ответ и «не больше».
+    Не переносится ничего, что делает опрос отправленным: `closes_at`,
+    `started_at`, `closed_at`, адресаты, зрители и прохождения. Коды вариантов
+    пересчитывает `validate_questions` (`next_codes`): старые не переезжают,
+    потому что ссылаться на них в копии некому.
+
+    Вопросов в копии быть не может меньше одного: пустой источник — отказ
+    `no_questions` тем же кодом, что у `save`.
+    """
+    items = []
+    for index, question in enumerate(questions, start=1):
+        items.append({
+            "position": int(question.get("position") or index),
+            "text": question.get("text"),
+            "kind": str(question.get("kind") or "single"),
+            "required": bool(question.get("required", True)),
+            "free_text": bool(question.get("free_text")),
+            "max_choices": question.get("max_choices"),
+            "options": [{"label": option.get("label")}
+                        for option in (question.get("options") or [])],
+        })
+    if not items:
+        raise DraftError("no_questions", "В опросе нет вопросов: копировать нечего.")
+    return {"title": copy_title(source.get("title")),
+            "intro": clean_text(source.get("intro"), limit=2000) or None,
+            "anonymous": bool(source.get("anonymous")),
+            "questions": validate_questions(items)}
+
+
+def copy_title(title: Any) -> str:
+    """Тема копии: текст источника без хвоста и суффикс « — копия».
+
+    Срез, а не `clean_text(limit=…)`: `clean_text` на длинном тексте не обрезает,
+    а отказывает (`too_long`), и копия темы в 300 знаков падала бы на ровном месте.
+    Предел темы у `save` — 300 знаков, суффикс входит в него, поэтому источник
+    срезается до 290. Хвост длинной темы теряется — предел назван в 166 §2.
+    """
+    text = " ".join(str(title or "").replace("\x00", " ").split())
+    return text[:COPY_TITLE_LIMIT].rstrip() + COPY_SUFFIX
 
 
 def answer_codes(kind: str, codes: Iterable[str]) -> list[str]:

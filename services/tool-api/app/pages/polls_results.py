@@ -43,6 +43,7 @@ _BODY = """
 
   <div class="ui-actions ui-actions--bottom">
     <button class="ui-btn ui-btn--ghost" id="close" type="button" hidden>Закрыть опрос</button>
+    <button class="ui-btn" id="copy" type="button">Копировать</button>
     <a class="ui-btn" id="csv" href="#">Экспорт CSV</a>
     <a class="ui-btn ui-btn--primary" id="md" href="#">Экспорт Markdown</a>
   </div>
@@ -168,6 +169,30 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
       exportFile(kind);
     });
   });
+
+  /* Копия — новый черновик, а не повторная рассылка: адресатов человек выберет
+     сам, поэтому ответ маршрута ведёт в конструктор копии (166 §1 D5). Кнопка
+     блокируется на время запроса: второго нажатия «вслепую» не будет (166 §3.3). */
+  async function copyPoll() {
+    var pollId = pollIdFromUrl();
+    if (!pollId) { showError("Не выбран опрос."); return; }
+    var button = $("copy");
+    button.disabled = true;
+    var result = await api("/webapp/polls/copy", { poll_id: pollId });
+    if (result.status === 403) {
+      $("denied").hidden = false;
+      $("form").hidden = true;
+      return;
+    }
+    if (result.status !== 200) {
+      button.disabled = false;
+      showError(detailOf(result));
+      return;
+    }
+    window.location.href = result.body.url;
+  }
+
+  $("copy").addEventListener("click", copyPoll);
 
   async function load() {
     var pollId = pollIdFromUrl();

@@ -148,8 +148,10 @@ AUDIENCE_JS = r"""
       return;
     }
     var body = result.body;
-    var text = "Уйдёт " + body.will_send + " из " + body.total + " в наборе.";
-    if (body.without_telegram) {
+    var text = body.total === 0
+      ? "Адресаты не выбраны: выберите набор или отметьте людей."
+      : "Уйдёт " + body.will_send + " из " + body.total + " в наборе.";
+    if (body.total > 0 && body.without_telegram) {
       text += " Не получат: " + body.without_telegram + " без Telegram.";
     }
     $("audience-count").textContent = text;
