@@ -227,6 +227,20 @@ entries:
     title: Результаты опроса
     not_for_agent: "сводка и экспорт — данные исследования; агент их не пересказывает без запроса человека"
 
+  - id: screen.polls_mine
+    kind: screen
+    surface: webapp
+    source: /webapp/polls/mine
+    title: Мои опросы
+    not_for_agent: "свои прохождения и ответы — личное дело человека; агент их не открывает и не пересказывает"
+
+  - id: screen.polls_answer
+    kind: screen
+    surface: webapp
+    source: /webapp/polls/answer
+    title: Вопрос опроса
+    not_for_agent: "ответ на опрос человек даёт сам: агент не отвечает за него и не выбирает варианты"
+
   - id: screen.ui
     kind: screen
     surface: webapp

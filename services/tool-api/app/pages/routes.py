@@ -43,7 +43,9 @@ from app.pages import (
     money,
     notes,
     person,
+    polls_answer,
     polls_edit,
+    polls_mine,
     polls_results,
     services,
     week,
@@ -202,6 +204,21 @@ def build_router(*, actor: Callable[..., dict], caps_for: Callable[[dict], list[
     def webapp_polls_results_page() -> str:
         """Сводка и экспорт: право — автор, `poll.results.all` или `poll_viewer`."""
         return polls_results.POLL_RESULTS_PAGE
+
+    @router.get("/webapp/polls/mine", response_class=HTMLResponse)
+    def webapp_polls_mine_page() -> str:
+        """«Мои опросы»: свои прохождения, вход — строка на Главной (docs/164 §12.4).
+
+        Страница открыта всем: она показывает только свои прохождения, и отбирает
+        их `participant_id` в `/webapp/polls/mine/data`. Права `poll.manage` здесь
+        нет — иначе адресат без него не увидел бы свои же опросы.
+        """
+        return polls_mine.POLLS_MINE_PAGE
+
+    @router.get("/webapp/polls/answer", response_class=HTMLResponse)
+    def webapp_polls_answer_page() -> str:
+        """Экран вопроса: один шаг — один экран, адрес не меняется (§12.5)."""
+        return polls_answer.POLLS_ANSWER_PAGE
 
     # --- разделы «Управления» -----------------------------------------------
 

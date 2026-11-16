@@ -12,9 +12,13 @@
 from __future__ import annotations
 
 from collections.abc import Iterable
+from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from html import escape
 from typing import Any
+
+from app.availability_coverage import plural
+from services.shared import format as shared_format
 
 #: Пять типов вопроса (D2). Варианты есть только у двух: у `yesno` два ответа
 #: рисуются кодом, у `number`/`text` их нет вовсе.
@@ -366,3 +370,142 @@ def _iso(value: Any) -> str:
         return value.isoformat()
     except AttributeError:
         return str(value)
+
+
+# --- «Мои опросы»: одно чтение на три потребителя (E8-D4, docs/development/164 §12.2) --
+# Три экрана спрашивают одно и то же: чат (`/tools/polls/mine`), счётчики Главной и
+# список «Мои опросы». Отдельный `select` под каждый — тот дрейф, от которого уходил
+# дизайн D5: у чата и приложения разошлись бы правила «какой опрос открыт». Поэтому
+# запрос один, а фильтруют потребители: им нужны разные наборы из одних строк.
+
+
+def my_runs(conn, participant_id: int) -> list[dict]:
+    """Все прохождения человека: и открытые, и пройденные, и закрытые.
+
+    Поля: `run_id`, `poll_id`, `title`, `status` (статус `poll_run`), `position`,
+    `total`, `poll_status`, `closes_at`, `finished_at`, `closed_at`.
+    `closed_at` — не для фильтра, а для подписи «опрос закрыт 12 ноября»: у опроса,
+    закрытого организатором, срока `closes_at` может не быть вовсе.
+    Порядок — `p.created_at desc, r.id` (как в `/tools/polls/mine`: свежий опрос выше).
+
+    Соединение приходит аргументом: модуль по-прежнему не открывает его сам и
+    импортируется тестами без базы.
+    """
+    rows = conn.execute(
+        """select r.id as run_id, r.status, r.position, r.finished_at,
+                  p.id as poll_id, p.title, p.status as poll_status,
+                  p.closes_at, p.closed_at,
+                  (select count(*) from poll_question q where q.poll_id = p.id) as total
+             from poll_run r join poll p on p.id = r.poll_id
+            where r.participant_id = %s
+            order by p.created_at desc, r.id""",
+        (participant_id,)).fetchall()
+    return [dict(row) for row in rows]
+
+
+def is_closed(run: dict, now: datetime | None = None) -> bool:
+    """Опрос закрыт: организатор закрыл или вышел срок. Прохождение при этом любое."""
+    if run.get("poll_status") == "closed":
+        return True
+    closes_at = run.get("closes_at")
+    return bool(closes_at and closes_at <= (now or datetime.now(UTC)))
+
+
+def is_open(run: dict, now: datetime | None = None) -> bool:
+    """Прохождение ждёт ответа: начато или приглашено, а опрос ещё идёт.
+
+    Это правило приложения. У чата своё, историческое (`poll_status = 'running'`
+    без срока) — оно осталось в `api/polls.py`, чтобы контракт `/tools/polls/mine`
+    не поехал (AC-18).
+    """
+    return run.get("status") in ("invited", "in_progress") and not is_closed(run, now)
+
+
+def groups(runs: Iterable[dict], now: datetime | None = None) -> dict[str, list[dict]]:
+    """Три группы «Моих опросов» в порядке показа: ждут ответа, пройденные, закрытые.
+
+    Строка попадает ровно в одну группу: `done` сильнее срока (человек ответил —
+    опрос для него пройден, даже если потом закрылся), а всё, что не открыто и не
+    пройдено, — закрыто. Так `declined` (в E8 недостижим, но `check` его допускает)
+    не теряется между группами.
+    """
+    result: dict[str, list[dict]] = {"open": [], "done": [], "closed": []}
+    for run in runs:
+        if run.get("status") == "done":
+            result["done"].append(run)
+        elif run.get("status") == "declined":
+            # Резерв: в E8 отказа от опроса нет, но `check` схемы его допускает.
+            result["closed"].append(run)
+        elif is_open(run, now):
+            result["open"].append(run)
+        else:
+            result["closed"].append(run)
+    return result
+
+
+def run_meta(run: dict, now: datetime | None = None) -> str:
+    """Подпись строки: «3 вопроса · не начат», «вопрос 3 из 11 · продолжить»,
+    «пройден 14 ноября · 11 из 11», «опрос закрыт 12 ноября».
+
+    `invited` и `in_progress` различаются словами, а не цветом: «не начат» против
+    «продолжить» человек читает, а цвет бейджа не читает никто.
+    """
+    total = int(run.get("total") or 0)
+    position = int(run.get("position") or 0)
+    status = run.get("status")
+    if status == "done":
+        day = _day_text(run.get("finished_at"))
+        answered = position or total
+        return (f"пройден {day} · {answered} из {total}" if day
+                else f"пройден · {answered} из {total}")
+    if status == "declined":
+        return "опрос закрыт"
+    if is_closed(run, now):
+        day = _day_text(run.get("closed_at") or run.get("closes_at"))
+        return f"опрос закрыт {day}" if day else "опрос закрыт"
+    if status == "in_progress":
+        return f"вопрос {max(position, 1)} из {total} · продолжить"
+    return f"{total} {plural(total, 'вопрос', 'вопроса', 'вопросов')} · не начат"
+
+
+def entry_meta(counts: dict) -> str:
+    """Подпись строки-входа на Главной: «2 ждут ответа · 3 пройдено».
+
+    Нулевая часть не печатается: «0 ждут ответа · 3 пройдено» — шум, а человеку
+    важно только то, что у него есть.
+    """
+    open_count = int(counts.get("open") or 0)
+    done_count = int(counts.get("done") or 0)
+    parts = []
+    if open_count:
+        parts.append(f"{open_count} {plural(open_count, 'ждёт ответа', 'ждут ответа', 'ждут ответа')}")
+    if done_count:
+        parts.append(f"{done_count} пройдено")
+    return " · ".join(parts)
+
+
+def cancel_invites(conn, run_id: int, participant_id: int) -> None:
+    """Отменить отложенное приглашение, если человек уже прошёл шаг (V-096).
+
+    Приглашение — строка `notification` с `kind='poll'` и номером прохождения в
+    `payload->>'run_id'`. Пока оно `scheduled` (push в 08:00) или `failed`
+    (ошибка настройки, которую `retry_failed` вернул бы в очередь), ответ в
+    приложении делает его ненужным: человек уже отвечает. `sent` и `skipped` не
+    трогаем — отправленное не отзывается.
+
+    `failed` в отмене не для полноты: `scripts/send_notifications.py:retry_failed`
+    возвращает `failed` в очередь (`status='scheduled'`, `attempts=0`), и без этой
+    строки push пришёл бы после пройденного опроса.
+    """
+    conn.execute(
+        """update notification set status = 'cancelled',
+                  last_error = 'пройдено в приложении'
+            where recipient_id = %s and kind = 'poll' and sent_at is null
+              and status in ('scheduled', 'failed')
+              and payload->>'run_id' = %s""",
+        (participant_id, str(run_id)))
+
+
+def _day_text(value: Any) -> str:
+    """Дата словами без дня недели: «14 ноября». Пустое значение — пустая строка."""
+    return shared_format.human_date(value, with_weekday=False) if value else ""
