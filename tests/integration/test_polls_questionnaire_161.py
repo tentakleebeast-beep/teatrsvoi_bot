@@ -1,17 +1,19 @@
-"""Анкета 161 целиком: четыре опроса, 35 вопросов, сводка и оба экспорта (E8, 162 §9).
+"""Анкета 161 целиком: четыре опроса, все вопросы документа, сводка и оба экспорта (E8, 162 §9).
 
 Ради этого прогона фича и делалась: вопросы берутся не из выдуманного списка, а из
-`docs/development/161` (§3–§6), раскладываются в четыре опроса 11 + 8 + 8 + 8,
-адресаты — вручную и по роли, дальше прохождение, сводка и обе выгрузки.
+`docs/development/161` (§3–§6), раскладываются в четыре опроса — сколько вопросов в каждом,
+сказано в заголовке раздела документа, — адресаты вручную и по роли, дальше прохождение, сводка
+и обе выгрузки. Счёт не зашит числом: анкету правят по вычитке владельца, и тест должен падать
+только тогда, когда документ и база разошлись, а не когда изменилось число вопросов.
 
 Проверяется то, что легко потерять на живом материале:
 
-* в базе ровно 35 вопросов и текст каждого совпадает с документом слово в слово
-  (ни обрезанных, ни склеенных пунктов);
+* в базе столько вопросов, сколько заявлено в заголовках §3–§6, и текст каждого совпадает с
+  документом слово в слово (ни обрезанных, ни склеенных пунктов);
 * состав адресатов совпадает с таблицей §9 (орг 3, Мария 1, педагоги 2, актёры 2);
-* ответы всех 35 вопросов доходят до сводки, `text`-сводка — списком;
+* ответы всех вопросов доходят до сводки, `text`-сводка — списком;
 * CSV разбирается обратно (`;`, `utf-8-sig`) и содержит каждый вопрос;
-* Markdown — готовые блоки «## Вопрос N» для журнала 161 §7.
+* Markdown — готовые блоки «## Вопрос N» для журнала 161 §9.
 
 Обоснование: FR-G18, AC-10, AC-11, AC-12, `docs/development/162-bot-polls.md` §9.
 """
@@ -39,13 +41,24 @@ from tests.integration.polls_helpers import (
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DOC = next(ROOT.glob("docs/development/161-*.md"))
 
-#: Разделы документа → опрос (§9: 11 + 8 + 8 + 8 = 35).
+#: Разделы документа → опрос (§9). Сколько вопросов в разделе, сказано в его заголовке.
 SECTIONS = {
     3: "Анкета организаторам",
     4: "Марии: деньги и соцсети",
     5: "Педагогам",
     6: "Актёрам",
 }
+
+
+def _declared_counts() -> dict[int, int]:
+    """Число вопросов по заголовкам разделов: «## 4. Марии … — 9 вопросов»."""
+    counts: dict[int, int] = {}
+    for line in DOC.read_text(encoding="utf-8").splitlines():
+        heading = re.match(r"^## (\d+)\..*?(\d+) вопрос", line)
+        if heading and int(heading.group(1)) in SECTIONS:
+            counts[int(heading.group(1))] = int(heading.group(2))
+    assert sorted(counts) == sorted(SECTIONS), f"в заголовках §3–§6 нет счёта: {counts}"
+    return counts
 
 
 def _sections() -> dict[int, list[str]]:
@@ -92,9 +105,10 @@ def _ids(chat_ids: list[int]) -> list[int]:
 def анкета(client) -> dict:
     """Четыре опроса из документа, адресаты по §9 — на живых участниках тестовой базы."""
     sections = _sections()
-    assert [len(sections.get(number, [])) for number in SECTIONS] == [11, 8, 8, 8], (
-        f"документ 161 дал не 11+8+8+8 вопросов: "
-        f"{ {number: len(texts) for number, texts in sections.items()} }")
+    declared = _declared_counts()
+    assert {number: len(texts) for number, texts in sections.items()} == declared, (
+        f"документ 161 дал не по заголовкам вопросов: "
+        f"{ {number: len(texts) for number, texts in sections.items()} } против {declared}")
 
     with psycopg.connect(_test_dsn()) as conn:
         person(conn, 783101, "Анкета Владелец", "admin")
@@ -134,6 +148,7 @@ def анкета(client) -> dict:
         started[title] = response.json()["invited"]
 
     return {"owner": owner, "polls": polls, "started": started, "sections": sections,
+            "counts": declared,
             "people": {"orgs": orgs, "maria": maria, "educators": educators, "actors": actors}}
 
 
@@ -150,13 +165,14 @@ def _answer_all(client, run_id: int, chat_id: int, total: int, prefix: str) -> N
     assert done.json()["step"]["done"] is True, done.text
 
 
-def test_анкета_собрана_из_35_вопросов_без_потерь(анкета) -> None:
+def test_анкета_собрана_без_потерь(анкета) -> None:
     """В базе столько же вопросов, сколько в документе, и тексты совпадают."""
     with psycopg.connect(_test_dsn()) as conn:
         rows = conn.execute(
             "select p.title, q.position, q.text from poll_question q "
             "join poll p on p.id = q.poll_id order by p.id, q.position").fetchall()
-    assert len(rows) == 35, f"вопросов в базе {len(rows)}, а в анкете 35"
+    total = sum(анкета["counts"].values())
+    assert len(rows) == total, f"вопросов в базе {len(rows)}, а в документе {total}"
 
     по_опросам: dict[str, list[str]] = {}
     for title, _position, text in rows:
@@ -166,7 +182,7 @@ def test_анкета_собрана_из_35_вопросов_без_потер�
 
 
 def test_адресаты_по_таблице_9(client, анкета) -> None:
-    """11 + 8 + 8 + 8 вопросов, а адресаты — как в §9: 3 / 1 / 2 / 2."""
+    """Вопросов — по документу, а адресаты — как в §9: 3 / 1 / 2 / 2."""
     assert анкета["started"] == {"Анкета организаторам": 3, "Марии: деньги и соцсети": 1,
                                  "Педагогам": 2, "Актёрам": 2}, анкета["started"]
     assert len(notifications()) == 8, "приглашений не по числу адресатов"
@@ -179,16 +195,17 @@ def test_прогон_до_конца_сводка_и_экспорты(client, �
             for row in notifications()}
     polls = анкета["polls"]
 
-    _answer_all(client, runs[(polls["Анкета организаторам"], 783102)], 783102, 11, "орг")
-    _answer_all(client, runs[(polls["Педагогам"], 783105)], 783105, 8, "педагог")
-    _answer_all(client, runs[(polls["Актёрам"], 783108)], 783108, 8, "актёр")
+    counts = анкета["counts"]
+    _answer_all(client, runs[(polls["Анкета организаторам"], 783102)], 783102, counts[3], "орг")
+    _answer_all(client, runs[(polls["Педагогам"], 783105)], 783105, counts[5], "педагог")
+    _answer_all(client, runs[(polls["Актёрам"], 783108)], 783108, counts[6], "актёр")
 
     summary = client.get(f"/webapp/polls/results/data?poll_id={polls['Анкета организаторам']}",
                          headers=owner)
     assert summary.status_code == 200, summary.text
     data = summary.json()
     assert data["invited"] == 3 and data["answered"] == 1
-    assert [item["position"] for item in data["questions"]] == list(range(1, 12))
+    assert [item["position"] for item in data["questions"]] == list(range(1, counts[3] + 1))
     assert [item["text"] for item in data["questions"]] == анкета["sections"][3]
     первый = data["questions"][0]["summary"]
     assert [row["text"] for row in первый["answers"]] == ["орг 1"], первый
@@ -201,7 +218,7 @@ def test_прогон_до_конца_сводка_и_экспорты(client, �
     text = csv_response.content.decode("utf-8-sig")
     rows = list(csv.reader(io.StringIO(text), delimiter=";"))
     assert rows[0] == ["вопрос", "тип", "человек", "ответ", "когда"], rows[0]
-    assert len(rows) == 12, f"строк {len(rows)} вместо шапки и 11 ответов"
+    assert len(rows) == counts[3] + 1, f"строк {len(rows)} вместо шапки и {counts[3]} ответов"
     for position, question in enumerate(анкета["sections"][3], start=1):
         assert any(row[0] == f"{position}. {question}" for row in rows[1:]), (
             f"вопрос {position} пропал из CSV: {question}")
@@ -210,7 +227,7 @@ def test_прогон_до_конца_сводка_и_экспорты(client, �
         f"/webapp/polls/export?poll_id={polls['Анкета организаторам']}&format=md", headers=owner)
     assert md_response.status_code == 200, md_response.text
     markdown = md_response.content.decode("utf-8")
-    for position in range(1, 12):
+    for position in range(1, counts[3] + 1):
         assert f"## Вопрос {position}" in markdown, f"в Markdown нет блока вопроса {position}"
     for question in анкета["sections"][3]:
         assert question in markdown, f"вопрос пропал из Markdown: {question}"
