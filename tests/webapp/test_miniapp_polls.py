@@ -177,13 +177,51 @@ def test_сводка_свёрнута_и_экспорт(app_page) -> None:
     assert "ответили 6" in text
     assert "выборов больше ответивших" in text
 
-    csv = page.get_attribute("#csv", "href")
-    md = page.get_attribute("#md", "href")
-    assert "/webapp/polls/export" in csv and "format=csv" in csv
-    assert "format=md" in md
+    # Экспорт больше не `href`: адрес готовит сервер, открывает браузер телефона.
+    assert page.get_attribute("#csv", "href") == "#"
+    assert page.get_attribute("#md", "href") == "#"
     assert "6 из 14" in page.inner_text("#head")
     _no_overflow(page)
     _tap_targets(page)
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_экспорт_открывает_файл_по_короткой_ссылке_и_не_уводит_страницу(app_page) -> None:
+    """Обращение №44: «CSV»/«Markdown» дают ссылку с подписью и не заменяют экран.
+
+    Голый `href` на `/webapp/polls/export` уходил верхним переходом в WKWebView,
+    заголовка Authorization там нет — человек видел JSON 401 вместо файла.
+    """
+    page = app_page("/webapp/polls/results?poll_id=7")
+    page.wait_for_selector("#questions details", timeout=10_000)
+    page.evaluate(
+        "() => { window.__opened = '';"
+        " window.Telegram.WebApp.openLink = function (url) { window.__opened = url; }; }")
+    page.click("#csv")
+    page.wait_for_function("() => window.__opened && window.__opened.length > 0",
+                           timeout=10_000)
+    url = page.evaluate("() => window.__opened")
+    assert "/webapp/polls/export" in url and "format=csv" in url, url
+    assert "token=" in url, url
+    assert page.url.split("?")[0].endswith("/webapp/polls/results"), page.url
+
+    # По открытому адресу действительно приходит файл, а не JSON отказа.
+    response = page.request.get(url)
+    assert response.status == 200, response.text()
+    assert "text/csv" in (response.headers.get("content-type") or "")
+    assert "вопрос;тип;человек" in response.text()
+
+    page.evaluate(
+        "() => { window.__opened = '';"
+        " window.Telegram.WebApp.openLink = function (url) { window.__opened = url; }; }")
+    page.click("#md")
+    page.wait_for_function("() => window.__opened && window.__opened.length > 0",
+                           timeout=10_000)
+    md_url = page.evaluate("() => window.__opened")
+    assert "format=md" in md_url and "token=" in md_url, md_url
+    md_file = page.request.get(md_url)
+    assert md_file.status == 200, md_file.text()
+    assert md_file.text().startswith("# Анкета организаторам")
     assert not page.svoi_errors, page.svoi_errors
 
 

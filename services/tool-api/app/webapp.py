@@ -29,6 +29,7 @@ from urllib.parse import parse_qsl
 
 DEFAULT_TTL_SECONDS = 1800          # полчаса работы в WebView
 MAX_AUTH_AGE = 3600                 # initData старше часа не принимаем
+LINK_TTL_SECONDS = 900              # подписанная ссылка на скачивание: 15 минут
 
 
 class InitDataError(ValueError):
@@ -134,6 +135,49 @@ def verify_token(token: str, secret: str, now: int | None = None) -> int:
     if int(data.get("exp", 0)) < current:
         raise InitDataError("token_expired")
     return int(data["chat_id"])
+
+
+# --- подписанные ссылки на скачивание ----------------------------------------
+# Ссылку открывает браузер телефона по `tg.openLink`: заголовка Authorization там
+# нет, поэтому право проверяется один раз — при выдаче ссылки. Внутри ссылки
+# подписанный срок и предмет (что именно скачивают), а не токен человека: иначе
+# ссылка стала бы его полным пропуском в Mini App.
+_EXPORT_PREFIX = "poll-export:"
+
+
+def issue_export_link(poll_id: int, fmt: str, secret: str,
+                      ttl: int = LINK_TTL_SECONDS, now: int | None = None) -> str:
+    """Подпись ссылки на экспорт результатов: срок и предмет внутри подписи."""
+    issued = now if now is not None else int(time.time())
+    payload = _b64(json.dumps({"poll_id": int(poll_id), "fmt": fmt,
+                               "exp": issued + ttl}).encode())
+    signature = _b64(hmac.new(secret.encode(), (_EXPORT_PREFIX + payload).encode(),
+                              hashlib.sha256).digest())
+    return f"{payload}.{signature}"
+
+
+def verify_export_link(token: str, secret: str, now: int | None = None) -> dict:
+    """Проверяет подпись ссылки и срок. Возвращает `{"poll_id": …, "fmt": …}`.
+
+    Бросает InitDataError: ссылка испорчена, подписана чужим секретом или истекла.
+    Префикс подписи отделяет её от токена Mini App — один не подходит вместо другого.
+    """
+    if not token or "." not in token:
+        raise InitDataError("no_token")
+    payload, signature = token.rsplit(".", 1)
+    expected = _b64(hmac.new(secret.encode(), (_EXPORT_PREFIX + payload).encode(),
+                             hashlib.sha256).digest())
+    if not hmac.compare_digest(expected, signature):
+        raise InitDataError("bad_token_signature")
+    try:
+        data = json.loads(_unb64(payload))
+    except (ValueError, TypeError) as exc:
+        raise InitDataError("bad_token_payload") from exc
+
+    current = now if now is not None else int(time.time())
+    if int(data.get("exp", 0)) < current:
+        raise InitDataError("token_expired")
+    return {"poll_id": int(data["poll_id"]), "fmt": str(data.get("fmt") or "")}
 
 
 # --- какие разделы админ-панели видит человек ---------------------------------

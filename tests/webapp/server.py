@@ -1906,13 +1906,27 @@ def polls_results_stand(request: Request, poll_id: int = 7):
 
 
 @app.get("/webapp/polls/export")
-def polls_export_stand(request: Request, poll_id: int = 7, format: str = "csv"):
-    denied = _polls_denied(request)
-    if denied is not None:
-        return denied
+def polls_export_stand(request: Request, poll_id: int = 7, format: str = "csv",
+                       token: str = ""):
+    # Скачивание идёт из браузера телефона: заголовка нет, предмет — подпись в адресе.
+    if not token:
+        denied = _polls_denied(request)
+        if denied is not None:
+            return denied
     if format == "md":
         return PlainTextResponse("# Анкета организаторам\n", media_type="text/markdown")
     return PlainTextResponse("\ufeffвопрос;тип;человек;ответ;когда\n", media_type="text/csv")
+
+
+@app.get("/webapp/polls/export/link")
+def polls_export_link_stand(request: Request, poll_id: int = 7, format: str = "csv"):
+    """Короткая ссылка на файл (обращение №44): страница не ходит по голому `href`."""
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    return JSONResponse({
+        "ok": True, "expires_in": 900,
+        "url": f"/webapp/polls/export?poll_id={poll_id}&format={format}&token=stand"})
 
 
 # --- E8-D4: «Мои опросы» и прохождение (docs/development/164 §12.3) -------------

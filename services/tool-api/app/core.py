@@ -483,6 +483,18 @@ def webapp_actor(authorization: str | None = Header(default=None)) -> dict:
             "display_name": row["display_name"]}
 
 
+def webapp_actor_optional(authorization: str | None = Header(default=None)) -> dict | None:
+    """Тот же актор, но без заголовка не отказывает: нужен ссылкам на скачивание.
+
+    `GET /webapp/polls/export` открывает браузер телефона, и Authorization туда не
+    приходит. Тогда человека опознаёт подписанная ссылка, а этот разбор заголовка
+    просто не срабатывает; если заголовок есть — проверки те же, что у `webapp_actor`.
+    """
+    if not authorization:
+        return None
+    return webapp_actor(authorization)
+
+
 
 KIND_TITLES_RU = {"rehearsal": "Репетиция", "show": "Показ", "training": "Тренинг",
                   "rental": "Аренда", "meeting": "Встреча"}
