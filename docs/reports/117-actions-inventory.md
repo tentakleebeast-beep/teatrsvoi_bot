@@ -57,7 +57,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/admin/files/storage` | `services/tool-api/app/api/admin.py:1615` | — | сервисный токен | test_cold.py, test_service_routes_auth.py | проверка на входе — сервисный Bearer-токен, а не сессия человека; никто не зовёт |
 | POST `/admin/files/{file_id}/access` | `services/tool-api/app/api/admin.py:1599` | чат: cmd_access | любой активный | test_file_access.py, test_files_actions_screen.py, test_files_studio_roles.py (+2) | — |
 | POST `/admin/grant` | `services/tool-api/app/api/admin.py:499` | чат: panel_person_cap_toggle, panel_person_master_grant, panel_person_role_toggle, panel_rights, panel_rows | participants.manage | test_admin_panel.py, test_admin_people_actions.py, test_gateway_chat_parity.py (+1) | — |
-| POST `/admin/invite` | `services/tool-api/app/api/admin.py:39` | чат: invite_issue, send_invite | registration.code.issue | test_admin_api.py, test_admin_archive_chat.py, test_admin_invites.py (+6) | — |
+| POST `/admin/invite` | `services/tool-api/app/api/admin.py:39` | чат: invite_issue, send_invite | registration.code.issue | test_admin_api.py, test_admin_archive_chat.py, test_admin_invites.py (+7) | — |
 | POST `/admin/invite/revoke` | `services/tool-api/app/api/admin.py:83` | чат: invite_revoke | registration.code.issue | test_admin_archive_chat.py, test_admin_invites.py, test_gateway_chat_parity.py | — |
 | GET `/admin/invites` | `services/tool-api/app/api/admin.py:64` | чат: _send_codes | registration.code.issue | test_admin_archive_chat.py, test_admin_invites.py, test_gateway_chat_parity.py | — |
 | POST `/admin/participant/discipline` | `services/tool-api/app/api/admin.py:590` | чат: panel_person_master_link | participants.manage | test_gateway_chat_parity.py, test_master_role.py | — |
@@ -379,7 +379,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | кнопка `panel_pending` | F.data == 'panel:pending' | `services/tg-gateway/app/routers/admin.py:560` | — | test_gateway_routing.py | `/admin/pending` |
 | кнопка `panel_rights` | F.data == 'panel:rights' | `services/tg-gateway/app/routers/admin.py:584` | — | test_gateway_chat_parity.py, test_gateway_routing.py | `/admin/capabilities`, `/admin/grant` |
 | кнопка `panel_invite` | F.data == 'panel:invite' | `services/tg-gateway/app/routers/admin.py:607` | participants.manage, registration.code.issue | test_admin_panel_wiring.py, test_gateway_invite_copy.py (+1) | — |
-| кнопка `invite_issue` | F.data.startswith('inv:role:') | `services/tg-gateway/app/routers/admin.py:625` | — | test_admin_panel_wiring.py | `/admin/invite` |
+| кнопка `invite_issue` | F.data.startswith('inv:role:') | `services/tg-gateway/app/routers/admin.py:625` | — | test_admin_panel_wiring.py, test_gateway_invite_copy.py | `/admin/invite` |
 | кнопка `panel_codes` | F.data == 'panel:codes' | `services/tg-gateway/app/routers/admin.py:683` | — | test_gateway_chat_parity.py | — |
 | кнопка `invite_revoke` | F.data.startswith('inv:revoke:') | `services/tg-gateway/app/routers/admin.py:697` | — | test_gateway_chat_parity.py | `/admin/invite/revoke` |
 | кнопка `panel_money` | F.data.startswith('panel:money') | `services/tg-gateway/app/routers/admin.py:716` | budget.write | test_panel_money_periods.py | `/tools/budget/recent` |
