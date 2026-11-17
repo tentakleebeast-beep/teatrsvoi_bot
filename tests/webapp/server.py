@@ -30,6 +30,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
 from app import webapp_page as pages  # noqa: E402
+from app.webapp import MANAGEMENT, PERSONAL, sections_for  # noqa: E402
 from app.pages import files as files_pages  # noqa: E402
 from app.pages import home as home_pages  # noqa: E402
 from app.pages import polls as polls_pages  # noqa: E402
@@ -557,27 +558,37 @@ def _caps_of(request: Request) -> list[str]:
 HOME_DATA = ({
     "ok": True, "name": "Тестовый Админ", "role": "admin", "role_label": "администратор",
     "staff": True, "can_record": True,
-    "attention": [
-        {"title": "Заявки", "meta": "ждут решения", "url": "/webapp/admin/pending", "count": 2},
-        {"title": "Обращения", "meta": "новое, 29 октября", "url": "/webapp/more", "count": 1},
-        {"title": "Крупная сумма", "meta": "Аренда помещения, 150 000 ₽",
-         "url": "/webapp/money"},
-    ],
     "today": {"label": "сегодня, суббота",
               "event": {"time": "19:00", "title": "Репетиция", "place": "Зал на Обороны"}},
     "week": {"title": "26 октября — 1 ноября", "marked": 4, "days": 7},
     "debt": {"period": "октябрь 2026", "rest": 3000, "due": 5000},
-    "more": {"management": [
-        {"title": "Заявки", "meta": "ждут решения", "url": "/webapp/admin/pending", "count": 2},
-        {"title": "Люди", "meta": "17 активных", "url": "/webapp/admin/people"},
-        {"title": "Обращения", "meta": "открытые", "url": "/webapp/admin/feedback", "count": 1},
-        {"title": "Рассылка", "meta": "14 из 17 получат", "url": "/webapp/broadcast"},
-        {"title": "Сверка листов", "meta": "база против таблицы", "url": "/webapp/reconcile"},
-    ], "personal": [
-        {"title": "Файлы студии", "meta": "записи, фонограммы, тексты", "url": "/webapp/files"},
-        {"title": "Заметки", "meta": "личные и общие, с тегами", "url": "/webapp/notes"},
-    ]},
 })
+
+# Счётчики бейджей: в бою их считает `webapp_api` по базе, на стенде — фикстура.
+HOME_COUNTS = {"pending": 2, "feedback": 1}
+
+
+def _home_rows(caps: list[str]) -> dict:
+    """Строки «Требует внимания» и «Ещё» — из реестра разделов, как в бою.
+
+    Раньше здесь лежал список из пяти разделов: стенд показывал «Управление» не тем,
+    что видит человек с правами, и граф переходов (`scripts/build_screen_map.py`)
+    считал девять экранов недостижимыми. Теперь состав строк зависит от роли так же,
+    как в `app/api/webapp_api.py:management_rows`.
+    """
+    management = []
+    for section in sections_for(caps, group=MANAGEMENT):
+        row: dict = {"title": section.title, "meta": section.caption, "url": section.url}
+        if section.count:
+            row["count"] = HOME_COUNTS.get(section.count, 0)
+        management.append(row)
+    personal = [{"title": s.title, "meta": s.caption, "url": s.url}
+                for s in sections_for(caps, group=PERSONAL)]
+    attention = [{"title": s.title, "meta": s.attention, "url": s.url,
+                  "count": HOME_COUNTS[s.count]}
+                 for s in sections_for(caps)
+                 if s.attention and s.count and HOME_COUNTS.get(s.count)]
+    return {"attention": attention, "more": {"management": management, "personal": personal}}
 
 
 # «Мои опросы» на Главной (E8-D4, docs/development/164 §12.6): три формы ответа —
@@ -600,6 +611,7 @@ def home_data_stand(request: Request):
     if denied is not None:
         return denied
     payload = dict(HOME_DATA)
+    payload.update(_home_rows(_caps_of(request)))
     # По умолчанию прохождений нет: остальные экраны стенда сняты без этой строки,
     # и лишняя строка меняла бы их замеры.
     key = (request.headers.get("x-svoi-polls") or "").strip().lower()
@@ -893,14 +905,14 @@ ADMIN_OVERVIEW = {
                 "budget.read", "budget.read.self", "budget.write", "calendar.write",
                 "feedback.send", "feedback.triage", "files.access", "howto.read",
                 "notes.write", "notify.send", "participants.contact",
-                "participants.manage", "participants.view", "quota.manage",
+                "participants.manage", "participants.view", "poll.manage", "quota.manage",
                 "registration.approve", "registration.code.issue",
                 "schedule.availability.self", "schedule.read.all", "schedule.slots",
                 "schedule.write", "system.health"]},
             {"role": "org", "caps": [
                 "budget.approve", "budget.import", "budget.read", "budget.read.self",
                 "budget.write", "calendar.write", "feedback.send", "files.access",
-                "notes.write", "participants.contact", "participants.view",
+                "notes.write", "participants.contact", "participants.view", "poll.manage",
                 "registration.approve", "schedule.availability.self",
                 "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]},
             {"role": "master", "caps": [

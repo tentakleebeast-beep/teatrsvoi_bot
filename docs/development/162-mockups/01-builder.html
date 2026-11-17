@@ -225,6 +225,34 @@ body.ui-page {
 .ui-row__chevron { color: var(--ui-muted); font-size: 18px; line-height: 1; }
 .ui-row--attention .ui-row__title { font-weight: 600; }
 
+/* ---------- флажок в строке ------------------------------------------------
+   Нативный чекбокс — 13 px, а цель нажатия в Mini App не меньше 44 px
+   (`tests/webapp/test_miniapp_system.py`, docs/development/91; на t_e7de39a3
+   проверка поймала 13 px на экране конструктора опроса). Поэтому само поле
+   растянуто до 44×44, а квадрат 24 px и галочка рисуются внутри: строка
+   остаётся плотной, палец попадает в неё целиком. */
+.ui-row > input[type="checkbox"] {
+  appearance: none; -webkit-appearance: none;
+  position: relative; flex: none;
+  width: var(--ui-tap); height: var(--ui-tap); margin: 0;
+  border: 0; background: none;
+}
+.ui-row > input[type="checkbox"]::after {
+  content: ""; position: absolute; inset: 10px;
+  border: 2px solid var(--ui-line); border-radius: 6px;
+  background: var(--ui-surface-2);
+}
+.ui-row > input[type="checkbox"]::before {
+  content: ""; position: absolute; left: 19px; top: 15px;
+  width: 5px; height: 11px; border: 2px solid var(--ui-on-accent);
+  border-top: 0; border-left: 0; border-radius: 1px;
+  transform: rotate(45deg); opacity: 0;
+}
+.ui-row > input[type="checkbox"]:checked::after {
+  border-color: var(--ui-accent); background: var(--ui-accent);
+}
+.ui-row > input[type="checkbox"]:checked::before { opacity: 1; }
+
 /* ---------- строка дня недели: состояние видно цветом и словом ----------
    Владелец (V-028/в, V-029/а): семь строк выглядели одинаково, состояние
    читалось только мелким текстом. Полоса слева, мягкий фон и слово справа
@@ -368,6 +396,35 @@ body.ui-page {
   font: inherit; font-size: 14px;
 }
 .ui-chip--on { background: var(--ui-accent); border-color: var(--ui-accent); color: var(--ui-on-accent); }
+
+/* ---------- E8: компактные строки опроса -----------------------------------
+   Конструктор открывают, чтобы поправить один вопрос, а не листать два экрана:
+   строка вопроса — 56 px, тип значением справа, подпись не переносится
+   (docs/development/162 §6 п. 1, мокапы 01 против 01b). */
+.ui-row--compact { min-height: 56px; padding-top: 8px; padding-bottom: 8px; }
+.ui-row--compact .ui-row__main { gap: 0; }
+.ui-row--compact .ui-row__title,
+.ui-row--dense .ui-row__title {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.ui-row--compact .ui-row__meta,
+.ui-row--dense .ui-row__meta {
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+
+/* Плотная строка списка людей: 44 px — ровно минимум нажатия, но на 8 строк
+   экономит 96 px и держит экран адресатов в одном кадре (docs/162 §6 п. 2). */
+.ui-row--dense {
+  min-height: 44px; padding-top: 2px; padding-bottom: 2px; gap: var(--ui-s2);
+}
+
+/* Сводка опроса: блок вопроса свёрнут, разворот по нажатию. 11 вопросов без
+   этого занимали 3 002 px (мокап 05, §6 п. 3). */
+.ui-acc { background: var(--ui-surface); border-bottom: 1px solid var(--ui-line); }
+.ui-acc:last-child { border-bottom: 0; }
+.ui-acc > summary { list-style: none; cursor: pointer; }
+.ui-acc > summary::-webkit-details-marker { display: none; }
+.ui-acc > .ui-list { margin: 0 var(--ui-s4) var(--ui-s3); border-radius: var(--ui-r-sm); }
 
 .ui-range { display: flex; align-items: flex-end; gap: var(--ui-s2); }
 .ui-range .ui-field { flex: 1; }
