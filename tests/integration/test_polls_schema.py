@@ -2,7 +2,7 @@
 
 Проверяется то, что легко потерять при правке SQL: идемпотентность файлов,
 наличие `poll.manage`/`poll.results.all` у admin, `poll.manage` (и только он) у org
-(V-088, 162 §3 D8) и то, что alembic доехал до `066_polls_org_manage` — то есть
+(V-088, 162 §3 D8) и то, что alembic доехал до `067_poll_interview_draft` — то есть
 схема одна и там, и там.
 
 Обоснование: FR-G18, AC-1, `docs/development/162-bot-polls.md` §14.1.
@@ -27,7 +27,7 @@ TABLES = ("poll", "poll_question", "poll_option", "poll_audience", "poll_person"
 def test_alembic_дошёл_до_066(test_db: str) -> None:
     with psycopg.connect(test_db, row_factory=dict_row) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()
-    assert head["version_num"] == "066_polls_org_manage"
+    assert head["version_num"] == "067_poll_interview_draft"
 
 
 def test_восемь_таблиц_на_месте(test_db: str) -> None:
