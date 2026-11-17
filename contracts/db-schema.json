@@ -1,0 +1,3837 @@
+{
+ "meta": {
+  "alembic": "066_polls_org_manage",
+  "note": "Снимок формы схемы. Индексы, права и данные не входят. Описание — docs/architecture/169-db-schema.md."
+ },
+ "tables": {
+  "access_grant": {
+   "check": [
+    "CHECK ((length(btrim(reason)) > 0))"
+   ],
+   "columns": {
+    "admin_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "expires_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "file_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('access_grant_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "notified_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "reason": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (admin_id) REFERENCES participant(id)",
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "agent_action": {
+   "check": [
+    "CHECK ((kind = ANY (ARRAY['move'::text, 'rename'::text, 'tag'::text, 'summarize'::text, 'answer'::text])))",
+    "CHECK ((status = ANY (ARRAY['proposed'::text, 'applied'::text, 'rejected'::text, 'expired'::text])))"
+   ],
+   "columns": {
+    "file_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('agent_action_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "payload": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "proposed_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "resolved_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'proposed'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "agent_proposal": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'confirmed'::text, 'cancelled'::text, 'expired'::text, 'failed'::text])))"
+   ],
+   "columns": {
+    "args": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "chat_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "confirmed_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "error": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "expires_at": {
+     "default": null,
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "human_text": {
+     "default": "''::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('agent_proposal_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "resolved_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "result": {
+     "default": null,
+     "not_null": false,
+     "type": "jsonb"
+    },
+    "status": {
+     "default": "'pending'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "token": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "tool": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "token"
+    ]
+   ]
+  },
+  "alembic_version": {
+   "check": [],
+   "columns": {
+    "version_num": {
+     "default": null,
+     "not_null": true,
+     "type": "character varying(32)"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "version_num"
+   ],
+   "unique": []
+  },
+  "app_setting": {
+   "check": [],
+   "columns": {
+    "key": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "value": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "key"
+   ],
+   "unique": []
+  },
+  "approval_request": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'approved'::text, 'rejected'::text, 'expired'::text])))"
+   ],
+   "columns": {
+    "amount": {
+     "default": null,
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "budget_tx_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "chat_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "comment": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "decided_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "decided_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('approval_request_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "idempotency_key": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "payload": {
+     "default": null,
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "requested_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "status": {
+     "default": "'pending'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "tx_type": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (budget_tx_id) REFERENCES budget_tx(id)",
+    "FOREIGN KEY (decided_by) REFERENCES participant(id)",
+    "FOREIGN KEY (requested_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "article_alias": {
+   "check": [],
+   "columns": {
+    "canonical": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "category_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "confirmed_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('article_alias_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "raw_text": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)",
+    "FOREIGN KEY (category_id) REFERENCES category(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "raw_text"
+    ]
+   ]
+  },
+  "article_map": {
+   "check": [],
+   "columns": {
+    "category_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "confirmed_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "counterparty": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('article_map_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kwargs": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "raw_text": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (category_id) REFERENCES category(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)",
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "raw_text"
+    ]
+   ]
+  },
+  "audit_event": {
+   "check": [
+    "CHECK ((actor_type = ANY (ARRAY['human'::text, 'bot'::text, 'system'::text])))"
+   ],
+   "columns": {
+    "action": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "actor_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "actor_type": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "after": {
+     "default": null,
+     "not_null": false,
+     "type": "jsonb"
+    },
+    "before": {
+     "default": null,
+     "not_null": false,
+     "type": "jsonb"
+    },
+    "correlation_id": {
+     "default": null,
+     "not_null": false,
+     "type": "uuid"
+    },
+    "entity_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "entity_type": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "hash": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('audit_event_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "prev_hash": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "source": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "ts": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "availability_hour": {
+   "check": [
+    "CHECK (((hour >= 0) AND (hour <= 23)))",
+    "CHECK ((source = ANY (ARRAY['bot'::text, 'sheet_import'::text, 'admin'::text])))",
+    "CHECK ((kind = ANY (ARRAY['busy'::text, 'free'::text, 'uncertain'::text, 'preferred'::text, 'declared'::text, 'imported'::text])))"
+   ],
+   "columns": {
+    "at_theatre": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "day": {
+     "default": null,
+     "not_null": true,
+     "type": "date"
+    },
+    "hour": {
+     "default": null,
+     "not_null": true,
+     "type": "integer"
+    },
+    "id": {
+     "default": "nextval('availability_hour_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "is_free": {
+     "default": null,
+     "not_null": true,
+     "type": "boolean"
+    },
+    "kind": {
+     "default": "'declared'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "raw_text": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "source": {
+     "default": "'bot'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "participant_id",
+     "day",
+     "hour"
+    ]
+   ]
+  },
+  "availability_template": {
+   "check": [
+    "CHECK (((from_min >= 0) AND (from_min <= 1440)))",
+    "CHECK (((to_min >= 0) AND (to_min <= 1440)))",
+    "CHECK (((from_min IS NULL) OR (to_min IS NULL) OR (from_min < to_min)))",
+    "CHECK ((status = ANY (ARRAY['free'::text, 'busy'::text, 'uncertain'::text])))",
+    "CHECK (((weekday >= 0) AND (weekday <= 6)))"
+   ],
+   "columns": {
+    "from_min": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "status": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "to_min": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "weekday": {
+     "default": null,
+     "not_null": true,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "participant_id",
+    "weekday"
+   ],
+   "unique": []
+  },
+  "budget_month_total": {
+   "check": [],
+   "columns": {
+    "computed_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "dues_total": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "expense_total": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "invest_total": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "period": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "profit_total": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "show_income_total": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "sublease_total": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "period"
+   ],
+   "unique": []
+  },
+  "budget_period": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))",
+    "CHECK ((quality = ANY (ARRAY['draft'::text, 'clean'::text])))"
+   ],
+   "columns": {
+    "closed_at": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "id": {
+     "default": "nextval('budget_period_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "opened_at": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "period": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "quality": {
+     "default": "'draft'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "status": {
+     "default": "'open'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "period"
+    ]
+   ]
+  },
+  "budget_plan": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['planned'::text, 'cancelled'::text])))",
+    "CHECK ((block = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))"
+   ],
+   "columns": {
+    "amount_planned": {
+     "default": null,
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "block": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "category_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('budget_plan_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "period": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "status": {
+     "default": "'planned'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (category_id) REFERENCES category(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "period",
+     "block",
+     "category_id"
+    ]
+   ]
+  },
+  "budget_tx": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['draft'::text, 'expected'::text, 'pending_approval'::text, 'confirmed'::text, 'rejected'::text, 'reversed'::text])))",
+    "CHECK ((origin = ANY (ARRAY['bot'::text, 'manual'::text, 'import'::text])))",
+    "CHECK ((method = ANY (ARRAY['cash'::text, 'card'::text, 'transfer'::text, 'unknown'::text])))",
+    "CHECK ((amount > (0)::numeric))",
+    "CHECK ((tx_type = ANY (ARRAY['income'::text, 'expense'::text, 'transfer'::text])))",
+    "CHECK ((block = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))"
+   ],
+   "columns": {
+    "amount": {
+     "default": null,
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "article_raw": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "base_amount": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(12,2)"
+    },
+    "base_tx_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "block": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "category_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "confirmed_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "confirmed_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "counterparty": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "currency": {
+     "default": "'RUB'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "entered_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('budget_tx_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "idempotency_key": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "is_advance": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "is_debt": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "is_plan": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "method": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "origin": {
+     "default": "'import'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "period": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "purpose": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "rate_pct": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(5,2)"
+    },
+    "raw_text": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "replaces": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "rev": {
+     "default": "1",
+     "not_null": true,
+     "type": "integer"
+    },
+    "service_period": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "sheet_error": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "sheet_written_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "source_chat_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "source_message_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "status": {
+     "default": "'confirmed'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "tx_date": {
+     "default": null,
+     "not_null": true,
+     "type": "date"
+    },
+    "tx_type": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (replaces) REFERENCES budget_tx(id)",
+    "FOREIGN KEY (entered_by) REFERENCES participant(id)",
+    "FOREIGN KEY (category_id) REFERENCES category(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (base_tx_id) REFERENCES budget_tx(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "source_chat_id",
+     "source_message_id"
+    ]
+   ]
+  },
+  "category": {
+   "check": [
+    "CHECK ((direction = ANY (ARRAY['expense'::text, 'income'::text, 'both'::text])))"
+   ],
+   "columns": {
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "direction": {
+     "default": "'expense'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('category_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "parent_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (parent_id) REFERENCES category(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "name"
+    ]
+   ]
+  },
+  "category_candidate": {
+   "check": [],
+   "columns": {
+    "approved": {
+     "default": null,
+     "not_null": false,
+     "type": "boolean"
+    },
+    "approved_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "approved_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "first_seen": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('category_candidate_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "proposed_text": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "seen_count": {
+     "default": "1",
+     "not_null": true,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (approved_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "name"
+    ]
+   ]
+  },
+  "discipline": {
+   "check": [],
+   "columns": {
+    "code": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('discipline_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "sort_order": {
+     "default": "100",
+     "not_null": true,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "code"
+    ]
+   ]
+  },
+  "dues_charge": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['due'::text, 'partial'::text, 'paid'::text, 'waived'::text, 'skipped'::text])))"
+   ],
+   "columns": {
+    "amount_due": {
+     "default": null,
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "amount_paid": {
+     "default": "0",
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "id": {
+     "default": "nextval('dues_charge_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "paid_on": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "payment_tx_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "period": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "status": {
+     "default": "'due'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
+    "FOREIGN KEY (payment_tx_id) REFERENCES budget_tx(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "participant_id",
+     "period"
+    ]
+   ]
+  },
+  "dues_plan": {
+   "check": [],
+   "columns": {
+    "amount": {
+     "default": null,
+     "not_null": true,
+     "type": "numeric(12,2)"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('dues_plan_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "period": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "reason": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "tariff": {
+     "default": null,
+     "not_null": true,
+     "type": "numeric(12,2)"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "participant_id",
+     "period"
+    ]
+   ]
+  },
+  "event_plan": {
+   "check": [
+    "CHECK ((ends_at > starts_at))",
+    "CHECK ((kind = ANY (ARRAY['rehearsal'::text, 'show'::text, 'training'::text, 'rental'::text, 'meeting'::text, 'other'::text])))",
+    "CHECK ((status = ANY (ARRAY['proposed'::text, 'confirmed'::text, 'cancelled'::text, 'done'::text])))"
+   ],
+   "columns": {
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "created_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "discipline_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "ends_at": {
+     "default": null,
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "gcal_event_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('event_plan_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "location": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "participant_ids": {
+     "default": "'{}'::bigint[]",
+     "not_null": true,
+     "type": "bigint[]"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "starts_at": {
+     "default": null,
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'proposed'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (project_id) REFERENCES project(id)",
+    "FOREIGN KEY (created_by) REFERENCES participant(id)",
+    "FOREIGN KEY (discipline_id) REFERENCES discipline(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "feedback": {
+   "check": [
+    "CHECK ((kind = ANY (ARRAY['bug'::text, 'wish'::text, 'wish-fl'::text, 'question'::text, 'praise'::text])))",
+    "CHECK ((status = ANY (ARRAY['new'::text, 'seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))"
+   ],
+   "columns": {
+    "context": {
+     "default": null,
+     "not_null": false,
+     "type": "jsonb"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('feedback_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": "'bug'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "resolution": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "resolved_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'new'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "text": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "feedback_answer": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))",
+    "CHECK ((source = ANY (ARRAY['agent'::text, 'human'::text, 'server'::text])))"
+   ],
+   "columns": {
+    "commit_sha": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "feedback_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('feedback_answer_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "question_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "source": {
+     "default": "'agent'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "status": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "text": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (feedback_id) REFERENCES feedback(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "feedback_attachment": {
+   "check": [],
+   "columns": {
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "feedback_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "file_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "position": {
+     "default": "0",
+     "not_null": true,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE",
+    "FOREIGN KEY (feedback_id) REFERENCES feedback(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "feedback_id",
+    "file_id"
+   ],
+   "unique": [
+    [
+     "file_id"
+    ]
+   ]
+  },
+  "file_audio": {
+   "check": [
+    "CHECK (((bitrate_kbps IS NULL) OR (bitrate_kbps > 0)))",
+    "CHECK (((duration_sec IS NULL) OR (duration_sec >= 0)))"
+   ],
+   "columns": {
+    "artist": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "bitrate_kbps": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "duration_sec": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "file_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "format": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "probed_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "title": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "file_id"
+   ],
+   "unique": []
+  },
+  "file_folder": {
+   "check": [],
+   "columns": {
+    "added_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "file_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "folder_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "position": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (folder_id) REFERENCES folder(id) ON DELETE CASCADE",
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "file_id",
+    "folder_id"
+   ],
+   "unique": []
+  },
+  "file_object": {
+   "check": [
+    "CHECK (((kind IS NULL) OR (kind = ANY (ARRAY['text'::text, 'image'::text, 'audio'::text]))))",
+    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text, 'feedback'::text])))",
+    "CHECK ((uploaded_via = ANY (ARRAY['human_drive'::text, 'human_telegram'::text, 'bot'::text, 'webapp'::text, 'agent'::text])))"
+   ],
+   "columns": {
+    "bucket": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "cold_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "deleted_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "drive_file_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('file_object_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "last_access_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "meta": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "mime": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "object_key": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "scope": {
+     "default": "'personal'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "search_tsv": {
+     "default": null,
+     "not_null": false,
+     "type": "tsvector"
+    },
+    "sha256": {
+     "default": null,
+     "not_null": false,
+     "type": "character(64)"
+    },
+    "size_bytes": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "uploaded_via": {
+     "default": "'human_drive'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "drive_file_id"
+    ]
+   ]
+  },
+  "file_tag": {
+   "check": [],
+   "columns": {
+    "file_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "tag_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE",
+    "FOREIGN KEY (tag_id) REFERENCES tag(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "file_id",
+    "tag_id"
+   ],
+   "unique": []
+  },
+  "file_text": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['ok'::text, 'text_unavailable'::text])))"
+   ],
+   "columns": {
+    "body": {
+     "default": "''::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "extracted_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "file_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "lang": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "status": {
+     "default": "'ok'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "file_id"
+   ],
+   "unique": []
+  },
+  "finance_granularity": {
+   "check": [
+    "CHECK ((section = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))",
+    "CHECK ((mode = ANY (ARRAY['per_operation'::text, 'per_source'::text, 'per_month'::text])))"
+   ],
+   "columns": {
+    "mode": {
+     "default": "'per_operation'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "section": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "section"
+   ],
+   "unique": []
+  },
+  "finance_source_map": {
+   "check": [
+    "CHECK ((section = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))"
+   ],
+   "columns": {
+    "category_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('finance_source_map_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "label": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "section": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE SET NULL",
+    "FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE SET NULL"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "folder": {
+   "check": [
+    "CHECK ((((scope = 'shared'::text) AND (participant_id IS NULL)) OR ((scope = 'personal'::text) AND (participant_id IS NOT NULL))))",
+    "CHECK (((depth >= 1) AND (depth <= 5)))",
+    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text])))"
+   ],
+   "columns": {
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "created_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "deleted_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "depth": {
+     "default": "1",
+     "not_null": true,
+     "type": "integer"
+    },
+    "id": {
+     "default": "nextval('folder_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "parent_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "path": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "scope": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (parent_id) REFERENCES folder(id) ON DELETE CASCADE",
+    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE SET NULL",
+    "FOREIGN KEY (created_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "import_batch": {
+   "check": [
+    "CHECK ((kind = ANY (ARRAY['budget'::text, 'schedule'::text, 'people'::text, 'projects'::text])))",
+    "CHECK ((status = ANY (ARRAY['running'::text, 'needs_review'::text, 'applied'::text, 'failed'::text])))"
+   ],
+   "columns": {
+    "finished_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('import_batch_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "source": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "source_hash": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "started_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "stats": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "status": {
+     "default": "'running'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "import_row": {
+   "check": [],
+   "columns": {
+    "applied": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "batch_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "confidence": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(4,3)"
+    },
+    "id": {
+     "default": "nextval('import_row_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "issue": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "raw": {
+     "default": null,
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "resolved_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "resolved_type": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "sheet_col": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "sheet_row": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "sheet_title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (batch_id) REFERENCES import_batch(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "intent_log": {
+   "check": [
+    "CHECK ((source = ANY (ARRAY['rules'::text, 'llm'::text, 'buttons'::text, 'human_new'::text, 'failed'::text, 'cache'::text])))",
+    "CHECK (((agent_status IS NULL) OR (agent_status = ANY (ARRAY['answer'::text, 'proposal'::text, 'refusal'::text]))))"
+   ],
+   "columns": {
+    "agent_status": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "answer": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "category_final": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "category_llm": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "category_rules": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "chat_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "confidence": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(4,3)"
+    },
+    "degraded_reason": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('intent_log_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "intent_llm": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "intent_rules": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "latency_ms": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "resolved": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "source": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "step_count": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "steps": {
+     "default": null,
+     "not_null": false,
+     "type": "jsonb"
+    },
+    "text": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "tokens": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "ts": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "invite_attempt": {
+   "check": [],
+   "columns": {
+    "chat_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('invite_attempt_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "ok": {
+     "default": null,
+     "not_null": true,
+     "type": "boolean"
+    },
+    "ts": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "invite_code": {
+   "check": [
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'troupe'::text, 'master'::text])))"
+   ],
+   "columns": {
+    "code": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "created_by": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "discipline_code": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "expires_at": {
+     "default": null,
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('invite_code_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "max_uses": {
+     "default": "1",
+     "not_null": true,
+     "type": "integer"
+    },
+    "role": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "used_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "uses": {
+     "default": "0",
+     "not_null": true,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "code"
+    ]
+   ]
+  },
+  "job": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'running'::text, 'done'::text, 'failed'::text])))"
+   ],
+   "columns": {
+    "attempts": {
+     "default": "0",
+     "not_null": true,
+     "type": "integer"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('job_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "last_error": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "locked_until": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "payload": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "run_at": {
+     "default": null,
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'pending'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "llm_policy": {
+   "check": [
+    "CHECK ((scope = ANY (ARRAY['global'::text, 'role'::text, 'participant'::text])))"
+   ],
+   "columns": {
+    "daily_requests": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "hard_stop": {
+     "default": "true",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "id": {
+     "default": "nextval('llm_policy_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "max_tokens_request": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "model_allowlist": {
+     "default": "'{}'::text[]",
+     "not_null": true,
+     "type": "text[]"
+    },
+    "monthly_cost_rub": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(10,2)"
+    },
+    "monthly_tokens": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "scope": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "scope_key": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "updated_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (updated_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "scope",
+     "scope_key"
+    ]
+   ]
+  },
+  "llm_usage": {
+   "check": [
+    "CHECK ((price_status = ANY (ARRAY['known'::text, 'no_price'::text])))",
+    "CHECK ((status = ANY (ARRAY['ok'::text, 'error'::text, 'stopped'::text])))"
+   ],
+   "columns": {
+    "cost_rub": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(10,4)"
+    },
+    "id": {
+     "default": "nextval('llm_usage_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "intent": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "model": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "price_status": {
+     "default": "'no_price'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "provider": {
+     "default": "'openrouter'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "request_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "status": {
+     "default": "'ok'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "tokens_in": {
+     "default": "0",
+     "not_null": true,
+     "type": "integer"
+    },
+    "tokens_out": {
+     "default": "0",
+     "not_null": true,
+     "type": "integer"
+    },
+    "ts": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "migration_marker": {
+   "check": [],
+   "columns": {
+    "applied_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "key": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "key"
+   ],
+   "unique": []
+  },
+  "note": {
+   "check": [
+    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text])))"
+   ],
+   "columns": {
+    "body": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "deleted_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "drive_file_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('note_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "scope": {
+     "default": "'personal'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "tags": {
+     "default": "'{}'::text[]",
+     "not_null": true,
+     "type": "text[]"
+    },
+    "title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "notification": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['scheduled'::text, 'sent'::text, 'failed'::text, 'cancelled'::text, 'skipped'::text])))"
+   ],
+   "columns": {
+    "attempts": {
+     "default": "0",
+     "not_null": true,
+     "type": "integer"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "dedupe_key": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('notification_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "last_error": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "payload": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "recipient_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "scheduled_at": {
+     "default": null,
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "sent_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'scheduled'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (recipient_id) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "dedupe_key",
+     "recipient_id"
+    ]
+   ]
+  },
+  "notification_pref": {
+   "check": [],
+   "columns": {
+    "digest_enabled": {
+     "default": "true",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "kinds_muted": {
+     "default": "'{}'::text[]",
+     "not_null": true,
+     "type": "text[]"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "quiet_from": {
+     "default": "'20:00:00'::time without time zone",
+     "not_null": true,
+     "type": "time without time zone"
+    },
+    "quiet_to": {
+     "default": "'08:00:00'::time without time zone",
+     "not_null": true,
+     "type": "time without time zone"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "participant_id"
+   ],
+   "unique": []
+  },
+  "participant": {
+   "check": [
+    "CHECK (((person_key IS NULL) OR (person_key ~ '^[a-zа-я0-9]+(-[a-zа-я0-9]+)*$'::text)))",
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'blocked'::text, 'archived'::text])))",
+    "CHECK (((travel_minutes >= 0) AND (travel_minutes <= 240)))",
+    "CHECK (((dues_tariff IS NULL) OR (dues_tariff >= (0)::numeric)))",
+    "CHECK (((phone IS NULL) OR (phone ~ '^\\+?[0-9]{10,15}$'::text)))",
+    "CHECK (((birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2020-12-31'::date))))",
+    "CHECK ((write_gender = ANY (ARRAY['m'::text, 'f'::text])))",
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'troupe'::text, 'master'::text])))"
+   ],
+   "columns": {
+    "activated_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "ai_manifest": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "birth_date": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "birthday": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "display_name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "drive_folder": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "dues_tariff": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric(12,2)"
+    },
+    "dues_tariff_from": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "id": {
+     "default": "nextval('participant_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "interests": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "invite_code_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "invited_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "is_active": {
+     "default": "true",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "is_director": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "is_teacher": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "person_key": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "phone": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "plays": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "role": {
+     "default": "'troupe'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "roles_note": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "specialty": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "status": {
+     "default": "'pending'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "tg_chat_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "travel_minutes": {
+     "default": "60",
+     "not_null": true,
+     "type": "integer"
+    },
+    "write_gender": {
+     "default": "'m'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "person_key"
+    ],
+    [
+     "tg_chat_id"
+    ]
+   ]
+  },
+  "participant_capability_override": {
+   "check": [],
+   "columns": {
+    "allowed": {
+     "default": null,
+     "not_null": true,
+     "type": "boolean"
+    },
+    "capability": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "granted_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "granted_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "reason": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (granted_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (capability) REFERENCES rbac_capability(code) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "participant_id",
+    "capability"
+   ],
+   "unique": []
+  },
+  "participant_discipline": {
+   "check": [
+    "CHECK ((relation = ANY (ARRAY['teacher'::text, 'student'::text])))"
+   ],
+   "columns": {
+    "discipline_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "relation": {
+     "default": "'student'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (discipline_id) REFERENCES discipline(id) ON DELETE CASCADE",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "participant_id",
+    "discipline_id"
+   ],
+   "unique": []
+  },
+  "participant_role": {
+   "check": [
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'troupe'::text, 'master'::text])))"
+   ],
+   "columns": {
+    "granted_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "granted_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "revoke_reason": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "revoked_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "revoked_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "role": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (revoked_by) REFERENCES participant(id)",
+    "FOREIGN KEY (granted_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "participant_id",
+    "role"
+   ],
+   "unique": []
+  },
+  "person_alias": {
+   "check": [
+    "CHECK ((source = ANY (ARRAY['manual'::text, 'import'::text, 'bot'::text])))",
+    "CHECK ((alias_kind = ANY (ARRAY['name'::text, 'short'::text, 'tg_username'::text, 'payee'::text, 'external'::text, 'role'::text])))"
+   ],
+   "columns": {
+    "alias": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "alias_kind": {
+     "default": "'name'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('person_alias_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "source": {
+     "default": "'manual'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "participant_id",
+     "alias"
+    ]
+   ]
+  },
+  "poll": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['draft'::text, 'running'::text, 'closed'::text])))",
+    "CHECK ((title <> ''::text))"
+   ],
+   "columns": {
+    "anonymous": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "closed_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "closes_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "created_by": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('poll_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "intro": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "started_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'draft'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (created_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "poll_answer": {
+   "check": [],
+   "columns": {
+    "answered_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "number_value": {
+     "default": null,
+     "not_null": false,
+     "type": "numeric"
+    },
+    "option_codes": {
+     "default": "'{}'::text[]",
+     "not_null": true,
+     "type": "text[]"
+    },
+    "question_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "run_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "skipped": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "text_value": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (question_id) REFERENCES poll_question(id) ON DELETE CASCADE",
+    "FOREIGN KEY (run_id) REFERENCES poll_run(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "run_id",
+    "question_id"
+   ],
+   "unique": []
+  },
+  "poll_audience": {
+   "check": [
+    "CHECK ((kind = ANY (ARRAY['all_active'::text, 'role'::text, 'project'::text])))",
+    "CHECK ((((kind = 'role'::text) AND (role IS NOT NULL) AND (project_id IS NULL)) OR ((kind = 'project'::text) AND (project_id IS NOT NULL) AND (role IS NULL)) OR ((kind = 'all_active'::text) AND (role IS NULL) AND (project_id IS NULL))))",
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))"
+   ],
+   "columns": {
+    "id": {
+     "default": "nextval('poll_audience_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "poll_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "project_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "role": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE",
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "poll_option": {
+   "check": [
+    "CHECK (((char_length(code) >= 1) AND (char_length(code) <= 2)))",
+    "CHECK ((label <> ''::text))"
+   ],
+   "columns": {
+    "code": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('poll_option_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "label": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "position": {
+     "default": null,
+     "not_null": true,
+     "type": "integer"
+    },
+    "question_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (question_id) REFERENCES poll_question(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "question_id",
+     "position"
+    ],
+    [
+     "question_id",
+     "code"
+    ]
+   ]
+  },
+  "poll_person": {
+   "check": [
+    "CHECK ((mode = ANY (ARRAY['include'::text, 'exclude'::text])))"
+   ],
+   "columns": {
+    "mode": {
+     "default": "'include'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "poll_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "poll_id",
+    "participant_id"
+   ],
+   "unique": []
+  },
+  "poll_question": {
+   "check": [
+    "CHECK (((kind = ANY (ARRAY['single'::text, 'multi'::text])) OR (free_text = false)))",
+    "CHECK (((max_choices IS NULL) OR (max_choices > 0)))",
+    "CHECK ((text <> ''::text))",
+    "CHECK ((kind = ANY (ARRAY['single'::text, 'multi'::text, 'yesno'::text, 'number'::text, 'text'::text])))",
+    "CHECK ((\"position\" > 0))"
+   ],
+   "columns": {
+    "free_text": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "id": {
+     "default": "nextval('poll_question_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "max_choices": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "poll_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "position": {
+     "default": null,
+     "not_null": true,
+     "type": "integer"
+    },
+    "required": {
+     "default": "true",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "text": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "poll_id",
+     "position"
+    ]
+   ]
+  },
+  "poll_run": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['invited'::text, 'in_progress'::text, 'done'::text, 'declined'::text])))"
+   ],
+   "columns": {
+    "finished_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('poll_run_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "message_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "participant_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "poll_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "position": {
+     "default": "1",
+     "not_null": true,
+     "type": "integer"
+    },
+    "started_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "status": {
+     "default": "'invited'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "poll_id",
+     "participant_id"
+    ]
+   ]
+  },
+  "poll_viewer": {
+   "check": [
+    "CHECK (((participant_id IS NULL) <> (role IS NULL)))",
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))"
+   ],
+   "columns": {
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "poll_id": {
+     "default": null,
+     "not_null": true,
+     "type": "bigint"
+    },
+    "role": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE"
+   ],
+   "primary_key": [],
+   "unique": []
+  },
+  "project": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['planned'::text, 'active'::text, 'archive'::text])))",
+    "CHECK ((kind = ANY (ARRAY['show'::text, 'course'::text, 'training'::text, 'other'::text])))"
+   ],
+   "columns": {
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "ends_on": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "id": {
+     "default": "nextval('project_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": "'show'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "starts_on": {
+     "default": null,
+     "not_null": false,
+     "type": "date"
+    },
+    "status": {
+     "default": "'active'::text",
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "name"
+    ]
+   ]
+  },
+  "rbac_capability": {
+   "check": [],
+   "columns": {
+    "code": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "description": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "grp": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "code"
+   ],
+   "unique": []
+  },
+  "rbac_role_capability": {
+   "check": [],
+   "columns": {
+    "capability": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "role": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (capability) REFERENCES rbac_capability(code) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "role",
+    "capability"
+   ],
+   "unique": []
+  },
+  "row_map": {
+   "check": [],
+   "columns": {
+    "binding_key": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "cell_key": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "col_from": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "col_to": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "content_hash": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "entity_id": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "entity_type": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "id": {
+     "default": "nextval('row_map_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "is_deleted": {
+     "default": "false",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "last_seen_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "sheet_row": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (binding_key) REFERENCES sheet_binding(key) ON DELETE CASCADE"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "sheet_binding": {
+   "check": [
+    "CHECK ((layout = ANY (ARRAY['monthly_blocks'::text, 'hour_matrix'::text, 'flat_table'::text, 'key_value'::text])))"
+   ],
+   "columns": {
+    "first_col": {
+     "default": "1",
+     "not_null": true,
+     "type": "integer"
+    },
+    "first_data_row": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "header_checksum": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "header_row": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "id": {
+     "default": "nextval('sheet_binding_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "key": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "last_col": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "last_edit_time": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "last_read_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "layout": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "meta": {
+     "default": "'{}'::jsonb",
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "sheet_title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "spreadsheet_id": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "updated_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "key"
+    ]
+   ]
+  },
+  "slot_proposal": {
+   "check": [],
+   "columns": {
+    "candidates": {
+     "default": null,
+     "not_null": true,
+     "type": "jsonb"
+    },
+    "chosen_index": {
+     "default": null,
+     "not_null": false,
+     "type": "integer"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "created_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "event_plan_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('slot_proposal_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "request": {
+     "default": null,
+     "not_null": true,
+     "type": "jsonb"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (created_by) REFERENCES participant(id)",
+    "FOREIGN KEY (event_plan_id) REFERENCES event_plan(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": []
+  },
+  "tag": {
+   "check": [
+    "CHECK ((status = ANY (ARRAY['approved'::text, 'draft'::text, 'rejected'::text])))",
+    "CHECK ((kind = ANY (ARRAY['topic'::text, 'project'::text, 'role'::text])))"
+   ],
+   "columns": {
+    "approved_at": {
+     "default": null,
+     "not_null": false,
+     "type": "timestamp with time zone"
+    },
+    "approved_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "created_by": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
+    "id": {
+     "default": "nextval('tag_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "kind": {
+     "default": "'topic'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "slug": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "status": {
+     "default": "'approved'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "title": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    }
+   },
+   "foreign_keys": [
+    "FOREIGN KEY (approved_by) REFERENCES participant(id)",
+    "FOREIGN KEY (created_by) REFERENCES participant(id)"
+   ],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "slug"
+    ],
+    [
+     "title"
+    ]
+   ]
+  },
+  "venue": {
+   "check": [],
+   "columns": {
+    "calendar_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "code": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "created_at": {
+     "default": "now()",
+     "not_null": true,
+     "type": "timestamp with time zone"
+    },
+    "id": {
+     "default": "nextval('venue_id_seq'::regclass)",
+     "not_null": true,
+     "type": "bigint"
+    },
+    "is_active": {
+     "default": "true",
+     "not_null": true,
+     "type": "boolean"
+    },
+    "kind": {
+     "default": "'room'::text",
+     "not_null": true,
+     "type": "text"
+    },
+    "name": {
+     "default": null,
+     "not_null": true,
+     "type": "text"
+    },
+    "sort_order": {
+     "default": "100",
+     "not_null": true,
+     "type": "integer"
+    }
+   },
+   "foreign_keys": [],
+   "primary_key": [
+    "id"
+   ],
+   "unique": [
+    [
+     "code"
+    ]
+   ]
+  }
+ },
+ "views": {
+  "v_active_participants": " SELECT id, display_name, person_key, role, status FROM participant WHERE (status <> 'archived'::text);",
+  "v_availability_summary": " SELECT a.day, a.hour, count(*) FILTER (WHERE a.is_free) AS free_cnt, count(*) FILTER (WHERE (NOT a.is_free)) AS busy_cnt, count(*) AS known_cnt FROM (availability_hour a JOIN participant p ON ((p.id = a.participant_id))) WHERE (p.status <> 'archived'::text) GROUP BY a.day, a.hour;",
+  "v_balance": " SELECT ( SELECT COALESCE(sum(dues_charge.amount_due), (0)::numeric) AS \"coalesce\" FROM dues_charge) AS dues_total, ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'income'::text) AND (budget_tx.status = 'confirmed'::text))) AS income_tx, ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'expense'::text) AND (budget_tx.status = 'confirmed'::text))) AS expense_tx, ((( SELECT COALESCE(sum(dues_charge.amount_due), (0)::numeric) AS \"coalesce\" FROM dues_charge) + ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'income'::text) AND (budget_tx.status = 'confirmed'::text)))) - ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'expense'::text) AND (budget_tx.status = 'confirmed'::text)))) AS balance;",
+  "v_dues_balance": " SELECT p.id AS participant_id, p.display_name, d.period, d.amount_due, d.amount_paid, (d.amount_due - d.amount_paid) AS balance, d.status FROM (dues_charge d JOIN participant p ON ((p.id = d.participant_id))) WHERE (d.amount_due <> d.amount_paid);",
+  "v_file_checks": " WITH f1 AS ( SELECT 'F1'::text AS code, 'У каждого файла есть владелец'::text AS name, (NOT (EXISTS ( SELECT 1 FROM file_object WHERE (file_object.participant_id IS NULL)))) AS ok, (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE (file_object.participant_id IS NULL)), '0'::text) || ' без владельца'::text) AS detail ), f2 AS ( SELECT 'F2'::text AS \"?column?\", 'Файл знает, где его байты'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.object_key IS NULL) AND (file_object.drive_file_id IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.object_key IS NULL) AND (file_object.drive_file_id IS NULL))), '0'::text) || ' без ключа'::text) AS \"?column?\" ), f3 AS ( SELECT 'F3'::text AS \"?column?\", 'Размер файла положительный'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.size_bytes IS NOT NULL) AND (file_object.size_bytes <= 0))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.size_bytes IS NOT NULL) AND (file_object.size_bytes <= 0))), '0'::text) || ' строк'::text) AS \"?column?\" ), f4 AS ( SELECT 'F4'::text AS \"?column?\", 'В ключе объекта нет имён и кириллицы'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE (file_object.object_key ~ '[А-Яа-яЁё]'::text)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE (file_object.object_key ~ '[А-Яа-яЁё]'::text)), '0'::text) || ' ключей с текстом'::text) AS \"?column?\" ), f5 AS ( SELECT 'F5'::text AS \"?column?\", 'Личная папка принадлежит человеку'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder WHERE ((folder.scope = 'personal'::text) AND (folder.participant_id IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder WHERE ((folder.scope = 'personal'::text) AND (folder.participant_id IS NULL))), '0'::text) || ' папок'::text) AS \"?column?\" ), f6 AS ( SELECT 'F6'::text AS \"?column?\", 'Глубина папок не больше 5'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder WHERE (folder.depth > 5)))) AS \"?column?\", (COALESCE(( SELECT (max(folder.depth))::text AS max FROM folder), '0'::text) || ' максимальная глубина'::text) AS \"?column?\" ), f7 AS ( SELECT 'F7'::text AS \"?column?\", 'У папки нет потерянного родителя'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder c WHERE ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE (p.id = c.parent_id)))))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder c WHERE ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE (p.id = c.parent_id)))))), '0'::text) || ' папок'::text) AS \"?column?\" ), f8 AS ( SELECT 'F8'::text AS \"?column?\", 'В папках нет удалённых файлов'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM (file_folder ff JOIN file_object f ON ((f.id = ff.file_id))) WHERE (f.deleted_at IS NOT NULL)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM (file_folder ff JOIN file_object f ON ((f.id = ff.file_id))) WHERE (f.deleted_at IS NOT NULL)), '0'::text) || ' связей'::text) AS \"?column?\" ), f9 AS ( SELECT 'F9'::text AS \"?column?\", 'Путь папки соответствует её имени и родителю'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder c WHERE (((c.parent_id IS NULL) AND (c.path <> c.name)) OR ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE ((p.id = c.parent_id) AND (c.path = ((p.path || '/'::text) || c.name))))))))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder c WHERE (((c.parent_id IS NULL) AND (c.path <> c.name)) OR ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE ((p.id = c.parent_id) AND (c.path = ((p.path || '/'::text) || c.name))))))))), '0'::text) || ' папок'::text) AS \"?column?\" ), f10 AS ( SELECT 'F10'::text AS \"?column?\", 'У доступа админа есть причина'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM access_grant WHERE (length(btrim(access_grant.reason)) = 0)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM access_grant WHERE (length(btrim(access_grant.reason)) = 0)), '0'::text) || ' записей'::text) AS \"?column?\" ) SELECT f1.code, f1.name, f1.ok, f1.detail FROM f1 UNION ALL SELECT f2.\"?column?\" AS code, f2.\"?column?_1\" AS name, f2.\"?column?_2\" AS ok, f2.\"?column?_3\" AS detail FROM f2 f2(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f3.\"?column?\" AS code, f3.\"?column?_1\" AS name, f3.\"?column?_2\" AS ok, f3.\"?column?_3\" AS detail FROM f3 f3(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f4.\"?column?\" AS code, f4.\"?column?_1\" AS name, f4.\"?column?_2\" AS ok, f4.\"?column?_3\" AS detail FROM f4 f4(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f5.\"?column?\" AS code, f5.\"?column?_1\" AS name, f5.\"?column?_2\" AS ok, f5.\"?column?_3\" AS detail FROM f5 f5(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f6.\"?column?\" AS code, f6.\"?column?_1\" AS name, f6.\"?column?_2\" AS ok, f6.\"?column?_3\" AS detail FROM f6 f6(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f7.\"?column?\" AS code, f7.\"?column?_1\" AS name, f7.\"?column?_2\" AS ok, f7.\"?column?_3\" AS detail FROM f7 f7(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f8.\"?column?\" AS code, f8.\"?column?_1\" AS name, f8.\"?column?_2\" AS ok, f8.\"?column?_3\" AS detail FROM f8 f8(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f9.\"?column?\" AS code, f9.\"?column?_1\" AS name, f9.\"?column?_2\" AS ok, f9.\"?column?_3\" AS detail FROM f9 f9(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f10.\"?column?\" AS code, f10.\"?column?_1\" AS name, f10.\"?column?_2\" AS ok, f10.\"?column?_3\" AS detail FROM f10 f10(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\");",
+  "v_intent_degraded": " SELECT (date_trunc('day'::text, ts))::date AS \"день\", COALESCE(degraded_reason, 'не записано'::text) AS \"причина\", CASE WHEN (degraded_reason = ANY (ARRAY['chat_tokens'::text, 'chat_steps'::text, 'token_budget'::text])) THEN 'бюджет'::text WHEN (degraded_reason = ANY (ARRAY['timeout'::text, 'llm_unavailable'::text, 'llm_error'::text, 'provider_timeout'::text])) THEN 'провайдер'::text WHEN (degraded_reason = 'step_limit'::text) THEN 'агент'::text WHEN (degraded_reason IS NULL) THEN 'не записано'::text ELSE 'прочее'::text END AS \"вид\", count(*) AS \"отказов\" FROM intent_log WHERE (agent_status = 'refusal'::text) GROUP BY ((date_trunc('day'::text, ts))::date), COALESCE(degraded_reason, 'не записано'::text), CASE WHEN (degraded_reason = ANY (ARRAY['chat_tokens'::text, 'chat_steps'::text, 'token_budget'::text])) THEN 'бюджет'::text WHEN (degraded_reason = ANY (ARRAY['timeout'::text, 'llm_unavailable'::text, 'llm_error'::text, 'provider_timeout'::text])) THEN 'провайдер'::text WHEN (degraded_reason = 'step_limit'::text) THEN 'агент'::text WHEN (degraded_reason IS NULL) THEN 'не записано'::text ELSE 'прочее'::text END;",
+  "v_intent_gaps": " SELECT (date_trunc('day'::text, ts))::date AS day, count(*) AS \"всего\", count(*) FILTER (WHERE (source = 'llm'::text)) AS \"разобрала_модель\", count(*) FILTER (WHERE (source = ANY (ARRAY['buttons'::text, 'human_new'::text]))) AS \"спросили_человека\", count(*) FILTER (WHERE (NOT resolved)) AS \"не_записано\" FROM intent_log WHERE (agent_status IS NULL) GROUP BY ((date_trunc('day'::text, ts))::date) ORDER BY ((date_trunc('day'::text, ts))::date) DESC;",
+  "v_invariant_checks": " WITH i1 AS ( SELECT 'I1'::text AS code, 'Баланс = накопленный итог последнего периода'::text AS name, (abs((( SELECT v_balance.balance FROM v_balance) - ( SELECT sum((v_period_totals.income_total - v_period_totals.expense_total)) AS sum FROM v_period_totals))) < 0.01) AS ok, concat('баланс ', ( SELECT round(v_balance.balance, 2) AS round FROM v_balance)) AS detail ), i2 AS ( SELECT 'I2'::text AS \"?column?\", 'Нет дублей операций'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE (budget_tx.status = 'confirmed'::text) GROUP BY budget_tx.period, budget_tx.block, budget_tx.tx_date, budget_tx.amount, budget_tx.article_raw HAVING (count(*) > 1)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM ( SELECT 1 AS \"?column?\" FROM budget_tx WHERE (budget_tx.status = 'confirmed'::text) GROUP BY budget_tx.period, budget_tx.block, budget_tx.tx_date, budget_tx.amount, budget_tx.article_raw HAVING (count(*) > 1)) d), '0'::text) || ' групп'::text) AS \"?column?\" ), i3 AS ( SELECT 'I3'::text AS \"?column?\", 'Тип операции соответствует категории'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM (budget_tx t JOIN category c ON ((c.id = t.category_id))) WHERE ((c.direction = ANY (ARRAY['income'::text, 'expense'::text])) AND (c.direction <> t.tx_type))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM (budget_tx t JOIN category c ON ((c.id = t.category_id))) WHERE ((c.direction = ANY (ARRAY['income'::text, 'expense'::text])) AND (c.direction <> t.tx_type))), '0'::text) || ' строк'::text) AS \"?column?\" ), i5 AS ( SELECT 'I5'::text AS \"?column?\", 'Доли от сборов сходятся с базой'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE ((budget_tx.rate_pct IS NOT NULL) AND (budget_tx.base_amount IS NOT NULL) AND (abs((budget_tx.amount - round(((budget_tx.base_amount * budget_tx.rate_pct) / (100)::numeric), 2))) > (0.01 * budget_tx.base_amount)))))) AS \"?column?\", ((COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE (budget_tx.rate_pct IS NOT NULL)), '0'::text) || ' выплат, из них с расхождением: '::text) || COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE ((budget_tx.rate_pct IS NOT NULL) AND (abs((budget_tx.amount - round(((budget_tx.base_amount * budget_tx.rate_pct) / (100)::numeric), 2))) > (0.01 * budget_tx.base_amount)))), '0'::text)) AS \"?column?\" ), i6 AS ( SELECT 'I6'::text AS \"?column?\", 'У аванса указан период услуги'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE (budget_tx.is_advance AND (budget_tx.service_period IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE (budget_tx.is_advance AND (budget_tx.service_period IS NULL))), '0'::text) || ' без периода'::text) AS \"?column?\" ), i7 AS ( SELECT 'I7'::text AS \"?column?\", 'У операции есть блок, категория и дата'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE ((budget_tx.category_id IS NULL) OR (budget_tx.tx_date IS NULL) OR (budget_tx.block IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE ((budget_tx.category_id IS NULL) OR (budget_tx.tx_date IS NULL))), '0'::text) || ' неполных'::text) AS \"?column?\" ), i8 AS ( SELECT 'I8'::text AS \"?column?\", 'План не попал в факт'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE ((budget_tx.status = 'expected'::text) AND (budget_tx.tx_type <> ALL (ARRAY['income'::text, 'expense'::text])))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE (budget_tx.status = 'expected'::text)), '0'::text) || ' ожидаемых'::text) AS \"?column?\" ) SELECT i1.code, i1.name, i1.ok, i1.detail FROM i1 UNION ALL SELECT i2.\"?column?\" AS code, i2.\"?column?_1\" AS name, i2.\"?column?_2\" AS ok, i2.\"?column?_3\" AS detail FROM i2 i2(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i3.\"?column?\" AS code, i3.\"?column?_1\" AS name, i3.\"?column?_2\" AS ok, i3.\"?column?_3\" AS detail FROM i3 i3(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i5.\"?column?\" AS code, i5.\"?column?_1\" AS name, i5.\"?column?_2\" AS ok, i5.\"?column?_3\" AS detail FROM i5 i5(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i6.\"?column?\" AS code, i6.\"?column?_1\" AS name, i6.\"?column?_2\" AS ok, i6.\"?column?_3\" AS detail FROM i6 i6(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i7.\"?column?\" AS code, i7.\"?column?_1\" AS name, i7.\"?column?_2\" AS ok, i7.\"?column?_3\" AS detail FROM i7 i7(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i8.\"?column?\" AS code, i8.\"?column?_1\" AS name, i8.\"?column?_2\" AS ok, i8.\"?column?_3\" AS detail FROM i8 i8(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\");",
+  "v_llm_balance": " WITH used AS ( SELECT p.id AS participant_id, p.display_name, p.role, count(*) FILTER (WHERE ((u_1.ts)::date = CURRENT_DATE)) AS today_requests, COALESCE(sum((u_1.tokens_in + u_1.tokens_out)), (0)::bigint) AS month_tokens, COALESCE(sum(u_1.cost_rub), (0)::numeric) AS month_cost_rub FROM (participant p LEFT JOIN llm_usage u_1 ON (((u_1.participant_id = p.id) AND (date_trunc('month'::text, u_1.ts) = date_trunc('month'::text, now()))))) GROUP BY p.id, p.display_name, p.role ) SELECT u.participant_id, u.display_name, u.role, u.today_requests, u.month_tokens, u.month_cost_rub, COALESCE(pol.daily_requests, rpol.daily_requests, gpol.daily_requests) AS daily_limit, COALESCE(pol.monthly_tokens, rpol.monthly_tokens, gpol.monthly_tokens) AS tokens_limit, COALESCE(pol.monthly_cost_rub, rpol.monthly_cost_rub, gpol.monthly_cost_rub) AS cost_limit, COALESCE(pol.hard_stop, rpol.hard_stop, gpol.hard_stop, true) AS hard_stop, (COALESCE(pol.monthly_tokens, rpol.monthly_tokens, gpol.monthly_tokens, (0)::bigint) - u.month_tokens) AS tokens_left, (COALESCE(pol.daily_requests, rpol.daily_requests, gpol.daily_requests, 0) - u.today_requests) AS requests_left FROM (((used u LEFT JOIN llm_policy pol ON (((pol.scope = 'participant'::text) AND (pol.scope_key = lower(u.display_name))))) LEFT JOIN llm_policy rpol ON (((rpol.scope = 'role'::text) AND (rpol.scope_key = u.role)))) LEFT JOIN llm_policy gpol ON (((gpol.scope = 'global'::text) AND (gpol.scope_key IS NULL))));",
+  "v_master_without_discipline": " SELECT participant_id, display_name FROM v_participant_roles r WHERE (('master'::text = ANY (roles)) AND (NOT (EXISTS ( SELECT 1 FROM participant_discipline pd WHERE ((pd.participant_id = r.participant_id) AND (pd.relation = 'teacher'::text))))));",
+  "v_participant_capabilities": " WITH direct AS ( SELECT pr.participant_id, rc.capability FROM (participant_role pr JOIN rbac_role_capability rc ON ((rc.role = pr.role))) WHERE (pr.revoked_at IS NULL) ), adds AS ( SELECT participant_capability_override.participant_id, participant_capability_override.capability FROM participant_capability_override WHERE participant_capability_override.allowed ), removes AS ( SELECT participant_capability_override.participant_id, participant_capability_override.capability FROM participant_capability_override WHERE (NOT participant_capability_override.allowed) ) ( SELECT direct.participant_id, direct.capability FROM direct UNION SELECT adds.participant_id, adds.capability FROM adds ) EXCEPT SELECT removes.participant_id, removes.capability FROM removes;",
+  "v_participant_disciplines": " SELECT p.id AS participant_id, p.display_name, COALESCE(array_agg(d.code ORDER BY d.sort_order, d.code) FILTER (WHERE (pd.relation = 'teacher'::text)), '{}'::text[]) AS teacher_disciplines, COALESCE(array_agg(d.name ORDER BY d.sort_order, d.code) FILTER (WHERE (pd.relation = 'teacher'::text)), '{}'::text[]) AS teacher_titles, COALESCE(array_agg(d.code ORDER BY d.sort_order, d.code) FILTER (WHERE (pd.relation = 'student'::text)), '{}'::text[]) AS student_disciplines FROM ((participant p LEFT JOIN participant_discipline pd ON ((pd.participant_id = p.id))) LEFT JOIN discipline d ON ((d.id = pd.discipline_id))) GROUP BY p.id, p.display_name;",
+  "v_participant_roles": " SELECT p.id AS participant_id, p.display_name, array_agg(pr.role ORDER BY pr.role) FILTER (WHERE (pr.revoked_at IS NULL)) AS roles FROM (participant p LEFT JOIN participant_role pr ON ((pr.participant_id = p.id))) GROUP BY p.id, p.display_name;",
+  "v_period_totals": " SELECT p.period, p.quality, COALESCE(( SELECT sum(d.amount_due) AS sum FROM dues_charge d WHERE (d.period = p.period)), (0)::numeric) AS income_dues, COALESCE(sum(t.amount) FILTER (WHERE (t.block = 'show_income'::text)), (0)::numeric) AS income_shows, COALESCE(sum(t.amount) FILTER (WHERE (t.block = 'sublease'::text)), (0)::numeric) AS income_sublease, (COALESCE(( SELECT sum(d.amount_due) AS sum FROM dues_charge d WHERE (d.period = p.period)), (0)::numeric) + COALESCE(sum(t.amount) FILTER (WHERE (t.block = ANY (ARRAY['show_income'::text, 'sublease'::text]))), (0)::numeric)) AS income_total, COALESCE(sum(t.amount) FILTER (WHERE (t.block = 'expense'::text)), (0)::numeric) AS expense_studio, COALESCE(sum(t.amount) FILTER (WHERE (t.block = 'show_cost'::text)), (0)::numeric) AS expense_shows, COALESCE(sum(t.amount) FILTER (WHERE (t.block = ANY (ARRAY['expense'::text, 'show_cost'::text]))), (0)::numeric) AS expense_total FROM (budget_period p LEFT JOIN budget_tx t ON (((t.period = p.period) AND (t.status = 'confirmed'::text)))) GROUP BY p.period, p.quality;",
+  "v_top_unmatched": " SELECT text, count(*) AS \"раз\", max(ts) AS \"последний_раз\" FROM intent_log WHERE ((agent_status IS NULL) AND (source = ANY (ARRAY['buttons'::text, 'human_new'::text, 'failed'::text]))) GROUP BY text ORDER BY (count(*)) DESC, (max(ts)) DESC LIMIT 100;"
+ }
+}

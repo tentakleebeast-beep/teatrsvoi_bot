@@ -1,0 +1,190 @@
+digraph db {
+  graph [bgcolor="#ffffff", rankdir=TB, fontname="Helvetica", fontsize=11,
+         nodesep=0.14, ranksep=0.34,
+         compound=true, label="Схема БД СВОИ — ревизия 066_polls_org_manage",
+         labelloc=t, fontsize=16];
+  node [shape=plaintext, fontname="Helvetica", fontsize=10];
+  edge [color="#8a8a8a", arrowsize=0.6, penwidth=0.8];
+  subgraph cluster_0 {
+    label="Люди и доступ"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "participant" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>participant</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 25</font></td></tr></table>>];
+    "participant_role" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>participant_role</b></td></tr><tr><td align="left"><u>participant_id</u> : bigint</td></tr><tr><td align="left"><u>role</u> : text</td></tr><tr><td align="left">granted_by : bigint</td></tr><tr><td align="left">revoked_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "participant_discipline" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>participant_discipline</b></td></tr><tr><td align="left"><u>participant_id</u> : bigint</td></tr><tr><td align="left"><u>discipline_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 1</font></td></tr></table>>];
+    "participant_capability_override" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>participant_capability_override</b></td></tr><tr><td align="left"><u>participant_id</u> : bigint</td></tr><tr><td align="left"><u>capability</u> : text</td></tr><tr><td align="left">granted_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "rbac_capability" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>rbac_capability</b></td></tr><tr><td align="left"><u>code</u> : text</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "rbac_role_capability" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>rbac_role_capability</b></td></tr><tr><td align="left"><u>role</u> : text</td></tr><tr><td align="left"><u>capability</u> : text</td></tr></table>>];
+    "invite_code" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>invite_code</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "invite_attempt" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>invite_attempt</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "discipline" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>discipline</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "project" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>project</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "person_alias" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>person_alias</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 4</font></td></tr></table>>];
+    "venue" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>venue</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 7</font></td></tr></table>>];
+  }
+  subgraph cluster_1 {
+    label="Деньги"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "budget_period" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>budget_period</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "budget_plan" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>budget_plan</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">category_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "budget_tx" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>budget_tx</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">base_tx_id : bigint</td></tr><tr><td align="left">category_id : bigint</td></tr><tr><td align="left">confirmed_by : bigint</td></tr><tr><td align="left">entered_by : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left">replaces : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 28</font></td></tr></table>>];
+    "budget_month_total" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>budget_month_total</b></td></tr><tr><td align="left"><u>period</u> : text</td></tr><tr><td align="left"><font color="#777777">… ещё 7</font></td></tr></table>>];
+    "category" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>category</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">parent_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "category_candidate" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>category_candidate</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">approved_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "article_map" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>article_map</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">category_id : bigint</td></tr><tr><td align="left">confirmed_by : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 4</font></td></tr></table>>];
+    "article_alias" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>article_alias</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">category_id : bigint</td></tr><tr><td align="left">confirmed_by : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "finance_granularity" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>finance_granularity</b></td></tr><tr><td align="left"><u>section</u> : text</td></tr><tr><td align="left"><font color="#777777">… ещё 2</font></td></tr></table>>];
+    "finance_source_map" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>finance_source_map</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">category_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 4</font></td></tr></table>>];
+    "dues_plan" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>dues_plan</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 5</font></td></tr></table>>];
+    "dues_charge" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>dues_charge</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">payment_tx_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+  }
+  subgraph cluster_2 {
+    label="Занятость и события"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "availability_hour" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>availability_hour</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 8</font></td></tr></table>>];
+    "availability_template" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>availability_template</b></td></tr><tr><td align="left"><u>participant_id</u> : bigint</td></tr><tr><td align="left"><u>weekday</u> : integer</td></tr><tr><td align="left"><font color="#777777">… ещё 5</font></td></tr></table>>];
+    "event_plan" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>event_plan</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">created_by : bigint</td></tr><tr><td align="left">discipline_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "slot_proposal" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>slot_proposal</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">created_by : bigint</td></tr><tr><td align="left">event_plan_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 4</font></td></tr></table>>];
+  }
+  subgraph cluster_3 {
+    label="Google Sheets"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "sheet_binding" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>sheet_binding</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 13</font></td></tr></table>>];
+    "row_map" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>row_map</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">binding_key : text</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "import_batch" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>import_batch</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 7</font></td></tr></table>>];
+    "import_row" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>import_row</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">batch_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+  }
+  subgraph cluster_4 {
+    label="Файлы и заметки"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "file_object" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>file_object</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 16</font></td></tr></table>>];
+    "file_text" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>file_text</b></td></tr><tr><td align="left"><u>file_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 4</font></td></tr></table>>];
+    "file_audio" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>file_audio</b></td></tr><tr><td align="left"><u>file_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "folder" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>folder</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">created_by : bigint</td></tr><tr><td align="left">parent_id : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "file_folder" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>file_folder</b></td></tr><tr><td align="left"><u>file_id</u> : bigint</td></tr><tr><td align="left"><u>folder_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 2</font></td></tr></table>>];
+    "tag" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>tag</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">approved_by : bigint</td></tr><tr><td align="left">created_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "file_tag" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>file_tag</b></td></tr><tr><td align="left"><u>file_id</u> : bigint</td></tr><tr><td align="left"><u>tag_id</u> : bigint</td></tr></table>>];
+    "access_grant" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>access_grant</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">admin_id : bigint</td></tr><tr><td align="left">file_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 4</font></td></tr></table>>];
+    "note" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>note</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 8</font></td></tr></table>>];
+  }
+  subgraph cluster_5 {
+    label="Обратная связь"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "feedback" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>feedback</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 7</font></td></tr></table>>];
+    "feedback_answer" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>feedback_answer</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">feedback_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "feedback_attachment" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>feedback_attachment</b></td></tr><tr><td align="left"><u>feedback_id</u> : bigint</td></tr><tr><td align="left"><u>file_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 2</font></td></tr></table>>];
+  }
+  subgraph cluster_6 {
+    label="Опросы"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "poll" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">created_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "poll_question" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_question</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">poll_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "poll_option" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_option</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">question_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 3</font></td></tr></table>>];
+    "poll_audience" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_audience</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">poll_id : bigint</td></tr><tr><td align="left">project_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 2</font></td></tr></table>>];
+    "poll_person" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_person</b></td></tr><tr><td align="left"><u>poll_id</u> : bigint</td></tr><tr><td align="left"><u>participant_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 1</font></td></tr></table>>];
+    "poll_run" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_run</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">poll_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 6</font></td></tr></table>>];
+    "poll_viewer" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_viewer</b></td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left">poll_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 1</font></td></tr></table>>];
+    "poll_answer" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>poll_answer</b></td></tr><tr><td align="left"><u>run_id</u> : bigint</td></tr><tr><td align="left"><u>question_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 5</font></td></tr></table>>];
+  }
+  subgraph cluster_7 {
+    label="Агент и LLM"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "agent_action" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>agent_action</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">file_id : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 5</font></td></tr></table>>];
+    "agent_proposal" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>agent_proposal</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">confirmed_by : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 11</font></td></tr></table>>];
+    "intent_log" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>intent_log</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 18</font></td></tr></table>>];
+    "llm_policy" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>llm_policy</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">updated_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "llm_usage" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>llm_usage</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">participant_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 10</font></td></tr></table>>];
+    "approval_request" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>approval_request</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">budget_tx_id : bigint</td></tr><tr><td align="left">decided_by : bigint</td></tr><tr><td align="left">requested_by : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "job" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>job</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 8</font></td></tr></table>>];
+  }
+  subgraph cluster_8 {
+    label="Уведомления и аудит"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "notification" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>notification</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left">recipient_id : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 9</font></td></tr></table>>];
+    "notification_pref" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>notification_pref</b></td></tr><tr><td align="left"><u>participant_id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 5</font></td></tr></table>>];
+    "audit_event" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>audit_event</b></td></tr><tr><td align="left"><u>id</u> : bigint</td></tr><tr><td align="left"><font color="#777777">… ещё 12</font></td></tr></table>>];
+    "app_setting" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>app_setting</b></td></tr><tr><td align="left"><u>key</u> : text</td></tr><tr><td align="left"><font color="#777777">… ещё 2</font></td></tr></table>>];
+    "migration_marker" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>migration_marker</b></td></tr><tr><td align="left"><u>key</u> : text</td></tr><tr><td align="left"><font color="#777777">… ещё 2</font></td></tr></table>>];
+  }
+  subgraph cluster_9 {
+    label="Прочее"; fontsize=12; style="rounded"; color="#bbbbbb";
+    "alembic_version" [label=<<table border="0" cellborder="1" cellspacing="0" cellpadding="3"><tr><td bgcolor="#eef1f5"><b>alembic_version</b></td></tr><tr><td align="left"><u>version_num</u> : character varying(32)</td></tr></table>>];
+  }
+  "access_grant" -> "participant";
+  "access_grant" -> "file_object";
+  "agent_action" -> "participant";
+  "agent_action" -> "file_object";
+  "agent_proposal" -> "participant";
+  "agent_proposal" -> "participant";
+  "approval_request" -> "budget_tx";
+  "approval_request" -> "participant";
+  "approval_request" -> "participant";
+  "article_alias" -> "participant";
+  "article_alias" -> "project";
+  "article_alias" -> "category";
+  "article_map" -> "category";
+  "article_map" -> "project";
+  "article_map" -> "participant";
+  "availability_hour" -> "participant";
+  "availability_template" -> "participant";
+  "budget_plan" -> "category";
+  "budget_tx" -> "budget_tx";
+  "budget_tx" -> "participant";
+  "budget_tx" -> "category";
+  "budget_tx" -> "project";
+  "budget_tx" -> "participant";
+  "budget_tx" -> "participant";
+  "budget_tx" -> "budget_tx";
+  "category" -> "category";
+  "category_candidate" -> "participant";
+  "dues_charge" -> "participant";
+  "dues_charge" -> "budget_tx";
+  "dues_plan" -> "participant";
+  "event_plan" -> "project";
+  "event_plan" -> "participant";
+  "event_plan" -> "discipline";
+  "feedback" -> "participant";
+  "feedback_answer" -> "feedback";
+  "feedback_attachment" -> "file_object";
+  "feedback_attachment" -> "feedback";
+  "file_audio" -> "file_object";
+  "file_folder" -> "folder";
+  "file_folder" -> "file_object";
+  "file_object" -> "participant";
+  "file_tag" -> "file_object";
+  "file_tag" -> "tag";
+  "file_text" -> "file_object";
+  "finance_source_map" -> "project";
+  "finance_source_map" -> "category";
+  "folder" -> "folder";
+  "folder" -> "project";
+  "folder" -> "participant";
+  "folder" -> "participant";
+  "import_row" -> "import_batch";
+  "intent_log" -> "participant";
+  "llm_policy" -> "participant";
+  "llm_usage" -> "participant";
+  "note" -> "participant";
+  "note" -> "project";
+  "notification" -> "participant";
+  "notification_pref" -> "participant";
+  "participant_capability_override" -> "participant";
+  "participant_capability_override" -> "participant";
+  "participant_capability_override" -> "rbac_capability";
+  "participant_discipline" -> "discipline";
+  "participant_discipline" -> "participant";
+  "participant_role" -> "participant";
+  "participant_role" -> "participant";
+  "participant_role" -> "participant";
+  "person_alias" -> "project";
+  "person_alias" -> "participant";
+  "poll" -> "participant";
+  "poll_answer" -> "poll_question";
+  "poll_answer" -> "poll_run";
+  "poll_audience" -> "poll";
+  "poll_audience" -> "project";
+  "poll_option" -> "poll_question";
+  "poll_person" -> "poll";
+  "poll_person" -> "participant";
+  "poll_question" -> "poll";
+  "poll_run" -> "participant";
+  "poll_run" -> "poll";
+  "poll_viewer" -> "participant";
+  "poll_viewer" -> "poll";
+  "rbac_role_capability" -> "rbac_capability";
+  "row_map" -> "sheet_binding";
+  "slot_proposal" -> "participant";
+  "slot_proposal" -> "event_plan";
+  "tag" -> "participant";
+  "tag" -> "participant";
+}
