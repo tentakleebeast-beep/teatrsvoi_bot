@@ -582,3 +582,18 @@ def test_ранбук_и_бэкапы_описывают_порядок_снач
     backups = (ROOT / "docs" / "infrastructure" / "110-backups-and-restore.md").read_text(encoding="utf-8")
     assert "сначала база" in backups and "потом код" in backups
     assert "35-deploy-runbook.md" in backups and "§10.3" in backups
+
+
+def test_выкат_накатывает_миграции_до_сверки_схемы():
+    """Релиз с миграцией не должен требовать двух прогонов и ручного db --migrate.
+
+    v0.11.4 упал на «версия схемы не равна head»: workflow проверял схему, но не накатывал
+    её, поэтому первый прогон всегда падал и ставил откат.
+    """
+    workflow = yaml.safe_load(
+        (ROOT / ".github" / "workflows" / "deploy.yml").read_text(encoding="utf-8"))
+    run = next(step["run"] for step in workflow["jobs"]["deploy"]["steps"]
+               if step.get("name") == "выкат")
+    assert "deploy/server-deploy.sh db --migrate" in run
+    assert run.index("db --migrate") < run.index("server-deploy.sh verify")
+    assert run.index("db --migrate") < run.index("systemctl restart svoi-tool-api")

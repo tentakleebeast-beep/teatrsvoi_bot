@@ -111,6 +111,12 @@ jobs:
             S checkout --force "${{ inputs.tag }}"
             echo "на диске: $(sudo -u svoi git -C /opt/svoi describe --tags --always)"
             sudo -u svoi /opt/svoi/.venv/bin/pip install -q -r /opt/svoi/requirements.txt
+            # Миграции ДО перезапуска и до verify: иначе релиз с миграцией падает на
+            # «схема позади тега» и требует ручного db --migrate между двумя прогонами
+            # (так и вышло на v0.11.4: 066 против head 067). Повторный upgrade — no-op.
+            # Следствие: после наката автоматический откат на прошлый тег невозможен —
+            # rollback откажется, потому что понижающих миграций нет. Разбор — вручную.
+            deploy/server-deploy.sh db --migrate
             # схема проверяется до перезапуска: иначе сервис поднимается на старой схеме
             deploy/server-deploy.sh verify
             # Хранилище файлов: без него presign отвечает 503, а Mini App не грузит файлы
