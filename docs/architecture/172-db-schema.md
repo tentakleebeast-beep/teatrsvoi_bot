@@ -14,7 +14,7 @@
 Сопутствующие файлы:
 
 - `contracts/db-schema.json` — полный снимок: каждая таблица, каждая колонка с типом, `not null`, значением по умолчанию, первичные, уникальные и CHECK-ограничения, внешние ключи, тексты представлений. **Единственное место, где перечислены все 552 колонки**; ниже — смысл и связи.
-- `docs/architecture/169-db-schema.svg` — карта всех таблиц с внешними ключами, по доменам. Широкий постер на 7 400 px: открывать и зумить, а не читать в окне. Перерисовывается тем же скриптом (`--dot`).
+- `docs/architecture/172-db-schema.svg` — карта всех таблиц с внешними ключами, по доменам. Широкий постер на 7 400 px: открывать и зумить, а не читать в окне. Перерисовывается тем же скриптом (`--dot`).
 
 ---
 
@@ -36,7 +36,7 @@
 ```bash
 env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py          # 0 — совпало, 1 — дифф
 env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py --write  # осознанно обновить снимок
-env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py --dot docs/architecture/169-db-schema.dot
+env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py --dot docs/architecture/172-db-schema.dot
 ```
 
 Снимок пишется по dev-базе из `scripts/_cli.dsn` (окружение → `.env` → локальная база).
@@ -88,7 +88,7 @@ graph TD
   polls --> notify
 ```
 
-Одна и та же схема целиком — `169-db-schema.svg`. Ниже — по доменам, с ключевыми колонками.
+Одна и та же схема целиком — `172-db-schema.svg`. Ниже — по доменам, с ключевыми колонками.
 
 ---
 

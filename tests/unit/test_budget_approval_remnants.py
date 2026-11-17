@@ -91,7 +91,7 @@ def test_документация_не_описывает_снятую_очер�
     page = (root / "docs" / "development" / "73-admin-panel-webapp.md").read_text(encoding="utf-8")
     assert "/webapp/admin/approval" not in page, "в docs/73 вернулся снятый маршрут"
     assert "убрано 30.10.2026" in page, "нет пометки, что механизм убран"
-    menu = (root / "docs" / "architecture" / "167-transition-graph.md").read_text(encoding="utf-8")
+    menu = (root / "docs" / "architecture" / "170-transition-graph.md").read_text(encoding="utf-8")
     assert "/webapp/admin/approval" not in menu, "на карте переходов вернулся снятый маршрут"
     assert "Крупные суммы ·" not in menu, "в панели снова обещана очередь крупных сумм"
 

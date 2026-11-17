@@ -5,7 +5,7 @@
 в коде четыре вкладки и 36 экранов).
 **Связано:** `docs/development/92-navigation-model.md` (модель навигации),
 `docs/development/141-miniapp-design-review.md` (инвентарь экранов),
-`docs/development/91-design-system.md` (вид), `docs/development/168-prototype-workspace.md`
+`docs/development/91-design-system.md` (вид), `docs/development/173-prototype-workspace.md`
 (как с этим работаем).
 
 Источник истины — код: `tests/webapp/server.py` отдаёт те же страницы, что боевой tool-api,
@@ -215,6 +215,6 @@ env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
   а не адреса: они не ведут в Mini App, а работают в чате. Их состав — `keyboards.menu_groups`.
 - **Динамические кнопки** бота: адрес собирается из переменной (`screen`, константы страниц).
   Они видны на графе как сами экраны, к которым ведут.
-- **Снимки экранов** — в `docs/reports/168-screens-atlas.html` (собирается тем же прогоном).
+- **Снимки экранов** — в `docs/reports/171-screens-atlas.html` (собирается тем же прогоном).
 
 

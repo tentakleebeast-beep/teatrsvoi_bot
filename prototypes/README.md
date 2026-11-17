@@ -12,8 +12,8 @@
 |---|---|
 | Токены и компоненты | `services/tool-api/app/static/webapp-ui.css` + справочник `/webapp/ui` (экран в приложении, а не файл) |
 | Правила вида | `docs/development/91-design-system.md` |
-| Все экраны как есть | `docs/reports/168-screens-atlas.html` — 36 снимков со стенда |
-| Переходы между экранами | `docs/architecture/167-transition-graph.md` — граф собирается скриптом |
+| Все экраны как есть | `docs/reports/171-screens-atlas.html` — 36 снимков со стенда |
+| Переходы между экранами | `docs/architecture/170-transition-graph.md` — граф собирается скриптом |
 
 Эталон — код приложения и документ, а не картинка. При расхождении макета и
 `docs/development/91` прав макет; менять документ под макет — решение заказчика, а не агента.

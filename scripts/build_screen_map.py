@@ -11,9 +11,9 @@ tool-api, поэтому ссылки на графе — настоящие `<a
     env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
 
 Пишет:
-    docs/architecture/167-transition-graph.md   — граф Mermaid + таблицы
-    docs/reports/168-screens-atlas.html         — атлас: экран, адрес, входы, снимок
-    docs/reports/168-screens/<адрес>.png        — снимки 390 × 844 ×2
+    docs/architecture/170-transition-graph.md   — граф Mermaid + таблицы
+    docs/reports/171-screens-atlas.html         — атлас: экран, адрес, входы, снимок
+    docs/reports/171-screens/<адрес>.png        — снимки 390 × 844 ×2
 """
 
 from __future__ import annotations
@@ -29,8 +29,8 @@ sys.path.insert(0, str(ROOT))                      # пакет tests.*
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
 STAND = "http://127.0.0.1:8799"
-GRAPH_DOC = ROOT / "docs" / "architecture" / "167-transition-graph.md"
-ATLAS_DOC = ROOT / "docs" / "reports" / "168-screens-atlas.html"
+GRAPH_DOC = ROOT / "docs" / "architecture" / "170-transition-graph.md"
+ATLAS_DOC = ROOT / "docs" / "reports" / "171-screens-atlas.html"
 SHOTS = ROOT / "docs" / "reports" / "168-screens"
 
 # Как Telegram передаёт данные Mini App: стенд подпись не проверяет (как в conftest).
@@ -291,7 +291,7 @@ def write_doc(mermaid: str, screens: list[dict], moves: dict[str, str],
 в коде четыре вкладки и {len(screens)} экранов).
 **Связано:** `docs/development/92-navigation-model.md` (модель навигации),
 `docs/development/141-miniapp-design-review.md` (инвентарь экранов),
-`docs/development/91-design-system.md` (вид), `docs/development/168-prototype-workspace.md`
+`docs/development/91-design-system.md` (вид), `docs/development/173-prototype-workspace.md`
 (как с этим работаем).
 
 Источник истины — код: `tests/webapp/server.py` отдаёт те же страницы, что боевой tool-api,
@@ -344,7 +344,7 @@ env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
   а не адреса: они не ведут в Mini App, а работают в чате. Их состав — `keyboards.menu_groups`.
 - **Динамические кнопки** бота: адрес собирается из переменной (`screen`, константы страниц).
   Они видны на графе как сами экраны, к которым ведут.
-- **Снимки экранов** — в `docs/reports/168-screens-atlas.html` (собирается тем же прогоном).
+- **Снимки экранов** — в `docs/reports/171-screens-atlas.html` (собирается тем же прогоном).
 
 {f"## 6. Найдено при сборке{chr(10)}{chr(10)}Ссылки, которые никуда не ведут: {len(skipped)}{chr(10)}{chr(10)}" + chr(10).join(f"- {item}" for item in skipped) if skipped else ""}
 """
@@ -358,7 +358,7 @@ def write_atlas(screens: list[dict]) -> None:
             f'<a class="card" href="{s["path"]}">'
             f'<div class="cap"><b>{s["label"]}</b>'
             f'<span>{s["path"]}</span></div>'
-            f'<img src="168-screens/{s["shot"].name}" alt="{s["label"]}"></a>')
+            f'<img src="171-screens/{s["shot"].name}" alt="{s["label"]}"></a>')
     ATLAS_DOC.write_text(f"""<!doctype html>
 <html lang="ru"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
@@ -382,7 +382,7 @@ def write_atlas(screens: list[dict]) -> None:
 <h1>Атлас экранов Mini App</h1>
 <p class="lead">{len(screens)} экранов со стенда (<code>tests.webapp.server</code>) в светлой схеме,
 ширина 390 px, плотность 2. Собирается <code>scripts/build_screen_map.py</code>; граф переходов
-между этими экранами — <code>docs/architecture/167-transition-graph.md</code>.
+между этими экранами — <code>docs/architecture/170-transition-graph.md</code>.
 Снимки — состояние демо-данных стенда, а не прода.</p>
 <div class="grid">
 {chr(10).join(cards)}

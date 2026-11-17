@@ -9,7 +9,7 @@
 
   env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py           # проверка
   env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py --write   # обновление
-  env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py --dot docs/architecture/169-db-schema.dot
+  env -u PYTHONPATH .venv/bin/python scripts/db_schema_snapshot.py --dot docs/architecture/172-db-schema.dot
 
 В снимок не входят индексы, последовательности, владельцы прав и данные: смена индекса
 не делает документ устаревшим. Номер ревизии пишется в `meta` (в диффе не участвует):
@@ -132,7 +132,7 @@ def snapshot(conn: psycopg.Connection[Any]) -> dict:
     return {
         "meta": {"alembic": alembic[0]["version_num"] if alembic else None,
                  "note": "Снимок формы схемы. Индексы, права и данные не входят. "
-                         "Описание — docs/architecture/169-db-schema.md."},
+                         "Описание — docs/architecture/172-db-schema.md."},
         "tables": tables,
         "views": views,
     }

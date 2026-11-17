@@ -2,7 +2,7 @@
 
 Действующие документы сгруппированы по смыслу. **Нумерация сквозная**: номер означает
 порядок появления документа и никогда не переиспользуется — по нему ссылаются код,
-тесты и другие документы. Номера не использованы: 39, 119, 133, 134, 159.
+тесты и другие документы. Номера не использованы: 39, 119, 133, 134, 159, 168, 169, 171.
 
 Устаревшее не удаляется, а лежит в [архиве](archive/) — отдельной строкой в конце
 индекса. Правило, что туда попадает и как на него ссылаться: `docs/archive/README.md`.
@@ -43,8 +43,8 @@
 | 52 | [52-twins-teachers-director.md](architecture/52-twins-teachers-director.md) | 52. Тёзки, педагоги и режиссёр |
 | 85 | [85-error-catalog.md](architecture/85-error-catalog.md) | 85. Каталог ошибок HTTP API |
 | 140 | [140-master-role.md](architecture/140-master-role.md) | 140. Роль «Педагог» (master): модель, дисциплины, права |
-| 167 | [167-transition-graph.md](architecture/167-transition-graph.md) | 167. Единый граф переходов: чат бота → экраны Mini App |
-| 169 | [169-db-schema.md](architecture/169-db-schema.md) | 169. Схема БД: фактическое состояние |
+| 170 | [170-transition-graph.md](architecture/170-transition-graph.md) | 167. Единый граф переходов: чат бота → экраны Mini App |
+| 172 | [172-db-schema.md](architecture/172-db-schema.md) | 169. Схема БД: фактическое состояние |
 
 ## Инфраструктура
 
@@ -123,7 +123,7 @@
 | 164 | [164-miniapp-home-polls.md](development/164-miniapp-home-polls.md) | 164. Открытые опросы на Главной: адресат видит, что опрос ему назначен (E8-D3, дизайн) |
 | 166 | [166-poll-draft-copy.md](development/166-poll-draft-copy.md) | 166. Черновик и копирование опросов: сохранить, не отправляя, и повторить анкету (E8-D5: дизайн и спецификация) |
 | 167 | [167-poll-interview-draft.md](development/167-poll-interview-draft.md) | 167. Миграция данных: черновик анкеты оргсостава (E8) — спецификация |
-| 168 | [168-prototype-workspace.md](development/168-prototype-workspace.md) | 166. Рабочее место для прототипов: слои, кросс-ревью, дизайн-тесты |
+| 173 | [173-prototype-workspace.md](development/173-prototype-workspace.md) | 166. Рабочее место для прототипов: слои, кросс-ревью, дизайн-тесты |
 
 ## Планы
 

@@ -1,7 +1,7 @@
 {
  "meta": {
   "alembic": "066_polls_org_manage",
-  "note": "Снимок формы схемы. Индексы, права и данные не входят. Описание — docs/architecture/169-db-schema.md."
+  "note": "Снимок формы схемы. Индексы, права и данные не входят. Описание — docs/architecture/172-db-schema.md."
  },
  "tables": {
   "access_grant": {
