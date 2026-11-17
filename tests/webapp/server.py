@@ -30,7 +30,6 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
 from app import webapp_page as pages  # noqa: E402
-from app.webapp import MANAGEMENT, PERSONAL, sections_for  # noqa: E402
 from app.pages import files as files_pages  # noqa: E402
 from app.pages import home as home_pages  # noqa: E402
 from app.pages import polls as polls_pages  # noqa: E402
@@ -39,6 +38,7 @@ from app.pages import polls_edit as polls_edit_pages  # noqa: E402
 from app.pages import polls_mine as polls_mine_pages  # noqa: E402
 from app.pages import polls_results as polls_results_pages  # noqa: E402
 from app.pages import services as services_page  # noqa: E402
+from app.webapp import MANAGEMENT, PERSONAL, sections_for  # noqa: E402
 
 STATIC = ROOT / "services" / "tool-api" / "app" / "static"
 VALID_TOKEN = "test-token"

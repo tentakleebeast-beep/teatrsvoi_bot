@@ -24,16 +24,14 @@ from __future__ import annotations
 import argparse
 import difflib
 import json
-import re
 import subprocess
 import sys
 from pathlib import Path
 from typing import Any
 
 import psycopg
-from psycopg.rows import dict_row
-
 from _cli import dsn
+from psycopg.rows import dict_row
 
 PROJECT = Path(__file__).resolve().parents[1]
 SNAPSHOT_PATH = PROJECT / "contracts" / "db-schema.json"
