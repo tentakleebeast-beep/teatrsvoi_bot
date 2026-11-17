@@ -68,7 +68,8 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     row.href = target;
     var main = make("span", "ui-row__main");
     main.appendChild(make("span", "ui-row__title", item.title));
-    var meta = plural(item.questions, "вопрос", "вопроса", "вопросов");
+    var count = plural(item.questions, "вопрос", "вопроса", "вопросов");
+    var meta = item.questions + " " + count;
     if (item.status === "running" || item.status === "closed") {
       meta += " · ответили " + item.answered + " из " + item.invited;
     }

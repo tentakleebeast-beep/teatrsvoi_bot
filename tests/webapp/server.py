@@ -15,6 +15,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import json
 import pathlib
@@ -1715,6 +1716,16 @@ NO_POLL_MANAGE_ROLES = {"participant", "master", "troupe"}
 POLL_KIND_LABELS = {"single": "один из списка", "multi": "несколько", "yesno": "да/нет",
                     "number": "число", "text": "текст"}
 
+#: Тема черновика `poll_id=8` — та же, что в строке списка (166 §5.3): экран и список
+#: говорят об одном опросе одно и то же.
+POLL_DRAFT_TITLE = "Что улучшить в расписании"
+
+#: Тема копии, которую стенд отдаёт на `POST /webapp/polls/copy` и по `poll_id=9`.
+POLL_COPY_TITLE = "Анкета организаторам — копия"
+
+#: Копия, которую вернул стенд: её id и адрес конструктора с меткой «пришли из копии».
+POLL_COPY_ID = 9
+
 
 def _lacks_poll_manage(request: Request) -> bool:
     return (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_POLL_MANAGE_ROLES
@@ -1791,12 +1802,21 @@ def polls_edit_stand(request: Request, poll_id: int = 7):
     denied = _polls_denied(request)
     if denied is not None:
         return denied
+    # Один опрос — одна правда: конструктор говорит о строке списка то же, что список
+    # (166 §5.3). `poll_id=8` — черновик на три вопроса, `poll_id=9` — копия, которую
+    # вернул стенд на `POST /webapp/polls/copy`.
+    if poll_id == 8:
+        title, questions = POLL_DRAFT_TITLE, _poll_questions(3)
+    elif poll_id == 9:
+        title, questions = POLL_COPY_TITLE, _poll_questions()
+    else:
+        title, questions = "Анкета организаторам", _poll_questions()
     return JSONResponse({
         "ok": True,
-        "poll": {"id": poll_id, "title": "Анкета организаторам",
+        "poll": {"id": poll_id, "title": title,
                  "intro": "Общий блок организаторам", "status": "draft",
                  "anonymous": False, "closes_at": None},
-        "questions": _poll_questions(),
+        "questions": questions,
         "can_edit": True,
     })
 
@@ -1840,6 +1860,32 @@ async def polls_save_stand(request: Request):
     body = await request.json()
     return JSONResponse({"ok": True, "poll_id": body.get("poll_id") or 7,
                          "status": "draft"})
+
+
+@app.post("/webapp/polls/copy")
+async def polls_copy_stand(request: Request):
+    """Копия опроса: та же форма, что у `POST /webapp/polls/copy` (166 §5.3).
+
+    Заголовок `X-SVOI-POLLS-COPY` включает отказы, которые иначе не нарисовать:
+    `draft` — 409 с задержкой 300 мс (кнопка обязана быть `disabled`, пока ответа
+    нет), `no_questions` — 400.
+    """
+    denied = _polls_denied(request)
+    if denied is not None:
+        return denied
+    await request.json()
+    mode = (request.headers.get("x-svoi-polls-copy") or "").strip().lower()
+    if mode == "draft":
+        await asyncio.sleep(0.3)
+        return _polls_fail("Черновик не копируют: откройте его в конструкторе.",
+                           "poll_draft", 409)
+    if mode == "no_questions":
+        return _polls_fail("В опросе нет вопросов: копировать нечего.",
+                           "no_questions", 400)
+    return JSONResponse({
+        "ok": True, "poll_id": POLL_COPY_ID, "title": POLL_COPY_TITLE,
+        "status": "draft",
+        "url": f"/webapp/polls/edit?poll_id={POLL_COPY_ID}&note=copy"})
 
 
 @app.post("/webapp/polls/start")
@@ -1890,6 +1936,9 @@ def polls_results_stand(request: Request, poll_id: int = 7):
     denied = _polls_denied(request)
     if denied is not None:
         return denied
+    # `poll_id=10` — закрытый опрос: на нём проверяется сводка без «Закрыть опрос»,
+    # но с «Копировать» (166 §5.3, AC-33).
+    closed = poll_id == 10
     questions = [{"id": question["id"], "position": question["position"],
                   "text": question["text"], "kind": question["kind"],
                   "required": question["required"], "free_text": question["free_text"],
@@ -1897,8 +1946,10 @@ def polls_results_stand(request: Request, poll_id: int = 7):
                   "summary": _poll_summary(question)} for question in _poll_questions()]
     return JSONResponse({
         "ok": True,
-        "poll": {"id": poll_id, "title": "Анкета организаторам", "status": "running",
-                 "anonymous": False, "closes_at": None, "closed_at": None},
+        "poll": {"id": poll_id, "title": "Анкета организаторам",
+                 "status": "closed" if closed else "running",
+                 "anonymous": False, "closes_at": None,
+                 "closed_at": "2026-11-15T18:00:00" if closed else None},
         "answered": 6, "invited": 14, "questions": questions,
         "not_answered": [{"participant_id": 205, "display_name": "Лев Крылов",
                           "position": 7}],

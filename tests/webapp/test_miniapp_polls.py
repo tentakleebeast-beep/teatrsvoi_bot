@@ -238,3 +238,286 @@ def test_экраны_опроса_на_двух_движках(device_page, dev
         page.wait_for_timeout(600)
         assert page.evaluate(OVERFLOW) <= 0, f"{device}: переполнение на {path}"
         assert not page.svoi_errors, (device, path, page.svoi_errors)
+
+
+# --- E8-D5: черновик с явным сохранением и копия опроса (docs/development/166 §5.1) --
+# Формы стенда (`tests/webapp/server.py`): копия `poll_id=9`, черновик `poll_id=8`,
+# закрытая сводка `poll_id=10`, отказы копирования по заголовку `X-SVOI-POLLS-COPY`.
+
+CONFIRM_STUB = """
+(answer) => {
+  window.__confirmText = "";
+  window.__confirmCalls = 0;
+  window.localStorage.setItem("svoi.confirm.calls", "0");
+  window.Telegram.WebApp.showConfirm = function (text, cb) {
+    window.__confirmText = text;
+    window.__confirmCalls += 1;
+    window.localStorage.setItem("svoi.confirm.calls", String(window.__confirmCalls));
+    if (cb) { cb(answer); }
+  };
+}
+"""
+
+COPY_NOTE = ("Копия сохранена как черновик. Адресаты не перенесены: "
+             "выберите их заново.")
+EXIT_TEXT = "Выйти без сохранения? Черновик не сохранён."
+
+
+def _watch_posts(page) -> list[dict]:
+    """Адрес и тело каждого POST: «ушёл ровно один `save`» проверяется фактом."""
+    calls: list[dict] = []
+    page.on("request", lambda request: calls.append(
+        {"url": request.url, "body": request.post_data or ""})
+        if request.method == "POST" else None)
+    return calls
+
+
+def _sent(calls: list[dict], suffix: str) -> list[dict]:
+    return [call for call in calls if call["url"].split("?")[0].endswith(suffix)]
+
+
+def _fill_question(page, text: str, kind: str = "text", options: str = "") -> None:
+    """Заполнить открытый редактор вопроса и нажать «Готово»."""
+    page.fill("#q-text", text)
+    page.select_option("#q-kind", kind)
+    if options:
+        page.fill("#q-options", options)
+    page.click("#q-done")
+
+
+def _three_questions(page) -> None:
+    """Тема и три вопроса нового опроса: первый редактор уже открыт страницей."""
+    _fill_question(page, "Какие файлы открываете утром?", "single", "Расписание\nЗвонки")
+    for text in ("Сколько часов уходит на согласование?", "Что улучшить?"):
+        page.click("#add-question")
+        _fill_question(page, text, "text")
+    page.fill("#title", "Анкета организатору")
+
+
+def test_сохранить_черновик_остаётся_в_конструкторе(app_page) -> None:
+    """AC-1: «Сохранить черновик» — один `save`, ни одного `start`, полоса и тот же экран."""
+    page = app_page("/webapp/polls/edit")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    _three_questions(page)
+    calls = _watch_posts(page)
+
+    page.click("#save-draft")
+    page.wait_for_selector("#note:not([hidden])", timeout=10_000)
+
+    assert page.inner_text("#note") == "Черновик сохранён"
+    assert page.locator("#note").evaluate("n => n.classList.contains('ui-alert--ok')")
+    assert page.locator("#step-questions").is_visible()
+    assert page.locator("#step-audience").is_hidden()
+    saves = _sent(calls, "/webapp/polls/save")
+    assert len(saves) == 1, [call["url"] for call in calls]
+    assert not _sent(calls, "/webapp/polls/start"), "уход в отправку без адресатов"
+    assert page.locator("#questions .ui-row").count() == 3
+    assert page.input_value("#title") == "Анкета организатору"
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_повторное_сохранение_правит_тот_же_черновик(app_page) -> None:
+    """AC-2: второй `save` несёт `poll_id` первого ответа, а не создаёт второй опрос."""
+    import json
+
+    page = app_page("/webapp/polls/edit")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    _three_questions(page)
+    calls = _watch_posts(page)
+
+    page.click("#save-draft")
+    page.wait_for_selector("#note:not([hidden])", timeout=10_000)
+    page.click("#add-question")
+    _fill_question(page, "Что оставить как есть?", "text")
+    page.click("#save-draft")
+    page.wait_for_function(
+        "() => document.querySelectorAll('#questions .ui-row').length === 4 && "
+        "document.getElementById('note').textContent === 'Черновик сохранён'",
+        timeout=10_000)
+
+    saves = _sent(calls, "/webapp/polls/save")
+    assert len(saves) == 2, saves
+    first = json.loads(saves[0]["body"])
+    second = json.loads(saves[1]["body"])
+    assert first.get("poll_id") is None, first
+    assert second.get("poll_id") is not None, second
+    assert second["poll_id"] == 7, "стенд вернул poll_id — второй save обязан его повторить"
+    assert len(second["questions"]) == 4
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_дальше_ведёт_на_шаг_адресатов(app_page) -> None:
+    """AC-3: «Дальше» сохраняет и открывает шаг адресатов; `#error` скрыт."""
+    page = app_page("/webapp/polls/edit")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    _three_questions(page)
+    calls = _watch_posts(page)
+
+    page.click("#to-audience")
+    page.wait_for_selector("#step-audience:not([hidden])", timeout=10_000)
+
+    assert len(_sent(calls, "/webapp/polls/save")) == 1
+    assert page.locator("#step-questions").is_hidden()
+    assert page.locator("#error").is_hidden()
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_выход_с_правками_спрашивает_и_не_теряет_ввод(app_page) -> None:
+    """AC-4: «‹» с правками — диалог; «Отмена» остаётся, «Выйти» уходит в список."""
+    page = app_page("/webapp/polls/edit?poll_id=8")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    page.click("#save-draft")
+    page.wait_for_selector("#note:not([hidden])", timeout=10_000)
+    page.fill("#title", "Что улучшить в расписании, правка")
+    calls = _watch_posts(page)
+
+    page.evaluate(CONFIRM_STUB, False)
+    page.click("a.ui-appbar__back")
+    assert page.evaluate("() => window.__confirmCalls") == 1, "диалога не было"
+    assert page.evaluate("() => window.__confirmText") == EXIT_TEXT
+    assert "/webapp/polls/edit" in page.url, page.url
+    assert page.input_value("#title") == "Что улучшить в расписании, правка"
+    assert not _sent(calls, "/webapp/polls/save"), "выход сохранил черновик сам"
+
+    page.evaluate(CONFIRM_STUB, True)
+    page.click("a.ui-appbar__back")
+    page.wait_for_url("**/webapp/polls", timeout=10_000)
+    assert page.url.split("?")[0].endswith("/webapp/polls"), page.url
+
+
+def test_без_правок_выход_не_спрашивает(app_page) -> None:
+    """AC-5: сразу после сохранения «‹» уходит без диалога."""
+    page = app_page("/webapp/polls/edit?poll_id=8")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    page.click("#save-draft")
+    page.wait_for_selector("#note:not([hidden])", timeout=10_000)
+
+    page.evaluate(CONFIRM_STUB, False)
+    page.click("a.ui-appbar__back")
+    page.wait_for_url("**/webapp/polls", timeout=10_000)
+    # Счётчик читаем из localStorage: новый документ списка прежние `window`-поля теряет.
+    assert page.evaluate("() => window.localStorage.getItem('svoi.confirm.calls')") == "0"
+
+
+def test_сохранение_без_темы_и_без_вопросов_отказывает_на_клиенте(app_page) -> None:
+    """AC-6, AC-7: пустая тема и отсутствие вопросов — текстом, без запроса на сервер."""
+    page = app_page("/webapp/polls/edit?poll_id=8")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    calls = _watch_posts(page)
+
+    page.fill("#title", "")
+    page.click("#save-draft")
+    page.wait_for_selector("#error:not([hidden])", timeout=10_000)
+    assert page.inner_text("#error") == "У опроса нет темы."
+    assert not _sent(calls, "/webapp/polls/save")
+
+    page.fill("#title", "Что улучшить в расписании")
+    for _ in range(3):
+        page.click("#questions .ui-row")
+        page.wait_for_selector("#editor:not([hidden])", timeout=10_000)
+        page.click("#q-delete")
+    assert page.locator("#questions .ui-row").count() == 0
+    page.click("#save-draft")
+    page.wait_for_selector("#error:not([hidden])", timeout=10_000)
+    assert page.inner_text("#error") == "В опросе нет ни одного вопроса."
+    assert not _sent(calls, "/webapp/polls/save")
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_подпись_под_темой_больше_не_обещает_автосохранение(app_page) -> None:
+    """AC-9: обещание «черновик сохраняется сам» снято, вместо него — правда."""
+    page = app_page("/webapp/polls/edit")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    hint = page.inner_text("#save-hint")
+    assert hint == "Черновик сохранится, когда нажмёте «Сохранить черновик».", hint
+    assert "Черновик сохраняется сам" not in page.content()
+
+
+def test_строка_черновика_в_списке_не_имеет_своих_действий(app_page) -> None:
+    """AC-11: «3 вопроса» и «черновик», ссылка в конструктор, внутри строки — ноль кнопок."""
+    page = app_page("/webapp/polls")
+    page.wait_for_selector("#polls .ui-row", timeout=10_000)
+
+    row = page.locator("#polls a.ui-row[href='/webapp/polls/edit?poll_id=8']")
+    assert row.count() == 1, "строка черновика не ведёт в конструктор"
+    text = row.inner_text()
+    assert "3 вопроса" in text and "черновик" in text, text
+    assert page.locator("#polls .ui-row button").count() == 0
+    assert page.locator("#polls .ui-row a a").count() == 0
+
+
+def test_строка_черновика_открывает_конструктор(app_page) -> None:
+    """AC-12: нажатие на строку — конструктор того же опроса с тремя вопросами."""
+    page = app_page("/webapp/polls")
+    page.wait_for_selector("#polls .ui-row", timeout=10_000)
+    page.click("#polls a.ui-row[href='/webapp/polls/edit?poll_id=8']")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+
+    assert page.url.split("?")[0].endswith("/webapp/polls/edit"), page.url
+    assert "poll_id=8" in page.url
+    assert page.input_value("#title") == "Что улучшить в расписании"
+    assert page.locator("#questions .ui-row").count() == 3
+    assert page.is_enabled("#add-question")
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_сводка_держит_копировать_второй_кнопкой(app_page) -> None:
+    """AC-33: четыре элемента в порядке; у закрытого «Закрыть опрос» скрыта."""
+    for path, closed in (("/webapp/polls/results?poll_id=7", False),
+                         ("/webapp/polls/results?poll_id=10", True)):
+        page = app_page(path)
+        page.wait_for_selector("#questions details", timeout=10_000)
+        buttons = page.eval_on_selector_all(
+            "#form > .ui-actions--bottom > *",
+            "nodes => nodes.map(node => node.textContent.trim())")
+        assert buttons == ["Закрыть опрос", "Копировать", "Экспорт CSV",
+                           "Экспорт Markdown"], buttons
+        assert page.locator("#copy").is_visible()
+        assert page.is_enabled("#copy")
+        assert page.locator("#close").is_hidden() is closed, path
+        _no_overflow(page)
+        assert not page.svoi_errors, (path, page.svoi_errors)
+
+
+def test_копирование_ведёт_в_конструктор_копии(app_page) -> None:
+    """AC-34: один `copy` с `poll_id`, переход в копию, полоса и тема с суффиксом."""
+    import json
+
+    page = app_page("/webapp/polls/results?poll_id=7")
+    page.wait_for_selector("#questions details", timeout=10_000)
+    calls = _watch_posts(page)
+
+    page.click("#copy")
+    page.wait_for_url("**/webapp/polls/edit?poll_id=9&note=copy", timeout=10_000)
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+
+    copies = _sent(calls, "/webapp/polls/copy")
+    assert len(copies) == 1, [call["url"] for call in calls]
+    assert json.loads(copies[0]["body"]) == {"poll_id": 7}
+    assert page.inner_text("#note") == COPY_NOTE
+    assert page.locator("#note").is_visible()
+    assert page.input_value("#title").endswith(" — копия")
+    assert page.locator("#questions .ui-row").count() == 11
+    assert not page.svoi_errors, page.svoi_errors
+
+
+def test_без_метки_копии_полосы_нет(app_page) -> None:
+    """AC-35: прямая ссылка в черновик без `note=copy` полосу не показывает."""
+    page = app_page("/webapp/polls/edit?poll_id=8")
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    assert page.locator("#note").is_hidden()
+
+
+def test_отказ_копирования_показывает_текст_и_не_уводит_страницу(app_page) -> None:
+    """AC-36: пока ответа нет — кнопка `disabled`; отказ — текстом, кнопка снова жива."""
+    page = app_page("/webapp/polls/results?poll_id=7",
+                    headers={"X-SVOI-POLLS-COPY": "draft"})
+    page.wait_for_selector("#questions details", timeout=10_000)
+
+    page.click("#copy", no_wait_after=True)
+    assert page.is_disabled("#copy"), "кнопка не заблокирована на время запроса"
+    page.wait_for_selector("#error:not([hidden])", timeout=10_000)
+    assert page.inner_text("#error") == "Черновик не копируют: откройте его в конструкторе."
+    assert page.url.split("?")[0].endswith("/webapp/polls/results"), page.url
+    assert page.is_enabled("#copy")
+    assert not page.svoi_errors, page.svoi_errors

@@ -99,7 +99,7 @@ BUILDER_BODY = f"""
   <div class="ui-field">
     <label class="ui-field__label" for="title">Тема опроса</label>
     <input class="ui-input" id="title" type="text" value="Анкета организаторам">
-    <span class="ui-field__hint">Черновик сохраняется сам: закрыли экран — вернулись к тому же.</span>
+    <span class="ui-field__hint">Черновик сохранится, когда нажмёте «Сохранить черновик».</span>
   </div>
 </section>
 

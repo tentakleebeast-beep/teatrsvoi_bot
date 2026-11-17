@@ -102,9 +102,17 @@ def _require_results(conn, viewer: dict, poll: dict) -> None:
         raise ApiError(status.HTTP_403_FORBIDDEN, "participant_archived",
                        code="participant_archived")
     if not _can_read_results(conn, viewer, poll, viewer.get("caps") or []):
-        core.audit(conn, "human", viewer.get("id"), "access.denied", "capability",
-                   "poll.results", after={"poll_id": poll["id"], "via": "webapp"})
+        _audit_denied_results(viewer, poll)
         raise ApiError(status.HTTP_403_FORBIDDEN, DENY_RESULTS_TEXT, code="no_results")
+
+
+def _audit_denied_results(viewer: dict, poll: dict) -> None:
+    """Отказ в видимости — своим соединением: запрос следом падает, и запись,
+    сделанная в его соединении, откатилась бы вместе с исключением. Так отказ
+    терялся молча — `access.denied` не появлялся в журнале ни у сводки, ни у копии."""
+    with core.pool.connection() as audit_conn:
+        core.audit(audit_conn, "human", viewer.get("id"), "access.denied", "capability",
+                   "poll.results", after={"poll_id": poll["id"], "via": "webapp"})
 
 
 def _own_draft(conn, viewer: dict, poll: dict, caps: list[str]) -> None:
@@ -237,6 +245,48 @@ def polls_save(body: PollSaveIn, who: dict = Depends(core.webapp_actor)) -> dict
             core.audit(conn, "human", viewer["id"], "poll.save", "poll", str(poll_id),
                        after={"title": title, "questions": len(questions)})
     return {"ok": True, "poll_id": poll_id, "status": "draft"}
+
+
+@router.post("/webapp/polls/copy")
+def polls_copy(body: PollIdIn, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Копия отправленного опроса — новым черновиком (docs/development/166 §2, §4).
+
+    Порядок проверок — как у `polls_start`, с архивом впереди: право → существование
+    → видимость → статус источника → наличие вопросов. Проверяется право **прочитать**
+    (`_require_results`), а не править: копируют то, что человек видит в сводке.
+    Адресаты, зрители, прохождения и сроки не переносятся — копия не отправлена.
+    """
+    viewer = core._webapp_require(who, "poll.manage", deny_code="no_poll_manage",
+                                  deny_text=DENY_MANAGE_TEXT)
+    with core.pool.connection() as conn:
+        poll = _poll_or_404(conn, body.poll_id)
+        _require_results(conn, viewer, poll)
+        if poll["status"] == "draft":
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "Черновик не копируют: откройте его в конструкторе.",
+                           code="poll_draft")
+        # Пустой источник проверяем до `validate_questions`: иначе тот же случай
+        # ответил бы второй фразой («В опросе нет ни одного вопроса»), 166 §5.3.
+        questions = _questions(conn, poll["id"])
+        if not questions:
+            raise ApiError(status.HTTP_400_BAD_REQUEST,
+                           "В опросе нет вопросов: копировать нечего.",
+                           code="no_questions")
+        try:
+            draft = poll_store.draft_copy(poll, questions)
+        except poll_store.DraftError as exc:
+            raise ApiError(status.HTTP_400_BAD_REQUEST, exc.text, code=exc.code) from exc
+        new_id = conn.execute(
+            """insert into poll (title, intro, anonymous, created_by)
+               values (%s,%s,%s,%s) returning id""",
+            (draft["title"], draft["intro"], draft["anonymous"],
+             viewer["id"])).fetchone()["id"]
+        _write_questions(conn, new_id, draft["questions"])
+        core.audit(conn, "human", viewer["id"], "poll.copy", "poll", str(new_id),
+                   after={"source_poll_id": poll["id"], "title": draft["title"],
+                          "questions": len(draft["questions"])})
+    return {"ok": True, "poll_id": new_id, "title": draft["title"], "status": "draft",
+            "url": f"/webapp/polls/edit?poll_id={new_id}&note=copy"}
 
 
 @router.get("/webapp/polls/edit/data")
