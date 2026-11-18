@@ -12,7 +12,7 @@
 | [Архитектура](architecture/) | модель данных, правила, алгоритмы, границы систем | 23 |
 | [Инфраструктура](infrastructure/) | Google, календари, уведомления, развёртывание | 10 |
 | [Разработка](development/) | требования, сценарии, тесты, процессы, интерфейсы | 56 |
-| [Планы](plans/) | роадмап, планы развития | 9 |
+| [Планы](plans/) | роадмап, планы развития | 10 |
 | [Отчёты](reports/) | датированные срезы: чекпойнты, аудиты, покрытие, смоук-тесты | 61 |
 | [Архив](archive/) | устаревшее и историческое; не правило, а запись | 7 |
 
@@ -43,8 +43,8 @@
 | 52 | [52-twins-teachers-director.md](architecture/52-twins-teachers-director.md) | 52. Тёзки, педагоги и режиссёр |
 | 85 | [85-error-catalog.md](architecture/85-error-catalog.md) | 85. Каталог ошибок HTTP API |
 | 140 | [140-master-role.md](architecture/140-master-role.md) | 140. Роль «Педагог» (master): модель, дисциплины, права |
-| 170 | [170-transition-graph.md](architecture/170-transition-graph.md) | 167. Единый граф переходов: чат бота → экраны Mini App |
-| 172 | [172-db-schema.md](architecture/172-db-schema.md) | 169. Схема БД: фактическое состояние |
+| 170 | [170-transition-graph.md](architecture/170-transition-graph.md) | 170. Единый граф переходов: чат бота → экраны Mini App |
+| 172 | [172-db-schema.md](architecture/172-db-schema.md) | 172. Схема БД: фактическое состояние |
 
 ## Инфраструктура
 
@@ -123,7 +123,7 @@
 | 164 | [164-miniapp-home-polls.md](development/164-miniapp-home-polls.md) | 164. Открытые опросы на Главной: адресат видит, что опрос ему назначен (E8-D3, дизайн) |
 | 166 | [166-poll-draft-copy.md](development/166-poll-draft-copy.md) | 166. Черновик и копирование опросов: сохранить, не отправляя, и повторить анкету (E8-D5: дизайн и спецификация) |
 | 167 | [167-poll-interview-draft.md](development/167-poll-interview-draft.md) | 167. Миграция данных: черновик анкеты оргсостава (E8) — спецификация |
-| 173 | [173-prototype-workspace.md](development/173-prototype-workspace.md) | 166. Рабочее место для прототипов: слои, кросс-ревью, дизайн-тесты |
+| 173 | [173-prototype-workspace.md](development/173-prototype-workspace.md) | 173. Рабочее место для прототипов: слои, кросс-ревью, дизайн-тесты |
 | 174 | [174-invite-instruction.md](development/174-invite-instruction.md) | 174. Инструкция при выпуске инвайт-кода: первый вход и опрос о студии (E9-1, дизайн и рамка) |
 
 ## Планы
@@ -141,6 +141,7 @@
 | 128 | [128-scope-now-and-roadmap.md](plans/128-scope-now-and-roadmap.md) | 128. Границы прохода: что рефакторим сейчас и что уходит в дорожную карту |
 | 129 | [129-public-repo-plan.md](plans/129-public-repo-plan.md) | 129. Публичный репозиторий: что вычистить, чем проверить, в каком порядке |
 | 157 | [157-epics-backlog-2026-11.md](plans/157-epics-backlog-2026-11.md) | 157. Бэклог эпиков на ноябрь 2026: Google, «Дом», «Управление», файлы, календарь, проекты, анимации |
+| 175 | [175-screens-and-transitions-review.md](plans/175-screens-and-transitions-review.md) | 175. Ревизия экранов и переходов Mini App |
 
 ## Отчёты
 

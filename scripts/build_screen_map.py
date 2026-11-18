@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 STAND = "http://127.0.0.1:8799"
 GRAPH_DOC = ROOT / "docs" / "architecture" / "170-transition-graph.md"
 ATLAS_DOC = ROOT / "docs" / "reports" / "171-screens-atlas.html"
-SHOTS = ROOT / "docs" / "reports" / "168-screens"
+SHOTS = ROOT / "docs" / "reports" / "171-screens"
 
 # Как Telegram передаёт данные Mini App: стенд подпись не проверяет (как в conftest).
 INIT_DATA = ("user=%7B%22id%22%3A30%2C%22first_name%22%3A%22Test%22%7D"
@@ -73,6 +73,14 @@ def label_of(title: str, path: str) -> str:
 
 
 ROLES = ("admin", "org", "master", "troupe")
+
+# Экраны, до которых нет перехода ни с одного экрана и ни одной кнопки бота. Это не
+# повод не рисовать их в атласе — это находка, и она печатается в документе (169 §6).
+# Новый экран без входа сюда не вписывать: это дефект навигации, и сборка обязана упасть.
+NO_ENTRY = {
+    "/webapp/person": "старый экран, вход убран: `routes.py` помечает его «ждёт переезда в лист человека»",
+    "/webapp/dues": "«Мои взносы»: в чате `/dues` отдаёт текст, кнопки в Mini App нет",
+}
 
 
 def collect() -> list[dict]:
@@ -133,6 +141,21 @@ def collect() -> list[dict]:
                     "    .replace(/\\s+/g, ' ').slice(0, 48)] : null;"
                     "}).filter(Boolean)")
                 links += [list(item) for item in jumps]
+                # Кнопка-обработчик в инлайн-скрипте: `$("people-dues").onclick =
+                # function () { location.href = "/webapp/admin/t/dues" }` — атрибута
+                # onclick в разметке нет, и без этого прохода «Взносы» недостижимы.
+                script_jumps = page.evaluate(
+                    "() => { const out = [];"
+                    " for (const s of document.querySelectorAll('script:not([src])')) {"
+                    "  const t = s.textContent || '';"
+                    "  const re = /\\$\\(\"([a-z0-9_-]+)\"\\)[\\s\\S]{0,200}?location\\.href\\s*=\\s*[\"']([^\"']+)/g;"
+                    "  let m; while ((m = re.exec(t))) {"
+                    "   const el = document.getElementById(m[1]);"
+                    "   out.push([m[2], ((el && el.textContent) || '').trim()"
+                    "     .replace(/\\s+/g, ' ').slice(0, 48)]);"
+                    "  }"
+                    " } return out; }")
+                links += [list(item) for item in script_jumps]
                 entry = screens.setdefault(path, {"path": path, "title": page.title(),
                                                   "label": label_of(page.title(), path),
                                                   "links": {}, "roles": set()})
@@ -198,13 +221,17 @@ def build(screens: list[dict]) -> tuple[str, list[str], list[str]]:
     def node(path: str) -> str:
         return "n" + slug(path).replace("-", "_")
 
-    lines = ["flowchart TB"]
+    lines = ["flowchart LR"]
     lines.append('  chat["Чат бота: /start, кнопка «Меню»"]')
+    group_of: dict[str, str] = {}        # адрес экрана → id подграфа
+    gid_by_name: dict[str, str] = {}     # имя группы → id подграфа
 
     groups = [(name, [p for p in paths if p in known]) for name, paths in GROUPS.items()]
     admin = [s["path"] for s in on_graph
              if s["path"] not in {p for ps in GROUPS.values() for p in ps}]
-    groups.append((ADMIN_GROUP, admin))
+    # Разделы «Управления» ставим сразу после вкладок: их открывает «Ещё», и если группа
+    # окажется последней, десять линий из хаба перечеркнут всю схему.
+    groups.insert(1, (ADMIN_GROUP, admin))
     # Два «Уведомления» и два «Файлы» на графе — разные экраны: раздел и свой. Различаем
     # пометкой, иначе узлы читаются как дубли.
     seen_labels: dict[str, int] = {}
@@ -213,6 +240,7 @@ def build(screens: list[dict]) -> tuple[str, list[str], list[str]]:
             label = next(x for x in on_graph if x["path"] == path)["label"]
             seen_labels[label] = seen_labels.get(label, 0) + 1
     for index, (name, members) in enumerate((g for g in groups if g[1]), start=1):
+        gid_by_name[name] = f"g{index}"
         lines.append(f'  subgraph g{index}["{name}"]')
         lines.append("    direction TB")
         for path in members:
@@ -221,6 +249,7 @@ def build(screens: list[dict]) -> tuple[str, list[str], list[str]]:
             if seen_labels[label] > 1:
                 label += " (раздел)" if path.startswith("/webapp/admin/t/") else " (свой)"
             lines.append(f'    {node(path)}["{label}"]')
+            group_of[path] = f"g{index}"
         lines.append("  end")
 
     edges: list[tuple[str, str, str]] = []
@@ -252,18 +281,37 @@ def build(screens: list[dict]) -> tuple[str, list[str], list[str]]:
         if target in known and target != "/webapp/ui":
             edges.append(("chat", target, label))
 
+    # Хаб «Ещё» открывает двенадцать разделов одной кучей строк — двенадцать линий из
+    # одной точки перечёркивают схему. Большие веера склеиваем в линию к группе: что
+    # именно открывается, видно в атласе и в таблице экранов ниже.
+    fan: dict[tuple[str, str], list[str]] = {}
+    for source, target, text in edges:
+        gid = group_of.get(target)
+        if gid and group_of.get(source) != gid:
+            fan.setdefault((source, gid), []).append(text)
+    collapsed = {key for key, items in fan.items() if len(items) >= 3}
+
     # Одна пара «экран → экран» — одна линия: у «Файлов» десяток строк в один и тот же
     # экран файла, и без склейки граф превращается в список файлов.
     merged: dict[tuple[str, str], list[str]] = {}
     for source, target, text in edges:
+        gid = group_of.get(target)
+        if (source, gid) in collapsed:
+            continue
         merged.setdefault((source, target), []).append(text)
+    for (source, gid), items in fan.items():
+        if (source, gid) in collapsed:
+            word = "разделов" if gid == gid_by_name.get(ADMIN_GROUP) else "экранов"
+            merged[(source, gid)] = [f"{len(items)} {word}"]
+
     for (source, target), labels in merged.items():
         labels.sort(key=lambda item: item == "‹")      # «‹» — подпись по умолчанию, не главная
         label = labels[0] if len(labels) == 1 else f"{labels[0]} и ещё {len(labels) - 1}"
         if len(label) > 28:
             label = label[:28].rstrip(" ,.;:") + "…"
         src = "chat" if source == "chat" else node(source)
-        lines.append(f'  {src} -->|"{label.replace(chr(34), "")}"| {node(target)}')
+        dst = target if target.startswith("g") and target[1:].isdigit() else node(target)
+        lines.append(f'  {src} -->|"{label.replace(chr(34), "")}"| {dst}')
 
     return "\n".join(lines), skipped, admin
 
@@ -272,7 +320,10 @@ def write_doc(mermaid: str, screens: list[dict], moves: dict[str, str],
               skipped: list[str], admin: list[str]) -> None:
     from app.webapp import SECTIONS
 
-    caps = {s.url: ", ".join(s.caps) for s in SECTIONS}
+    # Права берутся из SCREEN_CAPS, а не только из SECTIONS: у экранов вне хаба
+    # (деньги, неделя, опросы, файлы) право объявлено там, и «—» в таблице было неправдой.
+    from app.webapp import SCREEN_CAPS
+    caps = {url: ", ".join(value) for url, value in SCREEN_CAPS.items()}
     incoming: dict[str, int] = {}
     for line in mermaid.splitlines():
         for target in re.findall(r"\| *n([a-z0-9_]+)\]?", line):
@@ -301,7 +352,7 @@ def write_doc(mermaid: str, screens: list[dict], moves: dict[str, str],
 ## 1. Граф
 
 Полоса вкладок («Главная · Время · Деньги · Управление») есть на каждом экране и ведёт в
-четыре корня. На графе она не нарисована: 35 × 4 одинаковых линий сделали бы схему нечитаемой.
+четыре корня. На графе она не нарисована: {len(screens)} × 4 одинаковых линий сделали бы схему нечитаемой.
 Так же не нарисована стрелка «‹»: возврат на уровень выше есть на каждом вложенном экране и
 всегда ведёт к корню своей вкладки.
 
@@ -344,9 +395,12 @@ env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
   а не адреса: они не ведут в Mini App, а работают в чате. Их состав — `keyboards.menu_groups`.
 - **Динамические кнопки** бота: адрес собирается из переменной (`screen`, константы страниц).
   Они видны на графе как сами экраны, к которым ведут.
+- **Веера.** «Ещё» открывает десять разделов и пять прочих экранов: на графе это одна
+  линия к группе («10 разделов»), а не десять линий из одной точки. Что именно открывается —
+  в таблице §2 и в атласе.
 - **Снимки экранов** — в `docs/reports/171-screens-atlas.html` (собирается тем же прогоном).
 
-{f"## 6. Найдено при сборке{chr(10)}{chr(10)}Ссылки, которые никуда не ведут: {len(skipped)}{chr(10)}{chr(10)}" + chr(10).join(f"- {item}" for item in skipped) if skipped else ""}
+{f"## 6. Экраны без входа{chr(10)}{chr(10)}До этих экранов нет перехода ни с одного экрана и ни одной кнопки бота. В атласе они есть — в графе стоят отдельно, без входящих стрелок. Список ведётся в `scripts/build_screen_map.py:NO_ENTRY`: новый экран без входа валит сборку.{chr(10)}{chr(10)}" + chr(10).join(f'- `{path}` — {why}' for path, why in NO_ENTRY.items()) + chr(10) + chr(10)}{f"## 7. Найдено при сборке{chr(10)}{chr(10)}Ссылки, которые никуда не ведут: {len(skipped)}{chr(10)}{chr(10)}" + chr(10).join(f"- {item}" for item in skipped) if skipped else ""}
 """
     GRAPH_DOC.write_text(text, "utf-8")
 
@@ -364,7 +418,7 @@ def write_atlas(screens: list[dict]) -> None:
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>СВОИ — атлас экранов Mini App, 17.11.2026</title>
 <style>
-  /* Атлас собран скриптом со стенда: снимки 390 × 844 ×2, порядок — как в графе 167. */
+  /* Атлас собран скриптом со стенда: снимки 390 × 844 ×2, порядок — как в графе 170. */
   body {{ margin: 0; padding: 24px; background: #f7f8fa; color: #16181d;
           font: 14px/1.4 -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }}
   h1 {{ font-size: 20px; margin: 0 0 4px; }}
@@ -407,6 +461,9 @@ def main() -> int:
     # дефект навигации, а не «нарисуем стрелку откуда-нибудь».
     reach: set[str] = set()
     edges: dict[str, set[str]] = {}
+    members: dict[str, list[str]] = {}
+    for block in re.findall(r"subgraph (g\d+)\[[^\]]*\](.*?)\n  end", mermaid, re.S):
+        members[block[0]] = re.findall(r"^\s+(n\w+)\[", block[1], re.M)
     for source, target in re.findall(r"^\s*(\w+) -->\|\"[^\"]*\"\| (\w+)$", mermaid, re.M):
         edges.setdefault(source, set()).add(target)
     frontier = ["chat"] + [f"n{slug(p).replace('-', '_')}" for p in TABS]
@@ -415,11 +472,15 @@ def main() -> int:
         if current in reach:
             continue
         reach.add(current)
-        frontier.extend(edges.get(current, ()))
+        nxt = set(edges.get(current, ()))
+        for item in list(nxt):                 # линия к группе пускает во все её экраны
+            nxt.update(members.get(item, ()))
+        frontier.extend(nxt)
     unreachable = [s["path"] for s in screens
                    if s["path"] not in ("/webapp/ui",)
                    and f"n{slug(s['path']).replace('-', '_')}" not in reach]
-    assert not unreachable, f"до экранов нет перехода: {unreachable}"
+    unexpected = [p for p in unreachable if p not in NO_ENTRY]
+    assert not unexpected, f"до экранов нет перехода: {unexpected}"
     for s in screens:
         if s["path"] == "/webapp/ui":        # справочник компонентов, не экран потока
             continue

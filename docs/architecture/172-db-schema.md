@@ -1,6 +1,7 @@
-# 169. Схема БД: фактическое состояние
+# 172. Схема БД: фактическое состояние
 
-Срез: **2026-11-17**, PostgreSQL 16, ревизия Alembic `066_polls_org_manage`.
+Срез: **2026-11-17**, PostgreSQL 16. Ревизия Alembic: dev — `066_polls_org_manage`,
+прод — `067_poll_interview_draft` (накатана при выкате v0.11.5; ревизия данных, схема та же).
 Это описание того, что реально лежит в базе, а не того, что задумывалось в ранних версиях.
 
 Чем проверено:
@@ -8,7 +9,7 @@
 | Что | Чем | Результат |
 |---|---|---|
 | Состав | `information_schema.tables`, `pg_class` по dev (`127.0.0.1:5433/svoi`) | 64 таблицы предметной области + `alembic_version`, 15 представлений, 552 колонки, 87 внешних ключей |
-| Совпадение dev и прода | `pg_dump --schema-only` с dev и с `svoi-prod`, дифф по `CREATE TABLE` / `ALTER TABLE ONLY` / `ADD CONSTRAINT` / `CREATE [UNIQUE] INDEX` / `CREATE VIEW` | 0 расхождений |
+| Совпадение dev и прода | `pg_dump --schema-only` с dev и с `svoi-prod`, дифф по `CREATE TABLE` / `ALTER TABLE ONLY` / `ADD CONSTRAINT` / `CREATE [UNIQUE] INDEX` / `CREATE VIEW` | 0 расхождений по форме; версии учёта различаются: dev 066, прод 067 |
 | Машинный снимок | `contracts/db-schema.json` (`scripts/db_schema_snapshot.py --write`) | 65 таблиц, 15 представлений |
 
 Сопутствующие файлы:
@@ -21,7 +22,7 @@
 ## 1. Зачем этот документ и как им пользоваться
 
 Документы про данные расходились с базой молча: `01-data-model.md` описывает исходную версию
-(в ней 8 таблиц, которых в базе нет никогда не было — `session`, `message_event`, `dead_letter`,
+(в ней 8 таблиц, которых в базе не было никогда — `session`, `message_event`, `dead_letter`,
 `budget_sync_state`, `budget_recon`, `due_member`, `availability`, `tool_call_log`), а 23
 существующие таблицы не упомянуты в `docs/architecture` вообще. Ниже — точка отсчёта.
 

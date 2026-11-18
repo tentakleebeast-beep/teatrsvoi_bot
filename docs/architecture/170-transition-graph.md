@@ -1,4 +1,4 @@
-# 167. Единый граф переходов: чат бота → экраны Mini App
+# 170. Единый граф переходов: чат бота → экраны Mini App
 
 **Дата:** 17.11.2026. **Собирается:** `scripts/build_screen_map.py` — не правится руками.
 **Заменяет:** `docs/archive/prototypes/44-menu-map.html` (описывал меню и шесть экранов;
@@ -14,9 +14,11 @@
 
 ## 1. Граф
 
-Полоса вкладок («Главная · Время · Деньги · Управление») есть на каждом экране и ведёт в
-четыре корня. На графе она не нарисована: 35 × 4 одинаковых линий сделали бы схему нечитаемой.
-Стрелка «‹» — возврат на уровень выше.
+Полоса вкладок («Главная · Время · Деньги · Ещё») есть на каждом экране и ведёт в четыре
+корня. У ролей с управленческими правами четвёртая вкладка называется «Управление» и
+открывает те же десять разделов, что и «Ещё» у остальных (`pages/layout.py:38-52`). На графе она не нарисована: 36 × 4 одинаковых линий сделали бы схему нечитаемой.
+Так же не нарисована стрелка «‹»: возврат на уровень выше есть на каждом вложенном экране и
+всегда ведёт к корню своей вкладки.
 
 ```mermaid
 flowchart LR
@@ -29,41 +31,7 @@ flowchart LR
     nwebapp_money["Деньги"]
     nwebapp_more["Ещё"]
   end
-  subgraph g2["Время"]
-    direction TB
-    nwebapp_week_summary["Сводка занятости"]
-    nwebapp_week_month["Сетка месяца"]
-    nwebapp_slots["Поиск окон"]
-  end
-  subgraph g3["Деньги"]
-    direction TB
-    nwebapp_tx["Операция"]
-    nwebapp_dues["Мои взносы"]
-  end
-  subgraph g4["Опросы"]
-    direction TB
-    nwebapp_polls["Опросы"]
-    nwebapp_polls_edit["Конструктор опроса"]
-    nwebapp_polls_results["Результаты опроса"]
-    nwebapp_polls_mine["Мои опросы"]
-    nwebapp_polls_answer["Опрос"]
-  end
-  subgraph g5["Файлы"]
-    direction TB
-    nwebapp_files["Файлы"]
-    nwebapp_folder["Папка"]
-    nwebapp_file["Файл"]
-  end
-  subgraph g6["Прочее"]
-    direction TB
-    nwebapp_person["Карточка участника"]
-    nwebapp_notifications["Уведомления (свой)"]
-    nwebapp_feedback["Обратная связь"]
-    nwebapp_services["Сервисы"]
-    nwebapp_broadcast["Рассылка"]
-    nwebapp_reconcile["Сверка листов"]
-  end
-  subgraph g7["Управление (разделы)"]
+  subgraph g2["Управление (разделы)"]
     direction TB
     nwebapp_admin_t_people["Люди"]
     nwebapp_admin_t_dues["Взносы"]
@@ -77,80 +45,81 @@ flowchart LR
     nwebapp_admin_t_feedback["Обращения"]
     nwebapp_notes["Заметки"]
   end
-  nwebapp -->|"‹"| nwebapp_more
-  nwebapp_tx -->|"‹"| nwebapp_money
+  subgraph g3["Время"]
+    direction TB
+    nwebapp_week_summary["Сводка занятости"]
+    nwebapp_week_month["Сетка месяца"]
+    nwebapp_slots["Поиск окон"]
+  end
+  subgraph g4["Деньги"]
+    direction TB
+    nwebapp_tx["Операция"]
+    nwebapp_dues["Мои взносы"]
+  end
+  subgraph g5["Опросы"]
+    direction TB
+    nwebapp_polls["Опросы"]
+    nwebapp_polls_edit["Конструктор опроса"]
+    nwebapp_polls_results["Результаты опроса"]
+    nwebapp_polls_mine["Мои опросы"]
+    nwebapp_polls_answer["Опрос"]
+  end
+  subgraph g6["Файлы"]
+    direction TB
+    nwebapp_files["Файлы"]
+    nwebapp_folder["Папка"]
+    nwebapp_file["Файл"]
+  end
+  subgraph g7["Прочее"]
+    direction TB
+    nwebapp_person["Карточка участника"]
+    nwebapp_notifications["Уведомления (свой)"]
+    nwebapp_feedback["Обратная связь"]
+    nwebapp_services["Сервисы"]
+    nwebapp_broadcast["Рассылка"]
+    nwebapp_reconcile["Сверка листов"]
+  end
   nwebapp_week -->|"Сводка занятости"| nwebapp_week_summary
   nwebapp_week_summary -->|"Найти окно для события"| nwebapp_slots
   nwebapp_week_summary -->|"Сетка месяца"| nwebapp_week_month
-  nwebapp_week_month -->|"‹"| nwebapp_week_summary
   nwebapp_money -->|"Записать операцию"| nwebapp_tx
-  nwebapp_person -->|"‹"| nwebapp_home
-  nwebapp_feedback -->|"‹"| nwebapp_more
-  nwebapp_slots -->|"‹"| nwebapp_week
-  nwebapp_admin_t_people -->|"‹"| nwebapp_more
-  nwebapp_admin_t_dues -->|"‹"| nwebapp_more
-  nwebapp_admin_t_pending -->|"‹"| nwebapp_more
-  nwebapp_admin_t_rights -->|"‹"| nwebapp_more
-  nwebapp_admin_t_archive -->|"‹"| nwebapp_more
-  nwebapp_admin_t_audit -->|"‹"| nwebapp_more
-  nwebapp_admin_t_agent -->|"‹"| nwebapp_more
-  nwebapp_admin_t_notifications -->|"‹"| nwebapp_more
+  nwebapp_admin_t_people -->|"Взносы: тариф и начисление"| nwebapp_admin_t_dues
   nwebapp_admin_t_notifications -->|"Мои настройки уведомлений"| nwebapp_notifications
-  nwebapp_admin_t_invites -->|"‹"| nwebapp_more
-  nwebapp_admin_t_feedback -->|"‹"| nwebapp_more
+  nwebapp_home -->|"Мои опросы"| nwebapp_polls_mine
   nwebapp_home -->|"Заявки"| nwebapp_admin_t_pending
-  nwebapp_home -->|"Обращения"| nwebapp_more
-  nwebapp_home -->|"Крупная сумма"| nwebapp_money
+  nwebapp_home -->|"Обращения"| nwebapp_admin_t_feedback
   nwebapp_home -->|"Отметить занятость"| nwebapp_week
   nwebapp_home -->|"Записать операцию"| nwebapp_tx
-  nwebapp_notifications -->|"‹"| nwebapp_more
-  nwebapp_dues -->|"‹"| nwebapp_money
-  nwebapp_broadcast -->|"‹"| nwebapp_more
-  nwebapp_reconcile -->|"‹"| nwebapp_more
-  nwebapp_services -->|"‹"| nwebapp_more
-  nwebapp_files -->|"‹"| nwebapp_more
   nwebapp_files -->|"Репетиция 12 октября.m4a18,0…"| nwebapp_file
   nwebapp_files -->|"Архив 2024 и ещё 5"| nwebapp_folder
-  nwebapp_folder -->|"Открыть «Файлы» и ещё 1"| nwebapp_files
-  nwebapp_file -->|"Открыть Файлы и ещё 1"| nwebapp_files
-  nwebapp_notes -->|"‹"| nwebapp_more
-  nwebapp_polls -->|"‹"| nwebapp_more
   nwebapp_polls -->|"Анкета организаторам"| nwebapp_polls_results
   nwebapp_polls -->|"Что улучшить в расписании и…"| nwebapp_polls_edit
-  nwebapp_polls_edit -->|"‹"| nwebapp_polls
-  nwebapp_polls_results -->|"‹"| nwebapp_polls
-  nwebapp_polls_mine -->|"‹"| nwebapp_home
   nwebapp_polls_mine -->|"Что по опросам? и ещё 1"| nwebapp_polls_answer
-  nwebapp_polls_answer -->|"К списку и ещё 1"| nwebapp_polls_mine
-  nwebapp_more -->|"Заявки"| nwebapp_admin_t_pending
-  nwebapp_more -->|"Люди"| nwebapp_admin_t_people
-  nwebapp_more -->|"Обращения"| nwebapp_admin_t_feedback
-  nwebapp_more -->|"Рассылка"| nwebapp_broadcast
-  nwebapp_more -->|"Сверка листов"| nwebapp_reconcile
+  nwebapp_more -->|"Опросы"| nwebapp_polls
   nwebapp_more -->|"Профиль"| nwebapp
   nwebapp_more -->|"Файлы студии"| nwebapp_files
-  nwebapp_more -->|"Заметки"| nwebapp_notes
-  nwebapp_more -->|"Уведомления"| nwebapp_notifications
-  nwebapp_more -->|"Обратная связь"| nwebapp_feedback
   chat -->|"Открыть неделю"| nwebapp_week
   chat -->|"Внести операцию"| nwebapp_tx
   chat -->|"Открыть поиск окон"| nwebapp_slots
   chat -->|"Открыть анкету"| nwebapp
   chat -->|"Открыть заметки"| nwebapp_notes
+  nwebapp_more -->|"10 разделов"| g2
+  nwebapp_more -->|"5 экранов"| g7
 ```
 
 ## 2. Экраны
 
-Права — из реестра `SECTIONS` (`services/tool-api/app/webapp.py`): экран рисуется, только если
-возможность есть; данные всё равно проверяются в API.
+Права — из `SCREEN_CAPS` (`services/tool-api/app/webapp.py`): экран рисуется, только если
+возможность есть; данные всё равно проверяются в API. Пустая клетка — экран открыт всем
+ролям, он показывает лишь своё (`/webapp/home`, `/webapp/polls/mine`, `/webapp/feedback`).
 
 | Адрес | Экран | Права |
 |---|---|---|
 | `/webapp` | Профиль | — |
 | `/webapp/home` | Главная | — |
-| `/webapp/money` | Деньги | — |
+| `/webapp/money` | Деньги | budget.read.self, budget.read |
 | `/webapp/more` | Ещё | — |
-| `/webapp/week` | Занятость | — |
+| `/webapp/week` | Занятость | schedule.availability.self |
 | `/webapp/admin/t/agent` | Разбор агента | admin.panel |
 | `/webapp/admin/t/archive` | Архив | participants.manage |
 | `/webapp/admin/t/audit` | Аудит | audit.view |
@@ -162,26 +131,26 @@ flowchart LR
 | `/webapp/admin/t/people` | Люди | participants.view |
 | `/webapp/admin/t/rights` | Права | participants.manage |
 | `/webapp/broadcast` | Рассылка | notify.send |
-| `/webapp/dues` | Мои взносы | — |
+| `/webapp/dues` | Мои взносы | budget.read.self |
 | `/webapp/feedback` | Обратная связь | — |
-| `/webapp/file` | Файл | — |
+| `/webapp/file` | Файл | files.access |
 | `/webapp/files` | Файлы | files.access |
-| `/webapp/folder` | Папка | — |
+| `/webapp/folder` | Папка | files.access |
 | `/webapp/notes` | Заметки | notes.write |
 | `/webapp/notifications` | Уведомления | — |
-| `/webapp/person` | Карточка участника | — |
+| `/webapp/person` | Карточка участника | participants.view |
 | `/webapp/polls` | Опросы | poll.manage |
 | `/webapp/polls/answer` | Опрос | — |
-| `/webapp/polls/edit` | Конструктор опроса | — |
+| `/webapp/polls/edit` | Конструктор опроса | poll.manage |
 | `/webapp/polls/mine` | Мои опросы | — |
-| `/webapp/polls/results` | Результаты опроса | — |
+| `/webapp/polls/results` | Результаты опроса | poll.results.all, poll.manage |
 | `/webapp/reconcile` | Сверка листов | budget.import |
 | `/webapp/services` | Сервисы | admin.panel |
-| `/webapp/slots` | Поиск окон | — |
-| `/webapp/tx` | Операция | — |
+| `/webapp/slots` | Поиск окон | schedule.slots |
+| `/webapp/tx` | Операция | budget.write |
 | `/webapp/ui` | Элементы интерфейса | — |
-| `/webapp/week/month` | Сетка месяца | — |
-| `/webapp/week/summary` | Сводка занятости | — |
+| `/webapp/week/month` | Сетка месяца | schedule.read.all |
+| `/webapp/week/summary` | Сводка занятости | schedule.read.all |
 
 ## 3. Старые адреса (редиректы 301)
 
@@ -211,10 +180,24 @@ env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
 
 ## 5. Что не попало на граф
 
-- **Пункты меню чата** (Деньги · Время · Админ · Профиль · Помощь) — это `callback_data`,
-  а не адреса: они не ведут в Mini App, а работают в чате. Их состав — `keyboards.menu_groups`.
+- **Пункты меню чата** (Деньги · Занятость · Профиль · Участники · Админ · Помощь) — это
+  `callback_data`, а не адреса: они не ведут в Mini App, а работают в чате. Их состав —
+  `keyboards.MENU_GROUPS`, и он зависит от прав: пустые группы не рисуются.
 - **Динамические кнопки** бота: адрес собирается из переменной (`screen`, константы страниц).
   Они видны на графе как сами экраны, к которым ведут.
+- **Веера.** «Ещё» открывает десять разделов и пять прочих экранов: на графе это одна
+  линия к группе («10 разделов»), а не десять линий из одной точки. Что именно открывается —
+  в таблице §2 и в атласе.
 - **Снимки экранов** — в `docs/reports/171-screens-atlas.html` (собирается тем же прогоном).
+
+## 6. Экраны без входа
+
+До этих экранов нет перехода ни с одного экрана и ни одной кнопки бота. В атласе они есть — в графе стоят отдельно, без входящих стрелок. Список ведётся в `scripts/build_screen_map.py:NO_ENTRY`: новый экран без входа валит сборку.
+
+- `/webapp/person` — старый экран, вход убран: `routes.py` помечает его «ждёт переезда в лист человека»
+- `/webapp/dues` — «Мои взносы»: в чате `/dues` отдаёт текст, кнопки в Mini App нет
+- `/webapp/admin/t/dues` — «Взносы» в «Управлении»: вход есть только обработчиком на экране
+  «Люди» (`pages/admin_people.py:335`, `location.href`), сборщик его пока не видит и валит
+  сборку. Разбор — план 175, до него атлас и граф не пересобираются
 
 
