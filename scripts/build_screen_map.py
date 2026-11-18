@@ -318,8 +318,6 @@ def build(screens: list[dict]) -> tuple[str, list[str], list[str]]:
 
 def write_doc(mermaid: str, screens: list[dict], moves: dict[str, str],
               skipped: list[str], admin: list[str]) -> None:
-    from app.webapp import SECTIONS
-
     # Права берутся из SCREEN_CAPS, а не только из SECTIONS: у экранов вне хаба
     # (деньги, неделя, опросы, файлы) право объявлено там, и «—» в таблице было неправдой.
     from app.webapp import SCREEN_CAPS

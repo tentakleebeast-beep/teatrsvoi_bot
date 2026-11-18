@@ -331,7 +331,11 @@ async def run_menu_action(message: Message, state: FSMContext, label: str) -> No
         await admin_router.send_pending(message)
         return
 
-    if label == "Пригласить":
+    # Пункт меню называется «Приглашения» (`texts.TITLE_INVITES`, группа «Админ»), поэтому
+    # сравнивать надо с константой. Литерал «Пригласить» здесь стоял с самого появления
+    # пункта, но такого ярлыка в меню нет: ветка была недостижима, а нажатие проваливалось
+    # в справку «Что умею» — человек ждал код, а получал список возможностей (174 §11.4).
+    if label == texts.TITLE_INVITES:
         await state.clear()
         await admin_router.send_invite(message)
         return
