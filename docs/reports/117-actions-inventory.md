@@ -57,7 +57,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/admin/files/storage` | `services/tool-api/app/api/admin.py:1615` | — | сервисный токен | test_cold.py, test_service_routes_auth.py | проверка на входе — сервисный Bearer-токен, а не сессия человека; никто не зовёт |
 | POST `/admin/files/{file_id}/access` | `services/tool-api/app/api/admin.py:1599` | чат: cmd_access | любой активный | test_file_access.py, test_files_actions_screen.py, test_files_studio_roles.py (+2) | — |
 | POST `/admin/grant` | `services/tool-api/app/api/admin.py:499` | чат: panel_person_cap_toggle, panel_person_master_grant, panel_person_role_toggle, panel_rights, panel_rows | participants.manage | test_admin_panel.py, test_admin_people_actions.py, test_gateway_chat_parity.py (+1) | — |
-| POST `/admin/invite` | `services/tool-api/app/api/admin.py:39` | чат: invite_issue, send_invite | registration.code.issue | test_admin_api.py, test_admin_archive_chat.py, test_admin_invites.py (+7) | — |
+| POST `/admin/invite` | `services/tool-api/app/api/admin.py:39` | чат: invite_issue, send_invite | registration.code.issue | test_admin_api.py, test_admin_archive_chat.py, test_admin_invites.py (+8) | — |
 | POST `/admin/invite/revoke` | `services/tool-api/app/api/admin.py:83` | чат: invite_revoke | registration.code.issue | test_admin_archive_chat.py, test_admin_invites.py, test_gateway_chat_parity.py | — |
 | GET `/admin/invites` | `services/tool-api/app/api/admin.py:64` | чат: _send_codes | registration.code.issue | test_admin_archive_chat.py, test_admin_invites.py, test_gateway_chat_parity.py | — |
 | POST `/admin/participant/discipline` | `services/tool-api/app/api/admin.py:590` | чат: panel_person_master_link | participants.manage | test_gateway_chat_parity.py, test_master_role.py | — |
@@ -470,21 +470,21 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | сообщение `intro_trainings` | Intro.trainings, F.text | `services/tg-gateway/app/routers/intro.py:174` | — | нет | — |
 | сообщение `intro_manifest` | Intro.manifest, F.text | `services/tg-gateway/app/routers/intro.py:179` | — | нет | — |
 | кнопка `intro_skip` | F.data == 'intro:skip' | `services/tg-gateway/app/routers/intro.py:184` | — | нет | — |
-| кнопка `quiet_action` | F.data.startswith('quiet:') | `services/tg-gateway/app/routers/menu.py:1028` | — | test_gateway_quiet.py | — |
+| сообщение `cmd_quiet` | lambda message: parsers.command_name(message.text) in QUIET_COMMANDS | `services/tg-gateway/app/routers/menu.py:1003` | — | нет | — |
+| кнопка `quiet_action` | F.data.startswith('quiet:') | `services/tg-gateway/app/routers/menu.py:1032` | — | test_gateway_quiet.py | — |
 | сообщение `start` | CommandStart() | `services/tg-gateway/app/routers/menu.py:121` | — | нет | `/admin/bootstrap`, `/tools/participants/me` |
-| сообщение `on_menu_button` | StateFilter(None, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text.in_(keyboards.MENU_SURFACE) | `services/tg-gateway/app/routers/menu.py:345` | — | нет | — |
-| кнопка `menu_item_cb` | F.data.startswith('mi:') | `services/tg-gateway/app/routers/menu.py:352` | — | test_agent_features.py, test_gateway_menu_rights.py | — |
-| сообщение `on_dialog_control` | F.text.in_(keyboards.DIALOG_CONTROLS) | `services/tg-gateway/app/routers/menu.py:588` | — | нет | — |
-| сообщение `task_frame_text` | TaskFrame.await_text, F.text, ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:593` | — | нет | — |
-| сообщение `on_text` | StateFilter(None, Reg.await_code, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text & ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:628` | budget.write | нет | `/tools/assistant/ask`, `/tools/participants/check_code` |
-| кнопка `reg_discipline` | Reg.await_discipline, F.data.startswith('reg:disc:') | `services/tg-gateway/app/routers/menu.py:815` | — | нет | — |
-| сообщение `reg_filter` | Reg.choose, F.text, ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:825` | — | нет | `/tools/participants/search` |
-| кнопка `reg_pick` | F.data.startswith('reg:pick:') | `services/tg-gateway/app/routers/menu.py:854` | — | test_intro.py | `/tools/participants/attach` |
-| кнопка `reg_none` | F.data == 'reg:none' | `services/tg-gateway/app/routers/menu.py:878` | — | нет | — |
-| сообщение `reg_name` | Reg.await_name, F.text | `services/tg-gateway/app/routers/menu.py:885` | — | нет | `/tools/participants/register` |
-| сообщение `cmd_help` | Command('help') | `services/tg-gateway/app/routers/menu.py:925` | — | нет | — |
-| сообщение `menu_cmd` | Command('menu') | `services/tg-gateway/app/routers/menu.py:931` | — | test_gateway_assign_dialog.py | — |
-| сообщение `cmd_quiet` | lambda message: parsers.command_name(message.text) in QUIET_COMMANDS | `services/tg-gateway/app/routers/menu.py:999` | — | нет | — |
+| сообщение `on_menu_button` | StateFilter(None, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text.in_(keyboards.MENU_SURFACE) | `services/tg-gateway/app/routers/menu.py:349` | — | нет | — |
+| кнопка `menu_item_cb` | F.data.startswith('mi:') | `services/tg-gateway/app/routers/menu.py:356` | — | test_agent_features.py, test_gateway_menu_rights.py | — |
+| сообщение `on_dialog_control` | F.text.in_(keyboards.DIALOG_CONTROLS) | `services/tg-gateway/app/routers/menu.py:592` | — | нет | — |
+| сообщение `task_frame_text` | TaskFrame.await_text, F.text, ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:597` | — | нет | — |
+| сообщение `on_text` | StateFilter(None, Reg.await_code, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text & ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:632` | budget.write | нет | `/tools/assistant/ask`, `/tools/participants/check_code` |
+| кнопка `reg_discipline` | Reg.await_discipline, F.data.startswith('reg:disc:') | `services/tg-gateway/app/routers/menu.py:819` | — | нет | — |
+| сообщение `reg_filter` | Reg.choose, F.text, ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:829` | — | нет | `/tools/participants/search` |
+| кнопка `reg_pick` | F.data.startswith('reg:pick:') | `services/tg-gateway/app/routers/menu.py:858` | — | test_intro.py | `/tools/participants/attach` |
+| кнопка `reg_none` | F.data == 'reg:none' | `services/tg-gateway/app/routers/menu.py:882` | — | нет | — |
+| сообщение `reg_name` | Reg.await_name, F.text | `services/tg-gateway/app/routers/menu.py:889` | — | нет | `/tools/participants/register` |
+| сообщение `cmd_help` | Command('help') | `services/tg-gateway/app/routers/menu.py:929` | — | нет | — |
+| сообщение `menu_cmd` | Command('menu') | `services/tg-gateway/app/routers/menu.py:935` | — | test_gateway_assign_dialog.py | — |
 | сообщение `cmd_notes` | Command('заметки', 'notes') | `services/tg-gateway/app/routers/notes.py:104` | — | нет | `/webapp/notes` |
 | кнопка `note_confirm` | F.data.startswith('note:') | `services/tg-gateway/app/routers/notes.py:112` | notes.write | test_gateway_notes.py | `/tools/notes` |
 | сообщение `cmd_note` | Command('заметка', 'note') | `services/tg-gateway/app/routers/notes.py:98` | — | test_gateway_command_hints.py, test_gateway_notes.py | — |
