@@ -14,12 +14,14 @@
 Шаги идут в фиксированном порядке, каждый — отдельная строка отчёта:
 
   1. ruff check .
-  2. pytest -q                       — unit + integration на поднятом Postgres
-  3. tests/webapp --browser chromium — только в полном прогоне (`--full` по умолчанию)
-  4. scripts/check_invariants.py
-  5. scripts/check_registers.py
-  6. scripts/check_deadcode.py
-  7. scripts/check_kanban_cards.py   — если задан HERMES_KANBAN_TASK или `--board`
+  2. scripts/check_action_matrix.py  — отчёт 121 не разошёлся с docs/19 и docs/20
+  3. pytest -q                       — unit + integration на поднятом Postgres
+  4. tests/webapp --browser chromium — только в полном прогоне (`--full` по умолчанию)
+  5. scripts/check_invariants.py
+  6. scripts/check_registers.py
+  7. scripts/check_deadcode.py
+  8. scripts/check_settings.py
+  9. scripts/check_kanban_cards.py   — если задан HERMES_KANBAN_TASK или `--board`
 
 Единственное разрешённое сокращение — `--quick`: он пропускает только браузерные шаги
 и пишет это в итоговой строке явно. Флага «только unit» нет: integration-тесты входят
@@ -168,6 +170,13 @@ def gate_steps(
     root = project or ROOT
     steps = [
         Step("ruff", "ruff check .", (exe, "-m", "ruff", "check", ".")),
+        # Матрица 121 — отчёт, сгенерированный из docs/19 и docs/20. Без шага в гейте
+        # она разъезжается с источниками молча: так и случилось 04.11–18.11 (карта
+        # t_7af794fc). Флаг --write здесь не передаётся: гейт проверяет, а не правит.
+        # Шаг стоит до pytest и до проверок на данных: он читает только файлы, стоит
+        # десятые доли секунды, а красный I1 на dev-БД иначе загораживал бы его.
+        Step("matrix", "check_action_matrix.py (отчёт 121)",
+             (exe, str(root / "scripts" / "check_action_matrix.py"))),
         Step("pytest", "pytest -q (unit + integration)", (exe, *PYTEST)),
     ]
     if not quick:
@@ -227,6 +236,8 @@ def summarize(key: str, output: str, code: int) -> str:
         return "инварианты OK"
     if key == "registers":
         return "реестры OK"
+    if key == "matrix":
+        return "матрица 121 OK"
     if key == "deadcode":
         new = parse_deadcode(output)
         return "deadcode новых 0" if new is None else f"deadcode новых {new}"
