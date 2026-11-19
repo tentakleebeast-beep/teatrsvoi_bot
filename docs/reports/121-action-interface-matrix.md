@@ -33,23 +33,23 @@
 <!-- summary:begin -->
 | Показатель | Значение |
 |---|---:|
-| Строк-действий | 56 |
-| Требований в docs/19 | 113 |
-| Из них с действием участника | 64 |
+| Строк-действий | 58 |
+| Требований в docs/19 | 114 |
+| Из них с действием участника | 65 |
 | Сценариев в docs/20 | 30 |
 
 | Интерфейс сейчас | Действий |
 |---|---:|
 | чат | 16 |
-| Mini App | 10 |
-| оба | 14 |
+| Mini App | 11 |
+| оба | 15 |
 | нигде | 16 |
 
 | Кто | Действий |
 |---|---:|
-| участник | 17 |
-| организатор | 20 |
-| админ | 19 |
+| участник | 18 |
+| организатор | 21 |
+| админ | 20 |
 | владелец | 3 |
 | педагог | 1 |
 <!-- summary:end -->
@@ -67,29 +67,29 @@
 | Войти впервые и получить права владельца | владелец | чат | docs/development/19-functional-requirements.md#L30<br>docs/development/20-scenarios.md#L17 | P0, готово<br><small>Доступ по совпадению chat_id с ADMIN_CHAT_ID, без кода</small> |
 | Зарегистрироваться по одноразовому коду и выбрать себя из списка | участник, организатор | чат | docs/development/19-functional-requirements.md#L31<br>docs/development/19-functional-requirements.md#L32<br>docs/development/20-scenarios.md#L31<br>docs/development/20-scenarios.md#L43 | P0, готово<br><small>Повторная привязка того же chat_id невозможна</small> |
 | Подать заявку «меня нет в списке» | участник | чат | docs/development/19-functional-requirements.md#L33<br>docs/development/20-scenarios.md#L51 | P0, готово<br><small>Создаёт запись pending и уведомляет администратора</small> |
-| Подтвердить или отклонить заявку | админ | оба | docs/development/19-functional-requirements.md#L33<br>docs/development/20-scenarios.md#L51<br>docs/development/92-navigation-model.md#L141 | P0, готово<br><small>В чате — кнопки в уведомлении; в Mini App — раздел «Заявки»</small> |
-| Выдать или отозвать роль и возможность | админ | оба | docs/development/19-functional-requirements.md#L35<br>docs/development/20-scenarios.md#L255<br>docs/development/92-navigation-model.md#L144 | P1, готово<br><small>Один путь записи `/admin/grant` (`enabled=false` — отзыв роли, `allowed=false` — отзыв возможности); отзыв роли — пометка строки, а не удаление; входы: карточка человека в чате, экраны «Люди» и «Права» в Mini App</small> |
-| Архивировать ушедшего из театра | админ | оба | docs/development/19-functional-requirements.md#L36<br>docs/development/20-scenarios.md#L62<br>docs/development/92-navigation-model.md#L145 | P0, готово<br><small>Один путь записи `/admin/archive` и `…/unarchive` у чата и экрана; входы: карточка человека и раздел «Архив» в чате, раздел «Архив» в Mini App</small> |
+| Подтвердить или отклонить заявку | админ | оба | docs/development/19-functional-requirements.md#L33<br>docs/development/20-scenarios.md#L51<br>docs/development/92-navigation-model.md#L165 | P0, готово<br><small>В чате — кнопки в уведомлении; в Mini App — раздел «Заявки»</small> |
+| Выдать или отозвать роль и возможность | админ | оба | docs/development/19-functional-requirements.md#L35<br>docs/development/20-scenarios.md#L255<br>docs/development/92-navigation-model.md#L168 | P1, готово<br><small>Один путь записи `/admin/grant` (`enabled=false` — отзыв роли, `allowed=false` — отзыв возможности); отзыв роли — пометка строки, а не удаление; входы: карточка человека в чате, экраны «Люди» и «Права» в Mini App</small> |
+| Архивировать ушедшего из театра | админ | оба | docs/development/19-functional-requirements.md#L36<br>docs/development/20-scenarios.md#L62<br>docs/development/92-navigation-model.md#L169 | P0, готово<br><small>Один путь записи `/admin/archive` и `…/unarchive` у чата и экрана; входы: карточка человека и раздел «Архив» в чате, раздел «Архив» в Mini App</small> |
 | Заблокировать участника | админ | оба | docs/development/19-functional-requirements.md#L38 | P1, готово<br><small>`POST /admin/block` (`blocked=false` — вернуть доступ), одна функция у чата и экрана; статус `blocked` закрывает доступ и в чате, и в Mini App сразу; кнопки в карточке человека и на экране «Люди»</small> |
-| Посмотреть аудит действий | админ | оба | docs/development/19-functional-requirements.md#L37<br>docs/development/20-scenarios.md#L264<br>docs/development/92-navigation-model.md#L147 | P0, готово<br><small>Чат: /admin → «Аудит»; Mini App: «Управление → Аудит» (FR-A11)</small> |
-| Заполнить профиль (анкета) | участник | Mini App | docs/development/19-functional-requirements.md#L221<br>docs/development/92-navigation-model.md#L172<br>docs/development/82-ux-navigation.md#L85 | P1, готово<br><small>Имя, короткие имена, время в пути, манифест для AI</small> |
+| Посмотреть аудит действий | админ | оба | docs/development/19-functional-requirements.md#L37<br>docs/development/20-scenarios.md#L264<br>docs/development/92-navigation-model.md#L171 | P0, готово<br><small>Чат: /admin → «Аудит»; Mini App: «Управление → Аудит» (FR-A11)</small> |
+| Заполнить профиль (анкета) | участник | Mini App | docs/development/19-functional-requirements.md#L221<br>docs/development/92-navigation-model.md#L196<br>docs/development/82-ux-navigation.md#L85 | P1, готово<br><small>Имя, короткие имена, время в пути, манифест для AI</small> |
 | Изменить тариф взноса человеку | организатор | нигде | docs/development/19-functional-requirements.md#L50<br>docs/development/19-functional-requirements.md#L72 | P1, частично<br><small>API есть (participant.dues_tariff), экрана админ-панели нет</small> |
-| Посмотреть свои взносы | участник | оба | docs/development/19-functional-requirements.md#L50<br>docs/development/20-scenarios.md#L112<br>docs/development/92-navigation-model.md#L122 | P0, выполнено<br><small>Чат: «Мои взносы» /dues; Mini App: «Деньги» и /webapp/dues</small> |
+| Посмотреть свои взносы | участник | оба | docs/development/19-functional-requirements.md#L50<br>docs/development/20-scenarios.md#L112<br>docs/development/92-navigation-model.md#L146 | P0, выполнено<br><small>Чат: «Мои взносы» /dues; Mini App: «Деньги» и /webapp/dues</small> |
 | Внести оплату взноса | участник | нигде | docs/development/19-functional-requirements.md#L50<br>docs/development/93-cjm.md#L51 | P0, выполнено<br><small>Решения П-9, П-11: заявки и оплаты из чата нет — оплату вносит организатор доходом</small> |
 | Записать расход или доход свободным текстом | организатор | чат | docs/development/19-functional-requirements.md#L44<br>docs/development/19-functional-requirements.md#L45<br>docs/development/20-scenarios.md#L73<br>docs/development/20-scenarios.md#L105 | P0, готово<br><small>Разбор правилами и каскадом, черновик с кнопками, запись в БД и лист</small> |
 | Подтвердить, изменить или отменить черновик операции | организатор | чат | docs/development/19-functional-requirements.md#L45<br>docs/development/20-scenarios.md#L77<br>docs/development/82-ux-navigation.md#L178 | P0, готово<br><small>«Изменить» по 82 §4.2 ведёт в форму Mini App с предзаполнением</small> |
-| Записать операцию формой | организатор | оба | docs/development/12-bot-behavior.md#L94<br>docs/development/92-navigation-model.md#L117<br>docs/development/93-cjm.md#L72 | P0, частично<br><small>Форма в чате — да; в Mini App вход «Записать операцию» описан в 92, но 93 фиксирует «плитки нет»</small> |
+| Записать операцию формой | организатор | оба | docs/development/12-bot-behavior.md#L94<br>docs/development/92-navigation-model.md#L141<br>docs/development/93-cjm.md#L72 | P0, частично<br><small>Форма в чате — да; в Mini App вход «Записать операцию» описан в 92, но 93 фиксирует «плитки нет»</small> |
 | Пополнить справочник категорий и синонимов | админ | чат | docs/development/19-functional-requirements.md#L47<br>docs/development/12-bot-behavior.md#L138 | P0, готово<br><small>12 §5: справочник и личные алиасы настраиваются из Telegram</small> |
-| Посмотреть агрегаты по деньгам | организатор, админ | оба | docs/development/19-functional-requirements.md#L57<br>docs/development/20-scenarios.md#L139<br>docs/development/92-navigation-model.md#L118 | P1, готово<br><small>Чат: ответ на «сколько у нас денег»; Mini App: «Деньги → Бюджет» (админ)</small> |
-| Сверить листы (файл ↔ база) | админ | оба | docs/development/19-functional-requirements.md#L56<br>docs/development/20-scenarios.md#L248<br>docs/development/92-navigation-model.md#L149 | P0, готово<br><small>Чат: кнопка «Сверить листы»; Mini App: «Управление → Сверка листов»</small> |
+| Посмотреть агрегаты по деньгам | организатор, админ | оба | docs/development/19-functional-requirements.md#L57<br>docs/development/20-scenarios.md#L139<br>docs/development/92-navigation-model.md#L142 | P1, готово<br><small>Чат: ответ на «сколько у нас денег»; Mini App: «Деньги → Бюджет» (админ)</small> |
+| Сверить листы (файл ↔ база) | админ | оба | docs/development/19-functional-requirements.md#L56<br>docs/development/20-scenarios.md#L248<br>docs/development/92-navigation-model.md#L173 | P0, готово<br><small>Чат: кнопка «Сверить листы»; Mini App: «Управление → Сверка листов»</small> |
 | Поправить суммы в листе «Транзакции» | владелец | нигде | docs/development/19-functional-requirements.md#L55<br>docs/development/20-scenarios.md#L248 | P0, частично<br><small>Правка вне бота — в Google Sheets, затем сверка; занятость в базу не применяется</small> |
 | Спланировать доходы и расходы (план/факт) | админ | нигде | docs/development/19-functional-requirements.md#L58 | P2, частично<br><small>Только схема, логики и экрана нет</small> |
 | Отметить занятость свободным текстом | участник | чат | docs/development/19-functional-requirements.md#L65<br>docs/development/20-scenarios.md#L173 | P0, готово<br><small>«Занят в среду после 18» → подтверждение → запись</small> |
 | Отметить занятость формой в чате | участник | чат | docs/development/19-functional-requirements.md#L66<br>docs/development/20-scenarios.md#L181 | P0, готово<br><small>День → время → подтверждение</small> |
-| Отметить занятость по часам в Mini App | участник | Mini App | docs/development/19-functional-requirements.md#L74<br>docs/development/48-mini-app-grid.md#L42<br>docs/development/92-navigation-model.md#L92 | P1, частично<br><small>Лист дня и неделя есть; FR-H8 переписан на неделю, статус «не начато» до Ш-03</small> |
-| Заполнить неделю по шаблону «обычная неделя» | участник | Mini App | docs/development/19-functional-requirements.md#L73<br>docs/development/92-navigation-model.md#L96 | P1, готово<br><small>Кнопки на /webapp/days; в 92 — строка-действие в листе дня</small> |
+| Отметить занятость по часам в Mini App | участник | Mini App | docs/development/19-functional-requirements.md#L74<br>docs/development/48-mini-app-grid.md#L42<br>docs/development/92-navigation-model.md#L111 | P1, частично<br><small>Лист дня и неделя есть; FR-H8 переписан на неделю, статус «не начато» до Ш-03</small> |
+| Заполнить неделю по шаблону «обычная неделя» | участник | Mini App | docs/development/19-functional-requirements.md#L73<br>docs/development/92-navigation-model.md#L120 | P1, готово<br><small>Кнопки на /webapp/days; в 92 — строка-действие в листе дня</small> |
 | Посмотреть сводку свободных по дням | организатор | оба | docs/development/19-functional-requirements.md#L68<br>docs/development/20-scenarios.md#L193<br>docs/development/20-scenarios.md#L231 | P1, частично<br><small>Чат: счётчики «свободны/известно»; Mini App: сводка недели</small> |
-| Посмотреть сводку «люди × дни» | организатор | Mini App | docs/development/19-functional-requirements.md#L154<br>docs/development/48-mini-app-grid.md#L14<br>docs/development/92-navigation-model.md#L104 | P1, готово<br><small>Сетка месяца /webapp/week/month: только чтение, источник — Google-таблица, расхождение с базой показывается; POST /webapp/grid удалён (Ш-04)</small> |
+| Посмотреть сводку «люди × дни» | организатор | Mini App | docs/development/19-functional-requirements.md#L154<br>docs/development/48-mini-app-grid.md#L14<br>docs/development/92-navigation-model.md#L128 | P1, готово<br><small>Сетка месяца /webapp/week/month: только чтение, источник — Google-таблица, расхождение с базой показывается; POST /webapp/grid удалён (Ш-04)</small> |
 | Найти окна (top-3) для репетиции или тренинга | организатор | нигде | docs/development/19-functional-requirements.md#L69<br>docs/development/19-functional-requirements.md#L83<br>docs/development/19-functional-requirements.md#L85<br>docs/development/20-scenarios.md#L242<br>docs/development/20-scenarios.md#L301<br>docs/development/20-scenarios.md#L312 | P0, готово<br><small>FR-C6 слито в FR-D5; вход из чата и сценариев — Ш-06</small> |
 | Запросить занятость рассылкой с кнопками | организатор | нигде | docs/development/19-functional-requirements.md#L71 | P2, не начато<br><small>Механизма нет</small> |
 | Посмотреть метрику покрытия занятости | организатор | чат | docs/development/19-functional-requirements.md#L70 | P2, готово<br><small>Строка в «Расписании» gateway</small> |
@@ -108,18 +108,20 @@
 | Сообщить о проблеме или запросе на доработку текстом | участник | чат | docs/development/19-functional-requirements.md#L108 | P2, готово<br><small>FR-E8 слито в FR-I1: просьба о доработке — вид обращения, отдельного типа нет</small> |
 | Настроить квоты AI человеку или роли | админ | чат | docs/development/19-functional-requirements.md#L106<br>docs/development/12-bot-behavior.md#L136 | P1, частично<br><small>12 §5 относит квоты к настройке из Telegram; вторая ветка квоту не проверяет</small> |
 | Утвердить новую категорию из очереди | админ | нигде | docs/development/19-functional-requirements.md#L111<br>docs/development/21-intent-cascade.md#L116 | P1, готово<br><small>Только scripts/intent_report.py --approve/--reject</small> |
-| Открыть и загрузить файлы студии | админ | Mini App | docs/development/19-functional-requirements.md#L121<br>docs/development/92-navigation-model.md#L416 | P1, частично<br><small>92 §9.1: работает у админа; FR-F5 — частично, права другим участникам позже (П-7)</small> |
-| Записать заметку | участник | оба | docs/development/19-functional-requirements.md#L124<br>docs/development/92-navigation-model.md#L174 | P1, готово<br><small>дом — Mini App «Ещё → Заметки»; в чате карточка с подтверждением</small> |
-| Настроить тихие часы и типы уведомлений | участник | Mini App | docs/development/19-functional-requirements.md#L132<br>docs/development/92-navigation-model.md#L173<br>docs/development/82-ux-navigation.md#L205 | P1, готово<br><small>Частные — в профиле, общие — в админ-панели; частные важнее (П-8)</small> |
-| Отправить рассылку участникам | организатор, админ | Mini App | docs/development/19-functional-requirements.md#L131<br>docs/development/92-navigation-model.md#L148 | P1, частично<br><small>Право notify.send только у админа; организатору не выдаём (П-6)</small> |
+| Открыть и загрузить файлы студии | админ | Mini App | docs/development/19-functional-requirements.md#L121<br>docs/development/92-navigation-model.md#L440 | P1, частично<br><small>92 §9.1: работает у админа; FR-F5 — частично, права другим участникам позже (П-7)</small> |
+| Записать заметку | участник | оба | docs/development/19-functional-requirements.md#L124<br>docs/development/92-navigation-model.md#L198 | P1, готово<br><small>дом — Mini App «Ещё → Заметки»; в чате карточка с подтверждением</small> |
+| Настроить тихие часы и типы уведомлений | участник | Mini App | docs/development/19-functional-requirements.md#L132<br>docs/development/92-navigation-model.md#L197<br>docs/development/82-ux-navigation.md#L205 | P1, готово<br><small>Частные — в профиле, общие — в админ-панели; частные важнее (П-8)</small> |
+| Отправить рассылку участникам | организатор, админ | Mini App | docs/development/19-functional-requirements.md#L131<br>docs/development/92-navigation-model.md#L172 | P1, частично<br><small>Право notify.send только у админа; организатору не выдаём (П-6)</small> |
 | Посмотреть сводку недоставленных уведомлений | админ | нигде | docs/development/19-functional-requirements.md#L207 | P1, не начато |
 | Настроить гранулярность записи в человеческий лист | админ | нигде | docs/development/19-functional-requirements.md#L222 | P1, готово<br><small>finance_granularity — настройка в БД, экрана нет</small> |
 | Настроить карту источников листа | админ | нигде | docs/development/19-functional-requirements.md#L223 | P1, готово<br><small>finance_source_map — настройка в БД, экрана нет</small> |
-| Посмотреть состояние сервисов | админ | Mini App | docs/development/92-navigation-model.md#L150<br>docs/development/93-cjm.md#L155 | P2, готово<br><small>Экран /webapp/services и API есть; требование FR-H16</small> |
-| Отправить обратную связь | участник | оба | docs/development/19-functional-requirements.md#L219<br>docs/development/92-navigation-model.md#L175 | —, готово<br><small>Обратная связь принимает и просьбу о доработке (FR-E8 слито в FR-I1)</small> |
-| Разобрать обращение и ответить автору | админ | Mini App | docs/development/19-functional-requirements.md#L220<br>docs/development/92-navigation-model.md#L146 | —, готово<br><small>«Управление → Обращения»; счётчик новых — на «Главной»</small> |
-| Посмотреть карточку человека | организатор | оба | docs/development/19-functional-requirements.md#L40<br>docs/development/92-navigation-model.md#L161 | P1, частично<br><small>Карточка и API есть; экрана «Люди» с занятостью и долгом нет</small> |
-| Настроить общие уведомления студии | админ | Mini App | docs/development/19-functional-requirements.md#L137<br>docs/development/92-navigation-model.md#L152 | P1, готово<br><small>Обещано 92 §2.4; экран /webapp/admin/t/notifications, маршрут /webapp/admin/notifications/settings, право admin.panel (Ш-11)</small> |
+| Посмотреть состояние сервисов | админ | Mini App | docs/development/92-navigation-model.md#L174<br>docs/development/93-cjm.md#L155 | P2, готово<br><small>Экран /webapp/services и API есть; требование FR-H16</small> |
+| Отправить обратную связь | участник | оба | docs/development/19-functional-requirements.md#L219<br>docs/development/92-navigation-model.md#L199 | —, готово<br><small>Обратная связь принимает и просьбу о доработке (FR-E8 слито в FR-I1)</small> |
+| Разобрать обращение и ответить автору | админ | Mini App | docs/development/19-functional-requirements.md#L220<br>docs/development/92-navigation-model.md#L170 | —, готово<br><small>«Управление → Обращения»; счётчик новых — на «Главной»</small> |
+| Посмотреть карточку человека | организатор | оба | docs/development/19-functional-requirements.md#L40<br>docs/development/92-navigation-model.md#L185 | P1, частично<br><small>Карточка и API есть; экрана «Люди» с занятостью и долгом нет</small> |
+| Настроить общие уведомления студии | админ | Mini App | docs/development/19-functional-requirements.md#L137<br>docs/development/92-navigation-model.md#L176 | P1, готово<br><small>Обещано 92 §2.4; экран /webapp/admin/t/notifications, маршрут /webapp/admin/notifications/settings, право admin.panel (Ш-11)</small> |
+| Создать и отправить опрос: конструктор, адресаты, черновик | админ, организатор | Mini App | docs/development/19-functional-requirements.md#L138<br>docs/development/162-bot-polls.md#L473 | P1, готово<br><small>Экраны /webapp/polls и /webapp/polls/edit, право poll.manage (admin и org, V-088), отправка через очередь notification</small> |
+| Пройти опрос: вопрос, прогресс, «назад», «пропустить», черновик | участник | оба | docs/development/19-functional-requirements.md#L138<br>docs/development/164-miniapp-home-polls.md#L440 | P1, готово<br><small>Чат — кнопки и черновик в БД; Mini App — «Мои опросы» и экран /webapp/polls/answer (docs/164 §12)</small> |
 <!-- matrix:end -->
 
 ## Требования без отдельного действия участника
@@ -163,23 +165,23 @@
 | FR-G6 | P0 | отменено | требование отменено 30.10.2026 — маршруты подтверждения удалены | docs/development/19-functional-requirements.md#L132 |
 | FR-G4 | P1 | не начато | дедупликация — серверное правило | docs/development/19-functional-requirements.md#L135 |
 | FR-G15 | P2 | не начато | уведомление приходит само, отдельного шага человека нет | docs/development/19-functional-requirements.md#L136 |
-| FR-H1 | P0 | готово | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L146 |
-| FR-H2 | P0 | готово | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L147 |
-| FR-H3 | P0 | готово | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L148 |
-| FR-H4 | P0 | частично | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L149 |
-| FR-H5 | P1 | частично | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L150 |
-| FR-H6 | P1 | частично | наличие Mini App — платформа, а не действие | docs/development/19-functional-requirements.md#L151 |
-| FR-H7 | P2 | не начато | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L152 |
-| FR-H11 | P0 | не начато | уведомление приходит само, отдельного шага человека нет | docs/development/19-functional-requirements.md#L156 |
-| FR-D21 | P1 | не начато | проверка пересечений — часть действия «Назначить событие» | docs/development/19-functional-requirements.md#L206 |
-| FR-D22 | P2 | частично | правило фиксации присутствия режиссёра, отдельного шага нет | docs/development/19-functional-requirements.md#L207 |
-| FR-G16 | P1 | не начато | ретенция — миграция и архив | docs/development/19-functional-requirements.md#L211 |
-| FR-G7 | P2 | не начато | TTL заявок — серверное правило | docs/development/19-functional-requirements.md#L212 |
-| FR-G8 | P1 | готово | уникальность псевдонимов — ограничение базы | docs/development/19-functional-requirements.md#L213 |
-| FR-H12 | P0 | готово (systemd `Restart=always`, журнал journald) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L214 |
-| FR-H13 | P1 | готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L215 |
-| FR-G11 | P0 | готово | нет отдельного действия участника: серверное правило или расчёт | docs/development/19-functional-requirements.md#L233 |
-| FR-G14 | P2 | не начато | форматирование листов — скрипт | docs/development/19-functional-requirements.md#L237 |
+| FR-H1 | P0 | готово | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L147 |
+| FR-H2 | P0 | готово | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L148 |
+| FR-H3 | P0 | готово | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L149 |
+| FR-H4 | P0 | частично | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L150 |
+| FR-H5 | P1 | частично | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L151 |
+| FR-H6 | P1 | частично | наличие Mini App — платформа, а не действие | docs/development/19-functional-requirements.md#L152 |
+| FR-H7 | P2 | частично | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L153 |
+| FR-H11 | P0 | не начато | уведомление приходит само, отдельного шага человека нет | docs/development/19-functional-requirements.md#L157 |
+| FR-D21 | P1 | не начато | проверка пересечений — часть действия «Назначить событие» | docs/development/19-functional-requirements.md#L207 |
+| FR-D22 | P2 | частично | правило фиксации присутствия режиссёра, отдельного шага нет | docs/development/19-functional-requirements.md#L208 |
+| FR-G16 | P1 | не начато | ретенция — миграция и архив | docs/development/19-functional-requirements.md#L212 |
+| FR-G7 | P2 | не начато | TTL заявок — серверное правило | docs/development/19-functional-requirements.md#L213 |
+| FR-G8 | P1 | готово | уникальность псевдонимов — ограничение базы | docs/development/19-functional-requirements.md#L214 |
+| FR-H12 | P0 | готово (systemd `Restart=always`, журнал journald) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L215 |
+| FR-H13 | P1 | готово (`/health` с `git_sha`, `scripts/health_agent.py`, очередь) | эксплуатация: эндпоинт, миграции, тесты или деплой — не действие участника | docs/development/19-functional-requirements.md#L216 |
+| FR-G11 | P0 | готово | нет отдельного действия участника: серверное правило или расчёт | docs/development/19-functional-requirements.md#L234 |
+| FR-G14 | P2 | не начато | форматирование листов — скрипт | docs/development/19-functional-requirements.md#L238 |
 <!-- requirements:end -->
 
 ## Сценарии `docs/20`
