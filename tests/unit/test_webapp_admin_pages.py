@@ -10,10 +10,12 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+from typing import get_args
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
+from app.api.admin import InviteIn  # noqa: E402
 from app.pages import admin  # noqa: E402
 from app.pages.admin_disciplines import DISCIPLINES_SCRIPT  # noqa: E402
 
@@ -321,3 +323,122 @@ def test_карточка_рисует_предупреждение_из_отв�
     assert "ui-alert--warn" in html
     assert "тренинг назначить не сможет" not in html, "текст предупреждения вписан в JS"
     assert "нет ни одной" in html, "поле «Дисциплины» в карточке пропало"
+
+
+# ------------------------------- E10: роль «Педагог» в выпуске кода (карта t_ff6144fc)
+# Обоснование: docs/development/176 §9 (AC-1…AC-4, AC-12), вопросы V-105…V-108.
+# Разметка переключателя ролей повторяет контракт `InviteIn.role` без `admin`:
+# экран предлагает только те роли, код для которых сервер выпустит, а подсказка
+# говорит, что дисциплину педагог выберет при регистрации.
+ROLE_BUTTON = re.compile(r"<button\b([^>]*)>([^<]+)</button>", re.S)
+HINT = "Дисциплину педагог выберет при регистрации."
+TERM = "Действует 7 дней, вход один."
+
+
+def _role_block() -> str:
+    """Кусок разметки внутри `#invite-role` — чужие `data-*` на экране не считаем."""
+    return admin.INVITES_PAGE.split('id="invite-role"', 1)[1].split("</div>", 1)[0]
+
+
+def _role_buttons() -> list[tuple[dict, str]]:
+    """(атрибуты, подпись) каждой кнопки переключателя в порядке разметки."""
+    return [(dict(re.findall(r'([\w-]+)="([^"]*)"', attrs)), label.strip())
+            for attrs, label in ROLE_BUTTON.findall(_role_block())]
+
+
+def test_набор_ролей_переключателя_равен_InviteIn_минус_admin():
+    """AC-1 (`docs/development/176` §9.8): источник правды — тип, а не список в HTML.
+
+    Тест падает и когда роль появилась в API без кнопки (её не выпустить из
+    приложения), и когда кнопка есть вне контракта (`admin`: сервер отвечает на
+    неё отказом 400, `api/admin.py:43-44`). На `dd57afb` он был красный: в
+    разметке две роли, в API четыре.
+    """
+    api_roles = set(get_args(InviteIn.model_fields["role"].annotation))
+    page_roles = {attrs.get("data-role") for attrs, _ in _role_buttons()}
+
+    assert page_roles == api_roles - {"admin"}, (
+        f"переключатель и API разошлись: в разметке {sorted(page_roles)}, "
+        f"в InviteIn.role {sorted(api_roles)} минус admin = {sorted(api_roles - {'admin'})}")
+    assert page_roles == {"troupe", "org", "master"}
+
+
+def test_переключатель_три_роли_по_порядку_и_умолчание_труппа():
+    """AC-2: подписи и порядок «Труппа · Организатор · Педагог», выбранная — труппа.
+
+    `aria-pressed` нужен затем, что до первого нажатия состояние переключателя
+    иначе доступно только по классу (до этой карты атрибута не было вовсе).
+    """
+    buttons = _role_buttons()
+
+    assert [label for _, label in buttons] == ["Труппа", "Организатор", "Педагог"]
+    on = [attrs.get("data-role") for attrs, _ in buttons
+          if "ui-segmented__item--on" in attrs.get("class", "")]
+    assert on == ["troupe"], f"выбранным должен быть ровно первый сегмент: {on}"
+    assert [attrs.get("aria-pressed") for attrs, _ in buttons] == ["true", "false", "false"]
+    assert 'var role = "troupe";' in admin.INVITES_PAGE, "умолчание роли в скрипте сдвинулось"
+
+
+def test_подсказка_о_дисциплине_скрыта_и_одна():
+    """AC-3: подсказка одна, отдаётся скрытой и стоит между ролями и сроком.
+
+    Строку «Действует 7 дней, вход один.» подсказка не дублирует: она остаётся
+    ровно в двух местах страницы — в теле и в листе после выпуска (`:41`).
+    """
+    html = admin.INVITES_PAGE
+    card = html.split('id="invite-new"', 1)[1].split("</section>", 1)[0]
+
+    assert html.count('id="invite-hint"') == 1, "подсказка не одна"
+    hint = card.split('id="invite-hint"', 1)[1].split(">", 1)
+    assert "hidden" in hint[0], "подсказка отдаётся видимой — до ответа и без выбора роли"
+    assert hint[1].split("<", 1)[0] == HINT
+    assert len(HINT) == 43
+    assert html.count(TERM) == 2, "у строки срока появилась третья копия"
+    spans = re.findall(r'<span class="ui-small ui-muted"[^>]*>([^<]*)</span>', html)
+    # `#status` — тоже `ui-small ui-muted`, но это `div` для служебных сообщений:
+    # малых текстовых строк в разметке экрана две — подсказка и срок.
+    assert spans == [HINT, TERM], spans
+    assert card.index('id="invite-hint"') < card.index(TERM), "подсказка стоит после срока"
+    assert card.index('id="invite-role"') < card.index('id="invite-hint"'), \
+        "подсказка стоит выше переключателя"
+
+
+def test_лист_выпуска_называет_роль_педагога():
+    """AC-4: слово роли берётся из `ROLE`, второго источника строки нет.
+
+    Для `master` лист печатает «Роль: педагог. Действует 7 дней, вход один.»
+    (43 символа): слово «педагог» уже лежит в `ROLE` ядра, литерала в скрипте
+    экрана нет — переименование роли переименует и лист.
+    """
+    html = admin.INVITES_PAGE
+
+    assert html.count('"Роль: "') == 1, "строку листа собирают в нескольких местах"
+    assert '"Роль: " + (ROLE[role] || role)' in html, "слово роли вписано литералом"
+    assert 'master: "педагог"' in html, "в `ROLE` нет подписи педагога"
+    sheet = "Роль: педагог. Действует 7 дней, вход один."
+    assert len(sheet) == 43
+    assert "педагог" in sheet
+
+
+def test_разделитель_сегментов_в_системе():
+    """AC-12 (V-105 а): линия между невыбранными сегментами — правило системы.
+
+    Рамка сдвинула бы раскладку и съела ширину на 320 px, поэтому разделитель
+    нарисован тенью `inset`. Правило системное (`.ui-segmented` живёт и на
+    «Деньгах»), поэтому стоит после `.ui-segmented__item--on`, а не внутри экрана.
+    """
+    css = (ROOT / "services" / "tool-api" / "app" / "static" / "webapp-ui.css").read_text(
+        encoding="utf-8")
+    selector = ".ui-segmented__item + .ui-segmented__item:not(.ui-segmented__item--on)"
+
+    assert css.count(selector) == 1, "правило разделителя задано не один раз"
+    rule = css.split(selector, 1)[1].split("}", 1)[0]
+    assert "box-shadow: inset 1px 0 0 var(--ui-line);" in rule
+    assert "border" not in rule, "рамка сдвинет раскладку сегментов"
+    assert css.index(".ui-segmented__item--on") < css.index(selector), \
+        "правило разделителя стоит до правила выбранного сегмента"
+
+    design = (ROOT / "docs" / "development" / "91-design-system.md").read_text(encoding="utf-8")
+    section = design.split("### 4.7.", 1)[1].split("### 4.8.", 1)[0]
+    assert "разделител" in section.lower(), "в §4.7 нет слова о разделителе"
+    assert "320 px" in section, "в §4.7 нет правила про узкую ширину"

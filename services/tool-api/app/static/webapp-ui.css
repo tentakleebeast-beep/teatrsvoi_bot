@@ -446,6 +446,9 @@ body.ui-page {
   font: inherit; font-size: 15px;
 }
 .ui-segmented__item--on { background: var(--ui-accent); color: var(--ui-on-accent); font-weight: 600; }
+.ui-segmented__item + .ui-segmented__item:not(.ui-segmented__item--on) {
+  box-shadow: inset 1px 0 0 var(--ui-line);
+}
 
 .ui-switch-row {
   display: flex; align-items: center; gap: var(--ui-s3);
