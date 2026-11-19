@@ -35,12 +35,12 @@ def make_step(mod, key: str, code: int = 0, text: str = "ok", lines: int = 0) ->
 
 def test_полный_гейт_идёт_фиксированным_порядком(gate):
     keys = [step.key for step in gate.gate_steps(python_path=sys.executable)]
-    assert keys == ["ruff", "pytest", "webapp", "invariants", "registers", "deadcode",
-                    "settings"]
+    assert keys == ["ruff", "matrix", "pytest", "webapp", "invariants", "registers",
+                    "deadcode", "settings"]
 
 
 def test_браузерный_шаг_включается_переменной_окружения(gate):
-    webapp = gate.gate_steps(python_path=sys.executable)[2]
+    webapp = {step.key: step for step in gate.gate_steps(python_path=sys.executable)}["webapp"]
     assert dict(webapp.env)["SVOI_WEBAPP_TESTS"] == "1"
     assert webapp.command[-3:] == ("tests/webapp", "--browser", "chromium")
 
@@ -48,7 +48,8 @@ def test_браузерный_шаг_включается_переменной_�
 def test_quick_убирает_только_браузерный_шаг(gate):
     keys = [step.key for step in gate.gate_steps(quick=True, python_path=sys.executable)]
     assert "webapp" not in keys
-    assert keys == ["ruff", "pytest", "invariants", "registers", "deadcode", "settings"]
+    assert keys == ["ruff", "matrix", "pytest", "invariants", "registers", "deadcode",
+                    "settings"]
 
 
 def test_флага_только_unit_не_существует(gate):
@@ -66,6 +67,37 @@ def test_шаг_карт_канбана_только_по_окружению_и�
     by_board = gate.gate_steps(board="teatrsvoi", python_path=sys.executable)
     assert by_board[-1].key == "kanban"
     assert by_board[-1].command[-2:] == ("--board", "teatrsvoi")
+
+
+def test_шаг_матрицы_121_стоит_в_гейте_и_не_пишет(gate):
+    """Отчёт 121 проверяется гейтом, а не руками: шаг есть и идёт без `--write`.
+
+    Обоснование: docs/reports/121-action-interface-matrix.md (карта t_b0048881).
+    Матрица разъезжалась с docs/19 молча ровно потому, что её проверка не входила
+    в гейт; флаг `--write` здесь означал бы, что гейт правит отчёт вместо проверки.
+    """
+    steps = {step.key: step for step in gate.gate_steps(python_path=sys.executable)}
+    matrix = steps["matrix"]
+    assert matrix.command[0] == sys.executable
+    assert matrix.command[1].endswith("scripts/check_action_matrix.py")
+    assert "--write" not in matrix.command
+    assert gate.summarize("matrix", "матрица: 58 действий — расхождений нет", 0) == \
+        "матрица 121 OK"
+
+
+def test_падение_шага_матрицы_делает_гейт_красным(gate, capsys):
+    """Расхождение JSON 121 с docs/19 — красный гейт, а не зелёный прогон.
+
+    Обоснование: docs/reports/121-action-interface-matrix.md. Заглушка повторяет
+    вывод настоящей проверки: код 1 и строка «ОШИБКА: … расходится с docs/19».
+    """
+    steps = [make_step(gate, "ruff"),
+             make_step(gate, "matrix", code=1,
+                       text="ОШИБКА: FR-A5: поле status расходится с docs/19")]
+    assert gate.main([], steps=steps) == 1
+    out = capsys.readouterr().out
+    assert "ГЕЙТ КРАСНЫЙ: шаг «matrix» упал, код 1" in out
+    assert "расходится с docs/19" in out
 
 
 def test_зелёный_прогон_даёт_код_0_и_итог(gate, capsys):
