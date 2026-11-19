@@ -264,7 +264,7 @@ def test_заявки_и_приглашения_у_того_у_кого_есть
     """
     admin_groups = dict(gw.menu_groups(ADMIN_CAPS))
     assert admin_groups["Люди"] == ["Участники"]
-    assert {"Заявки", "Приглашения"} <= set(admin_groups["Админ"])
+    assert {"Заявки", "Приглашения"} <= set(admin_groups["Управление"])
 
     org_groups = dict(gw.menu_groups(ORG_CAPS))
     org_items = {item for items in org_groups.values() for item in items}
