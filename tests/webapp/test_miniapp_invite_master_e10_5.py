@@ -191,33 +191,29 @@ def test_пункт2_выпуск_педагогу_код_роль_копиро�
 def test_пункт3_новый_код_в_активных_с_ролью_педагог(browser, webapp_server) -> None:
     """Пункт 3 карты: в «Активных кодах» у нового кода роль «педагог».
 
-    Стенд не хранит выданные коды: `ADMIN_OVERVIEW["blocks"]["invites"]` пуст, а
-    POST `/webapp/admin/invite` его не меняет. Поэтому выданный код кладётся в
-    блок перехватом запроса — ответ отдаёт настоящий стенд, меняется только то,
-    что в бою сервер вернул бы из базы (`api/admin.py:1019`, `list_invites`).
-
-    Форма блока — список, как в бою (`blocks["invites"] = list_invites(...)["data"]`),
-    а не `{"data": [...]}`: стенд отдаёт именно обёртку, и экран рисует пустое
-    состояние даже с непустым списком (находка E10-5, карта о стенде заведена).
+    Подмены блока в тесте нет: стенд хранит выпущенный код сам, как бой пишет
+    строку в `invite_code`, а `blocks.invites` отдаёт голым списком, как бой
+    (`api/admin.py:1019-1020`). Фикстура панели содержит один код с ролью
+    `master`, поэтому строка списка и слово «педагог» проверяются и до выпуска
+    (находка E10-5, карта t_806a633e).
     """
     context, page = _open(browser, webapp_server)
-    save = stand.ADMIN_OVERVIEW["blocks"]["invites"]
-
-    def remember(route):
-        stand.ADMIN_OVERVIEW["blocks"]["invites"] = [
-            {"code": ISSUED, "role": "master",
-             "expires_at": "2026-11-26T12:00:00+04:00", "max_uses": 1, "uses": 0}]
-        route.continue_()
-
-    page.route("**/webapp/admin/invite", remember)
     try:
+        page.wait_for_selector("#invite-list .ui-row", timeout=10_000)
+        rows = page.locator("#invite-list .ui-row")
+        assert rows.count() == 1, rows.all_inner_texts()
+        sample = page.locator("#invite-list .ui-row__meta").first.inner_text()
+        assert "педагог" in sample, f"в строке фикстуры роль {sample!r}, а не «педагог»"
+
         _select(page, "master")
         _issue(page)
         _sheet_close(page)
 
-        page.wait_for_selector("#invite-list .ui-row", timeout=10_000)
+        # Экран после выпуска зовёт refresh(): строк становится на одну больше.
+        page.wait_for_function(
+            "() => document.querySelectorAll('#invite-list .ui-row').length === 2",
+            timeout=10_000)
         rows = page.locator("#invite-list .ui-row")
-        assert rows.count() == 1, rows.all_inner_texts()
         row = rows.first.inner_text()
         assert ISSUED in row, row
         meta = page.locator("#invite-list .ui-row__meta").first.inner_text()
@@ -225,7 +221,6 @@ def test_пункт3_новый_код_в_активных_с_ролью_пед�
         assert "master" not in meta.lower(), f"в строку утекло машинное имя роли: {meta!r}"
         assert page.svoi_errors == [], page.svoi_errors
     finally:
-        stand.ADMIN_OVERVIEW["blocks"]["invites"] = save
         context.close()
 
 
