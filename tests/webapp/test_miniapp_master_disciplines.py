@@ -200,7 +200,7 @@ def test_без_права_кнопок_правки_нет(app_page) -> None:
 
     troupe = app_page("/webapp/admin/t/people", headers=TROUPE)
     _settled(troupe)
-    assert "Раздел доступен организатору и администратору." in troupe.locator("#status").inner_text()
+    assert "Раздел доступен администратору." in troupe.locator("#status").inner_text()
     assert page.svoi_errors == [], page.svoi_errors
 
 

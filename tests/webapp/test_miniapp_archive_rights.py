@@ -20,7 +20,7 @@ docs/development/91 принципы 8, 9, Б3, docs/development/73 (права 
 
 from __future__ import annotations
 
-DENIED = "Раздел доступен организатору и администратору."
+DENIED = "Раздел доступен администратору."
 RESTORE = "Вернуть в активные"
 
 ORG = {"X-SVOI-Role": "org"}

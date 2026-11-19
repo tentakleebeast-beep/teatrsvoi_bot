@@ -18,7 +18,7 @@
 
 from __future__ import annotations
 
-DENIED = "Раздел доступен организатору и администратору."
+DENIED = "Раздел доступен администратору."
 
 MASTER = {"X-SVOI-Role": "master"}
 TROUPE = {"X-SVOI-Role": "troupe"}

@@ -19,7 +19,7 @@
 
 from __future__ import annotations
 
-DENIED = "Раздел доступен организатору и администратору."
+DENIED = "Раздел доступен администратору."
 NO_RIGHT = "Права выдаёт администратор"
 SCREEN = "/webapp/admin/t/rights"
 

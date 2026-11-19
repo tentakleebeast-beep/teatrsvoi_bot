@@ -25,7 +25,7 @@ from __future__ import annotations
 INVITES = "/webapp/admin/t/invites"
 HINT = "Дисциплину педагог выберет при регистрации."
 SHEET_ROLE = "Роль: педагог. Действует 7 дней, вход один."
-DENIED = "Раздел доступен организатору и администратору."
+DENIED = "Раздел доступен администратору."
 CODE = "PED7AGK2"
 
 SEGMENTS = "#invite-role .ui-segmented__item"

@@ -27,12 +27,19 @@
 |---|---|
 | `people` — участники | `participants.view` или `participants.manage` |
 | `pending` — заявки | `registration.approve` или `participants.manage` |
-| `rights` — роли и число возможностей | `participants.view` или `participants.manage` |
+| `rights` — роли и число возможностей | `participants.manage` |
 | `budget` — операции текущего месяца | `budget.read` |
 | `feedback` — открытые обращения | `feedback.triage` |
 | `audit` — последние 12 событий | `audit.view` |
 | `agent` — разбор агентных сессий (A-5) | `admin.panel` |
 | `notifications` — общие тихие часы и типы уведомлений (FR-G17, Ш-11) | `admin.panel` |
+
+**Текст отказа.** Все блоки панели отвечают на закрытый раздел одной фразой —
+`ERRORS.admin_panel_forbidden` = «Раздел доступен администратору.» (`pages/admin_core.py`).
+Перечислять в отказе роли нельзя: 068 снял `registration.approve` у организатора, а прежняя
+фраза «доступен организатору и администратору» продолжала обещать ему «Заявки». Администратор
+есть у каждого раздела панели, поэтому одна фраза верна для любого читателя и не устаревает
+при правке матрицы прав (принцип Б3 — «человек без права видит словами, чего он не видит и к кому идти», `docs/development/141` §4.2).
 
 Отдельно от блоков — вложенный экран «Взносы» (`/webapp/admin/t/dues`, данные
 `GET /webapp/admin/dues`). Право — `budget.write`: то же, что у начисления
