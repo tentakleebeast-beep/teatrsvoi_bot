@@ -82,7 +82,7 @@
 
 | № | Экран | Адрес | Права / кому | Состояния |
 |---|---|---|---|---|
-| 21 | Заявки | `/webapp/admin/t/pending` | `registration.approve`: admin, org | П, З, О, Н, Р |
+| 21 | Заявки | `/webapp/admin/t/pending` | `registration.approve`: admin | П, З, О, Н, Р |
 | 22 | Люди | `/webapp/admin/t/people` | `participants.view`: admin, org, master | П, З, О, Н |
 | 23 | Взносы (админ) | `/webapp/admin/t/dues` | `budget.write`: admin, org | П, З, О, Н, Р |
 | 24 | Приглашения | `/webapp/admin/t/invites` | `registration.code.issue`: admin | П, З, О, Н, Р |

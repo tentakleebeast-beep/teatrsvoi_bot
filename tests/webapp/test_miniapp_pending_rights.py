@@ -22,6 +22,9 @@ DENIED = "Раздел доступен организатору и админи
 
 MASTER = {"X-SVOI-Role": "master"}
 TROUPE = {"X-SVOI-Role": "troupe"}
+# С 068 (19.11.2026) у организатора нет `registration.approve`: заявки —
+# администратор. Экран «Заявки» для него закрыт так же, как для master и troupe.
+ORG = {"X-SVOI-Role": "org"}
 
 
 def _settled(page) -> None:
@@ -55,6 +58,46 @@ def test_troupe_видит_то_же_сообщение(app_page) -> None:
     assert page.locator("#status").inner_text().strip() == DENIED
     assert "Заявок нет" not in _screen_text(page)
     assert page.svoi_errors == [], page.svoi_errors
+
+
+def test_org_видит_то_же_сообщение_что_и_остальные_без_права(app_page) -> None:
+    """С 068 у организатора нет `registration.approve`: его экран «Заявки» — отказ.
+
+    Блок `pending` ему не приходит (`allowed` без `pending`), поэтому экран обязан
+    объяснить право, а не показать «Заявок нет». Текст отказа общий — он остаётся
+    прежним (границы карты: текст по разделу — отдельное решение).
+    """
+    page = app_page("/webapp/admin/t/pending", headers=ORG)
+    _settled(page)
+
+    text = _screen_text(page)
+    assert "Заявок нет" not in text, f"у org молчаливая пустота вместо отказа: {text}"
+    assert page.locator("#status").inner_text().strip() == DENIED
+    assert page.locator("#pending-list").inner_text().strip() == "", \
+        "под отказом остался список заявок"
+    assert page.svoi_errors == [], page.svoi_errors
+
+
+def test_org_не_видит_строки_заявок_на_главной_и_в_управлении(app_page) -> None:
+    """Без права нет и входа: строка «Заявки» не рисуется ни на Главной, ни в «Управлении».
+
+    Данные блоков отбирает `/webapp/home/data` по `sections_for(caps)`; у организатора
+    `pending` в наборе нет с 068, поэтому строка не появляется. Рабочие разделы
+    (участники, сверка листов, опросы) остаются.
+    """
+    for path in ("/webapp/home", "/webapp/more"):
+        page = app_page(path, headers=ORG)
+        _settled(page)
+
+        text = _screen_text(page)
+        assert "Заявки" not in text, f"{path}: у организатора снова строка заявок"
+        assert page.svoi_errors == [], f"{path}: {page.svoi_errors}"
+
+    page = app_page("/webapp/more", headers=ORG)
+    _settled(page)
+    text = _screen_text(page)
+    assert "Люди" in text, "рабочий раздел организатора пропал"
+    assert "Сверка листов" in text, "рабочий раздел организатора пропал"
 
 
 def test_у_admin_ни_одной_главной_кнопки_в_списке(app_page) -> None:

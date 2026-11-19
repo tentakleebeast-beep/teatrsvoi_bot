@@ -37,7 +37,7 @@ participant ──< participant_role >── rbac_role_capability ──> rbac_c
 
 | Роль | Возможностей |
 |---|---:|
-| admin | 24 (все) |
+| admin | 26 (все) |
 | org | 16 |
 | master | 7 (расписание, окна, события, заметки, файлы, состав; без денег и управления) |
 | troupe | 5 |
@@ -48,7 +48,9 @@ participant ──< participant_role >── rbac_role_capability ──> rbac_c
 Роль `student` удалена миграцией `017`; строка с ней в матрице §2 оставлена как след
 истории, а не действующая роль.
 
-Возможности (сценарии): `registration.code.issue`, `registration.approve`,
+Возможности (сценарии): `registration.code.issue`,
+
+так как 068.org не имеет доступа к регистрации и увлечениям.
 `participants.view`, `participants.manage`, `budget.read`, `budget.read.self`,
 `budget.write`, `budget.import`, `schedule.read.all`, `schedule.availability.self`,
 `schedule.slots`, `calendar.write`, `notes.write`, `files.access`, `notify.send`,

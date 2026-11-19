@@ -199,8 +199,14 @@ def client(api):
                               returning id""", (ADMIN_CHAT,)).fetchone()
         conn.execute("""insert into participant_role (participant_id, role) values (%s, 'org')
                         on conflict do nothing""", (row[0],))
-        # точечная выдача: организатору нужен доступ к аудиту (проверяем и override)
-        for capability in ("audit.view", "registration.code.issue", "feedback.triage"):
+        # точечная выдача: организатору нужен доступ к аудиту (проверяем и override).
+        # `registration.approve` — тоже личная выдача, а не право роли: с миграции 068
+        # (решение 19.11.2026) у роли `org` его нет, заявки ведёт администратор, а
+        # интеграционные тесты панели ходят этим участником и должны оставаться
+        # сценариями администратора. Проверка отсутствия права у роли — в
+        # `tests/integration/test_org_caps_after_068.py`.
+        for capability in ("audit.view", "registration.code.issue", "feedback.triage",
+                           "registration.approve"):
             conn.execute("""insert into participant_capability_override
                               (participant_id, capability, allowed, reason)
                             values (%s, %s, true, 'тестовая фикстура')

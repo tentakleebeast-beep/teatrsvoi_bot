@@ -939,10 +939,10 @@ ADMIN_OVERVIEW = {
                 "schedule.availability.self", "schedule.read.all", "schedule.slots",
                 "schedule.write", "system.health"]},
             {"role": "org", "caps": [
-                "budget.approve", "budget.import", "budget.read", "budget.read.self",
+                "budget.import", "budget.read", "budget.read.self",
                 "budget.write", "calendar.write", "feedback.send", "files.access",
                 "notes.write", "participants.contact", "participants.view", "poll.manage",
-                "registration.approve", "schedule.availability.self",
+                "schedule.availability.self",
                 "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]},
             {"role": "master", "caps": [
                 "files.access", "notes.write", "participants.view",
@@ -972,18 +972,19 @@ async def _admin_overview(request: Request) -> JSONResponse:
         return JSONResponse({"ok": True, "allowed": ["people"], "actions": {},
                              "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
     if role == "org":
-        # У организатора панель есть (`participants.view`, `registration.approve`,
-        # `budget.read`), а `registration.code.issue` и `participants.manage` нет
-        # (`db/init/008`), поэтому разделов `invites` и `rights` не приходит ни
-        # блоком, ни в `allowed`, а `manage_rights` в ответе ложно — как в бою
-        # (карта t_343d42fe: у org экран звал к кнопке, которой у него нет; карта
-        # t_c6a13266: без `manage_rights` нет и архива; карта t_eb9e0661: без
-        # права нет ни матрицы, ни формы выдачи).
-        blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "pending", "budget")}
+        # У организатора есть `participants.view`, `budget.read` и `budget.write`,
+        # а `registration.approve` снято миграцией 068 (19.11.2026): заявки и коды —
+        # работа администратора. Поэтому `pending` и `invites` не приходят ни блоком,
+        # ни в `allowed`, `approve_pending` и `issue_codes` в ответе ложно, а
+        # `manage_rights` нет — как в бою (карта t_343d42fe: у org экран звал
+        # к кнопке, которой у него нет; карта t_c6a13266: без `manage_rights` нет
+        # и архива; карта t_eb9e0661: без права нет ни матрицы, ни формы выдачи).
+        blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "budget")}
         actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
                    if name != "issue_codes"}
+        actions["approve_pending"] = False
         actions["manage_rights"] = False
-        return JSONResponse({"ok": True, "allowed": ["people", "pending", "budget"],
+        return JSONResponse({"ok": True, "allowed": ["people", "budget"],
                              "actions": actions, "blocks": blocks})
     if role == "troupe":
         return JSONResponse({"detail": "admin_panel_forbidden"}, status_code=403)

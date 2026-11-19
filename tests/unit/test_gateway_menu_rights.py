@@ -24,9 +24,12 @@ def gw():
 
 
 ADMIN = ["*"]
-ORG = ["participants.view", "participants.manage", "registration.approve",
-       "registration.code.issue", "budget.read", "budget.write", "budget.read.self",
-       "schedule.read.all", "schedule.write", "schedule.availability.self"]
+# Замер dev-базы после 068: 16 возможностей организатора. Права на заявки
+# (`registration.approve`) и коды (`registration.code.issue`) у него нет.
+ORG = ["budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
+       "feedback.send", "files.access", "notes.write", "participants.contact",
+       "participants.view", "poll.manage", "schedule.availability.self",
+       "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]
 TROUPE = ["schedule.availability.self", "budget.read.self"]
 STUDENT = ["schedule.availability.self"]
 
