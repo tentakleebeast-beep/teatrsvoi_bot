@@ -144,8 +144,11 @@ _SCRIPT_INVITES = r"""
     button.onclick = function () {
       role = button.getAttribute("data-role");
       document.querySelectorAll("#invite-role .ui-segmented__item").forEach(function (item) {
-        item.classList.toggle("ui-segmented__item--on", item === button);
+        var on = item === button;
+        item.classList.toggle("ui-segmented__item--on", on);
+        item.setAttribute("aria-pressed", on ? "true" : "false");
       });
+      $("invite-hint").hidden = role !== "master";
     };
   });
   $("invite-issue").addEventListener("click", issue);
@@ -157,9 +160,13 @@ _BODY_INVITES = """
   <h2 class="ui-h2">Новый код</h2>
   <div class="ui-segmented" id="invite-role" role="group" aria-label="Роль">
     <button type="button" class="ui-segmented__item ui-segmented__item--on"
-            data-role="troupe">Труппа</button>
-    <button type="button" class="ui-segmented__item" data-role="org">Организатор</button>
+            data-role="troupe" aria-pressed="true">Труппа</button>
+    <button type="button" class="ui-segmented__item" data-role="org"
+            aria-pressed="false">Организатор</button>
+    <button type="button" class="ui-segmented__item" data-role="master"
+            aria-pressed="false">Педагог</button>
   </div>
+  <span class="ui-small ui-muted" id="invite-hint" hidden>Дисциплину педагог выберет при регистрации.</span>
   <span class="ui-small ui-muted">Действует 7 дней, вход один.</span>
   <button type="button" class="ui-btn ui-btn--primary ui-btn--block" id="invite-issue">
     Выпустить код</button>

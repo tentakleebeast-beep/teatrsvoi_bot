@@ -1097,6 +1097,46 @@ async def stand_admin_grant(request: Request) -> JSONResponse:
                          "warnings": _warnings_of(participant_id, "admin")})
 
 
+#: Код на стенде — фиксированный, зато в алфавите `core.CODE_ALPHABET`
+#: (`ABCDEFGHJKLMNPQRSTUVWXYZ23456789`): экран печатает его как есть.
+INVITE_CODE = "PED7AGK2"
+
+#: Ответ `POST /webapp/admin/invite` в боевой форме (`api/admin.py:57-58`):
+#: экран читает только `code`, но `role` и `expires_at` в ответе есть, и стенд,
+#: который их не отдаёт, скрыл бы расхождение контракта (docs/development/176 §9.9).
+INVITE_ROLES = ("admin", "org", "troupe", "master")
+INVITE_ISSUE_REQUIRED = "registration.code.issue"
+
+
+@app.post("/webapp/admin/invite")
+async def stand_admin_invite(request: Request) -> JSONResponse:
+    """Выпуск кода приглашения: та же форма ответа и те же отказы, что у сервера.
+
+    Без этого обработчика браузерный сценарий выпуска уходил в 404 и лист не
+    открывался (docs/development/176 §9.9). Проверки идут в порядке боевого пути:
+    токен (`_guard`), право `registration.code.issue`, отказ по `admin`, набор
+    роли, дисциплина только у педагога (`api/admin.py:43-46`).
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _role_of(request) != "admin":
+        return JSONResponse({"detail": f"capability required: {INVITE_ISSUE_REQUIRED}"},
+                            status_code=403)
+    body = await request.json()
+    role = body.get("role")
+    if role == "admin":
+        return JSONResponse({"detail": "admin не выдаётся кодом: только через ADMIN_CHAT_ID"},
+                            status_code=400)
+    if role not in INVITE_ROLES:
+        return JSONResponse({"detail": "validation_failed"}, status_code=422)
+    if body.get("discipline_code") and role != "master":
+        return JSONResponse({"detail": "discipline_code допустим только для роли master"},
+                            status_code=400)
+    return JSONResponse({"ok": True, "code": INVITE_CODE, "role": role,
+                         "expires_at": "2026-11-26T12:00:00+04:00"})
+
+
 def _person_card_payload(participant_id: int) -> dict:
     """Карточка человека на стенде: те же ключи, что `core._person_card`."""
     known = {person["id"]: person for person in ADMIN_OVERVIEW["blocks"]["people"]["data"]}
