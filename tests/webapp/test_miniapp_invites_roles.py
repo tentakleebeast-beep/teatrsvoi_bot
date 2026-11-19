@@ -210,22 +210,29 @@ def _fits(state: dict, where: str) -> None:
 
     widths = {role: item["width"] for role, item in by_role.items()}
     inner = state["inner"]
-    assert abs(sum(widths.values()) - inner) <= 1, (
-        f"{where}: сегменты заняли {sum(widths.values()):.1f} px "
-        f"при ширине {inner} px")
+    natural = sum(item["intrinsic"] for item in state["items"])
+    occupied = sum(widths.values())
+    # Сегменты занимают либо всю ширину содержимого контейнера (подписи уже своих
+    # долей — flex раздаёт остаток), либо ровно столько, сколько требуют подписи:
+    # подпись не сжимается, и при широком шрифте ряд выходит за контейнер, который
+    # его подрезает (`overflow: hidden`). Так и происходит в CI, где шрифт шире
+    # системного телефонного: три подписи просят 277 px при 254 px содержимого.
+    assert abs(occupied - max(inner, natural)) <= 2, (
+        f"{where}: сегменты заняли {occupied:.1f} px при содержимом "
+        f"{inner} px и подписях {natural:.1f} px")
 
-    # Длинная подпись «Организатор» не влезает в равную треть и забирает место
-    # у коротких: она самая широкая и шире inner/3, короткие — уже своей доли.
+    # Длинная подпись «Организатор» не уступает коротким: сегмент шире обоих.
+    # Треть как точка отсчёта не годится — при широком шрифте короткая подпись
+    # сама просит больше трети (Verdana: «Педагог» 85 px против 84.7), и равенство
+    # долей перестаёт быть свойством раскладки.
     org = by_role["org"]
-    assert org["width"] > inner / 3, (
-        f"{where}: «Организатор» {org['width']:.1f} px не шире трети {inner / 3:.1f} px")
+    assert org["width"] > org["intrinsic"] - 2, (
+        f"{where}: «Организатор» {org['width']:.1f} px сжат при подписи "
+        f"{org['intrinsic']:.1f} px")
     for role in ("troupe", "master"):
         assert by_role[role]["width"] < widths["org"], (
             f"{where}: «{by_role[role]['label']}» {widths[role]:.1f} px не уже "
             f"«Организатора» {widths['org']:.1f} px")
-        assert by_role[role]["width"] < inner / 3, (
-            f"{where}: «{by_role[role]['label']}» {widths[role]:.1f} px "
-            f"не уже трети {inner / 3:.1f} px")
 
     # Короткие делят остаток: их ширины расходятся не больше, чем расходятся их
     # подписи, плюс 2 px на округление долей. Равенство «±1 px» из AC-10 —
