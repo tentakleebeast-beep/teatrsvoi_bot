@@ -6,9 +6,13 @@
 педагогу (тело запроса и лист) и отсутствие переключателя у роли без права.
 
 Отдельно — узкая ширина: на 320 px три подписи должны читаться целиком и не
-переноситься (проба E10-1 дала 70 / 110 / 74 px). Ширины проверяются с допуском
-±1 px: `flex: 1` с `min-width: auto` — правило браузера, и другой движок округлит
-иначе (§9.12).
+переноситься. Абсолютные ширины 70 / 110 / 74 из §9.12 — замер chromium на macOS
+(`inner` 254 px); гейт идёт на ubuntu-latest, где шрифт другой и контейнер шире
+(`inner` 278 px), и там те же три сегмента дают 78 / 119 / 81 без обрезки и
+переноса (CI run 44435068181). Поэтому проверяются инварианты раскладки, а не
+платформенное число: подпись не сжата ниже своей натуральной ширины, сегменты
+занимают ровно содержимое контейнера, «Организатор» шире равной трети, короткие
+делят остаток.
 
     SVOI_WEBAPP_TESTS=1 .venv/bin/python -m pytest tests/webapp/test_miniapp_invites_roles.py \\
         -q --browser chromium
@@ -24,11 +28,32 @@ CODE = "PED7AGK2"
 
 SEGMENTS = "#invite-role .ui-segmented__item"
 
-#: Замер сегмента: ширина, высота цели, обрезка и число строк подписи.
+#: Замер сегмента: ширина, высота цели, обрезка, число строк подписи и её
+#: натуральная ширина в том же шрифте (без сжатия flex'ом).
 MEASURE = """
 () => {
   const box = document.getElementById('invite-role');
   const style = window.getComputedStyle(box);
+  // Сколько подписи нужно при её собственном шрифте: пробный span вне раскладки.
+  // Так проверка не зависит от метрик платформы — сравниваются два замера страницы.
+  const natural = (node) => {
+    const cs = window.getComputedStyle(node);
+    const probe = document.createElement('span');
+    probe.textContent = node.textContent.trim();
+    probe.style.cssText =
+      'position:absolute;top:-9999px;left:0;white-space:nowrap;visibility:hidden';
+    probe.style.fontFamily = cs.fontFamily;
+    probe.style.fontSize = cs.fontSize;
+    probe.style.fontWeight = cs.fontWeight;
+    probe.style.fontStyle = cs.fontStyle;
+    probe.style.fontStretch = cs.fontStretch;
+    probe.style.letterSpacing = cs.letterSpacing;
+    probe.style.textTransform = cs.textTransform;
+    document.body.appendChild(probe);
+    const text = probe.getBoundingClientRect().width;
+    probe.remove();
+    return text + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+  };
   const items = Array.from(box.querySelectorAll('.ui-segmented__item')).map((node) => {
     const rect = node.getBoundingClientRect();
     const range = document.createRange();
@@ -39,6 +64,7 @@ MEASURE = """
       pressed: node.getAttribute('aria-pressed'),
       on: node.classList.contains('ui-segmented__item--on'),
       width: rect.width,
+      intrinsic: natural(node),
       height: rect.height,
       left: rect.left,
       right: rect.right,
@@ -155,46 +181,89 @@ def test_org_не_видит_сегментов_роли(app_page) -> None:
     assert page.svoi_errors == [], page.svoi_errors
 
 
-def _fits(state: dict, expected: list[int]) -> None:
-    """Подписи не обрезаны, по одной строке, цель ≥ 44 px, ширины по ожиданию ±1."""
+def _fits(state: dict, where: str) -> None:
+    """Инварианты раскладки трёх сегментов, не зависящие от метрик шрифта.
+
+    Ни одна проверка не называет абсолютных пикселей: и ожидание, и факт берутся
+    из самого замера, поэтому тест одинаково верен для macOS-шрифта (254 px
+    содержимого) и для ubuntu-шрифта в CI (278 px).
+    """
     assert len(state["items"]) == 3, state
+    by_role = {item["role"]: item for item in state["items"]}
+    assert set(by_role) == {"troupe", "org", "master"}, by_role
+
+    # AC-9: подпись читается целиком — без обрезки, в одну строку, цель ≥ 44 px.
     for item in state["items"]:
-        assert item["clipped"] <= 1, f"подпись «{item['label']}» обрезана на {item['clipped']} px"
-        assert item["lines"] == 1, f"подпись «{item['label']}» на {item['lines']} строк"
-        assert item["height"] >= 44 - 0.5, f"цель «{item['label']}» {item['height']} px"
+        assert item["clipped"] <= 1, (
+            f"{where}: подпись «{item['label']}» обрезана на {item['clipped']} px")
+        assert item["lines"] == 1, (
+            f"{where}: подпись «{item['label']}» на {item['lines']} строк")
+        assert item["height"] >= 44 - 0.5, (
+            f"{where}: цель «{item['label']}» {item['height']} px")
 
-    widths = [round(item["width"]) for item in state["items"]]
-    for got, want, item in zip(widths, expected, state["items"], strict=True):
-        assert abs(got - want) <= 1, (
-            f"ширина «{item['label']}» {got} px, ожидалось {want}±1: {widths}")
-    assert abs(sum(widths) - state["inner"]) <= 1, (
-        f"сегменты заняли {sum(widths)} px при ширине {state['inner']} px")
+    # Ни один сегмент не сжат flex'ом ниже своей подписи: ширина сегмента не
+    # меньше натуральной ширины подписи с полями. 2 px запаса — округление долей.
+    for item in state["items"]:
+        assert item["width"] >= item["intrinsic"] - 2, (
+            f"{where}: сегмент «{item['label']}» сжат до {item['width']:.1f} px "
+            f"при ширине подписи {item['intrinsic']:.1f} px")
 
-    assert state["overflow"] <= 0, f"экран переполнен по горизонтали на {state['overflow']} px"
+    widths = {role: item["width"] for role, item in by_role.items()}
+    inner = state["inner"]
+    assert abs(sum(widths.values()) - inner) <= 1, (
+        f"{where}: сегменты заняли {sum(widths.values()):.1f} px "
+        f"при ширине {inner} px")
+
+    # Длинная подпись «Организатор» не влезает в равную треть и забирает место
+    # у коротких: она самая широкая и шире inner/3, короткие — уже своей доли.
+    org = by_role["org"]
+    assert org["width"] > inner / 3, (
+        f"{where}: «Организатор» {org['width']:.1f} px не шире трети {inner / 3:.1f} px")
+    for role in ("troupe", "master"):
+        assert by_role[role]["width"] < widths["org"], (
+            f"{where}: «{by_role[role]['label']}» {widths[role]:.1f} px не уже "
+            f"«Организатора» {widths['org']:.1f} px")
+        assert by_role[role]["width"] < inner / 3, (
+            f"{where}: «{by_role[role]['label']}» {widths[role]:.1f} px "
+            f"не уже трети {inner / 3:.1f} px")
+
+    # Короткие делят остаток: их ширины расходятся не больше, чем расходятся их
+    # подписи, плюс 2 px на округление долей. Равенство «±1 px» из AC-10 —
+    # свойство macOS-шрифта; на ubuntu разница подписей даёт 3 px (78 и 81).
+    short = [by_role[role] for role in ("troupe", "master")]
+    spread = abs(short[0]["width"] - short[1]["width"])
+    labels = abs(short[0]["intrinsic"] - short[1]["intrinsic"])
+    assert spread <= labels + 2, (
+        f"{where}: ширины «{short[0]['label']}» и «{short[1]['label']}» "
+        f"разошлись на {spread:.1f} px при разнице подписей {labels:.1f} px")
+
+    assert state["overflow"] <= 0, (
+        f"{where}: экран переполнен по горизонтали на {state['overflow']} px")
     assert state["card"]["left"] >= 0, state["card"]
     assert state["card"]["right"] <= state["viewport"], state["card"]
 
 
 def test_три_сегмента_на_320_без_обрезки_и_переноса(app_page) -> None:
-    """AC-9 и AC-10: на 320 px три подписи читаются целиком, ширины 70/110/74.
+    """AC-9 и AC-10: на 320 px три подписи читаются целиком, раскладка цела.
+
+    Абсолютные ширины AC-10 (70 / 110 / 74) — замер chromium на macOS с `inner`
+    254 px; в CI (ubuntu-latest, `inner` 278 px) тот же экран даёт 78 / 119 / 81.
+    Число — свойство окружения, поэтому проверяются инварианты: подпись не сжата
+    ниже своей натуральной ширины, сумма ширин равна содержимому контейнера,
+    «Организатор» шире равной трети, «Труппа» и «Педагог» делят остаток.
 
     Проверяются оба состояния переключателя, потому что ширину сегмента двигает
-    жирность выбранного (`.ui-segmented__item--on`, `font-weight: 600`): подпись
-    выбранного шире на 2,5 px, и `flex` отдаёт ей больше места. Замер §9.12
-    (70 / 110 / 74) снят в состоянии по умолчанию — там выбран «Труппа»; когда
-    выбран «Педагог» (самый тесный набор — ещё и с подсказкой), выходит
-    67 / 110 / 77 при той же сумме 254 px. Допуск ±1 px: округление `flex`
-    съедает пиксель, а в WebKit метрики шрифта другие.
+    жирность выбранного (`.ui-segmented__item--on`, `font-weight: 600`).
     """
     page = _open(app_page)
     page.set_viewport_size({"width": 320, "height": 658})
     page.wait_for_timeout(300)
 
-    _fits(page.evaluate(MEASURE), [70, 110, 74])          # умолчание: выбран «Труппа»
+    _fits(page.evaluate(MEASURE), "выбран «Труппа»")      # состояние по умолчанию
 
     page.locator(f'{SEGMENTS}[data-role="master"]').click()
     page.wait_for_selector("#invite-hint:not([hidden])", timeout=5_000)
     page.wait_for_timeout(300)
 
-    _fits(page.evaluate(MEASURE), [67, 110, 77])          # выбран «Педагог»
+    _fits(page.evaluate(MEASURE), "выбран «Педагог»")     # самый тесный набор
     assert page.svoi_errors == [], page.svoi_errors
