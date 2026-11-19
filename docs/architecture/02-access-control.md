@@ -48,13 +48,14 @@ participant ──< participant_role >── rbac_role_capability ──> rbac_c
 Роль `student` удалена миграцией `017`; строка с ней в матрице §2 оставлена как след
 истории, а не действующая роль.
 
-Возможности (сценарии): `registration.code.issue`,
-
-так как 068.org не имеет доступа к регистрации и увлечениям.
+Возможности (сценарии): `registration.code.issue`, `registration.approve`,
 `participants.view`, `participants.manage`, `budget.read`, `budget.read.self`,
 `budget.write`, `budget.import`, `schedule.read.all`, `schedule.availability.self`,
 `schedule.slots`, `calendar.write`, `notes.write`, `files.access`, `notify.send`,
 `audit.view`, `quota.manage`, `system.health`.
+
+Право `registration.approve` снято у роли `org` миграцией `068` (решение владельца
+19.11.2026): заявки обрабатывает администратор, у него это право остаётся.
 
 Управление: `POST /admin/grant` — выдать роль или включить/отключить одну возможность
 с указанием причины. Всё пишется в аудит (`rbac.role.grant`, `rbac.capability.grant`).
