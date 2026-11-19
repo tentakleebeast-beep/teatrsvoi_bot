@@ -441,9 +441,9 @@ body.ui-page {
   background: var(--ui-surface);
 }
 .ui-segmented__item {
-  flex: 1; min-height: var(--ui-tap); padding: 0 var(--ui-s2);
+  flex: 1; min-height: var(--ui-tap); padding: 0 6px;
   border: 0; background: none; color: var(--ui-fg);
-  font: inherit; font-size: 15px;
+  font: inherit; font-size: 14px;
 }
 .ui-segmented__item--on { background: var(--ui-accent); color: var(--ui-on-accent); font-weight: 600; }
 .ui-segmented__item + .ui-segmented__item:not(.ui-segmented__item--on) {
