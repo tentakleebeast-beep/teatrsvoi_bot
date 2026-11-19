@@ -392,6 +392,8 @@ def reset_events() -> dict:
     ROLES_STATE.update({1: ["admin"], 2: ["troupe"], 30: ["troupe"]})
     GRANT_EVENTS.clear()
     DISCIPLINE_EVENTS.clear()
+    # Активные коды: выпуск и отзыв меняют фикстуру панели (карта t_806a633e).
+    reset_invites()
     return {"ok": True}
 
 
@@ -874,6 +876,28 @@ async def feedback_send(request: Request):
                              for item in (body.get("attachments") or [])]})
 
 
+#: Активные инвайт-коды фикстуры панели: та же форма, что отдаёт бой —
+#: `select code, role, created_at, expires_at, max_uses, uses from invite_code`
+#: (`api/admin.py:64-80`). Один код с ролью `master` в фикстуре, чтобы строка
+#: списка «Активные коды» была на экране без выпуска: иначе проверка строки и
+#: слова «педагог» держалась бы только на выпущенном коде (карта t_806a633e).
+INVITE_SAMPLES = [
+    {"code": "PED4GOG2", "role": "master", "created_at": "2026-11-19T09:00:00+04:00",
+     "expires_at": "2026-11-26T09:00:00+04:00", "max_uses": 1, "uses": 0},
+]
+
+
+def reset_invites(empty: bool = False) -> None:
+    """Вернуть список кодов стенда к фикстуре (или опустошить) — для тестов и `/__reset`.
+
+    Список меняется выпуском и отзывом кода, как боевая таблица, поэтому тестам
+    нужен возврат к исходному: без него код, выпущенный одним сценарием, менял бы
+    «Активных кодов нет» в другом (карта t_806a633e).
+    """
+    invites = ADMIN_OVERVIEW["blocks"]["invites"]
+    invites[:] = [] if empty else list(INVITE_SAMPLES)
+
+
 ADMIN_OVERVIEW = {
     "ok": True,
     "allowed": ["people", "pending", "rights", "budget", "feedback", "audit", "invites"],
@@ -894,7 +918,12 @@ ADMIN_OVERVIEW = {
         "budget": {"period_title": "октябрь 2026", "data": []},
         "feedback": {"data": []},
         "audit": {"data": []},
-        "invites": {"data": []},
+        # Форма как в бою: `blocks["invites"] = list_invites(...)["data"]` — голый
+        # список (`api/admin.py:1019-1020`), а не `{"data": [...]}`. С обёрткой экран
+        # читал `(BLOCKS.invites || []).length` = undefined, ветка `!invites.length`
+        # была всегда истинна, и «Активные коды» пустели даже с кодами в ответе
+        # (карта t_806a633e). Выпуск и отзыв кода список меняют, как боевая таблица.
+        "invites": list(INVITE_SAMPLES),
         # Матрица роль → возможности: в бою её отдаёт `capability_catalog` только с
         # правом `participants.manage` (`app/webapp.py:ADMIN_BLOCKS`). Без блока
         # стенд не воспроизводил ни дефект экрана 25, ни поведение с правом
@@ -1116,6 +1145,13 @@ async def stand_admin_invite(request: Request) -> JSONResponse:
     открывался (docs/development/176 §9.9). Проверки идут в порядке боевого пути:
     токен (`_guard`), право `registration.code.issue`, отказ по `admin`, набор
     роли, дисциплина только у педагога (`api/admin.py:43-46`).
+
+    Выпущенный код дописывается в `blocks["invites"]`, как бой пишет строку в
+    `invite_code`: иначе экран после выпуска звал бы `refresh()`, получал прежний
+    список и «Активных кодов» на стенде нельзя было бы увидеть вовсе (карта
+    t_806a633e). Код на стенде один и тот же, поэтому прежняя строка с тем же
+    кодом заменяется, а не дублируется; тесты возвращают фикстуру
+    `reset_invites()`.
     """
     denied = _guard(request)
     if denied is not None:
@@ -1133,8 +1169,40 @@ async def stand_admin_invite(request: Request) -> JSONResponse:
     if body.get("discipline_code") and role != "master":
         return JSONResponse({"detail": "discipline_code допустим только для роли master"},
                             status_code=400)
+    expires_at = "2026-11-26T12:00:00+04:00"
+    invites = ADMIN_OVERVIEW["blocks"]["invites"]
+    invites[:] = [item for item in invites if item.get("code") != INVITE_CODE]
+    invites.insert(0, {"code": INVITE_CODE, "role": role,
+                       "created_at": "2026-11-19T12:00:00+04:00",
+                       "expires_at": expires_at,
+                       "max_uses": int(body.get("max_uses") or 1), "uses": 0})
     return JSONResponse({"ok": True, "code": INVITE_CODE, "role": role,
-                         "expires_at": "2026-11-26T12:00:00+04:00"})
+                         "expires_at": expires_at})
+
+
+@app.post("/webapp/admin/invite-revoke")
+async def stand_admin_invite_revoke(request: Request) -> JSONResponse:
+    """Отзыв кода: строка уходит из списка, как боевой `update ... expires_at = now()`.
+
+    Экран зовёт этот адрес кнопкой «Отозвать» у каждой строки списка, и коды в
+    списке теперь есть — без обработчика кнопка получала 404 и молча показывала
+    ошибку (карта t_806a633e). Отказы те же: токен, право `registration.code.issue`,
+    404 `invite_not_found_or_used`, если кода в списке нет (`api/admin.py:83-95`).
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _role_of(request) != "admin":
+        return JSONResponse({"detail": f"capability required: {INVITE_ISSUE_REQUIRED}"},
+                            status_code=403)
+    body = await request.json()
+    code = (body or {}).get("code") or ""
+    invites = ADMIN_OVERVIEW["blocks"]["invites"]
+    left = [item for item in invites if item.get("code") != code]
+    if len(left) == len(invites):
+        return JSONResponse({"detail": "invite_not_found_or_used"}, status_code=404)
+    invites[:] = left
+    return JSONResponse({"ok": True, "code": code})
 
 
 def _person_card_payload(participant_id: int) -> dict:

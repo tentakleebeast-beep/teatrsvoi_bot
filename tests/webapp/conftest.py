@@ -49,6 +49,25 @@ def pytest_collection_modifyitems(config, items):
             item.add_marker(skip)
 
 
+@pytest.fixture(autouse=True)
+def stand_invites_fresh() -> Iterator[None]:
+    """Активные коды стенда — к фикстуре перед каждым тестом.
+
+    `ADMIN_OVERVIEW["blocks"]["invites"]` меняется выпуском и отзывом кода, как
+    боевая таблица `invite_code`; без возврата код, выпущенный одним сценарием,
+    попадал бы в чужой — например в проверку пустого состояния «Активных кодов
+    нет» (карта t_806a633e).
+    """
+    if not ENABLED:
+        yield
+        return
+    from tests.webapp import server as stand
+
+    stand.reset_invites()
+    yield
+    stand.reset_invites()
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
