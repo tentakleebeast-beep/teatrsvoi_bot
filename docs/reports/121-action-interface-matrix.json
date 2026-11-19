@@ -12,11 +12,13 @@
    "docs/development/90-ui-review.md",
    "docs/development/91-design-system.md",
    "docs/development/92-navigation-model.md",
-   "docs/development/93-cjm.md"
+   "docs/development/93-cjm.md",
+   "docs/development/162-bot-polls.md",
+   "docs/development/164-miniapp-home-polls.md"
   ],
-  "requirement_rows": 113,
+  "requirement_rows": 114,
   "scenario_rows": 30,
-  "action_rows": 56
+  "action_rows": 58
  },
  "actions": [
   {
@@ -1129,6 +1131,45 @@
    ],
    "note": "Обещано 92 §2.4; экран /webapp/admin/t/notifications, маршрут /webapp/admin/notifications/settings, право admin.panel (Ш-11)",
    "anchor": "| Общие уведомления | `admin.panel` | — |"
+  },
+  {
+   "id": "ACT-057",
+   "action": "Создать и отправить опрос: конструктор, адресаты, черновик",
+   "who": [
+    "админ",
+    "организатор"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-G18"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L138",
+    "docs/development/162-bot-polls.md#L473"
+   ],
+   "note": "Экраны /webapp/polls и /webapp/polls/edit, право poll.manage (admin и org, V-088), отправка через очередь notification",
+   "anchor": "Три экрана опроса — три страницы"
+  },
+  {
+   "id": "ACT-058",
+   "action": "Пройти опрос: вопрос, прогресс, «назад», «пропустить», черновик",
+   "who": [
+    "участник"
+   ],
+   "interface": "оба",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-G18"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L138",
+    "docs/development/164-miniapp-home-polls.md#L440"
+   ],
+   "note": "Чат — кнопки и черновик в БД; Mini App — «Мои опросы» и экран /webapp/polls/answer (docs/164 §12)",
+   "anchor": "экран «Мои опросы» со строкой-входом на Главной"
   }
  ],
  "requirements": [
@@ -1181,7 +1222,7 @@
    "id": "FR-A5",
    "priority": "P0",
    "status": "готово",
-   "text": "Роли множественные (`admin`, `org`, `troupe`); доступ определяется возможностями (capability), а не ролью",
+   "text": "Роли множественные (`admin`, `org`, `troupe`, `master`); доступ определяется возможностями (capability), а не ролью",
    "source": "docs/development/19-functional-requirements.md#L35",
    "participant_action": false,
    "actions": [],
@@ -1958,6 +1999,18 @@
    ]
   },
   {
+   "id": "FR-G18",
+   "priority": "P1",
+   "status": "готово",
+   "text": "Опросы в боте: конструктор (single, multi, yesno, number, text), адресаты по роли/спектаклю/вручную с исключениями и заморозкой при отправке, прохождение в чате и в Mini App (экран «Мои опросы» со строкой-входом на Главной и экран вопроса) с прогрессом, «назад», «пропустить» и черновиком в БД, черновик с явным сохранением и копирование отправленного опроса, приглашение через очередь `notification` с `payload.markup`, отмена отложенного приглашения, если человек ответил в приложении, сводка и экспорт CSV/Markdown; создание — `poll.manage` (admin и org, V-088), результаты — `poll.results.all` и `poll_viewer`",
+   "source": "docs/development/19-functional-requirements.md#L138",
+   "participant_action": true,
+   "actions": [
+    "ACT-057",
+    "ACT-058"
+   ]
+  },
+  {
    "id": "FR-H1",
    "priority": "P0",
    "status": "готово",
@@ -2020,7 +2073,7 @@
   {
    "id": "FR-H7",
    "priority": "P2",
-   "status": "не начато",
+   "status": "частично",
    "text": "Прод-контур: VPS, webhook вместо polling, TLS",
    "source": "docs/development/19-functional-requirements.md#L153",
    "participant_action": false,
@@ -2231,7 +2284,7 @@
   {
    "id": "FR-I1",
    "priority": "P2",
-   "status": "готово",
+   "status": "готово; скриншот — `POST /webapp/feedback/presign`, `GET /tools/feedback/{id}/attachment/{file_id}`, `tests/integration/test_feedback_attachment.py`, `tests/webapp/test_miniapp_feedback_screenshot.py` (3 файла × 8 МБ, `scope='feedback'`)",
    "text": "Обратная связь участников, включая просьбу о доработке: кнопка меню, форма Mini App, разбор организатором, ответ автору",
    "source": "docs/development/19-functional-requirements.md#L229",
    "participant_action": true,
