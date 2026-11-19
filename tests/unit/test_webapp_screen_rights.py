@@ -57,9 +57,9 @@ ROLE_CAPS = {
         "feedback.triage",
     },
     "org": set(UNIVERSAL_CAPS) | {
-        "budget.read.self", "registration.approve", "participants.view", "budget.read",
+        "budget.read.self", "participants.view", "participants.contact", "budget.read",
         "budget.write", "budget.import", "schedule.read.all", "schedule.slots",
-        "calendar.write", "system.health",
+        "schedule.write", "calendar.write", "feedback.send", "poll.manage", "system.health",
     },
     "troupe": set(UNIVERSAL_CAPS) | {"budget.read.self", "system.health"},
     "master": set(UNIVERSAL_CAPS) | {

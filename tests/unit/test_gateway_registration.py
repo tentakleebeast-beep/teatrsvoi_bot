@@ -5,8 +5,9 @@
 `StateFilter(None)`. После `/start` состояние `Reg.await_code` уже не None,
 поэтому сообщение с кодом не обрабатывал никто — бот молчал.
 
-Обращение №8: кнопка «Права» в админ-панели. У `org` есть `participants.view`
-и `registration.approve`, но панель требовала только `participants.manage`,
+Обращение №8: кнопка «Права» в админ-панели. У `org` были `participants.view`
+и `registration.approve` (второе снято миграцией `068`, 19.11.2026), но панель
+требовала только `participants.manage`,
 поэтому организатор получал «Панель доступна администратору». Теперь вход в
 панель и её пункты считаются по возможностям.
 """
@@ -27,8 +28,10 @@ GATEWAY_APP = ROOT / "services" / "tg-gateway" / "app"
 CODE = "ABCD1234"
 
 ADMIN_CAPS = ["*"]
-ORG_CAPS = ["registration.approve", "registration.code.issue", "participants.view",
-            "budget.read", "budget.write", "budget.approve", "system.health"]
+ORG_CAPS = ["budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
+            "feedback.send", "files.access", "notes.write", "participants.contact",
+            "participants.view", "poll.manage", "schedule.availability.self",
+            "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]
 TROUPE_CAPS = ["budget.read.self", "schedule.availability.self", "system.health"]
 
 
@@ -211,13 +214,14 @@ def test_панель_организатора_без_прав_и_с_аудит�
     """AUD-3 / Л4 (FR-A6): «Права» — по participants.manage, а не по просмотру.
 
     Раньше пункт висел на `participants.view`, и организатор видел вход, за
-    которым его ждал отказ. Свои действия в панели он не теряет: заявки, бюджет,
-    приглашения остаются.
+    которым его ждал отказ. Заявок в панели у него тоже нет с миграции 068:
+    обработка заявок — работа администратора. Рабочие пункты (бюджет, люди,
+    сверка листов) остаются.
     """
     rows = gw.panel_rows(ORG_CAPS)
     labels = [b[0] for row in rows for b in row]
     assert "Права" not in labels, "права выдаются по participants.manage"
-    assert "Заявки" in labels
+    assert "Заявки" not in labels, "заявки — администратор (миграция 068)"
     assert "Аудит" not in labels, "org без audit.view не должен видеть аудит"
     assert "Бюджет" in labels
 
@@ -250,11 +254,23 @@ def test_организатору_панель_не_нужна(gw, monkeypatch):
     assert buttons(message.markup) == []
 
 
-def test_у_организатора_есть_заявки_и_приглашения(gw):
-    """То, что раньше жило только в панели, стало пунктами меню."""
-    items = dict(gw.menu_groups(ORG_CAPS))["Люди"]
-    assert items == ["Участники"]
-    assert dict(gw.menu_groups(ORG_CAPS))["Админ"] == ["Заявки", "Приглашения"]
+def test_заявки_и_приглашения_у_того_у_кого_есть_права(gw):
+    """Пункты меню — по праву, а не по названию роли.
+
+    С 068 у организатора прав на заявки и коды нет: обработка заявок
+    и выпуск приглашений — работа администратора. Проверяем обе стороны:
+    у администратора пункты на месте, у организатора их нет ни в одной группе,
+    а «Участники» он не теряет.
+    """
+    admin_groups = dict(gw.menu_groups(ADMIN_CAPS))
+    assert admin_groups["Люди"] == ["Участники"]
+    assert {"Заявки", "Приглашения"} <= set(admin_groups["Админ"])
+
+    org_groups = dict(gw.menu_groups(ORG_CAPS))
+    org_items = {item for items in org_groups.values() for item in items}
+    assert org_groups["Люди"] == ["Участники"]
+    assert "Заявки" not in org_items
+    assert "Приглашения" not in org_items
 
 
 def test_труппа_не_видит_панель(gw, monkeypatch):

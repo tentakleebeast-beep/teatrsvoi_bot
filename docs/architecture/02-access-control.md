@@ -37,7 +37,7 @@ participant ──< participant_role >── rbac_role_capability ──> rbac_c
 
 | Роль | Возможностей |
 |---|---:|
-| admin | 24 (все) |
+| admin | 26 (все) |
 | org | 16 |
 | master | 7 (расписание, окна, события, заметки, файлы, состав; без денег и управления) |
 | troupe | 5 |
@@ -53,6 +53,9 @@ participant ──< participant_role >── rbac_role_capability ──> rbac_c
 `budget.write`, `budget.import`, `schedule.read.all`, `schedule.availability.self`,
 `schedule.slots`, `calendar.write`, `notes.write`, `files.access`, `notify.send`,
 `audit.view`, `quota.manage`, `system.health`.
+
+Право `registration.approve` снято у роли `org` миграцией `068` (решение владельца
+19.11.2026): заявки обрабатывает администратор, у него это право остаётся.
 
 Управление: `POST /admin/grant` — выдать роль или включить/отключить одну возможность
 с указанием причины. Всё пишется в аудит (`rbac.role.grant`, `rbac.capability.grant`).

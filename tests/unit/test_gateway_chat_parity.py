@@ -21,14 +21,14 @@ def gw():
     return gateway_modules.namespace()
 
 
-# Права ролей — по db/init/008_rbac_capabilities.sql, а не по памяти:
-# у организатора есть participants.view и budget.write, но нет participants.manage
-# и нет admin.panel; коды приглашений он не выпускает.
+# Права ролей — по замеру dev-базы после миграции 068, а не по памяти:
+# у организатора 16 возможностей, среди них нет participants.manage, нет admin.panel,
+# нет registration.approve (снято 068) и нет registration.code.issue.
 ADMIN = ["*"]
-ORG = ["registration.approve", "participants.view", "budget.read", "budget.read.self",
-       "budget.write", "budget.import", "schedule.read.all", "schedule.availability.self",
-       "schedule.slots", "calendar.write", "notes.write", "files.access", "notify.send",
-       "system.health"]
+ORG = ["budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
+       "feedback.send", "files.access", "notes.write", "participants.contact",
+       "participants.view", "poll.manage", "schedule.availability.self",
+       "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]
 ORG_WITH_CODES = ORG + ["registration.code.issue"]
 MANAGER = ["participants.view", "participants.manage"]
 # Роль «педагог» (db/init/061, docs/architecture/140 §3): семь возможностей, без денег,
@@ -260,17 +260,26 @@ def test_Л4_экран_прав_отказывает_без_manage(gw, fake_api
 def test_Л4_вход_в_панель_только_у_админа(gw):
     """FR-A6: пункт «Админ-панель» в разделе «Админ» — по admin.panel.
 
-    Организатор видит там свои действия (заявки, приглашения), а вход в панель —
-    нет: иначе он нажимает пункт и получает отказ. С карты Э1 «Участники» живут
-    в группе «Люди»: их открывает и педагог по `participants.view`, а группа «Админ»
-    ему не рисуется вовсе. Набор пунктов организатора при этом не сузился.
+    С 068 организатор не ведёт людей: `registration.approve` у него снято, поэтому
+    «Заявки» и «Приглашения» не появляются ни в одной группе меню — ни в «Админ»,
+    ни где-либо ещё. Своё организатор не теряет: «Участники» открываются в группе
+    «Люди» по `participants.view`, «Опросы» — в «Админ» по `poll.manage`. Вход
+    в панель остаётся администратору: иначе организатор нажимает пункт и получает
+    отказ (`admin.panel` у него нет с миграции 043).
     """
     org_groups = dict(gw.menu_groups(ORG))
-    assert "Админ-панель" not in org_groups["Админ"]
-    assert {"Заявки"} <= set(org_groups["Админ"]), "свои действия организатор не теряет"
+    org_items = {item for items in org_groups.values() for item in items}
+    assert "Админ-панель" not in org_items
+    assert "Заявки" not in org_items, "заявки не должны появляться ни в одной группе"
+    assert "Приглашения" not in org_items, "приглашения не должны появляться ни в одной группе"
     assert org_groups["Люди"] == ["Участники"], "«Участники» переехали в «Люди»"
+    assert org_items >= {"Расход и доход", "Сверка листов", "Участники", "Опросы"}, \
+        "рабочие пункты организатора не сузились"
+
     admin_groups = dict(gw.menu_groups(ADMIN))
     assert "Админ-панель" in admin_groups["Админ"]
+    assert {"Заявки", "Приглашения"} <= set(admin_groups["Админ"]), \
+        "у администратора заявки и приглашения остаются"
     assert admin_groups["Люди"] == ["Участники"]
 
 
