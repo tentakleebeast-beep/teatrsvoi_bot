@@ -172,7 +172,7 @@
 | Люди | Участники (по `participants.view`) |
 | Помощь | Обратная связь, Что умею |
 
-Группы «Деньги» и «Админ» не рисуются: у мастера нет `budget.write`,
+Группы «Деньги» и «Управление» не рисуются: у мастера нет `budget.write`,
 `budget.read`, `registration.approve`, `registration.code.issue`, `admin.panel`.
 «Участники» — единственный пункт, который появляется из-за `participants.view`;
 это чтение состава, не управление.
@@ -263,7 +263,7 @@
 | Файл | Что проверяет |
 |---|---|
 | `tests/unit/test_master_role.py` (новый) | CHECK роли, 7 прав, `v_participant_disciplines`, `v_master_without_discipline` пуст, `master` не видит деньги/рассылку/управление |
-| `tests/unit/test_gateway_chat_parity.py` | добавить набор прав `master`; проверить, что меню не показывает «Деньги» и «Админ» |
+| `tests/unit/test_gateway_chat_parity.py` | добавить набор прав `master`; проверить, что меню не показывает «Деньги» и «Управление» |
 | `tests/integration/test_master_events.py` (новый) | мастер ищет окна и назначает тренинг по своей дисциплине; чужую дисциплину — отказ |
 | `tests/integration/test_disciplines.py` | несколько дисциплин у одного мастера; состав тренинга по дисциплине |
 | `contracts/openapi.json` | перегенерировать, если `me`/`webapp/form-data`/`admin/grant` меняют ответ или тело |

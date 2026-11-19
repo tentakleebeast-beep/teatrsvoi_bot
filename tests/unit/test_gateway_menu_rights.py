@@ -84,11 +84,11 @@ def menu_titles(gw, caps) -> list[str]:
 def test_у_админа_видны_группы_и_помощь(gw):
     """Ш-47 / V-008 + docs/82: группы — для подменю, клавиатура — управление диалогом."""
     assert menu_titles(gw, ADMIN) == ["Деньги", "Занятость", "Профиль",
-                                     "Люди", "Админ", "Помощь"]
+                                     "Люди", "Управление", "Помощь"]
     # В чате — ровно три контроля разговора (решение 05.11.2026)
     keyboard = keyboard_labels(gw.menu_kb(ADMIN))
     assert set(keyboard) == {"Обнулить", "Озадачить", "Сколько мне осталось"}
-    assert "Админ" not in keyboard and "Помощь" not in keyboard
+    assert "Управление" not in keyboard and "Помощь" not in keyboard
     items = {text for _, texts in gw.menu_groups(ADMIN) for text in texts}
     assert items == set(gw.MENU_ACTIONS)
 
@@ -101,9 +101,9 @@ def test_состав_групп_по_решению_28_10(gw):
     assert groups["Профиль"] == ["Мой профиль"]
     assert groups["Помощь"] == ["Обратная связь", "Что умею", "Справка"]
     # «Участники» переехали в группу «Люди» картой Э1: право `participants.view` есть
-    # и у педагога, а группа «Админ» ему не рисуется (docs/architecture/140 §4.1).
+    # и у педагога, а группа «Управление» ему не рисуется (docs/architecture/140 §4.1).
     assert groups["Люди"] == ["Участники"]
-    assert groups["Админ"] == ["Админ-панель", "Заявки", "Приглашения", "Опросы"]
+    assert groups["Управление"] == ["Админ-панель", "Заявки", "Приглашения", "Опросы"]
 
 
 def test_труппа_видит_свои_пункты_в_группах(gw):
@@ -145,7 +145,7 @@ def test_подменю_содержит_только_свои_пункты(gw):
     assert inline_labels(markup) == ["Расход и доход", "Бюджет", "Сверка листов", "Мои взносы"]
     assert inline_data(markup) == [f"mi:{text}" for text in inline_labels(markup)]
     assert inline_labels(gw.group_kb(TROUPE, "Деньги")) == ["Мои взносы"]
-    assert inline_labels(gw.group_kb(TROUPE, "Админ")) == []
+    assert inline_labels(gw.group_kb(TROUPE, "Управление")) == []
 
 
 def test_кнопка_группы_открывает_подменю(gw, monkeypatch):
@@ -288,8 +288,8 @@ def test_панель_участников_шлёт_html(gw):
 
 
 def test_название_раздела_админ_короткое(gw):
-    """№28: «Администрирование» переносилось на кнопке — раздел называется «Админ»."""
-    assert "Админ" in menu_titles(gw, ADMIN)
+    """№28: «Администрирование» переносилось на кнопке — раздел называется «Управление»."""
+    assert "Управление" in menu_titles(gw, ADMIN)
     assert "Администрирование" not in menu_titles(gw, ADMIN)
     assert max(len(label) for label in menu_titles(gw, ADMIN)) <= 12
 
@@ -312,7 +312,7 @@ def test_пункт_что_умею_отвечает_справкой(gw, monkey
     asyncio.run(gw.run_menu_action(message, FakeState(), "Что умею"))
     text, _ = message.answers[-1]
     assert text.startswith("Что умею:")
-    assert "Админ" in text
+    assert "Управление" in text
 
 
 def test_Ш49_справка_только_по_праву(gw):

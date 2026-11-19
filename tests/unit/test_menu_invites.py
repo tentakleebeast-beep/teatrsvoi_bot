@@ -124,7 +124,7 @@ def test_подпись_пункта_совпадает_с_константой_
     """«Приглашения» в чате подписано `texts.TITLE_INVITES`, а не строкой по месту."""
     assert INVITES_LABEL == gw.TITLE_INVITES
     assert INVITES_LABEL in gw.MENU_ACTIONS
-    assert INVITES_LABEL in dict(gw.menu_groups(ADMIN))["Админ"]
+    assert INVITES_LABEL in dict(gw.menu_groups(ADMIN))["Управление"]
 
 
 def test_каждая_подпись_меню_имеет_свою_ветку(gw) -> None:
