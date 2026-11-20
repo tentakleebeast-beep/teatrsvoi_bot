@@ -46,9 +46,16 @@ def drift(before: dict[str, str | None],
     return {key: (before[key], after[key]) for key in GUARDED if before[key] != after[key]}
 
 
-def pytest_configure(config: pytest.Config) -> None:
-    """Снимок окружения до первого unit-теста — с ним сверяется сторож в конце."""
-    STATE["baseline"] = snapshot()
+def _ensure_baseline() -> None:
+    """Снимок «до» берётся лениво — на первом unit-модуле, а не в `pytest_configure`.
+
+    `pytest_configure` срабатывает до сбора тестов, а `tests/integration/conftest.py`
+    на импорте переводит `DATABASE_URL` на тестовую базу. Снимок, взятый раньше,
+    делал сторож ложным: он видел «утечку» там, где integration-набор честно
+    переключил базу (CI: `svoi` -> `svoi_test_3015`).
+    """
+    if not STATE["baseline"]:
+        STATE["baseline"] = snapshot()
 
 
 @pytest.fixture(scope="session")
@@ -60,6 +67,7 @@ def unit_env_guard() -> dict:
 @pytest.fixture(scope="module", autouse=True)
 def _unit_env_watch(request: pytest.FixtureRequest) -> Iterator[None]:
     """Снимок до/после каждого unit-модуля: видно, кто именно оставил окружение."""
+    _ensure_baseline()
     before = snapshot()
     yield
     changed = drift(before, snapshot())
