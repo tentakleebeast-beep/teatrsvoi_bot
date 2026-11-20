@@ -11,10 +11,29 @@
 from __future__ import annotations
 
 import json
+import os
 from datetime import datetime, timedelta
 from pathlib import Path
 
+import pytest
+
 from scripts import conflict_watch
+
+
+# Сторож `--env dev` намеренно пишет окружение своего процесса (`os.environ.update`):
+# для отдельного процесса скрипта это правильное поведение. В тесте значения из
+# `.env.dev` (в том числе dev-`DATABASE_URL` с паролем `pw`) не должны переживать
+# тест — иначе совместный прогон `pytest tests/unit tests/integration` уходит на
+# чужой DSN и падает в 786 ERROR на setup `test_db` (t_1dfb94b6).
+@pytest.fixture(autouse=True)
+def _restore_environ():
+    snapshot = dict(os.environ)
+    yield
+    for key, value in snapshot.items():
+        if os.environ.get(key) != value:
+            os.environ[key] = value
+    for key in [key for key in os.environ if key not in snapshot]:
+        del os.environ[key]
 
 NOW = datetime(2026, 11, 1, 12, 0).astimezone()   # локальное настенное время лога
 LOG_LINE = ("2026-11-01 11:58:12,101 ERROR aiogram: Telegram server says - "
