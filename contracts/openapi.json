@@ -2488,7 +2488,8 @@
             "default": "troupe",
             "enum": [
               "org",
-              "troupe"
+              "troupe",
+              "master"
             ],
             "type": "string"
           },

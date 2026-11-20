@@ -1098,7 +1098,9 @@ def webapp_admin_invites(who: dict = Depends(core.webapp_actor)) -> dict:
 
 
 class WebAppInviteIn(core.ApiIn):
-    role: Literal["org", "troupe"] = "troupe"
+    # Роли те же, что у бота (`InviteIn`) минус `admin`: код админа не выдаётся.
+    # Дисциплину педагог выбирает при регистрации, поэтому поля здесь нет.
+    role: Literal["org", "troupe", "master"] = "troupe"
     ttl_days: int = 7
     max_uses: int = 1
 
