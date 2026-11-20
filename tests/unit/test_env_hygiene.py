@@ -1,4 +1,4 @@
-"""Сторож окружения unit-набора (t_1dfb94b6).
+"""Сторож окружения unit-набора (урок L-048, карта t_1dfb94b6).
 
 Совместный прогон `pytest tests/unit tests/integration` в одном процессе валится,
 если unit-тест оставил в `os.environ` свой `DATABASE_URL`, `TELEGRAM_TOKEN` или `ENV`:
