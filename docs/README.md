@@ -122,7 +122,7 @@
 | 162 | [162-bot-polls.md](development/162-bot-polls.md) | 162. Опросы в боте: конструктор, адресаты, результаты (E8, дизайн) |
 | 164 | [164-miniapp-home-polls.md](development/164-miniapp-home-polls.md) | 164. Открытые опросы на Главной: адресат видит, что опрос ему назначен (E8-D3, дизайн) |
 | 166 | [166-poll-draft-copy.md](development/166-poll-draft-copy.md) | 166. Черновик и копирование опросов: сохранить, не отправляя, и повторить анкету (E8-D5: дизайн и спецификация) |
-| 167 | [167-poll-interview-draft.md](development/167-poll-interview-draft.md) | 167. Миграция данных: черновик анкеты оргсостава (E8) — спецификация |
+| 167 | [167-poll-interview-draft.md](development/167-poll-interview-draft.md) | 167. Миграция данных: анкета оргсостава четырьмя черновиками (E8) — спецификация |
 | 173 | [173-prototype-workspace.md](development/173-prototype-workspace.md) | 173. Рабочее место для прототипов: слои, кросс-ревью, дизайн-тесты |
 | 174 | [174-invite-instruction.md](development/174-invite-instruction.md) | 174. Инструкция при выпуске инвайт-кода: первый вход и опрос о студии (E9-1, дизайн и рамка) |
 | 176 | [176-e10-invite-role.md](development/176-e10-invite-role.md) | 176. Роль «Педагог» в выпуске инвайт-кода из Mini App (E10-1, дизайн и рамка) |
