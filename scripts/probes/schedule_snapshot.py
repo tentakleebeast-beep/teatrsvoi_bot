@@ -121,7 +121,7 @@ def report_sheet(vals: list[list[str]]) -> dict[date, str]:
     per_person: Counter = Counter()
     texts: list[str] = []
     decisions: dict[date, str] = {}
-    days = 0
+    sheet_dates: list[date] = []
     for row in vals[1:]:
         label = " ".join((c or "").strip() for c in row[:2])
         m = DATE_RE.search(label)
@@ -131,7 +131,7 @@ def report_sheet(vals: list[list[str]]) -> dict[date, str]:
             day = date(int(m.group(3)) + 2000, int(m.group(2)), int(m.group(1)))
         except ValueError:
             continue
-        days += 1
+        sheet_dates.append(day)
         month = day.strftime("%Y-%m")
         per_month_total[month] += 1
         decision = (row[2] if len(row) > 2 else "").strip()
@@ -148,7 +148,10 @@ def report_sheet(vals: list[list[str]]) -> dict[date, str]:
     counts = Counter(texts)
     singles = [t for t, n in counts.items() if n == 1]
     singles_ci = Counter(t.casefold() for t in texts)
-    print("дней в листе:", days, "| первый/последний:",
+    print("дней в листе:", len(sheet_dates), "| первый/последний день листа:",
+          min(sheet_dates).strftime("%d.%m.%y") if sheet_dates else "—", "/",
+          max(sheet_dates).strftime("%d.%m.%y") if sheet_dates else "—")
+    print("дней с решением:", len(decisions), "| первый/последний день с решением:",
           min(decisions) if decisions else "—", "/", max(decisions) if decisions else "—")
     print("людей с отметками:", len(per_person), "| пустых колонок:",
           len([c for c in names if c not in per_person]))
@@ -156,7 +159,7 @@ def report_sheet(vals: list[list[str]]) -> dict[date, str]:
           "| из них одиночных:", len(singles),
           "| одиночных без учёта регистра:", sum(1 for n in singles_ci.values() if n == 1))
     print("частые тексты:", counts.most_common(12))
-    print("дней с решением:", len(decisions), "| из них со временем:",
+    print("из них со временем:",
           sum(1 for t in decisions.values() if re.search(r"\d{1,2}[:.]\d{2}|\bс \d{1,2}\b", t)))
     print("по месяцам (дней / ячеек / решений):",
           {k: (per_month_total[k], per_month_filled[k], per_month_decision[k])
