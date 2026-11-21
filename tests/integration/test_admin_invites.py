@@ -18,7 +18,8 @@ import psycopg
 from app.person_key import make_key
 from psycopg.rows import dict_row
 
-from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK
+from services.shared.invite import INVITE_LINK
+from services.shared.onboarding import INVITE_INSTRUCTION
 from tests.conftest import TOKEN, _test_dsn
 from tests.integration.test_webapp_profile import _api, init_data
 
