@@ -15,7 +15,7 @@ from typing import get_args
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
-from app.api.admin import InviteIn  # noqa: E402
+from app.api.admin import WebAppNewPersonIn  # noqa: E402
 from app.pages import admin  # noqa: E402
 from app.pages.admin_disciplines import DISCIPLINES_SCRIPT  # noqa: E402
 
@@ -24,7 +24,6 @@ EMOJI = re.compile("[\U0001F300-\U0001FAFF\u2600-\u27BF\u2B00-\u2BFF\uFE0F]")
 PAGES = {
     "Люди": admin.PEOPLE_PAGE,
     "Взносы": admin.DUES_ADMIN_PAGE,
-    "Заявки": admin.PENDING_PAGE,
     "Права": admin.RIGHTS_PAGE,
     "Архив": admin.ARCHIVE_PAGE,
     "Аудит": admin.AUDIT_PAGE,
@@ -34,7 +33,7 @@ PAGES = {
 
 
 def test_разделы_отдельными_экранами():
-    assert set(PAGES) == {"Люди", "Взносы", "Заявки", "Права", "Архив", "Аудит",
+    assert set(PAGES) == {"Люди", "Взносы", "Права", "Архив", "Аудит",
                           "Приглашения", "Уведомления"}
     for title, html in PAGES.items():
         assert f"<title>{title}</title>" in html
@@ -99,14 +98,6 @@ def test_лист_человека_вместо_полей_в_строке():
     assert "select" not in html.split("<script>")[0].lower()  # в разметке нет select
 
 
-def test_заявки_принимаются_и_отклоняются_кнопками():
-    html = admin.PENDING_PAGE
-    assert "Принять" in html and "Отклонить" in html
-    assert "ui-btn--sm" in html                   # 44 px внутри строки
-    assert "/webapp/admin/approve" in html
-    assert "SVOI.sheet" in html                   # отклонение — через лист
-
-
 def test_права_это_матрица_и_точечная_выдача_а_не_второй_список():
     html = admin.RIGHTS_PAGE
     assert '"ui-dl"' in html
@@ -155,6 +146,10 @@ def test_приглашение_выпускается_в_лист_с_копир
     assert "Копировать" in html and "function copyText" in html
     assert "invite-issue" in html
     assert "/webapp/admin/invite-revoke" in html
+    assert "/webapp/admin/invite-candidates" in html
+    assert "/webapp/admin/person-new" in html
+    assert "Новый участник" in html
+    assert 'disabled>Выпустить код' in html, "выпуск доступен без выбранного человека"
 
 
 def test_приглашения_без_права_не_рисуют_форму_и_не_зовут_к_кнопке():
@@ -180,7 +175,6 @@ def test_приглашения_без_права_не_рисуют_форму_�
 def test_действия_подписаны_именем_объекта():
     """Опасное подтверждение называет человека или код, а не «вы уверены?»."""
     assert "В архив: " in admin.PEOPLE_PAGE
-    assert "Отклонить заявку: " in admin.PENDING_PAGE
     assert "Отозвать код: " in admin.INVITES_PAGE
 
 
@@ -215,21 +209,6 @@ def test_общие_настройки_уведомлений_без_права_
     assert "admin.panel" in html
 
 
-def test_заявки_без_права_говорят_о_праве_а_не_пустотой():
-    """docs/development/91 принцип 9, Б3: право проверяется до пустого состояния.
-
-    У master есть только `participants.view`: блок `pending` в ответе панели не
-    приходит, и экран рисовал «Заявок нет» — как будто решать нечего. У troupe
-    в том же месте честное «Раздел доступен организатору и администратору» (403),
-    то есть экран вёл себя по-разному у двух ролей без права.
-    """
-    html = admin.PENDING_PAGE
-    assert 'indexOf("pending")' in html, "экран не сверяет блок с правом"
-    assert "ERRORS.admin_panel_forbidden" in html, "слова не из общего словаря ядра"
-    assert html.index('indexOf("pending")') < html.index("var rows = BLOCKS.pending"), \
-        "проверка права стоит после чтения строк — пустое состояние успеет отрисоваться"
-
-
 def test_обращения_без_права_говорят_кто_их_разбирает():
     """Отчёт 142 §3 строка 27, принципы 91: 9, Б3; docs/reports/142 §5.1.
 
@@ -250,18 +229,6 @@ def test_обращения_без_права_говорят_кто_их_раз�
     assert "res.status === 403" in body, "403 панели не признан отсутствием права"
     # Пустое состояние осталось для того, у кого право есть.
     assert "Открытых обращений нет" in html
-
-
-def test_у_заявки_одна_главная_кнопка_на_экран_а_не_на_строку():
-    """А9 отчёта 142, принцип 1 docs/development/91: главная кнопка одна на экран.
-
-    «Принять» стояло главным в каждой строке: четыре заявки — четыре главных.
-    Действие строки остаётся обычной кнопкой и рисуется только по праву.
-    """
-    html = admin.PENDING_PAGE
-    assert "ui-btn--primary" not in html
-    assert "if (ACTIONS.approve_pending)" in html, "кнопки строки без проверки права"
-    assert "Принять" in html and "Отклонить" in html
 
 
 def test_аудит_без_права_говорит_нет_доступа_а_не_пустой_журнал():
@@ -325,99 +292,66 @@ def test_карточка_рисует_предупреждение_из_отв�
     assert "нет ни одной" in html, "поле «Дисциплины» в карточке пропало"
 
 
-# ------------------------------- E10: роль «Педагог» в выпуске кода (карта t_ff6144fc)
-# Обоснование: docs/development/176 §9 (AC-1…AC-4, AC-12), вопросы V-105…V-108.
-# Разметка переключателя ролей повторяет контракт `InviteIn.role` без `admin`:
-# экран предлагает только те роли, код для которых сервер выпустит, а подсказка
-# говорит, что дисциплину педагог выберет при регистрации.
-ROLE_BUTTON = re.compile(r"<button\b([^>]*)>([^<]+)</button>", re.S)
+# --------------------- E13: персональный код и «Новый участник» (docs/development/182 §4.3.2)
+# Обоснование: FR-A2 (код приглашения), FR-A6 (права решает сервер), docs/182 §4.3.2.
+# Форма «роль → код» больше не существует: роль переехала в шторку «Новый участник»,
+# а выпуск требует выбранного человека (`participant_id`). Набор ролей шторки повторяет
+# контракт `WebAppNewPersonIn.role` без `admin`.
 HINT = "Дисциплину педагог выберет при регистрации."
 TERM = "Действует 7 дней, вход один."
+ROLE_CHOICES = '[["troupe", "Актёр"], ["org", "Организатор"], ["master", "Педагог"]]'
 
 
-def _role_block() -> str:
-    """Кусок разметки внутри `#invite-role` — чужие `data-*` на экране не считаем."""
-    return admin.INVITES_PAGE.split('id="invite-role"', 1)[1].split("</div>", 1)[0]
+def test_набор_ролей_шторки_равен_WebAppNewPersonIn_минус_admin():
+    """AC-1: источник правды — тип, а не список в разметке.
 
-
-def _role_buttons() -> list[tuple[dict, str]]:
-    """(атрибуты, подпись) каждой кнопки переключателя в порядке разметки."""
-    return [(dict(re.findall(r'([\w-]+)="([^"]*)"', attrs)), label.strip())
-            for attrs, label in ROLE_BUTTON.findall(_role_block())]
-
-
-def test_набор_ролей_переключателя_равен_InviteIn_минус_admin():
-    """AC-1 (`docs/development/176` §9.8): источник правды — тип, а не список в HTML.
-
-    Тест падает и когда роль появилась в API без кнопки (её не выпустить из
-    приложения), и когда кнопка есть вне контракта (`admin`: сервер отвечает на
-    неё отказом 400, `api/admin.py:43-44`). На `dd57afb` он был красный: в
-    разметке две роли, в API четыре.
+    Тест падает и когда роль появилась в API без кнопки (её не завести из
+    приложения), и когда кнопка есть вне контракта (`admin`: сервер ответит 422).
     """
-    api_roles = set(get_args(InviteIn.model_fields["role"].annotation))
-    page_roles = {attrs.get("data-role") for attrs, _ in _role_buttons()}
+    api_roles = set(get_args(WebAppNewPersonIn.model_fields["role"].annotation))
+    html = admin.INVITES_PAGE
 
-    assert page_roles == api_roles - {"admin"}, (
-        f"переключатель и API разошлись: в разметке {sorted(page_roles)}, "
-        f"в InviteIn.role {sorted(api_roles)} минус admin = {sorted(api_roles - {'admin'})}")
-    assert page_roles == {"troupe", "org", "master"}
+    assert api_roles == {"org", "troupe", "master"}
+    assert ROLE_CHOICES in html, "подписи ролей шторки сдвинулись или разошлись с API"
 
 
-def test_переключатель_три_роли_по_порядку_и_умолчание_труппа():
-    """AC-2: подписи и порядок «Труппа · Организатор · Педагог», выбранная — труппа.
+def test_шторка_нового_участника_подписи_и_умолчание():
+    """AC-2: заголовок «Новый участник», кнопка «Создать и выпустить код», умолчание — труппа."""
+    html = admin.INVITES_PAGE
 
-    `aria-pressed` нужен затем, что до первого нажатия состояние переключателя
-    иначе доступно только по классу (до этой карты атрибута не было вовсе).
-    """
-    buttons = _role_buttons()
-
-    assert [label for _, label in buttons] == ["Труппа", "Организатор", "Педагог"]
-    on = [attrs.get("data-role") for attrs, _ in buttons
-          if "ui-segmented__item--on" in attrs.get("class", "")]
-    assert on == ["troupe"], f"выбранным должен быть ровно первый сегмент: {on}"
-    assert [attrs.get("aria-pressed") for attrs, _ in buttons] == ["true", "false", "false"]
-    assert 'var role = "troupe";' in admin.INVITES_PAGE, "умолчание роли в скрипте сдвинулось"
+    assert '"Новый участник"' in html
+    assert '"Создать и выпустить код"' in html
+    assert '"Например: Иванов Виктор"' in html
+    assert 'var role = "troupe";' in html, "умолчание роли в шторке сдвинулось"
 
 
 def test_подсказка_о_дисциплине_скрыта_и_одна():
-    """AC-3: подсказка одна, отдаётся скрытой и стоит между ролями и сроком.
+    """AC-3: подсказка одна, отдаётся скрытой и показывается только у «Педагога».
 
     Строку «Действует 7 дней, вход один.» подсказка не дублирует: она остаётся
-    ровно в двух местах страницы — в теле и в листе после выпуска (`:41`).
+    ровно один раз — в листе после выпуска, рядом с кодом и именем человека.
     """
     html = admin.INVITES_PAGE
-    card = html.split('id="invite-new"', 1)[1].split("</section>", 1)[0]
 
-    assert html.count('id="invite-hint"') == 1, "подсказка не одна"
-    hint = card.split('id="invite-hint"', 1)[1].split(">", 1)
-    assert "hidden" in hint[0], "подсказка отдаётся видимой — до ответа и без выбора роли"
-    assert hint[1].split("<", 1)[0] == HINT
+    assert html.count('"new-person-hint"') == 1, "подсказка не одна"
+    assert 'el("span", "ui-small ui-muted", ' + f'"{HINT}")' in html
+    assert "hint.hidden = role !== \"master\"" in html
+    assert html.count(TERM) == 1, "у строки срока появилась вторая копия"
     assert len(HINT) == 43
-    assert html.count(TERM) == 2, "у строки срока появилась третья копия"
-    spans = re.findall(r'<span class="ui-small ui-muted"[^>]*>([^<]*)</span>', html)
-    # `#status` — тоже `ui-small ui-muted`, но это `div` для служебных сообщений:
-    # малых текстовых строк в разметке экрана две — подсказка и срок.
-    assert spans == [HINT, TERM], spans
-    assert card.index('id="invite-hint"') < card.index(TERM), "подсказка стоит после срока"
-    assert card.index('id="invite-role"') < card.index('id="invite-hint"'), \
-        "подсказка стоит выше переключателя"
 
 
-def test_лист_выпуска_называет_роль_педагога():
-    """AC-4: слово роли берётся из `ROLE`, второго источника строки нет.
+def test_лист_выпуска_называет_человека_и_роль():
+    """AC-4: лист печатает имя человека и роль из `ROLE`, а не «Роль: …» из формы.
 
-    Для `master` лист печатает «Роль: педагог. Действует 7 дней, вход один.»
-    (43 символа): слово «педагог» уже лежит в `ROLE` ядра, литерала в скрипте
-    экрана нет — переименование роли переименует и лист.
+    Второго источника подписи нет: `ROLE` живёт в ядре (`admin_core.py`), а роль
+    приходит в ответе `POST /webapp/admin/invite`.
     """
     html = admin.INVITES_PAGE
 
-    assert html.count('"Роль: "') == 1, "строку листа собирают в нескольких местах"
-    assert '"Роль: " + (ROLE[role] || role)' in html, "слово роли вписано литералом"
-    assert 'master: "педагог"' in html, "в `ROLE` нет подписи педагога"
-    sheet = "Роль: педагог. Действует 7 дней, вход один."
-    assert len(sheet) == 43
-    assert "педагог" in sheet
+    assert 'data.display_name' in html, "лист не печатает, на кого выписан код"
+    assert 'ROLE[data.role] || data.role' in html, "слово роли вписано литералом"
+    assert '"Роль: "' not in html, "остался текст формы «роль → код»"
+    assert 'master: "педагог"' in admin.INVITES_PAGE or 'master: "педагог"' in html
 
 
 def test_разделитель_сегментов_в_системе():
@@ -446,10 +380,10 @@ def test_разделитель_сегментов_в_системе():
 def test_отказ_админ_раздела_не_перечисляет_роли():
     """068 снял `registration.approve` у организатора — отказ не должен обещать ему доступ.
 
-    Один и тот же `ERRORS.admin_panel_forbidden` печатают «Заявки», «Приглашения»,
+    Один и тот же `ERRORS.admin_panel_forbidden` печатают «Приглашения»,
     «Аудит» и «Архив». Перечисление ролей в отказе устаревает при каждой правке
     матрицы прав (так и вышло с 068), поэтому в тексте остаётся один админ.
     """
-    html = admin.PENDING_PAGE
+    html = admin.INVITES_PAGE
     assert '"admin_panel_forbidden": "Раздел доступен администратору."' in html
     assert "организатору и администратору" not in html

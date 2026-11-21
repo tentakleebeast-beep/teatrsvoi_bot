@@ -1,14 +1,15 @@
-"""Пункт меню «Приглашения» выпускает код, а не отвечает справкой.
+"""Пункт «Знакомство» открывает дозаполнение профиля, а кодов в чате больше нет.
 
-Обоснование: docs/development/174-invite-instruction.md §11.4 и §11.11 (AC-8) —
-вход выдачи кода из меню чата. Дефект найден на стенде E9-5: в `run_menu_action`
-ветка сравнивала подпись с литералом «Пригласить», которого в меню нет, поэтому
-пункт «Приглашения» (`texts.TITLE_INVITES`, право `registration.code.issue`)
-проваливался в общий ответ `keyboards.help_text` — человек ждал код, а получал
-«Что умею». Здесь два сторожа: поведение (`mi:Приглашения` → код) и состав меню
-(каждая подпись из `MENU_ACTIONS` имеет свою ветку, веток на несуществующие
-подписи нет). Второй закрывает класс ошибки, а не один ярлык: расхождение
-«строка в меню» ↔ «строка в обработчике» больше не доживёт до приёмки.
+Обоснование: docs/development/182 §2.3 и §4.3.3 (V-117/V-118) — решение владельца
+21.11.2026: код выпускается только в Mini App, а в группе «Профиль» появляется
+пункт «Знакомство». Файл прежде проверял чатовый выпуск кода («Приглашения» → код)
+и переписан вместе с ним: чатового пути больше не существует, поэтому сторож
+теперь обратный — такого пункта в меню нет, а «Знакомство» зовёт `intro_fill`,
+а не общую справку.
+
+Второй сторож — класс ошибки, а не один ярлык: каждая подпись из `MENU_ACTIONS`
+имеет свою ветку в `run_menu_action`. Расхождение «строка в меню» ↔ «строка
+в обработчике» (из-за него пункт когда-то падал в «Что умею») не доживёт до приёмки.
 """
 
 from __future__ import annotations
@@ -25,12 +26,7 @@ ROOT = pathlib.Path(__file__).resolve().parents[2]
 GATEWAY_APP = ROOT / "services" / "tg-gateway" / "app"
 MENU_PY = GATEWAY_APP / "routers" / "menu.py"
 
-CODE = "K7QM2XPD"
-EXPIRES = "2026-11-24T21:00:00+04:00"
 ADMIN = ["*"]
-#: Подпись пункта — из меню, а не литералом: тест должен падать от правки меню,
-#: только если обработчик за ней не поспел.
-INVITES_LABEL = "Приглашения"
 
 #: Сравнения подписи с константой: `if label == texts.TITLE_X:`
 CONST_COMPARE_RE = re.compile(r"if\s+label\s*==\s*texts\.([A-Z_][A-Z0-9_]*)")
@@ -64,8 +60,8 @@ class FakeState:
 class FakeMessage:
     """`Message` без Telegram: запоминает ответы, разметку и `parse_mode`."""
 
-    def __init__(self, chat_id: int = 1):
-        self.text = ""
+    def __init__(self, text: str = "", chat_id: int = 1):
+        self.text = text
         self.chat = types.SimpleNamespace(id=chat_id)
         self.answers: list[dict] = []
 
@@ -74,16 +70,24 @@ class FakeMessage:
                              "parse_mode": parse_mode})
 
 
-def _patch_api(gw, monkeypatch, reply) -> list[dict]:
-    """Подменить `core.api`: роутеры читают его через модуль `core`."""
-    calls: list[dict] = []
+def _run(gw, monkeypatch, label: str):
+    called: list[str] = []
+
+    async def fake_intro_fill(message, state):
+        called.append("intro_fill")
 
     async def fake_api(path, payload, chat_id, method="POST", timeout=25):
-        calls.append({"path": path, "payload": payload, "chat_id": chat_id})
-        return reply
+        return {"ok": True}
 
+    async def fake_help(*args, **kwargs):
+        return "Что умею"
+
+    monkeypatch.setattr(gateway_modules.load("routers.intro"), "intro_fill", fake_intro_fill)
     monkeypatch.setattr(gw.core, "api", fake_api)
-    return calls
+    monkeypatch.setattr(gw.keyboards, "help_text", fake_help)
+    message = FakeMessage()
+    asyncio.run(gw.run_menu_action(message, FakeState(), label))
+    return called, message
 
 
 def _menu_action_body() -> str:
@@ -94,43 +98,39 @@ def _menu_action_body() -> str:
     return source[start:end]
 
 
-def test_пункт_меню_приглашения_выпускает_код(gw, monkeypatch) -> None:
-    """Репро дефекта E9-5: нажатие «Приглашения» шлёт код с кнопкой, а не справку."""
-    calls = _patch_api(gw, monkeypatch,
-                       {"ok": True, "code": CODE, "expires_at": EXPIRES})
+def test_пункт_знакомство_открывает_дозаполнение_профиля(gw, monkeypatch) -> None:
+    """«Профиль» → «Знакомство»: обработчик `intro_fill`, а не общая справка."""
+    called, message = _run(gw, monkeypatch, gw.texts.TITLE_FILL)
 
-    async def fake_caps_of(chat_id):
-        return ADMIN
-
-    monkeypatch.setattr(gw.core, "caps_of", fake_caps_of)
-    message = FakeMessage()
-
-    asyncio.run(gw.run_menu_action(message, FakeState(), INVITES_LABEL))
-
-    assert len(message.answers) == 1, "на нажатие пункта — ровно один ответ"
-    sent = message.answers[0]
-    assert not sent["text"].startswith("Что умею"), \
-        "пункт снова провалился в общую справку вместо выпуска кода"
-    assert sent["parse_mode"] == "HTML"
-    assert f"<code>{CODE}</code>" in sent["text"]
-    assert "1. Зайди в бота" in sent["text"], "инструкция получателю идёт вместе с кодом"
-    assert sent["markup"].inline_keyboard[0][0].copy_text.text == CODE
-    assert calls == [{"path": "/admin/invite",
-                      "payload": {"role": "troupe", "ttl_days": 7}, "chat_id": 1}], \
-        "право, роль и TTL приглашения карта не меняет"
+    assert called == ["intro_fill"], "пункт снова провалился в чужую ветку"
+    assert not [item for item in message.answers if item["text"].startswith("Что умею")], \
+        "пункт отвечает справкой вместо дозаполнения"
 
 
-def test_подпись_пункта_совпадает_с_константой_меню(gw) -> None:
-    """«Приглашения» в чате подписано `texts.TITLE_INVITES`, а не строкой по месту."""
-    assert INVITES_LABEL == gw.TITLE_INVITES
-    assert INVITES_LABEL in gw.MENU_ACTIONS
-    assert INVITES_LABEL in dict(gw.menu_groups(ADMIN))["Управление"]
+def test_подпись_знакомства_равна_решению_владельца(gw) -> None:
+    """Подпись дословно «Знакомство» (не «Дозаполнить профиль»), docs/182 §7.3."""
+    assert gw.texts.TITLE_FILL == "Знакомство"
+    assert gw.texts.TITLE_FILL in gw.MENU_ACTIONS
+    assert gw.texts.TITLE_FILL in dict(gw.menu_groups(ADMIN))["Профиль"]
+
+
+def test_чатового_выпуска_кодов_нет(gw) -> None:
+    """V-118: пункта «Приглашения» в меню нет, ветки выпуска в обработчике — тоже."""
+    groups = dict(gw.menu_groups(ADMIN))
+    items = {item for values in groups.values() for item in values}
+
+    assert "Приглашения" not in items
+    assert not hasattr(gw.texts, "TITLE_INVITES"), "константа подписи не удалена"
+    body = _menu_action_body()
+    assert "TITLE_INVITES" not in body
+    assert "send_invite" not in body
 
 
 def test_каждая_подпись_меню_имеет_свою_ветку(gw) -> None:
     """Сторож класса ошибки: меню и обработчик не расходятся по подписям."""
     body = _menu_action_body()
-    handled = {getattr(gw, name) for name in CONST_COMPARE_RE.findall(body)}
+    handled = {getattr(gw.texts, name) for name in CONST_COMPARE_RE.findall(body)
+               if hasattr(gw.texts, name)}
     declared = set(gw.MENU_ACTIONS)
 
     missing = sorted(declared - handled)

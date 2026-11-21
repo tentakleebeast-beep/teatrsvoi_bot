@@ -612,12 +612,12 @@ entries:
     title: Открыть неделю
     not_for_agent: "открывает вкладку «Время» в Mini App; агент экраны не открывает"
 
-  - id: chat.fill_profile
+  - id: menu.fill_profile
     kind: button
-    surface: chat
+    surface: menu
     source: Знакомство
     title: Знакомство
-    not_for_agent: "запускает опрос о профиле; личные данные агент не собирает"
+    not_for_agent: "запускает опрос о профиле; личные ответы агент не собирает"
 
   - id: chat.record_expense
     kind: button
@@ -737,13 +737,6 @@ entries:
     title: Подтвердить
     not_for_agent: "подтверждение записи или заявки — решение человека кнопкой (A-3), агент не подтверждает за него"
 
-  - id: chat.reject
-    kind: button
-    surface: chat
-    source: Отклонить
-    title: Отклонить
-    not_for_agent: "отклонение заявки — действие администратора, не агента"
-
   - id: chat.cancel
     kind: button
     surface: chat
@@ -764,13 +757,6 @@ entries:
     source: Изменить
     title: Изменить (черновик)
     not_for_agent: "правка черновика в форме: агент карточку не редактирует и данные не меняет"
-
-  - id: chat.not_in_list
-    kind: button
-    surface: chat
-    source: Меня нет в списке
-    title: Меня нет в списке
-    not_for_agent: "выбор себя при регистрации: привязка аккаунта — действие человека"
 
   - id: chat.intro_skip
     kind: button

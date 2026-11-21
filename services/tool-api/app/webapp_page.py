@@ -15,7 +15,6 @@
 | `pages/admin.py` | точка импорта админских экранов (см. `admin_*`) |
 | `pages/admin_core.py` | общее ядро админских экранов: стили, запросы, листы |
 | `pages/admin_people.py` | люди |
-| `pages/admin_pending.py` | заявки |
 | `pages/admin_rights.py` | права |
 | `pages/admin_archive.py` | архив |
 | `pages/admin_audit.py` | аудит |
@@ -71,7 +70,6 @@ UI_KIT_PAGE = _kit.UI_KIT_PAGE                  # справочник комп�
 NOTES_PAGE = _notes.NOTES_PAGE                  # заметки: личные и общие (FR-F7)
 
 PEOPLE_PAGE = _admin.PEOPLE_PAGE
-PENDING_PAGE = _admin.PENDING_PAGE
 RIGHTS_PAGE = _admin.RIGHTS_PAGE
 ARCHIVE_PAGE = _admin.ARCHIVE_PAGE
 AUDIT_PAGE = _admin.AUDIT_PAGE

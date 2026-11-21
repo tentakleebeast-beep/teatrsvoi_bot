@@ -1082,17 +1082,18 @@ def webapp_person_new(body: WebAppNewPersonIn,
     actor = core._webapp_require(who, "registration.code.issue")
     display_name = " ".join(body.display_name.split())
     if len(display_name.split()) < 2:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Напишите фамилию и имя.",
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Напишите фамилию и имя: «Фамилия Имя».",
                        code="need_full_name")
     key = make_key(display_name)
     if not key:
-        raise ApiError(status.HTTP_400_BAD_REQUEST, "Напишите фамилию и имя.",
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Напишите фамилию и имя: «Фамилия Имя».",
                        code="need_full_name")
     with core.pool.connection() as conn:
         if conn.execute("select 1 from participant where person_key = %s",
                         (key,)).fetchone():
             raise ApiError(status.HTTP_409_CONFLICT,
-                           "Такой человек уже есть в списке.",
+                           "Такой человек уже есть в списке — найдите его поиском "
+                           "или уточните имя.",
                            code="person_key_taken")
         created = conn.execute(
             """insert into participant

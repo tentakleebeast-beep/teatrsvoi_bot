@@ -35,7 +35,7 @@ async def intro_start(message: Message, chat_id: int, state: FSMContext) -> None
     await state.update_data(plan=plan, answers={}, mode="entry")
     await state.set_state(getattr(Intro, plan[0]).state)
     await message.answer(intro.INTRO_HEAD_ENTRY + "\n\n" + intro.question(plan[0]),
-                         reply_markup=keyboards.intro_skip_kb())
+                         reply_markup=keyboards.intro_skip_kb() if plan[0] != "alias" else None)
 
 
 async def intro_fill(message: Message, state: FSMContext) -> None:

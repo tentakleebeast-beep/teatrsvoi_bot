@@ -1,14 +1,12 @@
-"""Стенд Mini App отвечает на выпуск инвайт-кода так же, как сервер.
+"""Стенд Mini App отвечает на выпуск персонального кода так же, как сервер.
 
-Обоснование: `docs/development/176` §9.9 и AC-11 (карта `t_ff6144fc`), контракт —
-`services/tool-api/app/api/admin.py:29-58`: роль `Literal["admin", "org", "troupe", "master"]`,
-отказ `400` на `admin`, `400` на дисциплину у не-педагога, право
-`registration.code.issue` для выпуска.
+Обоснование: docs/development/182 §4.3.2 и §4.3.4 (V-116 б, V-117 а) — код
+выписывается на выбранного человека: `POST /webapp/admin/invite {participant_id}`,
+кандидаты — `GET /webapp/admin/invite-candidates`, новый человек —
+`POST /webapp/admin/person-new`. Право — `registration.code.issue`.
 
-До этой карты стенд на `POST /webapp/admin/invite` не отвечал вовсе, поэтому
-браузерный сценарий выпуска получал 404 и лист не открывался. Здесь проверяется
-не только «200 с кодом», но и каждый отказ: стенд, который их не повторяет,
-даёт зелёный браузерный тест на поведении, которого на сервере нет.
+Стенд повторяет не только «200 с кодом», но и каждый отказ: стенд, который их не
+повторяет, даёт зелёный браузерный тест на поведении, которого на сервере нет.
 """
 
 from __future__ import annotations
@@ -21,7 +19,8 @@ from fastapi.testclient import TestClient
 from tests.webapp import server as stand
 
 TOKEN = {"Authorization": f"Bearer {stand.VALID_TOKEN}"}
-SUCCESS_BODY = {"role": "master", "ttl_days": 7, "max_uses": 1}
+TROUPE_ID = 6
+SUCCESS_BODY = {"participant_id": TROUPE_ID, "ttl_days": 7}
 
 
 @pytest.fixture(scope="module")
@@ -31,53 +30,44 @@ def client() -> TestClient:
 
 @pytest.fixture(autouse=True)
 def fresh_invites() -> Iterator[None]:
-    """Активные коды стенда — к фикстуре перед каждым тестом.
+    """Активные коды и кандидаты стенда — к фикстуре перед каждым тестом.
 
     Выпуск и отзыв меняют `ADMIN_OVERVIEW["blocks"]["invites"]`, как боевая таблица
-    `invite_code`; без возврата код одного теста менял бы список в другом (карта
-    t_806a633e).
+    `invite_code`; созданный человек дописывается к кандидатам (карта t_806a633e,
+    docs/development/182 §4.3.2).
     """
     stand.reset_invites()
     yield
     stand.reset_invites()
 
 
-def test_стенд_выпускает_код_и_повторяет_отказы(client) -> None:
-    """AC-11: успех в боевой форме и все отказы пути выпуска.
-
-    Форма ответа — `{ok, code, role, expires_at}`: экран читает только `code`, но
-    в бою в ответе есть и роль, и срок, и стенд, который их не отдаёт, скрыл бы
-    расхождение контракта.
-    """
+def test_стенд_выпускает_код_на_выбранного_человека(client) -> None:
+    """Успех в боевой форме и отказы пути выпуска (`{participant_id}`)."""
     ok = client.post("/webapp/admin/invite", json=SUCCESS_BODY, headers=TOKEN)
     assert ok.status_code == 200, ok.text
     body = ok.json()
-    assert set(body) == {"ok", "code", "role", "expires_at"}, body
+    assert set(body) == {"ok", "code", "role", "participant_id", "display_name",
+                         "expires_at"}, body
     assert body["ok"] is True
     assert body["code"] == "PED7AGK2"
-    assert body["role"] == "master"
+    assert body["participant_id"] == TROUPE_ID
+    assert body["display_name"] == "Сидоров Пётр"
+    assert body["role"] == "troupe"
     assert body["expires_at"] == "2026-11-26T12:00:00+04:00"
     # Код в алфавите `core.CODE_ALPHABET`: без похожих знаков (0/O, 1/I).
     assert len(body["code"]) == 8
     assert set(body["code"]) <= set("ABCDEFGHJKLMNPQRSTUVWXYZ23456789")
 
-    # Роль по умолчанию — труппа: экран отправляет её, пока сегмент не нажали.
-    troupe = client.post("/webapp/admin/invite", headers=TOKEN,
-                         json={"role": "troupe", "ttl_days": 7, "max_uses": 1})
-    assert troupe.status_code == 200
-    assert troupe.json()["role"] == "troupe"
+    # Роль берётся из записи, а не из тела: `role` в запросе ничего не меняет.
+    master = client.post("/webapp/admin/invite", headers=TOKEN,
+                         json={"participant_id": 5, "role": "admin"})
+    assert master.status_code == 200
+    assert master.json()["role"] == "master"
 
-    admin = client.post("/webapp/admin/invite", json={"role": "admin"}, headers=TOKEN)
-    assert admin.status_code == 400
-    assert "ADMIN_CHAT_ID" in admin.json()["detail"]
-
-    unknown = client.post("/webapp/admin/invite", json={"role": "owner"}, headers=TOKEN)
-    assert unknown.status_code == 422, unknown.text
-
-    discipline = client.post("/webapp/admin/invite", headers=TOKEN,
-                             json={"role": "troupe", "discipline_code": "acting"})
-    assert discipline.status_code == 400
-    assert "discipline_code" in discipline.json()["detail"]
+    # Неизвестный человек — боевой 404.
+    missing = client.post("/webapp/admin/invite", json={"participant_id": 999}, headers=TOKEN)
+    assert missing.status_code == 404
+    assert missing.json()["detail"] == "participant_not_found"
 
     # У организатора нет `registration.code.issue` (`db/init/008`) — 403 словами права.
     org = client.post("/webapp/admin/invite", json=SUCCESS_BODY,
@@ -91,24 +81,59 @@ def test_стенд_выпускает_код_и_повторяет_отказы
     assert anonymous.json()["detail"] == "token_expired"
 
 
+def test_стенд_заводит_человека_и_отдаёт_кандидатов(client) -> None:
+    """`person-new` и `invite-candidates` повторяют правила `api/admin.py`."""
+    found = client.get("/webapp/admin/invite-candidates", headers=TOKEN)
+    assert found.status_code == 200, found.text
+    names = [row["display_name"] for row in found.json()["data"]]
+    assert "Сидоров Пётр" in names
+    assert set(found.json()["data"][0]) == {"id", "display_name", "role"}
+
+    search = client.get("/webapp/admin/invite-candidates?q=кузнец", headers=TOKEN)
+    assert [row["display_name"] for row in search.json()["data"]] == ["Кузнецова Мария"]
+
+    created = client.post("/webapp/admin/person-new", headers=TOKEN,
+                          json={"display_name": "Петров Иван", "role": "troupe"})
+    assert created.status_code == 200, created.text
+    person = created.json()["participant"]
+    assert person["display_name"] == "Петров Иван"
+    assert person["role"] == "troupe"
+    after = client.get("/webapp/admin/invite-candidates?q=петров", headers=TOKEN)
+    assert [row["id"] for row in after.json()["data"]] == [person["id"]]
+
+    one_word = client.post("/webapp/admin/person-new", headers=TOKEN,
+                           json={"display_name": "Иван"})
+    assert one_word.status_code == 400
+    assert one_word.json()["code"] == "need_full_name"
+
+    duplicate = client.post("/webapp/admin/person-new", headers=TOKEN,
+                            json={"display_name": "Петров Иван"})
+    assert duplicate.status_code == 409
+    assert duplicate.json()["code"] == "person_key_taken"
+
+    admin = client.post("/webapp/admin/person-new", headers=TOKEN,
+                        json={"display_name": "Главный Админ", "role": "admin"})
+    assert admin.status_code == 422, "роль admin кодом и экраном не создаётся"
+
+
 def test_блок_приглашений_панели_отдаётся_списком(client) -> None:
     """Форма блока как в бою: `blocks.invites` — список кодов, не `{"data": [...]}`.
 
-    Бой отдаёт `blocks["invites"] = list_invites(who=viewer)["data"]`
-    (`api/admin.py:1019-1020`) — голый список, а экран читает
-    `(BLOCKS.invites || []).length` и `forEach` (`admin_invites.py:122`). Пока
-    стенд отдавал обёртку, длина была `undefined`, ветка `!invites.length` всегда
-    истинна, и «Активные коды» пустели даже с кодами в ответе (карта t_806a633e).
-    Фикстура не пуста: строка списка и слово «педагог» проверяются и без выпуска.
+    Бой отдаёт `blocks["invites"] = list_invites(who=viewer)["data"]`; экран читает
+    `(BLOCKS.invites || []).length` и `forEach`. Пока стенд отдавал обёртку, длина
+    была `undefined`, ветка `!invites.length` всегда истинна, и «Активные коды»
+    пустели даже с кодами в ответе (карта t_806a633e). Строка списка теперь несёт
+    имя человека: экран печатает, на кого выписан код (§4.3.2).
     """
     overview = client.get("/webapp/admin/overview", headers=TOKEN)
     assert overview.status_code == 200, overview.text
     invites = overview.json()["blocks"]["invites"]
     assert isinstance(invites, list), f"стенд отдал {type(invites).__name__}: {invites!r}"
     assert invites, "список кодов фикстуры пуст — строку рисовать не на чем"
-    assert set(invites[0]) == {"code", "role", "created_at", "expires_at",
-                              "max_uses", "uses"}, invites[0]
+    assert set(invites[0]) == {"code", "role", "participant_id", "display_name",
+                              "created_at", "expires_at", "max_uses", "uses"}, invites[0]
     assert invites[0]["role"] == "master", invites[0]
+    assert invites[0]["display_name"] == "Кузнецова Мария"
 
 
 def test_выпуск_и_отзыв_меняют_список_кодов(client) -> None:

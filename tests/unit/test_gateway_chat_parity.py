@@ -195,49 +195,16 @@ def test_Л6_архив_отказывает_без_права(gw, fake_api, cap
 
 
 # ----------------------------------------------------------- Л8: отзыв инвайт-кода
-def test_Л8_коды_видны_по_праву_выпуска(gw):
-    """FR-A2: пункт «Коды приглашений» — по registration.code.issue, как у отзыва."""
-    assert "Коды приглашений" in panel_labels(gw, ORG_WITH_CODES)
-    assert "Коды приглашений" not in panel_labels(gw, MANAGER)
-    assert "Коды приглашений" not in panel_labels(gw, ORG)
-
-
-def test_Л8_список_кодов_и_кнопка_отозвать(gw, fake_api, caps):
-    """FR-A2: открытые коды перечислены, у каждого — «Отозвать»."""
-    caps["caps"] = ORG_WITH_CODES
-    fake_api.answers["/admin/invites"] = {"ok": True, "data": [
-        {"code": "ABCD1234", "role": "troupe", "expires_at": "2026-11-11T10:00:00+04:00",
-         "uses": 0, "max_uses": 1}]}
-    cb = FakeCb("panel:codes")
-    asyncio.run(gw.panel_codes(cb))
-
-    text, markup = cb.message.answers[-1]
-    assert "ABCD1234" in text and "актёр труппы" in text
-    assert "inv:revoke:ABCD1234" in datas(markup)
-
-
-def test_Л8_отзыв_зовёт_путь_записи(gw, fake_api, caps):
-    """FR-A2: «Отозвать» пишет через `/admin/invite/revoke`, а не молчит."""
-    caps["caps"] = ORG_WITH_CODES
-    fake_api.answers["/admin/invite/revoke"] = {"ok": True, "code": "ABCD1234"}
-    fake_api.answers["/admin/invites"] = {"ok": True, "data": []}
-    cb = FakeCb("inv:revoke:ABCD1234")
-    asyncio.run(gw.invite_revoke(cb))
-
-    assert ("/admin/invite/revoke", {"code": "ABCD1234"}, "POST") in fake_api.calls
-    assert "Код отозван" in cb.alerts
-    # после отзыва список перечитывается: отозванного кода в нём уже нет
-    assert "/admin/invites" in [path for path, _, _ in fake_api.calls]
-
-
-def test_Л8_отзыв_отказывает_без_права(gw, fake_api, caps):
-    """FR-A2: без registration.code.issue отзыв не уходит в tool-api."""
-    caps["caps"] = MANAGER
-    cb = FakeCb("inv:revoke:ABCD1234")
-    asyncio.run(gw.invite_revoke(cb))
-
-    assert cb.alerts == ["Нет права"]
-    assert not fake_api.calls
+def test_Л8_кодов_в_чате_больше_нет(gw):
+    """V-118: ни «Выпустить инвайт-код», ни «Коды приглашений» не рисуются никому."""
+    for caps in (ADMIN, ORG_WITH_CODES, MANAGER, ORG):
+        labels = panel_labels(gw, caps)
+        assert "Выпустить инвайт-код" not in labels
+        assert "Коды приглашений" not in labels
+    source = gateway_modules.source()
+    for gone in ("panel:codes", "panel:invite", "inv:role:", "inv:revoke:"):
+        assert f'F.data == "{gone}"' not in source and gone not in source, \
+            f"чатовое действие вернулось: {gone}"
 
 
 # ------------------------------------------------------------ Л4: права организатора
@@ -278,8 +245,9 @@ def test_Л4_вход_в_панель_только_у_админа(gw):
 
     admin_groups = dict(gw.menu_groups(ADMIN))
     assert "Админ-панель" in admin_groups["Управление"]
-    assert {"Заявки", "Приглашения"} <= set(admin_groups["Управление"]), \
-        "у администратора заявки и приглашения остаются"
+    admin_items = {item for items in admin_groups.values() for item in items}
+    assert "Заявки" not in admin_items and "Приглашения" not in admin_items, \
+        "коды и заявки — только в Mini App (V-117/V-118)"
     assert admin_groups["Люди"] == ["Участники"]
 
 
@@ -449,8 +417,8 @@ def test_Э1_админ_не_теряет_ни_одного_пункта(gw):
     items = [item for _, items in gw.menu_groups(ADMIN) for item in items]
     assert set(items) == {
         "Расход и доход", "Бюджет", "Сверка листов", "Мои взносы",
-        "Занятость", "Расписание", "Поиск окон", "Мой профиль",
-        "Админ-панель", "Участники", "Заявки", "Приглашения", "Опросы",
+        "Занятость", "Расписание", "Поиск окон", "Мой профиль", "Знакомство",
+        "Админ-панель", "Участники", "Опросы",
         "Обратная связь", "Что умею", "Справка",
     }
 

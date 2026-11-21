@@ -15,8 +15,10 @@ def test_труппа_не_видит_ничего():
     assert allowed_admin_blocks(["schedule.availability.self"]) == []
 
 
-def test_заявки_по_праву_согласования():
-    assert allowed_admin_blocks(["registration.approve"]) == ["pending"]
+def test_заявок_нет_ни_у_кого():
+    """V-117: раздела «Заявки» не существует — `registration.approve` ничего не открывает."""
+    assert allowed_admin_blocks(["registration.approve"]) == []
+    assert "pending" not in ADMIN_BLOCKS
 
 
 def test_чтение_бюджета_без_записи():
@@ -28,8 +30,8 @@ def test_порядок_разделов_как_в_панели_бота():
     assert allowed_admin_blocks(caps) == ["people", "budget", "audit"]
 
 
-def test_управление_участниками_открывает_заявки_и_права():
-    assert allowed_admin_blocks(["participants.manage"]) == ["people", "pending", "rights"]
+def test_управление_участниками_открывает_права():
+    assert allowed_admin_blocks(["participants.manage"]) == ["people", "rights"]
 
 
 def test_права_не_видны_по_просмотру_людей():
@@ -50,11 +52,11 @@ def test_действия_по_правам():
 
     assert allowed_admin_actions(["*"]) == {name: True for name in ADMIN_ACTIONS}
     assert allowed_admin_actions(["registration.approve"]) == {
-        "approve_pending": True, "manage_rights": False, "set_tariff": False,
+        "manage_rights": False, "set_tariff": False,
         "accrue_dues": False, "retry_sheet": False, "issue_codes": False}
     # `budget.approve` больше не даёт действий в панели: подтверждения нет в проекте
     assert allowed_admin_actions(["participants.manage", "budget.approve"]) == {
-        "approve_pending": False, "manage_rights": True, "set_tariff": False,
+        "manage_rights": True, "set_tariff": False,
         "accrue_dues": False, "retry_sheet": False, "issue_codes": False}
 
 
@@ -62,12 +64,13 @@ def test_действия_не_шире_разделов():
     """Кнопка действия без права на раздел бессмысленна — проверяем согласованность."""
     from app.webapp import ADMIN_ACTIONS, ADMIN_BLOCKS, allowed_admin_actions
 
-    expected = {"approve_pending", "manage_rights", "set_tariff", "accrue_dues",
+    expected = {"manage_rights", "set_tariff", "accrue_dues",
                 "retry_sheet", "issue_codes"}
     for name in ADMIN_ACTIONS:
         assert name in expected
     assert set(ADMIN_ACTIONS) == expected
-    assert set(ADMIN_BLOCKS) >= {"people", "pending", "rights", "budget"}
+    assert set(ADMIN_BLOCKS) >= {"people", "rights", "budget"}
+    assert "pending" not in ADMIN_BLOCKS
     assert allowed_admin_actions(["troupe.only"]) == {
-        "approve_pending": False, "manage_rights": False, "set_tariff": False,
+        "manage_rights": False, "set_tariff": False,
         "accrue_dues": False, "retry_sheet": False, "issue_codes": False}

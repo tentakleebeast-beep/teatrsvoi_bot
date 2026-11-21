@@ -73,7 +73,7 @@ def test_отказ_во_входе_печатается_словами_серв
             f"{path.name}: снова boolean-вход вместо `auth()` с причиной")
 
     for name in ("admin_archive.py", "admin_audit.py", "admin_feedback.py",
-                 "admin_invites.py", "admin_pending.py", "admin_people.py",
+                 "admin_invites.py", "admin_people.py",
                  "admin_rights.py"):
         text = (PAGES / name).read_text(encoding="utf-8")
         assert "auth().then(function (denied)" in text, f"{name}: причина отказа не берётся"
@@ -117,7 +117,7 @@ def test_экраны_по_прежним_именам_доступны() -> Non
     """Маршруты, стенд и тесты берут экраны из `pages.admin` / `pages.misc`."""
     from app.pages import admin, misc, money, week
 
-    for name in ("PEOPLE_PAGE", "PENDING_PAGE", "RIGHTS_PAGE", "ARCHIVE_PAGE",
+    for name in ("PEOPLE_PAGE", "RIGHTS_PAGE", "ARCHIVE_PAGE",
                  "AUDIT_PAGE", "INVITES_PAGE", "FEEDBACK_QUEUE_PAGE", "DUES_ADMIN_PAGE"):
         assert getattr(admin, name).startswith("<!doctype html>"), name
     for name in ("MONEY_PAGE", "TX_PAGE"):
