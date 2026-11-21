@@ -10,6 +10,11 @@
 
 Сторож снимает окружение до и после каждого unit-модуля и падает тестом
 `tests/unit/test_env_hygiene.py` в конце unit-раздела, называя виновный модуль.
+
+Отдельно (t_986edeac) unit-набор не читает настоящий `.env` из корня: скрипты
+вроде `agent_cost` зовут `_cli.apply_env()` при импорте и иначе кладут
+`TELEGRAM_TOKEN`/`ENV` в `os.environ` процесса. Здесь `_cli.ENV_FILE` указывает
+на несуществующий файл — unit-тесты передают конфиг явно, а не из файла.
 """
 
 from __future__ import annotations
@@ -25,14 +30,30 @@ HERE = pathlib.Path(__file__).resolve().parent
 if str(HERE) not in sys.path:
     sys.path.insert(0, str(HERE))
 
+import _cli  # noqa: E402  (путь к scripts/ добавляет tests/conftest.py)
+
+# Настоящий `.env` в корне — источник окружения integration-набора и стенда.
+# Unit-тесты не должны его читать: импорт скрипта с `apply_env()` иначе пишет
+# `TELEGRAM_TOKEN`/`ENV` в `os.environ` процесса (t_986edeac).
+REAL_ENV_FILE = _cli.ENV_FILE
+UNIT_ENV_FILE = HERE / "_нет_настоящего_env"
+_cli.ENV_FILE = UNIT_ENV_FILE
+
 # Переменные, которые читают integration-набор и стенд. Остальные настройки тесты
 # передают явно (`configure(Settings(...))`), подменять окружение им не нужно.
 GUARDED = ("DATABASE_URL", "TELEGRAM_TOKEN", "ENV")
 
 GUARD_TEST = "test_unit_набор_не_меняет_окружение"
 
-# Снимок «до» (pytest_configure) и след по модулям, оставившим окружение.
-STATE: dict = {"guarded": GUARDED, "baseline": {}, "drift": {}}
+# Снимок «до» (ленивый, на первом unit-модуле), след по модулям и по импорту
+# модулей при сборе тестов.
+STATE: dict = {
+    "guarded": GUARDED,
+    "baseline": {},
+    "drift": {},
+    "collection_before": {},
+    "collection_drift": {},
+}
 
 
 def snapshot() -> dict[str, str | None]:
@@ -49,10 +70,10 @@ def drift(before: dict[str, str | None],
 def _ensure_baseline() -> None:
     """Снимок «до» берётся лениво — на первом unit-модуле, а не в `pytest_configure`.
 
-    `pytest_configure` срабатывает до сбора тестов, а `tests/integration/conftest.py`
-    на импорте переводит `DATABASE_URL` на тестовую базу. Снимок, взятый раньше,
-    делал сторож ложным: он видел «утечку» там, где integration-набор честно
-    переключил базу (CI: `svoi` -> `svoi_test_3015`).
+    `pytest_configure` срабатывает до сбора тестов, а integration-модули на импорте
+    читают `.env` (`load_dotenv`), и снимок, взятый раньше, делал сторож ложным:
+    он видел «утечку» там, где integration-набор честно загрузил своё окружение.
+    Утечки при импорте unit-модулей ловит отдельный трекинг сбора.
     """
     if not STATE["baseline"]:
         STATE["baseline"] = snapshot()
@@ -73,6 +94,28 @@ def _unit_env_watch(request: pytest.FixtureRequest) -> Iterator[None]:
     changed = drift(before, snapshot())
     if changed:
         STATE["drift"][request.module.__name__] = changed
+
+
+def pytest_collectstart(collector: pytest.Collector) -> None:
+    """Снимок до импорта unit-модуля: утечка при импорте тоже имеет виновника."""
+    if isinstance(collector, pytest.Module):
+        STATE["collection_before"][collector.nodeid] = snapshot()
+
+
+def pytest_collectreport(report: pytest.CollectReport) -> None:
+    """Сравнить окружение после импорта модуля и записать, кто оставил утечку."""
+    before = STATE["collection_before"].pop(report.nodeid, None)
+    if before is None:
+        return
+    changed = drift(before, snapshot())
+    if changed:
+        STATE["collection_drift"][report.nodeid] = changed
+
+
+def pytest_runtest_teardown(item: pytest.Item, nextitem: pytest.Item | None) -> None:
+    """После сторожа возвращаем `_cli.ENV_FILE`: integration-набор читает настоящий `.env`."""
+    if item.name == GUARD_TEST:
+        _cli.ENV_FILE = REAL_ENV_FILE
 
 
 def pytest_collection_modifyitems(items: list[pytest.Item]) -> None:
