@@ -17,10 +17,14 @@
 | `cross_service_imports` | модуль одного сервиса импортирует другой напрямую | 0 |
 | `getenv_outside_settings` | чтения окружения вне `settings.py` сверх allowlist | 0 |
 | `migration_duplicates` | повторяющиеся номера в `db/init` | 0 |
-| `migration_gaps` | пропущенные номера миграций (кроме задокументированных) | 0 |
+| `migration_gaps` | пропущенные номера миграций (кроме записанных в `DOCUMENTED_GAPS`) | 0 |
 | `public_routes_unmarked` | публичный маршрут без пометки в реестре | 0 |
 | `contract_differences` | расхождений снимка OpenAPI с кодом | 0 |
-| `tests_without_assert` | тест без единой проверки | 0 |
+| `tests_without_assert` | тест без единой проверки — в теле или в локальных помощниках файла | 0 |
+
+Реестр `DOCUMENTED_GAPS` — пропуск с причиной, а не глушилка: пропуск, которого в нём нет,
+находка, а каждая причина обязана указывать на файл дерева, где пропуск объяснён
+(`tests/unit/test_arch_drift.py::test_причина_пропуска_ссылается_на_существующий_файл`).
 
 Публичные маршруты помечаются в `config/public-routes.txt` (путь и причина): маршрут
 считается защищённым, если в его подписи есть `Depends(...)`/`Header(...)`, иначе он
@@ -65,8 +69,17 @@ MIN_DUP_STATEMENTS = 3
 SAMARA = timezone(timedelta(hours=4))
 
 #: Пропуски номеров миграций, признанные безопасными: номер и где это объяснено.
+#: Это реестр с причиной, а не глушилка (docs/reports/165 §5): пропуск, которого здесь
+#: нет, — находка, а причина обязана указывать на файл дерева, где пропуск объяснён
+#: (`test_причина_пропуска_ссылается_на_существующий_файл`).
 DOCUMENTED_GAPS = {
     18: "docs/reports/63-release-readiness.md: «номера 018 нет» — миграция не создавалась",
+    # 050 — номер занят невлитой веткой feat/t_74ab8e2f-boot-beacon (`050_webapp_boot_log.sql`),
+    # файла 050_*.sql нет ни в одной ветви истории (docs/reports/165 §4, V-097).
+    50: "db/init/055_agent_observability_cost.sql:22-25 и "
+        "db/init/051_feedback_answer_server.sql:12-13: номер занят невлитой веткой "
+        "feat/t_74ab8e2f-boot-beacon, задним числом занимать нельзя — порядок применения "
+        "сортировкой по имени файла",
     # 059 — буфер под параллельные ветки (на момент Ш-07 в main заняты 057 и 058).
     # Удалить тем же коммитом, который займёт 059.
     59: "db/init/060_participant_role_revoked.sql: 059 оставлен буфером под "
@@ -450,12 +463,52 @@ def _test_functions(tree: ast.Module) -> list[ast.FunctionDef | ast.AsyncFunctio
     return found
 
 
-def _has_check(node: ast.AST, source_lines: list[str]) -> bool:
+def _local_helpers(tree: ast.Module) -> dict[str, ast.AST]:
+    """Функции и методы того же файла, которые тест может вызвать как помощник.
+
+    Ключ — имя вызова: модульная функция (`_no_right`) или метод класса (`self._no_right`).
+    Сами тесты помощниками не считаются, иначе каждый тест «проверял» бы сам себя.
+    """
+    helpers: dict[str, ast.AST] = {}
+    for node in tree.body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                and not node.name.startswith("test"):
+            helpers[node.name] = node
+        elif isinstance(node, ast.ClassDef):
+            for child in node.body:
+                if isinstance(child, (ast.FunctionDef, ast.AsyncFunctionDef)) \
+                        and not child.name.startswith("test"):
+                    helpers.setdefault(f"self.{child.name}", child)
+    return helpers
+
+
+def _called_names(node: ast.AST) -> set[str]:
+    """Имена, которые тело вызывает: `helper(...)` и `self.helper(...)`."""
+    names: set[str] = set()
+    for child in ast.walk(node):
+        if not isinstance(child, ast.Call):
+            continue
+        func = child.func
+        if isinstance(func, ast.Name):
+            names.add(func.id)
+        elif isinstance(func, ast.Attribute) and isinstance(func.value, ast.Name) \
+                and func.value.id == "self":
+            names.add(f"self.{func.attr}")
+    return names
+
+
+def _has_check(node: ast.AST, source_lines: list[str], helpers: dict[str, ast.AST] | None = None,
+               seen: frozenset[str] = frozenset(), explanation: bool = True) -> bool:
     """Есть ли в тесте проверка: assert, pytest.raises/warns/fail или `raise AssertionError`.
+
+    Проверка ищется и в локальных помощниках файла: `_no_right(page)` с восемью `assert`
+    внутри — такая же проверка, как `assert` в теле теста (docs/reports/165 §4, V-097).
+    Помощники прослеживаются по цепочке с защитой от рекурсии.
 
     Тест на «не бросило» проверки не содержит по определению. Такой тест принимается,
     только если в нём есть комментарий, объясняющий, что он доказывает: строка с `#`
-    внутри тела. Молчаливый `pass` — находка.
+    внутри тела. Молчаливый `pass` — находка. Снисходительность к комментарию действует
+    только для тела самого теста (`explanation`): помощник без `assert` ничего не доказывает.
     """
     for child in ast.walk(node):
         if isinstance(child, ast.Assert):
@@ -465,12 +518,21 @@ def _has_check(node: ast.AST, source_lines: list[str]) -> bool:
         if isinstance(child, ast.Raise) and child.exc is not None \
                 and "AssertionError" in ast.unparse(child.exc):
             return True
-    start = getattr(node, "lineno", 1) - 1
-    end = getattr(node, "end_lineno", start + 1)
-    text = "\n".join(source_lines[start:end])
-    if any(marker in text.lower() for marker in NO_RAISE_MARKERS):
-        return True
-    return "#" in text                       # комментарий-объяснение вместо assert
+    if explanation:
+        start = getattr(node, "lineno", 1) - 1
+        end = getattr(node, "end_lineno", start + 1)
+        text = "\n".join(source_lines[start:end])
+        if any(marker in text.lower() for marker in NO_RAISE_MARKERS):
+            return True
+        if "#" in text:                  # комментарий-объяснение вместо assert
+            return True
+    for name in sorted(_called_names(node)):
+        helper = (helpers or {}).get(name)
+        if helper is None or name in seen:
+            continue
+        if _has_check(helper, source_lines, helpers, seen | {name}, explanation=False):
+            return True
+    return False
 
 
 def measure_tests_without_assert(root: pathlib.Path) -> dict[str, Any]:
@@ -479,10 +541,13 @@ def measure_tests_without_assert(root: pathlib.Path) -> dict[str, Any]:
         if path.name == "conftest.py":
             continue                      # test_db — фикстура, а не тест
         source_lines = path.read_text(encoding="utf-8").splitlines()
-        for node in _test_functions(_parse(path)):
-            if not _has_check(node, source_lines):
+        tree = _parse(path)
+        helpers = _local_helpers(tree)
+        for node in _test_functions(tree):
+            if not _has_check(node, source_lines, helpers):
                 empty.append(f"{_rel(path, root)}:{node.lineno} {node.name}")
     return _metric("tests_without_assert", "Тесты без assert", len(empty), 0, tuple(empty),
+                   "проверка ищется в теле теста и в локальных помощниках файла: "
                    "тест без проверки не падает и ничего не доказывает")
 
 
