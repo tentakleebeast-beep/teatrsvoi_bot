@@ -92,3 +92,36 @@ def test_в_панели_код_выпускается_кнопкой(client) ->
     revoked = client.post("/webapp/admin/invite-revoke",
                           json={"code": created.json()["code"]}, headers=headers)
     assert revoked.status_code == 200
+
+def test_код_педагога_выпускается_из_mini_app(client, auth) -> None:
+    """Роль `master` — такая же кнопка, как труппа и организатор (карта E10, дефект L-049).
+
+    Дефект: тело `POST /webapp/admin/invite` объявляло `Literal["org", "troupe"]`, поэтому
+    третий сегмент экрана отдавал 422 «Unprocessable Entity». Бот тот же код выпускал
+    (`InviteIn` знал `master`), а стенд Mini App отвечал успехом — расхождение живого
+    API со стендом и не заметили.
+    """
+    session = _token(client, 123456789)          # сессия Mini App, не токен бота
+    created = client.post("/webapp/admin/invite", json={"role": "master", "ttl_days": 7},
+                          headers=session)
+    assert created.status_code == 200, created.text
+    assert created.json()["role"] == "master"
+
+    listed = client.get("/webapp/admin/invites", headers=session).json()
+    assert created.json()["code"] in [item["code"] for item in listed["data"]]
+
+
+def test_мини_app_и_бот_принимают_один_набор_ролей() -> None:
+    """Сторож расхождения: стенд и API не должны знать разные наборы ролей.
+
+    Сравниваются сами модели, а не экран: экран рисует кнопки, а отказывает модель.
+    """
+    from typing import get_args
+
+    from app.api.admin import InviteIn, WebAppInviteIn
+
+    bot_roles = set(get_args(InviteIn.model_fields["role"].annotation))
+    app_roles = set(get_args(WebAppInviteIn.model_fields["role"].annotation))
+    assert app_roles == bot_roles - {"admin"}, (
+        f"Mini App принимает {sorted(app_roles)}, бот {sorted(bot_roles)}: "
+        "роль, добавленная в один вход, обязана появиться и в другом")
