@@ -285,7 +285,12 @@ def test_оба_входа_зовут_invite_text(gw) -> None:
 
     declared = [path.name for path in (ROOT / "services").rglob("*.py")
                 if "INVITE_INSTRUCTION =" in path.read_text(encoding="utf-8")]
-    assert declared == ["texts.py"], f"константа объявлена не только в texts.py: {declared}"
+    assert declared == ["invite.py"], f"константа объявлена не только в services/shared: {declared}"
+
+    # Второй источник правды не заводим: texts.py только реэкспортирует общий текст
+    # (E12, docs/development/179), поэтому бот и уведомление Mini App шлют одно и то же.
+    texts = (GATEWAY_APP / "texts.py").read_text(encoding="utf-8")
+    assert "from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK" in texts
 
 
 def test_формат_инструкции(gw) -> None:

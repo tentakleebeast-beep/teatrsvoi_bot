@@ -1,18 +1,24 @@
-"""
-Приглашения в админ-панели: код выпускается, виден и отзывается кнопками.
+"""Приглашения в админ-панели: код выпускается, виден и отзывается кнопками.
 
 Раньше единственным способом было напечатать `/invite org` в чате. Теперь код
 создаётся в панели Mini App теми же обработчиками, что и раньше, и с тем же
 правом `registration.code.issue`; список открытых кодов виден рядом.
+
+У выпуска из Mini App есть и вторая половина: код остаётся на экране, а
+инструкция получателю уходит в чат уведомлением (`docs/development/179`).
 
 Правила и требования раздела: docs/development/73-admin-panel-webapp.md.
 """
 
 from __future__ import annotations
 
+from datetime import timedelta
+
 import psycopg
 from app.person_key import make_key
+from psycopg.rows import dict_row
 
+from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK
 from tests.conftest import TOKEN, _test_dsn
 from tests.integration.test_webapp_profile import _api, init_data
 
@@ -125,3 +131,96 @@ def test_мини_app_и_бот_принимают_один_набор_роле�
     assert app_roles == bot_roles - {"admin"}, (
         f"Mini App принимает {sorted(app_roles)}, бот {sorted(bot_roles)}: "
         "роль, добавленная в один вход, обязана появиться и в другом")
+
+
+def _notes(recipient_id: int) -> list[dict]:
+    """Записи очереди этого адресата — то, что увидит отправитель (docs/179 §5)."""
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        return conn.execute(
+            "select id, kind, recipient_id, payload, dedupe_key, status, scheduled_at "
+            "from notification where recipient_id = %s order by id", (recipient_id,)).fetchall()
+
+
+def test_выпуск_из_mini_app_ставит_инструкцию_в_очередь(client) -> None:
+    """E12 (docs/development/179 §5.1): код на экране, инструкция получателю — в чат.
+
+    Адресат — тот, кто выпустил: инструкцию он пересылает человеку, которому отдаёт
+    код. Текста кода в сообщении нет — код виден только на экране шторки.
+    """
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        pid = _person(conn, 785020, "Инструкция Выпустил", role="admin")
+    headers = _token(client, 785020)
+
+    created = client.post("/webapp/admin/invite", json={"role": "troupe"},
+                          headers=headers).json()
+    code = created["code"]
+
+    notes = _notes(pid)
+    assert len(notes) == 1, f"ожидалась одна строка очереди, пришло {len(notes)}"
+    note = notes[0]
+    assert note["kind"] == "invite_instruction"
+    assert note["recipient_id"] == pid
+    assert note["status"] == "scheduled" and note["scheduled_at"] is not None
+    assert note["payload"]["title"] == INVITE_LINK
+    assert note["payload"]["body"] == INVITE_INSTRUCTION
+    assert code not in note["payload"]["title"]
+    assert code not in note["payload"]["body"]
+
+
+def test_выпуск_из_бота_инструкцию_в_чат_не_ставит(client, auth) -> None:
+    """E12 (docs/development/179 §5.2): бот присылает код и инструкцию одним сообщением.
+
+    Оба входа сходятся в `create_invite`, поэтому уведомление ставится только в
+    `webapp_admin_invite`: иначе админ получил бы инструкцию дважды.
+    """
+    _api()
+    created = client.post("/admin/invite", json={"role": "troupe"}, headers=auth)
+    assert created.status_code == 200, created.text
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        rows = conn.execute("select id from notification where kind = 'invite_instruction'"
+                            ).fetchall()
+    assert rows == [], "бот-путь не должен ставить инструкцию в очередь"
+
+
+def test_повторное_нажатие_не_плодит_инструкцию(client) -> None:
+    """E12 (docs/development/179 §5.3, правило Д4): второй код — та же инструкция.
+
+    Ключ по коду от двойного нажатия не спасает (каждое нажатие выпускает новый код),
+    поэтому вторую строку отсекает правило «не чаще одной инструкции в сутки».
+    """
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        pid = _person(conn, 785021, "Инструкция Дважды", role="admin")
+    headers = _token(client, 785021)
+
+    first = client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers).json()
+    second = client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers).json()
+    assert first["code"] != second["code"], "каждое нажатие выпускает новый код"
+
+    codes = [item["code"] for item in
+             client.get("/webapp/admin/invites", headers=headers).json()["data"]]
+    assert {first["code"], second["code"]} <= set(codes), "оба кода остаются рабочими"
+
+    assert len(_notes(pid)) == 1, "второй код не должен давать второе сообщение"
+
+
+def test_вчерашняя_инструкция_не_мешает_новой(client) -> None:
+    """E12 (docs/development/179 §Д4): окно ограничения — сутки, а не навсегда.
+
+    Иначе админ, выпускавший код вчера, не получил бы инструкцию сегодня: текст у
+    него в чате, но человеку он его уже отдал.
+    """
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        pid = _person(conn, 785022, "Инструкция Вчера", role="admin")
+    headers = _token(client, 785022)
+    client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers)
+
+    with psycopg.connect(_test_dsn()) as conn:
+        conn.execute("update notification set status = 'sent', sent_at = now() - interval '25 hours' "
+                     "where recipient_id = %s and kind = 'invite_instruction'", (pid,))
+        conn.commit()
+
+    client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers)
+    assert len(_notes(pid)) == 2, "старше суток — новое сообщение ставится"

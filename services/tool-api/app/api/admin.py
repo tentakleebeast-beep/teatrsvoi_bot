@@ -14,6 +14,8 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import Field
 
+from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK
+
 from .. import agent, cold, core, file_access, files_store, llm, masking, notification_store
 from ..errors import ApiError
 from ..external import DB_ERRORS, HTTP_ERRORS
@@ -1109,10 +1111,49 @@ class WebAppInviteIn(core.ApiIn):
 @router.post("/webapp/admin/invite")
 def webapp_admin_invite(body: WebAppInviteIn,
                         who: dict = Depends(core.webapp_actor)) -> dict:
-    """Выпустить код кнопкой: админ не выдаётся кодом даже из панели."""
-    return create_invite(InviteIn(role=body.role, ttl_days=body.ttl_days,
-                                 max_uses=body.max_uses),
-                         who=core._webapp_require(who, "registration.code.issue"))
+    """Выпустить код кнопкой: админ не выдаётся кодом даже из панели.
+
+    Код остаётся на экране, а инструкция получателю уходит в чат уведомлением
+    (E12, docs/development/179): пересылать её из шторки неудобно, а в боте она
+    приходит тем же сообщением, что и код. Ставим её только здесь, не в
+    `create_invite`: бот зовёт `/admin/invite` и инструкцию уже прислал.
+    """
+    actor = core._webapp_require(who, "registration.code.issue")
+    created = create_invite(InviteIn(role=body.role, ttl_days=body.ttl_days,
+                                     max_uses=body.max_uses), who=actor)
+    if actor.get("id"):
+        _queue_invite_instruction(actor["id"], created["code"])
+    return created
+
+
+def _queue_invite_instruction(recipient_id: int, code: str) -> bool:
+    """Инструкция получателю — тому, кто выпустил (E12, docs/development/179).
+
+    Кода в тексте нет: он на экране. Ключ привязан к коду, но от двойного нажатия
+    защищает правило «не чаще одной инструкции в сутки»: каждое нажатие выпускает
+    новый код, поэтому по ключу дубль не поймать. Сбой постановки в очередь не
+    отменяет выпуск: код уже записан в `invite_code`, админ его видит.
+    """
+    payload = {"title": INVITE_LINK, "body": INVITE_INSTRUCTION}
+    try:
+        with core.pool.connection() as conn:
+            row = conn.execute(
+                "insert into notification (recipient_id, kind, payload, dedupe_key, scheduled_at) "
+                "select %s, 'invite_instruction', %s, %s, now() "
+                "where not exists (select 1 from notification "
+                "                  where recipient_id = %s and kind = 'invite_instruction' "
+                "                    and (status = 'scheduled' "
+                "                         or (status = 'sent' "
+                "                             and sent_at > now() - interval '24 hours'))) "
+                "on conflict (dedupe_key, recipient_id) do nothing "
+                "returning id",
+                (recipient_id, json.dumps(payload, ensure_ascii=False),
+                 f"invite_instruction:{recipient_id}:{code}", recipient_id),
+            ).fetchone()
+        return row is not None
+    except DB_ERRORS:
+        core.log.exception("инструкция приглашения не поставлена в очередь: %s", code)
+        return False
 
 
 
