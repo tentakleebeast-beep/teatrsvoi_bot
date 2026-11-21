@@ -12,9 +12,10 @@ import errors
 from services.shared.dues import dues_lines  # noqa: E402
 from services.shared.format import MONTHS, WEEKDAYS_FULL, money  # noqa: E402
 
-# Инструкция получателю — один текст на чат и на уведомление из Mini App (E12, docs/179).
-# Объявлена в services/shared/invite.py; здесь реэкспорт, чтобы `texts.INVITE_*` работали.
-from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK  # noqa: E402, F401
+# Тексты первого входа — один источник на чат и на уведомление (E13, docs/182).
+# Объявлены в services/shared/onboarding.py; здесь реэкспорт, чтобы `texts.INVITE_*`
+# и `texts.HELP_MEMO` работали.
+from services.shared.onboarding import HELP_MEMO, INVITE_INSTRUCTION  # noqa: E402, F401
 
 # --- общие слова и подписи -------------------------------------------
 # Одна формулировка — одно место: её берут меню, панель, формы и ответы.
@@ -22,7 +23,6 @@ TITLE_AVAILABILITY = "Занятость"
 TITLE_SCHEDULE = "Расписание"
 TITLE_ADMIN = "Админ-панель"
 TITLE_BUDGET = "Бюджет"
-TITLE_REQUESTS = "Заявки"
 TITLE_DUES = "Мои взносы"
 TITLE_PROFILE = "Мой профиль"
 TITLE_FEEDBACK = "Обратная связь"
@@ -34,9 +34,8 @@ MENU_BUTTON = "Меню"          # кнопка Mini App в чате (routers/m
 TITLE_PEOPLE = "Участники"
 TITLE_PEOPLE_GROUP = "Люди"
 TITLE_CAPABILITIES = "Что умею"
-TITLE_INVITES = "Приглашения"
+TITLE_FILL = "Знакомство"      # дозаполнение профиля, docs/development/182 §2.3
 TITLE_ARCHIVE = "Архив"
-TITLE_CODES = "Коды приглашений"
 TITLE_FILES = "файлы"
 TITLE_POLLS = "Опросы"
 BTN_CONTINUE = "Продолжить"
@@ -77,7 +76,6 @@ STATUS_DONE = "сделано"
 NO_ANSWER = "нет ответа"
 DUES_DENIED = "Взносы доступны участнику студии."
 PREFIX_WRITTEN = "Записал: "
-PREFIX_REQUEST = "Заявка: "
 STALE_BUTTON = "Кнопка устарела"
 SAVE_FAILED = "Не удалось записать"
 CANCELLED = "Отменено."
@@ -197,27 +195,6 @@ def sheet_retry_text(res: dict) -> str:
     return "\n".join(lines)
 
 
-def invite_text(code: str, expires_at: str | None, role: str) -> str:
-    """Текст инвайт-кода (HTML): код в ``<code>`` — по нему тапают и копируют.
-
-    Обращение №9: код раньше шёл голым текстом, ``parse_mode=None``, и его
-    приходилось переписывать вручную. Теперь он копируется тапом, плюс есть
-    кнопка с ``copy_text``.
-    """
-    until = str(expires_at or "")[:10]
-    title = escape(ROLE_TITLES.get(role, role))
-    tail = f"Действует до {escape(until)}, использовать можно один раз.\n" if until else \
-           "Использовать можно один раз.\n"
-    hint = ("\nЧеловек вводит код боту и выбирает дисциплину: Актёрское мастерство или Музыка.\n"
-            if role == "master" else "")
-    return (f"Код приглашения для роли «{title}»:\n\n"
-            f"<code>{escape(code)}</code>\n\n"
-            + tail + hint +
-            "Скопируйте код кнопкой ниже или нажмите на него в тексте.\n"
-            "Передайте код человеку: он отправляет боту этот код и регистрируется."
-            "\n\n" + INVITE_LINK + "\n\n" + INVITE_INSTRUCTION)
-
-
 def person_card_text(card: dict) -> str:
     """Карточка человека для админ-панели в чате (Ш-50, обращение №25).
 
@@ -260,8 +237,7 @@ def person_card_text(card: dict) -> str:
     return "\n".join(lines)[:3900]
 
 
-STATUS_TITLES = {"active": "активен", "pending": "заявка",
-                 "blocked": "заблокирован", "left": "вышел"}
+STATUS_TITLES = {"active": "активен", "blocked": "заблокирован", "left": "вышел"}
 
 
 def _fit(text: str, width: int) -> str:
@@ -445,11 +421,10 @@ MENU_HELP: dict[str, str] = {
     TITLE_SCHEDULE: "что идёт на неделе: показы, репетиции, тренинги",
     TITLE_SLOTS: "найти время, когда нужные люди свободны: даты, кто нужен, длительность",
     TITLE_PROFILE: "анкета в окне: имя, контакты, короткие имена, род",
+    TITLE_FILL: "дозаполнить день рождения, дорогу, спектакли, роли, тренинги, заметку помощнику",
     TITLE_PEOPLE: "список людей; нажатие открывает профиль и тариф",
-    TITLE_REQUESTS: "кто ждёт подтверждения — принять или отклонить",
-    TITLE_INVITES: "выпустить код для нового человека",
     TITLE_POLLS: "опросы: вопросы в чате, ответы в базе, сводка и экспорт",
-    TITLE_ADMIN: "участники, заявки, права, приглашения, бюджет, аудит, лист бюджета",
+    TITLE_ADMIN: "участники, права, архив, бюджет, аудит, лист бюджета",
     TITLE_FEEDBACK: "сообщить о проблеме или пожелании",
     TITLE_CAPABILITIES: "этот список",
     TITLE_HELP: "подробная инструкция по вашей роли",

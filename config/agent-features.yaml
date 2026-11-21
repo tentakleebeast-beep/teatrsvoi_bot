@@ -56,26 +56,12 @@ scenarios:
     expr: text
     reason: "общий построитель строк: подписи берутся из routers.menu.CHAT_ACTION_BUTTONS"
 
-  - id: scenario.copy_code_rows
-    file: keyboards.py
-    function: copy_code_kb
-    kind: "text=InlineKeyboardButton"
-    expr: text
-    reason: "общий построитель: подписи приходят из строк вызова, они проверяются отдельно"
-
   - id: scenario.rows_kb
     file: keyboards.py
     function: kb
     kind: "text=InlineKeyboardButton"
     expr: t
     reason: "общий построитель клавиатуры: подписи приходят из строк вызова"
-
-  - id: scenario.candidates
-    file: keyboards.py
-    function: _candidates_kb
-    kind: row
-    expr: "c['display_name']"
-    reason: "имя человека из БД — данные, а не текст интерфейса; кнопка выбора себя"
 
   - id: scenario.group_kb
     file: keyboards.py
@@ -301,13 +287,6 @@ entries:
     title: Люди
     not_for_agent: "управление участниками: агент не меняет данные и права людей"
 
-  - id: screen.admin_pending
-    kind: screen
-    surface: webapp
-    source: /webapp/admin/t/pending
-    title: Заявки
-    not_for_agent: "одобрение заявок — действие с подтверждением, отдельный этап"
-
   - id: screen.admin_dues
     kind: screen
     surface: webapp
@@ -498,20 +477,6 @@ entries:
     title: Участники
     not_for_agent: "управление людьми: агент не меняет данные и права"
 
-  - id: menu.pending
-    kind: button
-    surface: menu
-    source: Заявки
-    title: Заявки
-    not_for_agent: "одобрение заявок — отдельный этап с подтверждением"
-
-  - id: menu.invites
-    kind: button
-    surface: menu
-    source: Приглашения
-    title: Приглашения
-    not_for_agent: "выдача доступа: агент не выпускает инвайт-коды"
-
   - id: menu.polls
     kind: button
     surface: menu
@@ -574,13 +539,6 @@ entries:
     title: Участники (панель)
     not_for_agent: "управление людьми: агент не меняет данные и права"
 
-  - id: panel.pending
-    kind: button
-    surface: panel
-    source: Заявки
-    title: Заявки (панель)
-    not_for_agent: "одобрение заявок — отдельный этап с подтверждением"
-
   - id: panel.rights
     kind: button
     surface: panel
@@ -630,20 +588,6 @@ entries:
     title: Дописать в лист (панель)
     not_for_agent: "пишет в Google-лист: агенту недоступно"
 
-  - id: panel.invite
-    kind: button
-    surface: panel
-    source: Выпустить инвайт-код
-    title: Выпустить инвайт-код (панель)
-    not_for_agent: "выдача доступа: агент не выпускает инвайт-коды"
-
-  - id: panel.codes
-    kind: button
-    surface: panel
-    source: Коды приглашений
-    title: Коды приглашений (панель)
-    not_for_agent: "отзыв кода закрывает доступ: агент этого не делает"
-
   - id: panel.archive
     kind: button
     surface: panel
@@ -668,12 +612,12 @@ entries:
     title: Открыть неделю
     not_for_agent: "открывает вкладку «Время» в Mini App; агент экраны не открывает"
 
-  - id: chat.copy_code
+  - id: chat.fill_profile
     kind: button
     surface: chat
-    source: Скопировать код
-    title: Скопировать код
-    not_for_agent: "техническая кнопка копирования кода приглашения, не действие агента"
+    source: Знакомство
+    title: Знакомство
+    not_for_agent: "запускает опрос о профиле; личные данные агент не собирает"
 
   - id: chat.record_expense
     kind: button

@@ -14,12 +14,14 @@ import httpx
 from fastapi import APIRouter, Depends, Header, HTTPException, Query, status
 from pydantic import Field
 
-from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK
+from services.shared.invite import INVITE_LINK
+from services.shared.onboarding import INVITE_INSTRUCTION
 
 from .. import agent, cold, core, file_access, files_store, llm, masking, notification_store
 from ..errors import ApiError
 from ..external import DB_ERRORS, HTTP_ERRORS
 from ..pages import layout as page_layout
+from ..person_key import make_key
 from ..rules import CONFIDENCE_THRESHOLD, cascade_decide
 from ..version import format_uptime, uptime_seconds
 from ..webapp import allowed_admin_actions, allowed_admin_blocks
@@ -29,51 +31,55 @@ from . import people
 router = APIRouter()
 
 class InviteIn(core.ApiIn):
-    role: Literal["admin", "org", "troupe", "master"]
-    # Дисциплина для кода педагога необязательна: спрашиваем её при регистрации (064).
-    discipline_code: Literal["acting", "music"] | None = None
+    """Персональный код: выписывается на конкретного человека (docs/development/182 §4.3.4)."""
+
+    participant_id: int
     ttl_days: int = core.INVITE_TTL_DAYS
-    max_uses: int = 1
     correlation_id: str | None = None
 
 
-
-@router.post("/admin/invite")
-def create_invite(body: InviteIn,
-                 who: dict = Depends(core.require("registration.code.issue"))) -> dict:
-    if body.role == "admin":
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            "admin не выдаётся кодом: только через ADMIN_CHAT_ID")
-    if body.role != "master" and body.discipline_code:
-        raise HTTPException(status.HTTP_400_BAD_REQUEST,
-                            "discipline_code допустим только для роли master")
-    code = "".join(secrets.choice(core.CODE_ALPHABET) for _ in range(8))
-    expires = core.now() + timedelta(days=body.ttl_days)
+def create_invite(body: InviteIn, who: dict) -> dict:
+    """Выпустить одноразовый код на человека. Вызывается только webapp-обёрткой."""
     with core.pool.connection() as conn:
+        person = conn.execute("select * from participant where id = %s",
+                              (body.participant_id,)).fetchone()
+        if person is None:
+            raise HTTPException(status.HTTP_404_NOT_FOUND, "participant_not_found")
+        if person["tg_chat_id"] is not None:
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "participant_already_bound")
+        if person["status"] in ("archived", "blocked"):
+            raise HTTPException(status.HTTP_400_BAD_REQUEST, "participant_not_available")
+        if person["role"] == "admin":
+            raise HTTPException(status.HTTP_400_BAD_REQUEST,
+                                "admin не выдаётся кодом: только через ADMIN_CHAT_ID")
+        code = "".join(secrets.choice(core.CODE_ALPHABET) for _ in range(8))
+        expires = core.now() + timedelta(days=body.ttl_days)
         row = conn.execute(
-            """insert into invite_code (code, role, discipline_code, created_by, expires_at, max_uses)
-               values (%s,%s,%s,%s,%s,%s) returning id""",
-            (code, body.role, body.discipline_code, who.get("id") or 0, expires, body.max_uses),
+            """insert into invite_code
+                 (code, role, participant_id, created_by, expires_at, max_uses)
+               values (%s,%s,%s,%s,%s,1) returning id""",
+            (code, person["role"], person["id"], who.get("id") or 0, expires),
         ).fetchone()
         core.audit(conn, "human", who.get("id"), "invite.create", "invite_code", str(row["id"]),
-              after={"role": body.role, "expires_at": expires.isoformat()},
-              correlation_id=body.correlation_id)
-    return {"ok": True, "code": code, "role": body.role,
+                   after={"participant_id": person["id"], "role": person["role"],
+                          "expires_at": expires.isoformat()},
+                   correlation_id=body.correlation_id)
+    return {"ok": True, "code": code, "role": person["role"],
+            "participant_id": person["id"], "display_name": person["display_name"],
             "expires_at": expires.isoformat(timespec="seconds")}
 
 
-
-@router.get("/admin/invites")
-def list_invites(who: dict = Depends(core.require("registration.code.issue"))) -> dict:
+def list_invites(who: dict) -> dict:
     """Открытые коды: ещё не истекли и не исчерпаны. Секретов здесь нет — только коды."""
     with core.pool.connection() as conn:
         rows = conn.execute(
-            """select code, role, created_at, expires_at, max_uses, uses
-                 from invite_code
-                where expires_at > now() and uses < max_uses
-                order by created_at desc limit 50""").fetchall()
+            """select i.code, i.role, i.created_at, i.expires_at, i.max_uses, i.uses,
+                      i.participant_id, p.display_name
+                 from invite_code i
+                 left join participant p on p.id = i.participant_id
+                where i.expires_at > now() and i.uses < i.max_uses
+                order by i.created_at desc limit 50""").fetchall()
     return {"ok": True, "data": [dict(row) for row in rows]}
-
 
 
 class InviteRevokeIn(core.ApiIn):
@@ -81,10 +87,7 @@ class InviteRevokeIn(core.ApiIn):
     correlation_id: str | None = None
 
 
-
-@router.post("/admin/invite/revoke")
-def revoke_invite(body: InviteRevokeIn,
-                  who: dict = Depends(core.require("registration.code.issue"))) -> dict:
+def revoke_invite(body: InviteRevokeIn, who: dict) -> dict:
     """Отзыв кода: проставляем срок «сейчас», запись остаётся в истории."""
     with core.pool.connection() as conn:
         row = conn.execute(
@@ -94,7 +97,7 @@ def revoke_invite(body: InviteRevokeIn,
         if row is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "invite_not_found_or_used")
         core.audit(conn, "human", who.get("id"), "invite.revoke", "invite_code", str(row["id"]),
-              after={"role": row["role"]}, correlation_id=body.correlation_id)
+                   after={"role": row["role"]}, correlation_id=body.correlation_id)
     return {"ok": True, "code": body.code.strip().upper()}
 
 
@@ -398,44 +401,6 @@ def webapp_admin_reconcile(body: ReconcileIn, who: dict = Depends(core.webapp_ac
     """То же, что /admin/reconcile, но по токену Mini App."""
     core._webapp_require(who, "budget.import")
     return admin_reconcile(body, who)
-
-
-
-class ApproveIn(core.ApiIn):
-    participant_id: int
-    approve: bool = True
-    correlation_id: str | None = None
-
-
-
-@router.get("/admin/pending")
-def pending(who: dict = Depends(core.require("registration.approve"))) -> dict:
-    with core.pool.connection() as conn:
-        rows = conn.execute(
-            """select p.id, p.display_name, p.role, p.created_at, p.phone,
-                      i.code as invite_code
-                 from participant p
-                 left join invite_code i on i.id = p.invite_code_id
-                where p.status = 'pending' order by p.created_at""").fetchall()
-    return {"ok": True, "data": rows}
-
-
-
-@router.post("/admin/approve")
-def approve(body: ApproveIn, who: dict = Depends(core.require("registration.approve"))) -> dict:
-    with core.pool.connection() as conn:
-        person = conn.execute("select * from participant where id = %s",
-                              (body.participant_id,)).fetchone()
-        if person is None:
-            raise HTTPException(status.HTTP_404_NOT_FOUND, "participant_not_found")
-        new_status = "active" if body.approve else "archived"
-        conn.execute("update participant set status = %s, activated_at = coalesce(activated_at, now())"
-                     " where id = %s", (new_status, body.participant_id))
-        core.audit(conn, "human", who.get("id"), "participant.approve" if body.approve
-              else "participant.reject", "participant", str(body.participant_id),
-              before={"status": person["status"]}, after={"status": new_status},
-              correlation_id=body.correlation_id)
-    return {"ok": True, "status": new_status}
 
 
 
@@ -973,8 +938,7 @@ def webapp_admin_overview(who: dict = Depends(core.webapp_actor)) -> dict:
     if "people" in allowed:
         rows = people.participants(include_archived=False, who=viewer)["data"]
         blocks["people"] = {
-            "counts": {"active": sum(1 for p in rows if p["status"] == "active"),
-                       "pending": sum(1 for p in rows if p["status"] == "pending")},
+            "counts": {"active": sum(1 for p in rows if p["status"] == "active")},
             "data": rows,
         }
     if page_layout.has(caps, "participants.manage"):
@@ -1005,8 +969,6 @@ def webapp_admin_overview(who: dict = Depends(core.webapp_actor)) -> dict:
                     person["archived_at"] = str(mark["ts"])[:10]
                     person["archived_action"] = mark["action"]
         blocks["archive"] = {"data": archived}
-    if "pending" in allowed:
-        blocks["pending"] = pending(who=viewer)["data"]
     if "rights" in allowed:
         catalog = capability_catalog(who=viewer)
         blocks["rights"] = {"matrix": catalog["matrix"]}
@@ -1029,13 +991,6 @@ class WebAppTariffIn(core.ApiIn):
     participant_id: int
     tariff: float | None = Field(default=None, ge=0, le=1_000_000,
                                  description="взнос в месяц, ₽; null — снять тариф")
-
-
-
-@router.post("/webapp/admin/approve")
-def webapp_admin_approve(body: ApproveIn, who: dict = Depends(core.webapp_actor)) -> dict:
-    """Подтвердить или отклонить заявку из Mini App (право `registration.approve`)."""
-    return approve(body, who=core._webapp_require(who, "registration.approve"))
 
 
 
@@ -1099,28 +1054,82 @@ def webapp_admin_invites(who: dict = Depends(core.webapp_actor)) -> dict:
 
 
 
-class WebAppInviteIn(core.ApiIn):
-    # Роли те же, что у бота (`InviteIn`) минус `admin`: код админа не выдаётся.
-    # Дисциплину педагог выбирает при регистрации, поэтому поля здесь нет.
-    role: Literal["org", "troupe", "master"] = "troupe"
-    ttl_days: int = 7
-    max_uses: int = 1
+@router.get("/webapp/admin/invite-candidates")
+def webapp_invite_candidates(q: str = "",
+                             who: dict = Depends(core.webapp_actor)) -> dict:
+    """Люди без Telegram — кандидаты на персональный код (V-117, docs/182 §4.3.2)."""
+    core._webapp_require(who, "registration.code.issue")
+    with core.pool.connection() as conn:
+        rows = people._search_candidates(conn, q)
+    return {"ok": True, "data": rows}
 
+
+class WebAppNewPersonIn(core.ApiIn):
+    display_name: str = Field(min_length=2, max_length=120)
+    role: Literal["org", "troupe", "master"] = "troupe"
+    discipline_code: Literal["acting", "music"] | None = None
+    correlation_id: str | None = None
+
+
+@router.post("/webapp/admin/person-new")
+def webapp_person_new(body: WebAppNewPersonIn,
+                      who: dict = Depends(core.webapp_actor)) -> dict:
+    """Завести человека без Telegram прямо на экране «Приглашения» (V-117).
+
+    Запись сразу `active`: код на неё выписывается отдельным шагом, а вход
+    переводит `tg_chat_id` и оставляет статус `active`.
+    """
+    actor = core._webapp_require(who, "registration.code.issue")
+    display_name = " ".join(body.display_name.split())
+    if len(display_name.split()) < 2:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Напишите фамилию и имя.",
+                       code="need_full_name")
+    key = make_key(display_name)
+    if not key:
+        raise ApiError(status.HTTP_400_BAD_REQUEST, "Напишите фамилию и имя.",
+                       code="need_full_name")
+    with core.pool.connection() as conn:
+        if conn.execute("select 1 from participant where person_key = %s",
+                        (key,)).fetchone():
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "Такой человек уже есть в списке.",
+                           code="person_key_taken")
+        created = conn.execute(
+            """insert into participant
+                 (display_name, person_key, role, status, is_active)
+               values (%s, %s, %s, 'active', true) returning *""",
+            (display_name, key, body.role)).fetchone()
+        core.ensure_role_row(conn, created["id"], body.role)
+        if body.role == "master" and body.discipline_code:
+            people._bind_master_discipline(conn, created["id"], "master",
+                                           body.discipline_code)
+        core.audit(conn, "human", actor.get("id"), "participant.create", "participant",
+                   str(created["id"]),
+                   after={"display_name": display_name, "person_key": key, "role": body.role},
+                   correlation_id=body.correlation_id)
+    return {"ok": True, "participant": {"id": created["id"],
+                                        "display_name": created["display_name"],
+                                        "role": created["role"]}}
+
+
+class WebAppInviteIn(core.ApiIn):
+    participant_id: int
+    ttl_days: int = 7
+    correlation_id: str | None = None
 
 
 @router.post("/webapp/admin/invite")
 def webapp_admin_invite(body: WebAppInviteIn,
                         who: dict = Depends(core.webapp_actor)) -> dict:
-    """Выпустить код кнопкой: админ не выдаётся кодом даже из панели.
+    """Выпустить персональный код на выбранного человека.
 
-    Код остаётся на экране, а инструкция получателю уходит в чат уведомлением
-    (E12, docs/development/179): пересылать её из шторки неудобно, а в боте она
-    приходит тем же сообщением, что и код. Ставим её только здесь, не в
-    `create_invite`: бот зовёт `/admin/invite` и инструкцию уже прислал.
+    Код остаётся на экране, а инструкция выпустившему уходит уведомлением
+    (E12, docs/development/179): у нового человека Telegram ещё нет.
     """
     actor = core._webapp_require(who, "registration.code.issue")
-    created = create_invite(InviteIn(role=body.role, ttl_days=body.ttl_days,
-                                     max_uses=body.max_uses), who=actor)
+    created = create_invite(InviteIn(participant_id=body.participant_id,
+                                     ttl_days=body.ttl_days,
+                                     correlation_id=body.correlation_id), who=actor)
     if actor.get("id"):
         _queue_invite_instruction(actor["id"], created["code"])
     return created

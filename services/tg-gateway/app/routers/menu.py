@@ -3,13 +3,11 @@
 from __future__ import annotations
 
 import re
-from urllib.parse import quote
 
 import core
 import errors
 import keyboards
 import parsers
-import runtime
 import texts
 from aiogram import Bot, F, Router
 from aiogram.exceptions import TelegramAPIError
@@ -39,7 +37,7 @@ import routers.intro as intro_router
 import routers.notes as notes_router
 import routers.polls as polls_router
 import routers.profile as profile_router
-from config import ADMIN_CHAT_ID, WEBAPP_BASE_URL, log
+from config import WEBAPP_BASE_URL, log
 
 router = Router()
 
@@ -59,6 +57,31 @@ def _chat_action_buttons(*labels: str) -> list[list[tuple[str, str]]]:
     """Кнопки-действия по подписям — для сообщений без проверки прав."""
     wanted = set(labels)
     return [[(text, data)] for text, _, data in CHAT_ACTION_BUTTONS if text in wanted]
+
+
+#: Ответы входа по коду (docs/development/182 §1.3). Три первых строки цитируются
+#: в памятке `/help`, поэтому меняются только вместе с ней.
+code_texts = {
+    "code_not_found": "Код не найден. Проверьте написание.",
+    "code_expired": "Код устарел — попросите новый.",
+    "code_exhausted": "Этот код уже использован.",
+    "code_not_personal": "Этот код больше не действует — попросите администратора выпустить новый.",
+    "rate_limited": "Слишком много попыток ввода кода. Попробуйте через час.",
+    "participant_blocked": "Доступ к боту закрыт. Напишите администратору студии.",
+}
+
+
+async def _attach_by_code(message: Message, code: str,
+                          discipline_code: str | None = None) -> dict | None:
+    """Привязать запись по персональному коду; при отказе — сказать причину."""
+    payload: dict = {"chat_id": message.chat.id, "code": code}
+    if discipline_code:
+        payload["discipline_code"] = discipline_code
+    res = await core.api("/tools/participants/attach", payload, message.chat.id)
+    if not res.get("ok"):
+        await message.answer(code_texts.get(errors.error_code(res), "Код не подошёл."))
+        return None
+    return res.get("participant") or {}
 
 
 def disciplines_line(disciplines: list[dict] | None) -> str:
@@ -141,7 +164,7 @@ async def start(message: Message, state: FSMContext) -> None:
     await state.set_state(Reg.await_code)
     await message.answer(
         "Это бот театра-студии СВОИ.\nВы пока не зарегистрированы.\n\n"
-        "Введите код приглашения (8 символов), который дал организатор."
+        "Введите код приглашения (8 символов), который дал администратор."
     )
 
 
@@ -176,14 +199,11 @@ async def list_people(message: Message) -> bool:
         return True
     rows = res.get("data", [])
     active = [p for p in rows if p["status"] == "active"]
-    pending = [p for p in rows if p["status"] == "pending"]
-    lines = [f"Зарегистрировано: {len(active)}, ожидают подтверждения: {len(pending)}", ""]
+    lines = [f"Зарегистрировано: {len(active)}", ""]
     for p in active:
         roles = ", ".join(texts.ROLE_TITLES.get(r, r) for r in (p.get("roles") or [p["role"]]))
         tg = "telegram привязан" if p.get("chat_id") else "без telegram"
         lines.append(f"{p['display_name']} — {roles} ({tg})")
-    if pending:
-        lines += ["", "Ожидают: " + ", ".join(p["display_name"] for p in pending)]
     await message.answer("\n".join(lines)[:3800])
     return True
 
@@ -307,6 +327,11 @@ async def run_menu_action(message: Message, state: FSMContext, label: str) -> No
                                  "короткие имена, род.", reply_markup=app_kb)
         return
 
+    if label == texts.TITLE_FILL:
+        await state.clear()
+        await intro_router.intro_fill(message, state)
+        return
+
     if label == texts.TITLE_CAPABILITIES:
         await state.clear()
         await message.answer(keyboards.help_text(await core.caps_of(chat_id), await core.ui_texts_cached(chat_id)))
@@ -324,20 +349,6 @@ async def run_menu_action(message: Message, state: FSMContext, label: str) -> No
 
     if label == texts.TITLE_ADMIN:
         await admin_router.panel_root(message, edit=False)
-        return
-
-    if label == texts.TITLE_REQUESTS:
-        await state.clear()
-        await admin_router.send_pending(message)
-        return
-
-    # Пункт меню называется «Приглашения» (`texts.TITLE_INVITES`, группа «Управление»), поэтому
-    # сравнивать надо с константой. Литерал «Пригласить» здесь стоял с самого появления
-    # пункта, но такого ярлыка в меню нет: ветка была недостижима, а нажатие проваливалось
-    # в справку «Что умею» — человек ждал код, а получал список возможностей (174 §11.4).
-    if label == texts.TITLE_INVITES:
-        await state.clear()
-        await admin_router.send_invite(message)
         return
 
     caps = await core.caps_of(chat_id)
@@ -658,30 +669,23 @@ async def on_text(message: Message, state: FSMContext) -> None:
                             p.get("roles") or [p["role"]], p.get("capabilities") or [])
             return
         if not res.get("ok"):
-            code_texts = {"code_not_found": "Код не найден. Проверьте написание.",
-                     "code_expired": "Код устарел — попросите новый.",
-                     "code_exhausted": "Этот код уже использован."}
             await message.answer(code_texts.get(errors.error_code(res), "Код не подошёл."))
             return
 
         await state.update_data(code=text, role=res.get("role"))
         if res.get("needs_discipline"):
-            # Педагог называет дисциплину до выбора себя (064): предмет — часть роли.
+            # Педагог называет дисциплину до привязки (064): предмет — часть роли.
             await state.set_state(Reg.await_discipline)
             await message.answer(
                 "Код педагога принят. Какую дисциплину вы преподаёте?",
                 reply_markup=keyboards.discipline_kb())
             return
-        cands = res.get("candidates", [])
-        if cands:
-            await state.set_state(Reg.choose)
-            await message.answer(
-                "Код принят. Выберите себя из списка — так ваши взносы и занятость "
-                "останутся на одной записи. Начните вводить фамилию или имя: список "
-                "сузится, а кнопки обновятся.", reply_markup=keyboards._candidates_kb(cands))
-        else:
-            await state.set_state(Reg.await_name)
-            await message.answer("Код принят. Напишите фамилию и имя — «Фамилия Имя».")
+        person = await _attach_by_code(message, text)
+        if person is None:
+            return
+        await state.clear()
+        await message.answer(f"Код принят: {person['display_name']}.")
+        await intro_router.intro_start(message, chat_id, state)
         return
 
     # «заметка: …» — задача, а не вопрос: текст → карточка → подтверждение (FR-F7).
@@ -800,135 +804,33 @@ async def on_text(message: Message, state: FSMContext) -> None:
     )
 
 
-async def _reg_after_code(message: Message, state: FSMContext) -> None:
-    """Продолжение регистрации после выбора: список кандидатов или заявка с именем."""
-    res = await core.api("/tools/participants/search?q=", None, message.chat.id, method="GET")
-    cands = (res.get("candidates") or []) if res.get("ok") else []
-    if cands:
-        await state.set_state(Reg.choose)
-        await message.answer(
-            "Выберите себя из списка — так ваши взносы и занятость останутся на одной "
-            "записи. Начните вводить фамилию или имя: список сузится.",
-            reply_markup=keyboards._candidates_kb(cands))
-    else:
-        await state.set_state(Reg.await_name)
-        await message.answer("Напишите фамилию и имя — «Фамилия Имя».")
-
-
 @router.callback_query(Reg.await_discipline, F.data.startswith("reg:disc:"))
 async def reg_discipline(cb: CallbackQuery, state: FSMContext) -> None:
+    """Выбор дисциплины педагога: привязка тем же кодом и знакомство сразу после."""
     code = cb.data.split(":")[2]
-    await state.update_data(discipline_code=code)
     title = {"acting": "Актёрское мастерство", "music": "Музыка"}.get(code, code)
-    await cb.message.edit_text(f"Дисциплина: {title}.")
-    await cb.answer()
-    await _reg_after_code(cb.message, state)
-
-
-@router.message(Reg.choose, F.text, ~F.text.startswith("/"))
-async def reg_filter(message: Message, state: FSMContext) -> None:
-    """Ввод букв сужает список людей (Ш-46, V-006): «Смирнова» находит «Дарья Смирнова».
-
-    Автосопоставления нет: бот только показывает записи, привязку делает человек
-    нажатием кнопки. Ничего не нашлось — человек идёт в заявку, а не в чужой профиль.
-    """
     data = await state.get_data()
-    if not data.get("code"):
-        await message.answer("Начните заново: /start")
-        return
-    query = (message.text or "").strip()
-    res = await core.api(f"/tools/participants/search?q={quote(query)}", None,
-                    message.chat.id, method="GET")
-    if not res.get("ok"):
-        await message.answer("Не получилось получить список. Попробуйте ещё раз "
-                             "или нажмите «Меня нет в списке».")
-        return
-    cands = res.get("candidates") or []
-    if not cands:
-        await state.set_state(Reg.await_name)
-        await message.answer(
-            f"{texts.PREFIX_QUERY}{query}» никого не нашёл. Напишите фамилию и имя — "
-            "заявку подтвердит администратор.")
-        return
-    await message.answer(f"Кто из них вы? Найдено: {len(cands)}.",
-                         reply_markup=keyboards._candidates_kb(cands))
-
-
-@router.callback_query(F.data.startswith("reg:pick:"))
-async def reg_pick(cb: CallbackQuery, state: FSMContext) -> None:
-    data = await state.get_data()
-    code = data.get("code")
-    if not code:
+    invite_code = data.get("code")
+    if not invite_code:
         await cb.answer("Начните заново: /start", show_alert=True)
         return
-    pid = int(cb.data.split(":")[2])
-    payload = {"chat_id": cb.message.chat.id, "participant_id": pid, "code": code}
-    if data.get("discipline_code"):
-        payload["discipline_code"] = data["discipline_code"]
-    res = await core.api("/tools/participants/attach", payload, cb.message.chat.id)
-    if res.get("ok"):
-        await state.clear()
-        p = res["participant"]
-        await send_menu(cb.message, cb.message.chat.id, p["display_name"],
-                        p.get("roles") or [p["role"]], p.get("capabilities") or [])
-        await cb.message.delete()
-        await cb.answer("Зарегистрировано")
-        await intro_router.intro_start(cb.message, cb.message.chat.id, state)
-    else:
-        await cb.answer(f"Ошибка: {res.get('error')}", show_alert=True)
-
-
-@router.callback_query(F.data == "reg:none")
-async def reg_none(cb: CallbackQuery, state: FSMContext) -> None:
-    await state.set_state(Reg.await_name)
-    await cb.message.edit_text("Напишите фамилию и имя — заявку подтвердит администратор.")
+    person = await _attach_by_code(cb.message, invite_code, discipline_code=code)
     await cb.answer()
-
-
-@router.message(Reg.await_name, F.text)
-async def reg_name(message: Message, state: FSMContext) -> None:
-    data = await state.get_data()
-    code = data.get("code")
-    if not code:
-        await message.answer("Начните заново: /start")
+    if person is None:
         return
-    payload = {"chat_id": message.chat.id, "code": code,
-               "display_name": message.text.strip(), "require_approval": True}
-    if data.get("discipline_code"):
-        payload["discipline_code"] = data["discipline_code"]
-    res = await core.api("/tools/participants/register", payload, message.chat.id)
-    if res.get("ok") and res.get("status") == "need_discipline":
-        await state.set_state(Reg.await_discipline)
-        await message.answer("Какую дисциплину вы преподаёте?",
-                             reply_markup=keyboards.discipline_kb())
-        return
-    if errors.error_code(res) == "person_key_taken":
-        await message.answer("Такой человек уже есть. Отправьте /start и выберите себя из списка.")
-        return
-    if not res.get("ok"):
-        await message.answer(errors.error_text(res))
-        return
-    p = res["participant"]
     await state.clear()
-    if p["status"] == "pending":
-        await message.answer(f"Заявка создана: {p['display_name']}. "
-                             "Доступ откроется после подтверждения.")
-        if ADMIN_CHAT_ID and runtime._bot:
-            await runtime._bot.send_message(
-                ADMIN_CHAT_ID,
-                f"{texts.PREFIX_REQUEST}{p['display_name']} — {texts.ROLE_TITLES.get(p['role'], p['role'])}",
-                reply_markup=keyboards.kb([[(texts.BTN_CONFIRM, f"adm:ok:{p['id']}"),
-                                  (texts.BTN_REJECT, f"adm:no:{p['id']}")]]))
-    else:
-        await send_menu(message, message.chat.id, p["display_name"],
-                        p.get("roles") or [p["role"]], p.get("capabilities") or [])
-        await intro_router.intro_start(message, message.chat.id, state)
+    await cb.message.edit_text(f"Код принят: {person['display_name']}. Дисциплина: {title}.")
+    await intro_router.intro_start(cb.message, cb.message.chat.id, state)
 
 
 @router.message(Command("help"))
 async def cmd_help(message: Message) -> None:
-    await message.answer(keyboards.help_text(await core.caps_of(message.chat.id),
-                                  await core.ui_texts_cached(message.chat.id)))
+    """Памятка первого входа (E13, docs/development/182 §3.2).
+
+    Список возможностей остаётся пунктом «Что умею» и ответом на «как/где/почему»;
+    `/help` — про вход, код и знакомство.
+    """
+    await message.answer(texts.HELP_MEMO)
 
 
 @router.message(Command("menu"))

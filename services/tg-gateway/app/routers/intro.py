@@ -16,23 +16,41 @@ import routers.menu as menu_router
 router = Router()
 
 
-async def intro_ask(message: Message, state: FSMContext, step: str) -> None:
+async def intro_ask(message: Message, state: FSMContext, step: str,
+                    skippable: bool = True) -> None:
     await state.set_state(getattr(Intro, step).state)
-    await message.answer(intro.question(step), reply_markup=keyboards.intro_skip_kb())
+    await message.answer(intro.question(step),
+                         reply_markup=keyboards.intro_skip_kb() if skippable else None)
 
 
 async def intro_start(message: Message, chat_id: int, state: FSMContext) -> None:
-    """Начать знакомство: план зависит от того, что уже есть в профиле.
+    """Начать знакомство при входе: план — из трёх обязательных полей.
 
-    Известное не переспрашиваем — телефон и день рождения спрашиваются, только
-    если их нет; имя — если в профиле одно слово (V-009).
+    Известное не переспрашиваем: имя — только если в записи одно слово, телефон —
+    если он пуст. Короткое имя нужно всегда (docs/development/182 §2.2).
     """
     res = await core.api("/tools/profile/me", None, chat_id, method="GET")
     profile = res if res.get("ok") else {}
-    plan = intro.build_plan(profile)
-    await state.update_data(plan=plan, answers={})
+    plan = intro.build_entry_plan(profile)
+    await state.update_data(plan=plan, answers={}, mode="entry")
     await state.set_state(getattr(Intro, plan[0]).state)
-    await message.answer(intro.INTRO_HEAD + "\n\n" + intro.question(plan[0]),
+    await message.answer(intro.INTRO_HEAD_ENTRY + "\n\n" + intro.question(plan[0]),
+                         reply_markup=keyboards.intro_skip_kb())
+
+
+async def intro_fill(message: Message, state: FSMContext) -> None:
+    """Дозаполнение по кнопке «Знакомство»: только пустые необязательные поля."""
+    res = await core.api("/tools/profile/me", None, message.chat.id, method="GET")
+    if not res.get("ok"):
+        await message.answer("Сначала регистрация: /start")
+        return
+    plan = intro.build_fill_plan(res)
+    if not plan:
+        await message.answer(intro.FILL_NOTHING)
+        return
+    await state.update_data(plan=plan, answers={}, mode="fill")
+    await state.set_state(getattr(Intro, plan[0]).state)
+    await message.answer(intro.INTRO_HEAD_FILL + "\n\n" + intro.question(plan[0]),
                          reply_markup=keyboards.intro_skip_kb())
 
 
@@ -61,8 +79,16 @@ async def intro_answer(message: Message, state: FSMContext, step: str) -> None:
         await menu_router.menu_action(message, state)
         return
     data = await state.get_data()
-    plan = data.get("plan") or list(intro.STEPS)
+    plan = data.get("plan") or []
+    if not plan:
+        await state.clear()
+        await message.answer("Начните заново: /intro")
+        return
     answers = dict(data.get("answers") or {})
+    if step == "alias" and intro.is_skip(text):
+        # Короткое имя обязательно при входе: «Пропустить» повторяет вопрос.
+        await message.answer(intro.RETRY["alias"])
+        return
     if not intro.is_skip(text):
         patch = intro.parse_step(step, text)
         if not patch and step in intro.LLM_STEPS:
@@ -79,7 +105,7 @@ async def intro_answer(message: Message, state: FSMContext, step: str) -> None:
         await state.update_data(answers=answers)
     follow = intro.next_step(plan, step)
     if follow:
-        await intro_ask(message, state, follow)
+        await intro_ask(message, state, follow, skippable=follow != "alias")
         return
     await intro_finish(message, state)
 
@@ -87,7 +113,7 @@ async def intro_answer(message: Message, state: FSMContext, step: str) -> None:
 async def intro_skip_current(message: Message, state: FSMContext) -> None:
     current = await state.get_state()
     data = await state.get_data()
-    plan = data.get("plan") or list(intro.STEPS)
+    plan = data.get("plan") or []
     if current == Intro.confirm.state:
         await message.answer("Сводка уже показана: «Записать» или «Отменить».",
                              reply_markup=keyboards.intro_confirm_kb())
@@ -113,6 +139,7 @@ async def intro_save(cb: CallbackQuery, state: FSMContext) -> None:
     """Подтверждение сводки: единственная точка записи профиля в знакомстве."""
     await cb.answer("Записываю…")
     data = await state.get_data()
+    mode = data.get("mode") or "entry"
     patch = intro.build_patch(data.get("answers") or {})
     if not patch:
         await state.clear()
@@ -125,14 +152,34 @@ async def intro_save(cb: CallbackQuery, state: FSMContext) -> None:
             reply_markup=keyboards.intro_confirm_kb())
         return
     await state.clear()
-    await cb.message.edit_text(intro.DONE)
+    if mode == "fill":
+        await cb.message.edit_text(intro.DONE_FILL)
+        return
+    await cb.message.edit_text(intro.DONE_ENTRY)
+    me = await core.api("/tools/participants/me", None, cb.message.chat.id, method="GET")
+    if me.get("ok"):
+        p = me["data"]
+        await menu_router.send_menu(cb.message, cb.message.chat.id, p["display_name"],
+                                    p.get("roles") or [p["role"]],
+                                    p.get("capabilities") or [], p.get("disciplines"))
 
 
 @router.callback_query(F.data == "intro:cancel")
 async def intro_cancel(cb: CallbackQuery, state: FSMContext) -> None:
     await cb.answer()
+    data = await state.get_data()
+    mode = data.get("mode") or "entry"
     await state.clear()
     await cb.message.edit_text(intro.CANCELLED)
+    if mode == "fill":
+        return
+    # Человек уже зарегистрирован — оставлять его без меню нельзя.
+    me = await core.api("/tools/participants/me", None, cb.message.chat.id, method="GET")
+    if me.get("ok"):
+        p = me["data"]
+        await menu_router.send_menu(cb.message, cb.message.chat.id, p["display_name"],
+                                    p.get("roles") or [p["role"]],
+                                    p.get("capabilities") or [], p.get("disciplines"))
 
 
 @router.message(Intro.name, F.text)

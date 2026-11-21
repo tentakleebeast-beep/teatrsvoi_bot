@@ -2,32 +2,18 @@
 
 from __future__ import annotations
 
-import hmac
 import re
 from datetime import date, datetime
 from typing import Literal
 
-from fastapi import APIRouter, Depends, Header, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import Field, field_validator
 
 from .. import core, intro_llm, llm
-from ..errors import ApiError
-from ..person_key import make_key
 from ..person_match import rank, resolve, words
 from . import finance
 
 router = APIRouter()
-
-class RegisterIn(core.ApiIn):
-    chat_id: int
-    code: str = Field(min_length=4, max_length=16)
-    # Дисциплина обязательна для роли master (064): её называют при регистрации.
-    discipline_code: Literal["acting", "music"] | None = None
-    display_name: str | None = None
-    require_approval: bool = False
-    correlation_id: str | None = None
-
-
 
 @router.get("/tools/participants/{participant_id}/card")
 def participant_card(participant_id: int,
@@ -62,86 +48,6 @@ def _bind_master_discipline(conn, participant_id: int, code_role: str,
         (participant_id, row["id"]))
     return None
 
-
-@router.post("/tools/participants/register")
-def register(body: RegisterIn) -> dict:
-    """Регистрация по инвайт-коду: бот сам наполняет таблицу участников."""
-    with core.pool.connection() as conn:
-        existing = conn.execute("select * from participant where tg_chat_id = %s",
-                                (body.chat_id,)).fetchone()
-        if existing:
-            return {"ok": True, "status": "already_registered",
-                    "participant": core._participant_out(existing)}
-
-        fails = conn.execute(
-            """select count(*) c from invite_attempt
-               where chat_id = %s and ok = false and ts > now() - interval '1 hour'""",
-            (body.chat_id,),
-        ).fetchone()["c"]
-        if fails >= core.INVITE_MAX_ATTEMPTS:
-            core.audit(conn, "system", None, "access.denied", "invite_code", body.code,
-                  after={"reason": "rate_limited", "chat_id": body.chat_id})
-            raise ApiError(status.HTTP_429_TOO_MANY_REQUESTS,
-                           "Слишком много попыток ввода кода. Попробуйте через час.",
-                           code="rate_limited")
-
-        code_row = conn.execute(
-            "select * from invite_code where upper(code) = upper(%s)", (body.code.strip(),)
-        ).fetchone()
-        reason = None
-        if code_row is None:
-            reason = "code_not_found"
-        elif code_row["expires_at"] < core.now():
-            reason = "code_expired"
-        elif code_row["uses"] >= code_row["max_uses"]:
-            reason = "code_exhausted"
-
-        if reason or code_row is None:
-            conn.execute("insert into invite_attempt (chat_id, ok) values (%s, false)",
-                         (body.chat_id,))
-            core.audit(conn, "human", None, "registration.reject", "invite_code", body.code,
-                  after={"reason": reason, "chat_id": body.chat_id})
-            return {"ok": False, "error": reason}
-
-        if not body.display_name:
-            return {"ok": True, "status": "need_name", "role": code_row["role"],
-                    "needs_discipline": code_row["role"] == "master"}
-        if code_row["role"] == "master" and not (body.discipline_code or code_row.get("discipline_code")):
-            return {"ok": True, "status": "need_discipline", "role": "master"}
-
-        key = make_key(body.display_name)
-        if key and conn.execute("select 1 from participant where person_key = %s",
-                                (key,)).fetchone():
-            raise ApiError(status.HTTP_409_CONFLICT,
-                           "Такой человек уже зарегистрирован — напишите организатору.",
-                           code="person_key_taken")
-
-        new_status = "pending" if body.require_approval else "active"
-        created = conn.execute(
-            """insert into participant
-               (tg_chat_id, display_name, person_key, role, status,
-                drive_folder, invited_by, invite_code_id, activated_at)
-               values (%s,%s,%s,%s,%s,%s,%s,%s,%s)
-               returning *""",
-            (body.chat_id, body.display_name.strip(), key, code_row["role"], new_status,
-             f"TG_{body.chat_id}", code_row["created_by"], code_row["id"],
-             None if body.require_approval else datetime.now(core.TZ)),
-        ).fetchone()
-        core.ensure_role_row(conn, created["id"], code_row["role"])
-        err = _bind_master_discipline(conn, created["id"], code_row["role"],
-                                      body.discipline_code or code_row.get("discipline_code"))
-        if err:
-            raise ApiError(status.HTTP_400_BAD_REQUEST, "Неизвестная дисциплина",
-                           code=err)
-        conn.execute("update invite_code set uses = uses + 1, used_by = %s where id = %s",
-                     (created["id"], code_row["id"]))
-        conn.execute("insert into invite_attempt (chat_id, ok) values (%s, true)",
-                     (body.chat_id,))
-        core.audit(conn, "human", created["id"], "participant.register", "participant",
-              str(created["id"]), after={"role": code_row["role"], "chat_id": body.chat_id,
-                                         "person_key": key, "code": body.code},
-              correlation_id=body.correlation_id)
-    return {"ok": True, "status": "registered", "participant": core._participant_out(created)}
 
 
 
@@ -578,13 +484,11 @@ def webapp_profile_save(body: ProfileIn, who: dict = Depends(core.webapp_actor))
 class CheckCodeIn(core.ApiIn):
     chat_id: int
     code: str
-    q: str | None = None
 
 
 
 class AttachIn(core.ApiIn):
     chat_id: int
-    participant_id: int
     code: str
     discipline_code: Literal["acting", "music"] | None = None
     correlation_id: str | None = None
@@ -622,14 +526,24 @@ def _search_candidates(conn, q: str, limit: int = core.SEARCH_LIMIT) -> list[dic
 
 @router.post("/tools/participants/check_code")
 def check_code(body: CheckCodeIn) -> dict:
-    """Проверка кода перед регистрацией + список людей без Telegram для выбора себя."""
+    """Проверка персонального кода перед привязкой (docs/development/182 §1.4)."""
     with core.pool.connection() as conn:
+        fails = conn.execute(
+            """select count(*) c from invite_attempt
+               where chat_id = %s and ok = false and ts > now() - interval '1 hour'""",
+            (body.chat_id,),
+        ).fetchone()["c"]
+        if fails >= core.INVITE_MAX_ATTEMPTS:
+            core.audit(conn, "system", None, "access.denied", "invite_code", body.code,
+                       after={"reason": "rate_limited", "chat_id": body.chat_id})
+            return {"ok": False, "error": "rate_limited"}
+
         code_row, err = _code_row(conn, body.code)
         if err:
             conn.execute("insert into invite_attempt (chat_id, ok) values (%s, false)",
                          (body.chat_id,))
             core.audit(conn, "human", None, "registration.reject", "invite_code", body.code,
-                  after={"reason": err, "chat_id": body.chat_id})
+                       after={"reason": err, "chat_id": body.chat_id})
             return {"ok": False, "error": err}
 
         existing = conn.execute("select * from participant where tg_chat_id = %s",
@@ -638,28 +552,22 @@ def check_code(body: CheckCodeIn) -> dict:
             return {"ok": False, "error": "already_registered",
                     "participant": core._participant_out(existing)}
 
-        rows = _search_candidates(conn, body.q or "")
-    return {"ok": True, "role": code_row["role"],
-            "needs_discipline": code_row["role"] == "master",
-            "candidates": rows}
-
-
-
-@router.get("/tools/participants/search")
-def participants_search(q: str = "", limit: int = core.SEARCH_LIMIT,
-                        authorization: str | None = Header(default=None)) -> dict:
-    """Люди без Telegram по частям имени, фамилии и псевдонимам (Ш-46, V-006).
-
-    Регистрация идёт до входа, поэтому токен — служебный, а наружу отдаём только
-    id, имя и роль: телефон и дата рождения при поиске не нужны. Автосопоставления
-    нет — бот сужает список, выбор записи делает человек сам.
-    """
-    if not hmac.compare_digest(authorization or "", f"Bearer {core.TOOL_API_TOKEN}"):
-        raise ApiError(status.HTTP_401_UNAUTHORIZED, "Неверный сервисный токен",
-                       code="bad_service_token")
-    with core.pool.connection() as conn:
-        rows = _search_candidates(conn, q, max(1, min(limit, core.SEARCH_LIMIT)))
-    return {"ok": True, "query": q, "candidates": rows}
+        person = None
+        if code_row["participant_id"] is not None:
+            person = conn.execute("select * from participant where id = %s",
+                                  (code_row["participant_id"],)).fetchone()
+        if person is None:
+            return {"ok": False, "error": "code_not_personal"}
+        if person["status"] in ("blocked", "archived"):
+            return {"ok": False, "error": "participant_blocked"}
+        needs_discipline = (
+            person["role"] == "master"
+            and conn.execute("select 1 from participant_discipline where participant_id = %s",
+                             (person["id"],)).fetchone() is None
+        )
+    return {"ok": True, "role": person["role"], "needs_discipline": needs_discipline,
+            "participant": {"id": person["id"], "display_name": person["display_name"],
+                            "role": person["role"]}}
 
 
 
@@ -680,45 +588,48 @@ def participants_find(q: str = "",
 
 @router.post("/tools/participants/attach")
 def attach(body: AttachIn) -> dict:
-    """Привязка chat_id к уже существующей записи (человек выбран себя из списка)."""
+    """Привязка chat_id к записи, на которую выписан персональный код."""
     with core.pool.connection() as conn:
         code_row, err = _code_row(conn, body.code)
         if err:
             return {"ok": False, "error": err}
 
-        person = conn.execute("select * from participant where id = %s",
-                              (body.participant_id,)).fetchone()
+        participant_id = code_row["participant_id"]
+        person = None
+        if participant_id is not None:
+            person = conn.execute("select * from participant where id = %s",
+                                  (participant_id,)).fetchone()
         if person is None:
-            return {"ok": False, "error": "participant_not_found"}
+            return {"ok": False, "error": "code_not_personal"}
         if person["tg_chat_id"] is not None:
-            return {"ok": False, "error": "already_bound"}
+            return {"ok": False, "error": "code_exhausted"}
+        if person["status"] in ("blocked", "archived"):
+            return {"ok": False, "error": "participant_blocked"}
 
         chosen_discipline = body.discipline_code or code_row.get("discipline_code")
-        if code_row["role"] == "master" and chosen_discipline and conn.execute(
+        if person["role"] == "master" and not chosen_discipline and conn.execute(
+                "select 1 from participant_discipline where participant_id = %s",
+                (person["id"],)).fetchone() is None:
+            return {"ok": False, "error": "need_discipline"}
+        if chosen_discipline and conn.execute(
                 "select 1 from discipline where code = %s", (chosen_discipline,)).fetchone() is None:
             return {"ok": False, "error": "unknown_discipline"}
 
-        rank = {"troupe": 2, "master": 2, "org": 3, "admin": 4}
-        role = code_row["role"]
-        if rank.get(person["role"], 0) > rank.get(role, 0) and person["role"] != "admin":
-            role = person["role"]
-
         updated = conn.execute(
             """update participant
-                  set tg_chat_id = %s, role = %s, status = 'active',
+                  set tg_chat_id = %s, status = 'active',
                       activated_at = now(), drive_folder = coalesce(drive_folder, %s)
                 where id = %s returning *""",
-            (body.chat_id, role, f"TG_{body.chat_id}", body.participant_id)).fetchone()
-        core.ensure_role_row(conn, body.participant_id, role)
-        _bind_master_discipline(conn, body.participant_id, code_row["role"], chosen_discipline)
+            (body.chat_id, f"TG_{body.chat_id}", person["id"])).fetchone()
+        _bind_master_discipline(conn, person["id"], person["role"], chosen_discipline)
         conn.execute("update invite_code set uses = uses + 1, used_by = %s where id = %s",
-                     (body.participant_id, code_row["id"]))
+                     (body.chat_id, code_row["id"]))
         conn.execute("insert into invite_attempt (chat_id, ok) values (%s, true)",
                      (body.chat_id,))
-        core.audit(conn, "human", body.participant_id, "participant.attach", "participant",
-              str(body.participant_id), before={"tg_chat_id": None},
-              after={"tg_chat_id": body.chat_id, "role": role},
-              correlation_id=body.correlation_id)
+        core.audit(conn, "human", person["id"], "participant.attach", "participant",
+                   str(person["id"]), before={"tg_chat_id": None},
+                   after={"tg_chat_id": body.chat_id, "role": person["role"]},
+                   correlation_id=body.correlation_id)
     return {"ok": True, "status": "attached", "participant": core._participant_out(updated)}
 
 

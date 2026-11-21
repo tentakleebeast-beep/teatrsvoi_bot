@@ -14,7 +14,7 @@ from states import PanelEdit
 from webapp_links import base_url as webapp_base_url
 from webapp_links import keyboard as webapp_keyboard
 
-from config import WEBAPP_BASE_URL, log
+from config import WEBAPP_BASE_URL
 
 router = Router()
 
@@ -42,37 +42,6 @@ async def start_reconcile(message: Message) -> None:
     await message.answer(str(res.get("text") or "Сверка выполнена.")[:3800],
                          parse_mode=None,
                          reply_markup=keyboards.kb([[("Применить к базе", "panel:reconcile_apply")]]))
-
-
-async def send_pending(message: Message) -> None:
-    """Заявки на доступ — кнопками, без админ-панели (нужно организатору)."""
-    res = await core.api("/admin/pending", None, message.chat.id, method="GET")
-    rows = res.get("data") or []
-    if not rows:
-        await message.answer("Заявок нет.")
-        return
-    lines = ["Ожидают подтверждения:"]
-    for row in rows[:8]:
-        lines.append(f"  {row['display_name']} — {texts.ROLE_TITLES.get(row.get('role'), row.get('role'))}")
-    markup = keyboards.kb([[(texts.BTN_CONFIRM, f"adm:ok:{rows[0]['id']}"),
-                  (texts.BTN_REJECT, f"adm:no:{rows[0]['id']}")]])
-    await message.answer("\n".join(lines), reply_markup=markup)
-    if len(rows) > 1:
-        await message.answer(f"Кнопки относятся к первой заявке; всего ждут {len(rows)}.")
-
-
-async def send_invite(message: Message, role: str = "troupe") -> None:
-    """Код приглашения кнопкой: печатать /invite больше не нужно."""
-    res = await core.api("/admin/invite", {"role": role, "ttl_days": 7}, message.chat.id)
-    if not res.get("ok"):
-        await message.answer("Не удалось выпустить код: "
-                             + errors.error_text(res))
-        return
-    code = str(res.get("code") or "")
-    await message.answer(texts.invite_text(code, res.get("expires_at"), role), parse_mode="HTML",
-                         reply_markup=keyboards.copy_code_kb(
-                             code, [[("Ещё код", "panel:invite")],
-                                    [(texts.TITLE_CODES, "panel:codes")]]))
 
 
 async def panel_root(message: Message, edit: bool = True) -> None:
@@ -556,30 +525,6 @@ async def panel_tariff_save(message: Message, state: FSMContext) -> None:
                          "со следующего месяца.")
 
 
-@router.callback_query(F.data == "panel:pending")
-async def panel_pending(cb: CallbackQuery) -> None:
-    res = await core.api("/admin/pending", None, cb.message.chat.id, method="GET")
-    if not res.get("ok"):
-        await cb.message.edit_text(
-            "Не удалось прочитать заявки: " + errors.error_text(res),
-            parse_mode=None, reply_markup=keyboards.kb([[(texts.BTN_BACK, "panel:root")]]))
-        await cb.answer()
-        return
-    rows = res.get("data", [])
-    if not rows:
-        await cb.message.edit_text("Заявок нет.",
-                                   reply_markup=keyboards.kb([[(texts.BTN_BACK, "panel:root")]]))
-        await cb.answer()
-        return
-    p = rows[0]
-    await cb.message.edit_text(
-        f"{texts.PREFIX_REQUEST}{p['display_name']} — {texts.ROLE_TITLES.get(p['role'], p['role'])}",
-        reply_markup=keyboards.kb([[(texts.BTN_CONFIRM, f"adm:ok:{p['id']}"),
-                          (texts.BTN_REJECT, f"adm:no:{p['id']}")],
-                         [(texts.BTN_BACK, "panel:root")]]))
-    await cb.answer()
-
-
 @router.callback_query(F.data == "panel:rights")
 async def panel_rights(cb: CallbackQuery) -> None:
     """Роли и число возможностей (Л4, FR-A6).
@@ -601,115 +546,6 @@ async def panel_rights(cb: CallbackQuery) -> None:
     await cb.message.edit_text("\n".join(lines),
                                reply_markup=keyboards.kb([[(texts.BTN_BACK, "panel:root")]]))
     await cb.answer()
-
-
-@router.callback_query(F.data == "panel:invite")
-async def panel_invite(cb: CallbackQuery) -> None:
-    """Шаг 1: выбираем роль, для которой выпускаем код."""
-    cap = await core.caps_of(cb.message.chat.id)
-    if "registration.code.issue" not in cap and "*" not in cap and "participants.manage" not in cap:
-        await cb.answer("Нет права выпускать коды", show_alert=True)
-        return
-    await cb.message.edit_text(
-        "Кому выпустить код?\n\n"
-        "Код одноразовый, действует 7 дней. Человек вводит его боту командой /start "
-        "или в ответ на запрос кода и попадает в систему с выбранной ролью.",
-        parse_mode=None,
-        reply_markup=keyboards.kb([[("Организатор", "inv:role:org"), ("Актёр труппы", "inv:role:troupe")],
-                         [("Педагог", "inv:role:master")],
-                         [(texts.BTN_BACK, "panel:root")]]))
-    await cb.answer()
-
-
-@router.callback_query(F.data.startswith("inv:role:"))
-async def invite_issue(cb: CallbackQuery) -> None:
-    """Шаг 2: выпускаем код и отдаём его человеку текстом."""
-    parts = (cb.data or "").split(":")
-    role = parts[2] if len(parts) > 2 else ""
-    if role not in ("org", "troupe", "master"):
-        await cb.answer("Неизвестная роль", show_alert=True)
-        return
-    res = await core.api("/admin/invite", {"role": role, "ttl_days": 7}, cb.message.chat.id)
-    if not res.get("ok"):
-        await cb.message.edit_text(
-            "Не удалось выпустить код: " + errors.error_text(res),
-            parse_mode=None,
-            reply_markup=keyboards.kb([[(texts.BTN_BACK, "panel:root")]]))
-        await cb.answer()
-        return
-    code = str(res.get("code") or "")
-    await cb.message.edit_text(
-        texts.invite_text(code, res.get("expires_at"), role),
-        parse_mode="HTML",
-        reply_markup=keyboards.copy_code_kb(code, [[("Ещё код", "panel:invite")],
-                                         [(texts.TITLE_CODES, "panel:codes")],
-                                         [(texts.BTN_BACK, "panel:root")]]))
-    log.info("выпущен инвайт-код role=%s by=%s", role, cb.message.chat.id)
-    await cb.answer("Код выпущен")
-
-
-async def _send_codes(cb: CallbackQuery) -> None:
-    """Нарисовать открытые коды, не отвечая на callback (ответ — у обработчика)."""
-    res = await core.api("/admin/invites", None, cb.message.chat.id, method="GET")
-    if not res.get("ok"):
-        await cb.message.edit_text(
-            "Не удалось прочитать коды: " + errors.error_text(res),
-            parse_mode=None, reply_markup=keyboards.kb([[(texts.BTN_BACK, "panel:root")]]))
-        return
-    codes = res.get("data") or []
-    back = [[(texts.BTN_BACK, "panel:root")]]
-    if not codes:
-        await cb.message.edit_text(
-            "Открытых кодов нет. Выпустить новый — «Выпустить инвайт-код».",
-            parse_mode=None,
-            reply_markup=keyboards.kb([[(texts.TITLE_INVITES, "panel:invite")]] + back))
-        return
-    lines = [f"Открытые коды: {len(codes)}. Код действует до срока и до первого "
-             "использования; «Отозвать» закрывает его сразу.", ""]
-    for item in codes[:10]:
-        role = texts.ROLE_TITLES.get(item.get("role"), item.get("role"))
-        until = str(item.get("expires_at") or "")[:10]
-        lines.append(f"{item['code']} — {role}, до {until}, "
-                     f"использован {item.get('uses', 0)} из {item.get('max_uses', 1)}")
-    buttons = [[(f"{texts.BTN_REVOKE} {item['code']}", f"inv:revoke:{item['code']}")]
-               for item in codes[:10]]
-    buttons.append([(texts.TITLE_INVITES, "panel:invite")])
-    buttons += back
-    await cb.message.edit_text("\n".join(lines), parse_mode=None,
-                               reply_markup=keyboards.kb(buttons))
-
-
-@router.callback_query(F.data == "panel:codes")
-async def panel_codes(cb: CallbackQuery) -> None:
-    """Открытые инвайт-коды и отзыв кнопкой (AUD-3, Л8, FR-A2).
-
-    Раньше отзыв существовал только на экране Mini App: `POST /admin/invite/revoke`
-    никто не звал из чата. Право то же, что у пути записи, —
-    `registration.code.issue`.
-    """
-    if await _denied(cb, "registration.code.issue"):
-        return
-    await _send_codes(cb)
-    await cb.answer()
-
-
-@router.callback_query(F.data.startswith("inv:revoke:"))
-async def invite_revoke(cb: CallbackQuery) -> None:
-    """Отзыв кода: путь записи `POST /admin/invite/revoke` (Л8)."""
-    if await _denied(cb, "registration.code.issue"):
-        return
-    parts = (cb.data or "").split(":", 2)
-    code = parts[2] if len(parts) == 3 else ""
-    if not code:
-        await cb.answer("Непонятный код", show_alert=True)
-        return
-    res = await core.api("/admin/invite/revoke", {"code": code}, cb.message.chat.id)
-    if not res.get("ok"):
-        await cb.answer("Не удалось отозвать: " + errors.error_text(res), show_alert=True)
-        return
-    log.info("отозван инвайт-код %s by=%s", code, cb.message.chat.id)
-    await cb.answer("Код отозван")
-    await _send_codes(cb)
 
 
 @router.callback_query(F.data.startswith("panel:money"))
@@ -849,21 +685,6 @@ async def panel_health(cb: CallbackQuery) -> None:
     await cb.answer()
 
 
-@router.callback_query(F.data.startswith("adm:"))
-async def admin_decision(cb: CallbackQuery) -> None:
-    parts = (cb.data or "").split(":")
-    if len(parts) != 3 or not parts[2].isdigit() or parts[1] not in ("ok", "no"):
-        await cb.answer("Кнопка устарела, откройте заявки заново", show_alert=True)
-        return
-    _, action, pid = parts
-    res = await core.api("/admin/approve", {"participant_id": int(pid), "approve": action == "ok"},
-                    cb.message.chat.id)
-    if res.get("ok"):
-        await cb.message.edit_text("Заявка обработана.",
-                                   reply_markup=keyboards.kb([[(texts.BTN_BACK, "panel:root")]]))
-        await cb.answer(texts.BTN_DONE)
-    else:
-        await cb.answer("Не удалось", show_alert=True)
 
 
 @router.callback_query(F.data == "panel:reconcile")

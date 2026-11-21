@@ -810,7 +810,6 @@ HOME_SECTIONS = (
         ("feedback", "💬", "Обратная связь", "вопрос или предложение", "/webapp/feedback", ()),
     )),
     ("Люди", (
-        ("pending", "📥", "Заявки", "ждут решения", "/webapp/admin/t/pending", ("registration.approve",)),
         ("people", "👥", "Участники", "активные и ожидающие", "/webapp/admin/t/people", ("participants.view",)),
         ("invites", "✉️", "Приглашения", "коды для новых", "/webapp/admin/t/invites", ("registration.code.issue",)),
         ("archive", "🗄", "Архив", "вернуть человека", "/webapp/admin/t/archive", ("participants.manage",)),
