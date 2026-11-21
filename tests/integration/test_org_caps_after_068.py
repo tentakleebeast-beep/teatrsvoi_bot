@@ -71,7 +71,7 @@ def test_повторный_накат_068_ничего_не_меняет(test_d
 
 
 def test_голова_alembic_после_068(test_db: str) -> None:
-    """Учёт версий совпадает с файлом: накат дошёл до 068, а не остановился раньше."""
+    """Учёт версий совпадает с файлом: накат дошёл как минимум до 068, а не остановился раньше."""
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "068_org_without_approve"
+    assert head == "069_poll_interview_drafts"
