@@ -337,9 +337,9 @@ roles/trainings/manifest (или всё, что успел), поэтому `bui
 | «8 символов», «действует 7 дней», «вход один» | `admin.py:35, 50-51`, `core.py:55, 59`, `pages/admin_invites.py:26` |
 | «код выписан на ваше имя» | `invite_code.participant_id` (§4.3), `people.py:624-648` |
 | «дисциплина: два варианта» | `keyboards.py:283-295` |
-| «дисциплина — только если её ещё нет» | `people.check_code` (`:565-570`) отдаёт `needs_discipline`, `attach` (`:589`) спрашивает по отсутствию строки в `participant_discipline`; `pages/admin_people.py:112` заводит педагога сразу с дисциплиной |
+| «дисциплина — только если её ещё нет» | `people.check_code` (`:563-567`) отдаёт `needs_discipline`, `attach` (`:611-614`) спрашивает по отсутствию строки в `participant_discipline`; `pages/admin_people.py:110-114` передаёт дисциплины в `/webapp/admin/grant` (`api/admin.py:454-465`), и тогда вопроса нет |
 | «имя спросит, только если одно слово» | `intro.py:137-149` (правило переносится в `build_entry_plan`) |
-| «телефон — если его ещё нет в записи» | `intro.build_entry_plan` (`:167-175`, `if not profile.get("phone")`) |
+| «телефон — если его ещё нет в записи» | `intro.build_entry_plan` (`:145-153`; вопрос о телефоне — `:152`, `if not profile.get("phone")`) |
 | «телефон можно пропустить» | `keyboards.intro_skip_kb`, `intro.is_skip` (`:129-134`) |
 | «сводка, потом „Записать“» | `routers/intro.py:39-47`, `keyboards.py:276-277` |
 | «заявок нет, доступ сразу» | §4.1 (до правки — неверно, потому и правится) |
