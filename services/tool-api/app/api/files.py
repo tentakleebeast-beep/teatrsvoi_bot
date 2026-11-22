@@ -823,7 +823,8 @@ def webapp_file_view(file_id: int, who: dict = Depends(core.webapp_actor)) -> di
                     "kind_word": file_kind.kind_word(row["kind"], row["name"]),
                     "description": row.get("description"),
                     "open_url": row.get("drive_url"), "drive_path": row.get("drive_path"),
-                    "folder": row.get("folder"), "size_bytes": None, "as_admin": False}
+                    "folder": row.get("folder"), "size_bytes": None, "as_admin": False,
+                    "owner": int(row["participant_id"] or 0) == int(who["id"])}
         if not row["object_key"]:
             raise ApiError(status.HTTP_404_NOT_FOUND,
                            "Файл не долетел до хранилища — загрузите заново.",
@@ -849,7 +850,8 @@ def webapp_file_view(file_id: int, who: dict = Depends(core.webapp_actor)) -> di
             # `extension` держит точку ради Content-Disposition («file» + ext);
             # наружу расширение уходит без неё: `png`, а не `.png` (§3.1).
             "ext": files_store.extension(row["name"]).lstrip("."),
-            "folder": row.get("folder"), "as_admin": as_admin, "cold_restored": restored}
+            "folder": row.get("folder"), "as_admin": as_admin, "cold_restored": restored,
+            "owner": int(row["participant_id"] or 0) == int(who["id"])}
 
 
 @router.get("/webapp/files/{file_id}/link")

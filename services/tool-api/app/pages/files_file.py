@@ -35,6 +35,17 @@ _BODY_FILE = """
 <div class="ui-file__scene" id="scene">
   <p class="ui-file__note" id="scene-note">Готовлю файл</p>
 </div>
+<div class="ui-file__edit" id="file-edit" hidden>
+  <div class="ui-field">
+    <label class="ui-field__label" for="file-describe">Что это</label>
+    <textarea class="ui-input" id="file-describe" rows="2" maxlength="500"></textarea>
+    <span class="ui-field__hint">Необязательно. Поиск по описанию не идёт — ищет по имени, папке и типу.</span>
+  </div>
+  <div class="ui-actions files-actions">
+    <button class="ui-btn ui-btn--block" type="button" id="file-save">Сохранить описание</button>
+  </div>
+  <p class="ui-small ui-muted" id="file-save-status"></p>
+</div>
 <div class="ui-file__actions" id="file-actions"></div>
 """
 
@@ -271,6 +282,7 @@ _SCRIPT_FILE = r"""
 
   function show(data) {
     setHead(data.name, metaText(data));
+    showEditor(data);
     if (data.type === "external") { showExternal(data); return; }
     var word = data.kind_word || "файл";
     if (data.kind === "image") { showImage(data); return; }
@@ -286,6 +298,31 @@ _SCRIPT_FILE = r"""
     showCard(data, "файл", "Файл откроется в браузере телефона");
   }
 
+  // Описание правит владелец (V-124): поле показывается только ему — чужой файл
+  // ответил бы 404, и кнопка, которая гарантированно ругается, хуже её отсутствия.
+  function showEditor(data) {
+    var block = $("file-edit");
+    if (!block) return;
+    block.hidden = !data.owner;
+    if (!data.owner) return;
+    $("file-describe").value = data.description || "";
+  }
+
+  function saveDescription() {
+    api("/webapp/files/" + fileId + "/meta",
+        { description: ($("file-describe").value || "").trim() })
+      .then(function (res) {
+        var box = $("file-save-status");
+        if (res.status !== 200) {
+          box.textContent = problem(res);
+          box.className = "ui-alert";
+          return;
+        }
+        box.textContent = "Описание сохранено.";
+        box.className = "ui-small ui-muted";
+      });
+  }
+
   function load() {
     waiting = true;
     api("/webapp/files/" + fileId + "/view").then(function (res) {
@@ -296,7 +333,6 @@ _SCRIPT_FILE = r"""
   }
 
   if (!fileId) {
-    // Без `?id=` экран не тупик: сказано, чего не хватает, и есть путь в «Файлы» (7.3).
     setHead("Файл", "");
     showNote("Файл не выбран");
     var openFiles = el("a", "ui-btn ui-btn--block", "Открыть Файлы");
