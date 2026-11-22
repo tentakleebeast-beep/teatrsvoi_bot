@@ -30,10 +30,15 @@ KV_SEP = "="
 
 @dataclass(frozen=True)
 class SheetCell:
-    """Одна запись в лист: адрес в A1 и текст."""
+    """Одна запись в лист: адрес в A1 и текст.
+
+    `day` — день занятости для клетки человека (нужен `row_map`, 186 §4.3 шаг 10);
+    у служебной колонки `svoi` дня нет, там лежит снимок строки.
+    """
 
     a1: str
     text: str
+    day: str | None = None
 
 
 @dataclass
@@ -280,7 +285,7 @@ def plan_week(
         if row is None:
             plan.problems.append(f"day_row_not_found: {day.isoformat()}")
             continue
-        plan.cells.append(SheetCell(cell_a1(row, person_column), text))
+        plan.cells.append(SheetCell(cell_a1(row, person_column), text, day.isoformat()))
         existing = ""
         if len(values) >= row and len(values[row - 1]) >= service_column:
             existing = values[row - 1][service_column - 1]

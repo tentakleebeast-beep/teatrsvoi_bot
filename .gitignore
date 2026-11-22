@@ -42,3 +42,5 @@ tests/webapp/baseline/
 # [project.dependencies] даёт вырожденный лок на 133 байта. Проект ставит
 # зависимости по requirements.txt, CI uv не использует.
 uv.lock
+
+result.log

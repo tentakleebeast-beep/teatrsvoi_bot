@@ -24,6 +24,7 @@ from .api import (
     feedback,
     files,
     finance,
+    google,
     notes,
     people,
     polls,

@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field, field_validator
 
-from .. import core
+from .. import core, google_targets, sheet_binding
 from ..errors import ApiError
 from ..external import DB_ERRORS, GOOGLE_API_ERRORS
 from ..participant_names import category_hints
@@ -175,16 +175,44 @@ def _sheet_row(tx: dict) -> list:
 
 
 
-def _append_sheet_row(row: list) -> str | None:
-    """Дописать готовую строку в лист. Возвращает текст ошибки или None."""
+def _write_row(row: list, tx_id: int) -> str | None:
+    """Запись строки «Транзакции» по общему протоколу привязки (186 §4.3).
+
+    До этой карты строка дописывалась в `Транзакции!A1` без сверки шапки, свежести и
+    дедупа по `row_map` (R-4): переименованная человеком колонка уезжала в чужое место,
+    а повтор операции заводил вторую строку. Возвращает текст отказа или None —
+    исход остаётся в `budget_tx.sheet_error`, запись в БД не отменяется.
+    """
+    entity_id = str(tx_id)
     try:
-        core._sheets().spreadsheets().values().append(
-            spreadsheetId=core.BUDGET_SPREADSHEET_ID, range="Транзакции!A1",
-            valueInputOption="USER_ENTERED", insertDataOption="INSERT_ROWS",
-            body={"values": [row]}).execute()
-    except GOOGLE_API_ERRORS as e:
-        # адаптер листа: текст отказа уходит в budget_tx.sheet_error, запись в БД живёт
-        return str(e)[:200]
+        with core.pool.connection() as conn:
+            session = sheet_binding.open_sheet("budget.transactions", conn=conn)
+            digest = sheet_binding.content_hash(row)
+            found = sheet_binding.row_map_find(conn, "budget.transactions", "budget_tx",
+                                               entity_id)
+            if found and not found["is_deleted"] and found["content_hash"] == digest:
+                return None                      # уже записано — второй строки нет
+            if found and found["sheet_row"]:
+                sheet_binding.update_row(session, row, found["sheet_row"])
+                sheet_row = found["sheet_row"]
+            else:
+                sheet_row = sheet_binding.append_row(session, row)
+            if not sheet_row:
+                return "sheet_verify_failed: лист не подтвердил запись"
+            mismatched = sheet_binding.verify_row(session, row, sheet_row)
+            if mismatched:
+                return "sheet_verify_failed: лист не подтвердил запись"
+            sheet_binding.remember_header(conn, session)
+            sheet_binding.row_map_save(conn, "budget.transactions", "budget_tx", entity_id,
+                                       sheet_row=sheet_row, col_from=1,
+                                       col_to=len(row), content_hash=digest)
+            sheet_binding.touch_after_write(conn, session)
+    except ApiError as exc:
+        return f"{exc.code}: {exc.detail}"[:200]
+    except DB_ERRORS as exc:
+        # пометка «записано» не легла — строка в листе есть, и сверка покажет расхождение
+        core.log.warning("не удалось сохранить адрес строки бюджета: %s", exc)
+        return "sheet_verify_failed: адрес строки не сохранён"
     return None
 
 
@@ -193,10 +221,10 @@ def _sheet_ids() -> set[int]:
     """ID операций, уже стоящие в листе. Нужны, чтобы повтор не задвоил строку.
 
     Append мог пройти, а ответ — потеряться (таймаут): тогда в БД останется
-    `sheet_error`, хотя строка в листе есть.
+    `sheet_error`, хотя строка в листе есть. Чтение — read-only клиентом.
     """
-    values = core._sheets().spreadsheets().values().get(
-        spreadsheetId=core.BUDGET_SPREADSHEET_ID,
+    values = core._sheets_read().spreadsheets().values().get(
+        spreadsheetId=google_targets.resolve("budget.transactions"),
         range="Транзакции!A2:A5000").execute().get("values", [])
     ids: set[int] = set()
     for row in values:
@@ -228,7 +256,7 @@ def _append_tx_sheet(body: BudgetCommitIn, created: dict) -> str | None:
         "counterparty": body.counterparty, "purpose": body.purpose,
         "source_text": body.source_text, "chat_id": body.chat_id,
     })
-    error = _append_sheet_row(row)
+    error = _write_row(row, created["id"])
     _mark_sheet_state(created["id"], error=error)
     return error
 
@@ -335,7 +363,7 @@ def budget_sheet_retry(body: SheetRetryIn | None = None,
             _mark_sheet_state(tx["id"])
             already.append(tx["id"])
             continue
-        error = _append_sheet_row(_sheet_row(tx))
+        error = _write_row(_sheet_row(tx), tx["id"])
         _mark_sheet_state(tx["id"], error=error)
         if error is None:
             written.append(tx["id"])

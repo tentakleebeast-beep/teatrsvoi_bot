@@ -8,9 +8,10 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
 
-from .. import core
+from .. import core, google_targets
 from ..assign import parse_assignment
-from ..calendar_blocks import PROP_KIND, PROP_PEOPLE, PROP_PROJECT, PROP_SOURCE
+from ..calendar_blocks import (PROP_EVENT_ID, PROP_KIND, PROP_PEOPLE, PROP_PROJECT,
+                               PROP_SOURCE, PROP_SOURCE_MARK, SOURCE_VALUE)
 from ..errors import ApiError
 from ..external import GOOGLE_API_ERRORS
 from ..person_match import normalize as normalize_name
@@ -439,8 +440,8 @@ def events_assign(payload: dict,
         start = datetime.combine(day, datetime.min.time(), core.TZ) + timedelta(hours=from_hour)
         end = datetime.combine(day, datetime.min.time(), core.TZ) + timedelta(hours=min(to_hour, 23),
                                                                         minutes=55 if to_hour >= 24 else 0)
-        private = {PROP_KIND: card["kind"], PROP_SOURCE: "tool-api",
-                   "svoi_venue": venue}
+        private = {PROP_KIND: card["kind"], PROP_SOURCE: SOURCE_VALUE,
+                   PROP_SOURCE_MARK: SOURCE_VALUE, PROP_EVENT_ID: "", "svoi_venue": venue}
         if card.get("project_id"):
             private[PROP_PROJECT] = str(card["project_id"])
         people = [person["id"] for person in card.get("participants") or []]
@@ -450,30 +451,24 @@ def events_assign(payload: dict,
             # событие давало «280,279» или «279,280» от прогона к прогону
             private[PROP_PEOPLE] = ",".join(str(pid) for pid in sorted(people))
 
-        gcal_id = None
-        if core.CALENDAR_ID_DRAFT:
-            try:
-                created = core._calendar().events().insert(calendarId=core.CALENDAR_ID_DRAFT, body={
-                    "summary": f"{core.KIND_TITLES_RU.get(card['kind'], 'Событие')} - {card['title']}",
-                    "start": {"dateTime": start.isoformat(), "timeZone": "Europe/Samara"},
-                    "end": {"dateTime": end.isoformat(), "timeZone": "Europe/Samara"},
-                    "colorId": str(core.EVENT_COLORS.get(card["kind"], 8)),
-                    "extendedProperties": {"private": private},
-                }).execute()
-                gcal_id = created.get("id")
-            except GOOGLE_API_ERRORS as exc:
-                # адаптер календаря: событие уже в БД, запись в календарь — best effort
-                core.log.warning("событие не записано в календарь: %s", str(exc)[:150])
-
+        # Сначала строка БД, потом календарь: маркер `svoi_event_id` — это id события
+        # в базе (186 §5.1), а без строки его неоткуда взять. Раньше было наоборот,
+        # и событие в календаре жило без связи с базой.
         plan = conn.execute("""
             insert into event_plan (title, kind, project_id, starts_at, ends_at,
                                     location, participant_ids, status, gcal_event_id,
-                                    created_by, discipline_id)
-            values (%s, %s, %s, %s, %s, %s, %s, 'confirmed', %s, %s,
+                                    gcal_calendar_id, created_by, discipline_id)
+            values (%s, %s, %s, %s, %s, %s, %s, 'confirmed', null, null, %s,
                     (select id from discipline where code = %s)) returning id""",
             (card["title"], card["kind"], card.get("project_id"), start, end,
-             card.get("venue") or card.get("venue_name"), people, gcal_id,
+             card.get("venue") or card.get("venue_name"), people,
              who["id"], card.get("discipline"))).fetchone()
+
+        gcal_id, gcal_calendar_id = _create_draft_event(plan["id"], private, start, end,
+                                                        card)
+        if gcal_id:
+            conn.execute("update event_plan set gcal_event_id = %s, gcal_calendar_id = %s "
+                         "where id = %s", (gcal_id, gcal_calendar_id, plan["id"]))
 
         if proposal_id:
             conn.execute("update slot_proposal set event_plan_id = %s, chosen_index = 0 "
@@ -509,24 +504,70 @@ class EventCancelIn(core.ApiIn):
 
 
 
+def _create_draft_event(event_id: int, private: dict, start: datetime, end: datetime,
+                        card: dict) -> tuple[str | None, str | None]:
+    """Создать событие **только** в черновом календаре.
+
+    Пишущий вызов возможен лишь с ключом `calendar.draft` из реестра (186 §2.2):
+    боевой календарь в реестре записи отсутствует, поэтому «создать сразу в боевом»
+    здесь невозможно даже случайно. Best effort: отказ Google не отменяет строку БД.
+    """
+    private = dict(private)
+    private[PROP_EVENT_ID] = str(event_id)
+    try:
+        calendar_id = google_targets.resolve("calendar.draft")
+        created = core._calendar_write().events().insert(calendarId=calendar_id, body={
+            "summary": f"{core.KIND_TITLES_RU.get(card['kind'], 'Событие')} - {card['title']}",
+            "start": {"dateTime": start.isoformat(), "timeZone": "Europe/Samara"},
+            "end": {"dateTime": end.isoformat(), "timeZone": "Europe/Samara"},
+            "colorId": str(core.EVENT_COLORS.get(card["kind"], 8)),
+            "extendedProperties": {"private": private},
+        }).execute()
+    except GOOGLE_API_ERRORS as exc:
+        core.log.warning("событие не записано в календарь: %s", str(exc)[:150])
+        return None, None
+    except ApiError as exc:
+        # объект записи не настроен: событие живёт в БД, календарь не тронут
+        core.log.warning("черновой календарь не настроен: %s", exc.code)
+        return None, None
+    return created.get("id"), calendar_id
+
+
+def _draft_event_exists(gcal_id: str) -> bool:
+    """Событие найдено в черновом календаре — только такие бот правит и удаляет.
+
+    Боевой календарь здесь не участвует: событие, которого нет в черновом, считается
+    чужим (`not_bot_event`), даже если оно создано ботом когда-то давно.
+    """
+    try:
+        calendar_id = google_targets.resolve("calendar.draft")
+        core._calendar_write().events().get(calendarId=calendar_id,
+                                            eventId=gcal_id).execute()
+    except GOOGLE_API_ERRORS:
+        return False
+    except ApiError:
+        return False
+    return True
+
+
 def _delete_calendar_event(gcal_id: str) -> tuple[bool, str | None]:
-    """Снимает событие из календаря: сначала черновой, потом боевой.
+    """Снимает событие из **чернового** календаря.
 
     Отмена в БД важнее календаря: если Google недоступен, событие всё равно
-    считается отменённым, а причина возвращается человеку.
+    считается отменённым, а причина возвращается человеку. В боевой календарь
+    бот не ходит ни при каком статусе (дизайн D10, 186 §5.2).
     """
-    errors = []
-    for calendar_id in (core.CALENDAR_ID_DRAFT, core.CALENDAR_ID_READ):
-        if not calendar_id:
-            continue
-        try:
-            core._calendar().events().delete(calendarId=calendar_id,
-                                        eventId=gcal_id).execute()
-            return True, None
-        except GOOGLE_API_ERRORS as exc:
-            # адаптер календаря: пробуем черновой, потом боевой
-            errors.append(str(exc)[:150])
-    return False, "; ".join(errors) or "calendar_id_missing"
+    if not _draft_event_exists(gcal_id):
+        return False, "not_bot_event"
+    try:
+        calendar_id = google_targets.resolve("calendar.draft")
+        core._calendar_write().events().delete(calendarId=calendar_id,
+                                               eventId=gcal_id).execute()
+    except GOOGLE_API_ERRORS as exc:
+        return False, str(exc)[:150]
+    except ApiError as exc:
+        return False, exc.code
+    return True, None
 
 
 
@@ -553,7 +594,8 @@ def events_cancel(body: EventCancelIn,
 
         if plan["status"] == "cancelled":
             return {"ok": True, "event_id": plan["id"], "already_cancelled": True,
-                    "status": "cancelled", "in_calendar": False, "notified": 0}
+                    "status": "cancelled", "in_calendar": False,
+                    "calendar_updated": False, "notified": 0}
 
         before = {"title": plan["title"], "kind": plan["kind"],
                   "starts_at": plan["starts_at"], "status": plan["status"],
@@ -598,6 +640,7 @@ def events_cancel(body: EventCancelIn,
 
     return {"ok": True, "event_id": plan["id"], "already_cancelled": False,
             "status": "cancelled", "in_calendar": calendar_deleted,
+            "calendar_updated": calendar_deleted,
             "calendar_error": calendar_error, "notified": notified}
 
 
@@ -614,27 +657,27 @@ class EventMoveIn(core.ApiIn):
 
 def _update_calendar_event(gcal_id: str, start: datetime, end: datetime,
                            title: str | None = None) -> tuple[bool, str | None]:
-    """Правит время события в календаре: сначала черновой, затем боевой.
+    """Правит время события **только в черновом** календаре.
 
     Как и отмена, перенос в БД важнее календаря: при недоступности Google
-    время в базе всё равно меняется, а причина возвращается человеку.
+    время в базе всё равно меняется, а причина возвращается человеку. Событие,
+    которого нет в черновом, — `not_bot_event`: в боевом его правит человек.
     """
-    errors = []
+    if not _draft_event_exists(gcal_id):
+        return False, "not_bot_event"
     patch: dict = {"start": {"dateTime": start.isoformat(), "timeZone": "Europe/Samara"},
                    "end": {"dateTime": end.isoformat(), "timeZone": "Europe/Samara"}}
     if title:
         patch["summary"] = title
-    for calendar_id in (core.CALENDAR_ID_DRAFT, core.CALENDAR_ID_READ):
-        if not calendar_id:
-            continue
-        try:
-            core._calendar().events().update(calendarId=calendar_id, eventId=gcal_id,
-                                        body=patch).execute()
-            return True, None
-        except GOOGLE_API_ERRORS as exc:
-            # адаптер календаря: пробуем черновой, потом боевой
-            errors.append(str(exc)[:150])
-    return False, "; ".join(errors) or "calendar_id_missing"
+    try:
+        calendar_id = google_targets.resolve("calendar.draft")
+        core._calendar_write().events().update(calendarId=calendar_id, eventId=gcal_id,
+                                               body=patch).execute()
+    except GOOGLE_API_ERRORS as exc:
+        return False, str(exc)[:150]
+    except ApiError as exc:
+        return False, exc.code
+    return True, None
 
 
 
@@ -756,7 +799,8 @@ def events_move(body: EventMoveIn,
 
     return {"ok": True, "event_id": plan["id"], "changed": True,
             "starts_at": start.isoformat(), "ends_at": end.isoformat(),
-            "in_calendar": calendar_updated, "calendar_error": calendar_error,
+            "in_calendar": calendar_updated, "calendar_updated": calendar_updated,
+            "calendar_error": calendar_error,
             "notified": notified, "busy_people": busy_people,
             "venue": venue}
 

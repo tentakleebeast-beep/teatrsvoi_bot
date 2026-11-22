@@ -26,6 +26,13 @@ PROP_KIND = "svoi_kind"
 PROP_PROJECT = "svoi_project_id"
 PROP_PEOPLE = "svoi_participant_ids"
 PROP_SOURCE = "source"
+#: Маркер «это событие бота»: id строки `event_plan` (docs/development/186 §5.1).
+#: Без него событие считается чужим — бот его не правит и не удаляет.
+PROP_EVENT_ID = "svoi_event_id"
+#: Метка источника в том же смысле, что и у 186 §5.1. `source` остаётся для
+#: разборщиков, написанных до маркера; пишутся оба ключа.
+PROP_SOURCE_MARK = "svoi_source"
+SOURCE_VALUE = "tool-api"
 
 
 @dataclass(frozen=True)
