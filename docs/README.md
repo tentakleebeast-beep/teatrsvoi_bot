@@ -134,6 +134,7 @@
 | 185 | [185-google-process-design.md](development/185-google-process-design.md) | 180. Google: целевой процесс «файлы + календарь + Sheets + бот» — дизайн (E1-2) |
 | 186 | [186-e1-google-process-spec.md](development/186-e1-google-process-spec.md) | 186. Google: контракты процесса «файлы + календарь + бот» (E1-3, спецификация) |
 | 187 | [187-e5-calendar-card-design.md](development/187-e5-calendar-card-design.md) | 187. Календарь: карточка события, сверка и настройка типов и цветов — дизайн (E5) |
+| 188 | [188-what-i-can-text.md](development/188-what-i-can-text.md) | 188. «Что умею»: одна строка на право, отдельный текст каждой роли (дизайн) |
 
 ## Планы
 
