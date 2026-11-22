@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from .. import calendar_sync, core, google_targets
+from .. import core, google_targets
 
 router = APIRouter()
 
