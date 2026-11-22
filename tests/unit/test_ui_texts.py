@@ -13,7 +13,7 @@ def test_тексты_читаются_из_репозитория() -> None:
     """config/ui-texts.yaml лежит в репозитории и заполнен осмысленно."""
     assert ui_texts.get("week", "save", "нет") != "нет"
     assert ui_texts.get("help", "free_text", "нет") != "нет"
-    assert ui_texts.section("menu"), "меню без подписей"
+    assert ui_texts.section("capabilities"), "нет подписей прав для «Что умею»"
 
 
 def test_пропавшая_строка_даёт_умолчание() -> None:

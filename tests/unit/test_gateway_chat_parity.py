@@ -28,7 +28,7 @@ ADMIN = ["*"]
 ORG = ["budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
        "feedback.send", "files.access", "notes.write", "participants.contact",
        "participants.view", "poll.manage", "schedule.availability.self",
-       "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]
+       "schedule.read.all", "schedule.slots", "schedule.write"]
 ORG_WITH_CODES = ORG + ["registration.code.issue"]
 MANAGER = ["participants.view", "participants.manage"]
 # Роль «педагог» (db/init/061, docs/architecture/140 §3): семь возможностей, без денег,

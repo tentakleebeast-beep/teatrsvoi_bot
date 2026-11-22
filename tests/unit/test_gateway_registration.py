@@ -31,8 +31,8 @@ ADMIN_CAPS = ["*"]
 ORG_CAPS = ["budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
             "feedback.send", "files.access", "notes.write", "participants.contact",
             "participants.view", "poll.manage", "schedule.availability.self",
-            "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]
-TROUPE_CAPS = ["budget.read.self", "schedule.availability.self", "system.health"]
+            "schedule.read.all", "schedule.slots", "schedule.write"]
+TROUPE_CAPS = ["budget.read.self", "schedule.availability.self"]
 
 
 @pytest.fixture(scope="module")

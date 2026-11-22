@@ -4,11 +4,12 @@
 (фикстура `test_db`), а не чтением SQL глазами: `delete ... where`,
 `on conflict` и учёт версий ломаются молча, если их только читать.
 
-Что проверяется (критерии карты t_848c60ed, пункты 4–5; после миграции 070):
+Что проверяется (критерии карты t_848c60ed, пункты 4–5; после миграций 070 и 071):
   * у `org` нет `registration.approve` (068), и 070 сняла его у всех ролей;
-  * у `org` ровно 16 возможностей, и это именно ожидаемый набор;
+  * у `org` ровно 15 возможностей, и это именно ожидаемый набор (071 сняла
+    `system.health`, V-121 — см. `test_dead_capabilities_dropped.py`);
   * повторный накат `db/init/068_org_without_approve.sql` не падает и чисел не меняет;
-  * голова Alembic — `070_personal_invite_code`.
+  * голова Alembic — `071_drop_dead_capabilities`.
 
 Обоснование: FR-A6 (права решает сервер), FR-A2 (код приглашения),
 docs/architecture/02-access-control.md §1, карта t_848c60ed.
@@ -20,13 +21,13 @@ import os
 
 import psycopg
 
-# Замер после 068: 16 возможностей роли `org`. Список повторён намеренно — тест
+# Замер после 071: 15 возможностей роли `org`. Список повторён намеренно — тест
 # должен падать, если набор прав «уточнят» молча (как было с `budget.approve`).
 ORG_CAPS = {
     "budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
     "feedback.send", "files.access", "notes.write", "participants.contact",
     "participants.view", "poll.manage", "schedule.availability.self",
-    "schedule.read.all", "schedule.slots", "schedule.write", "system.health",
+    "schedule.read.all", "schedule.slots", "schedule.write",
 }
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -51,9 +52,9 @@ def test_у_администратора_права_на_заявки_больш
 
 
 def test_набор_прав_организатора_ровно_измеренный(test_db: str) -> None:
-    """Остальные права `org` не тронуты: 16 возможностей, ровно из замера."""
+    """Остальные права `org` не тронуты: 15 возможностей, ровно из замера."""
     caps = _caps(test_db, "org")
-    assert len(caps) == 16, f"у org {len(caps)} возможностей: {sorted(caps)}"
+    assert len(caps) == 15, f"у org {len(caps)} возможностей: {sorted(caps)}"
     assert caps == ORG_CAPS
     assert {"budget.write", "schedule.slots", "files.access", "feedback.send"} <= caps
 
@@ -70,8 +71,8 @@ def test_повторный_накат_068_ничего_не_меняет(test_d
     assert _caps(test_db, "org") == before
 
 
-def test_голова_alembic_после_070(test_db: str) -> None:
-    """Учёт версий совпадает с файлом: накат дошёл до головы 070, а не остановился раньше."""
+def test_голова_alembic_после_071(test_db: str) -> None:
+    """Учёт версий совпадает с файлом: накат дошёл до головы 071, а не остановился раньше."""
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "070_personal_invite_code"
+    assert head == "071_drop_dead_capabilities"

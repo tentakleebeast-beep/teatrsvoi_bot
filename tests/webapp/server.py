@@ -942,7 +942,7 @@ ADMIN_OVERVIEW = {
                 "budget.read", "budget.read.self", "budget.write", "calendar.write",
                 "feedback.send", "feedback.triage", "files.access", "howto.read",
                 "notes.write", "notify.send", "participants.contact",
-                "participants.manage", "participants.view", "poll.manage", "quota.manage",
+                "participants.manage", "participants.view", "poll.manage",
                 "registration.code.issue",
                 "schedule.availability.self", "schedule.read.all", "schedule.slots",
                 "schedule.write", "system.health"]},
@@ -951,14 +951,14 @@ ADMIN_OVERVIEW = {
                 "budget.write", "calendar.write", "feedback.send", "files.access",
                 "notes.write", "participants.contact", "participants.view", "poll.manage",
                 "schedule.availability.self",
-                "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]},
+                "schedule.read.all", "schedule.slots", "schedule.write"]},
             {"role": "master", "caps": [
                 "files.access", "notes.write", "participants.view",
                 "schedule.availability.self", "schedule.read.all", "schedule.slots",
                 "schedule.write"]},
             {"role": "troupe", "caps": [
                 "budget.read.self", "feedback.send", "files.access", "notes.write",
-                "schedule.availability.self", "system.health"]},
+                "schedule.availability.self"]},
         ]},
     },
 }

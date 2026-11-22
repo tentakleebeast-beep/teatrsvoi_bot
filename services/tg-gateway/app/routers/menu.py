@@ -17,6 +17,7 @@ from aiogram.types import CallbackQuery, MenuButtonWebApp, Message, WebAppInfo
 from routing import (
     ABOUT_ME,
     ASSIGN_Q,
+    CAPS_Q,
     HOWTO_Q,
     LIST_PEOPLE,
     MONEY_Q,
@@ -211,10 +212,24 @@ async def list_people(message: Message) -> bool:
 async def answer_howto(message: Message) -> bool:
     """
     «Как/где/почему» — это инструкция, а не операция. Отвечаем той же справкой,
-    что и «Что умею»: список строится из меню, поэтому команды там не всплывают.
+    что и «Что умею»: строки идут из прав человека (`texts.CAP_LINES`), поэтому
+    команд и механики там не всплывает.
     """
     await message.answer(keyboards.help_text(await core.caps_of(message.chat.id),
                                   await core.ui_texts_cached(message.chat.id)))
+    return True
+
+
+async def answer_capabilities(message: Message) -> bool:
+    """«Что умеешь / что можешь» свободным текстом — тот же ответ, что у пункта меню.
+
+    V-122 (docs/development/188 §8): вопрос о собственных умениях перехватывается
+    ДО модели. У модели нет ни матрицы прав, ни `CAP_LINES`, поэтому её свободный
+    ответ называл несуществующие действия; здесь — ноль догадок: строки ответа
+    ровно те, чьё право есть у человека.
+    """
+    await message.answer(keyboards.help_text(await core.caps_of(message.chat.id),
+                                             await core.ui_texts_cached(message.chat.id)))
     return True
 
 
@@ -389,6 +404,11 @@ async def answer_question(message: Message, text: str) -> bool:
             return True
     if re.search(LIST_PEOPLE, low):
         if await list_people(message):
+            return True
+    # V-122: вопрос об умениях бота — до модели. Стоит первым среди вопросов о боте,
+    # потому что «что ты умеешь» не должно попасть ни в howto, ни в каскад.
+    if re.search(CAPS_Q, low):
+        if await answer_capabilities(message):
             return True
     if re.search(HOWTO_Q, low) and not re.search(r"\d", low):
         if await answer_howto(message):
@@ -624,6 +644,11 @@ async def task_frame_text(message: Message, state: FSMContext) -> None:
             await state.set_state(prev)
             await state.update_data(**{assign_router.DRAFT_KEY: data.get(assign_router.DRAFT_KEY)})
         await on_text(message, state)
+        return
+    # V-122: и в рамке «Озадачить» вопрос об умениях уходит не в модель, а в
+    # `help_text(caps)` — ответ тот же, что у пункта «Что умею».
+    if re.search(CAPS_Q, text.lower()):
+        await answer_capabilities(message)
         return
     chat_id = message.chat.id
     placeholder = await message.answer("Разбираю задачу…")

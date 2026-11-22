@@ -163,3 +163,27 @@ def test_в_справке_нет_переключателя_режима(gw):
 
     assert "/agent" not in text
     assert "режим" not in text.lower(), "справка всё ещё говорит о режиме агента"
+
+
+def test_вопрос_что_умеешь_не_уходит_в_модель(gw, monkeypatch):
+    """V-122 (docs/development/188 §8): ответ — `help_text(caps)`, ноль догадок.
+
+    У модели нет ни матрицы прав, ни `CAP_LINES`: её свободный ответ называл
+    несуществующие действия. Поэтому фраза перехватывается до `agent_ask`, и в
+    ответе только строки по правам человека.
+    """
+    for phrase in ("что ты умеешь", "что можешь", "ты что вообще можешь"):
+        order, message = run(gw, monkeypatch, phrase=phrase)
+
+        assert "agent" not in order and "router" not in order, (
+            f"«{phrase}» ушло в агент/каскад: {order}")
+        assert message.sent[-1].text.startswith("Что умею:"), message.sent[-1].text
+
+
+def test_вопрос_что_умеешь_отвечает_по_правам(gw, monkeypatch):
+    """Перехват фильтрует строки по правам: без прав — только анкета, без чужих строк."""
+    _, message = run(gw, monkeypatch, phrase="что ты умеешь")
+
+    text = message.sent[-1].text
+    assert "Заполнить анкету: контакты и дорога" in text
+    assert "Показать бюджет студии за месяц" not in text

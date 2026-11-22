@@ -15,11 +15,12 @@
 4. применённый `db/init/008` не переписан: снятие живёт только в `068`, иначе
    «починка» правкой истории разошлась бы с ревизией и хэшем (`test_migrations_registry`).
 
-Набор прав организатора — замер dev-базы после `068` (16 возможностей), а не
-список из памяти: `budget.import, budget.read, budget.read.self, budget.write,
+Набор прав организатора — замер живой схемы после `068` и `071` (15 возможностей),
+а не список из памяти: `budget.import, budget.read, budget.read.self, budget.write,
 calendar.write, feedback.send, files.access, notes.write, participants.contact,
 participants.view, poll.manage, schedule.availability.self, schedule.read.all,
-schedule.slots, schedule.write, system.health`.
+schedule.slots, schedule.write`. `system.health` снят с `org` миграцией `071`
+(V-121): входов у права не было, матрица не должна обещать недоступное.
 
 Обоснование: FR-A6 (права решает сервер, оболочка только не показывает),
 FR-A2 (код приглашения), карта t_848c60ed, docs/architecture/02-access-control.md §1.
@@ -41,12 +42,12 @@ sys.path.insert(0, str(ROOT))
 
 from app import webapp  # noqa: E402
 
-#: Замер dev-базы после `068`: 16 возможностей роли `org`.
+#: Замер живой схемы после `068` и `071`: 15 возможностей роли `org`.
 ORG_CAPS = [
     "budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
     "feedback.send", "files.access", "notes.write", "participants.contact",
     "participants.view", "poll.manage", "schedule.availability.self",
-    "schedule.read.all", "schedule.slots", "schedule.write", "system.health",
+    "schedule.read.all", "schedule.slots", "schedule.write",
 ]
 ADMIN_CAPS = ["*"]
 
