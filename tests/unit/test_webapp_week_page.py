@@ -7,9 +7,14 @@
 
 from __future__ import annotations
 
+import json
 import pathlib
 import re
+import shutil
+import subprocess
 import sys
+
+import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
@@ -18,6 +23,27 @@ from app.pages import week  # noqa: E402
 
 EMOJI = re.compile("[\U0001f300-\U0001faff\u2600-\u27bf\u2b00-\u2bff\ufe0f]")
 MODALS = re.compile(r"\b(alert|confirm|prompt)\s*\(")
+NODE = shutil.which("node") or next(
+    (candidate for candidate in ("/opt/homebrew/bin/node", "/usr/local/bin/node")
+     if pathlib.Path(candidate).exists()), None)
+
+
+def _js_function(html: str, name: str) -> str:
+    """Текст функции `name` из скрипта страницы: от `function name(` до парной скобки.
+
+    Считаем скобки, а не строки: `pad()` записан одной строкой, `clock()` — блоком,
+    и общий поиск по отступу на них разъезжается.
+    """
+    start = html.index("function " + name + "(")
+    depth = 0
+    for index in range(start, len(html)):
+        if html[index] == "{":
+            depth += 1
+        elif html[index] == "}":
+            depth -= 1
+            if depth == 0:
+                return html[start:index + 1]
+    raise AssertionError(f"в скрипте недели не закрыта функция {name}()")
 
 
 def test_экраны_собраны_каркасом() -> None:
@@ -219,3 +245,46 @@ def test_сводка_ведёт_в_поиск_окон_с_датами_неде
     assert 'id="to-slots"' in html
     assert 'href="/webapp/slots"' in html, "статический адрес — резерв без JS"
     assert '"/webapp/slots?from="' in html and 'view.days[6]' in html
+
+
+@pytest.mark.skipif(NODE is None, reason="нет node для проверки clock()")
+def test_clock_принимает_точку_как_двоеточие(tmp_path) -> None:
+    """Обращение №45: время через точку из чата и таблиц — то же, что через двоеточие.
+
+    Прогоняем настоящую функцию страницы в node, а не сверяем регулярку глазами:
+    цена ошибки — человек с «18.30» получает отказ и не сохраняет день.
+    """
+    script = tmp_path / "clock.js"
+    assert NODE is not None
+    script.write_text(
+        _js_function(week.WEEK_PAGE, "pad") + "\n"
+        + _js_function(week.WEEK_PAGE, "clock") + "\n"
+        + 'var values = JSON.parse(process.argv[2]);\n'
+        + 'process.stdout.write(JSON.stringify(values.map(clock)));\n',
+        encoding="utf-8")
+    cases = [
+        "18.30", "18:30",          # точка и двоеточие — одно и то же время
+        "18.00", "9.00", "9",      # минуты нулевые и голый час
+        "10.30",                   # двузначные минуты через точку
+        "10.3", "", "  ",          # «10.3» не время: минуты только двузначные
+        "мусор", "25.00", "18.75", # не цифры, час вне суток, минут больше 59
+        "18.10", "18.40",          # округление до получаса сохраняется
+        "23.45",                   # 23:45 округляется в 24:00 — за пределы суток
+    ]
+    result = subprocess.run([NODE, str(script), json.dumps(cases, ensure_ascii=False)],
+                            capture_output=True, text=True)
+    assert result.returncode == 0, f"clock() не выполнился: {result.stderr[:400]}"
+    assert json.loads(result.stdout) == [
+        "18:30", "18:30",
+        "18:00", "09:00", "09:00",
+        "10:30",
+        None, "", "",
+        None, None, None,
+        "18:00", "18:30",
+        None,
+    ]
+
+
+def test_текст_ошибки_показывает_оба_формата_времени() -> None:
+    """Обращение №45: подсказка обязана называть формат с точкой, иначе отказ снова загадка."""
+    assert "Время пишется так: 18:00 или 18.30." in week.WEEK_PAGE
