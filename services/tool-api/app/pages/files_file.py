@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from app.pages import files_actions, layout
+from app.pages import layout
 from app.pages.admin_core import CORE
 
 _BODY_FILE = """
@@ -119,9 +119,43 @@ _SCRIPT_FILE = r"""
   }
 
   function metaText(data) {
-    var parts = [humanSize(data.size_bytes), kindWord(data.kind, data.name)];
-    if (data.folder) parts.push(data.folder);
-    return parts.filter(Boolean).join(" \u00b7 ");
+    if (data.type === "external") {
+      var parts = [data.kind === "folder" ? "папка в Drive" : "ссылка"];
+      if (data.folder) parts.push(data.folder);
+      return parts.filter(Boolean).join(" \u00b7 ");
+    }
+    var parts2 = [humanSize(data.size_bytes), data.kind_word || "файл"];
+    if (data.folder) parts2.push(data.folder);
+    return parts2.filter(Boolean).join(" \u00b7 ");
+  }
+
+  // «Открыть в Drive» — единственное действие ссылки: байтов у нас нет, копии нет,
+  // «Скачать» гарантированно ответило бы 409 (docs/development/192 §8.4).
+  function openDriveButton(url) {
+    return action("Открыть в Drive", true, function () {
+      if (!url) { showNote("Адрес ссылки не сохранён."); return; }
+      if (tg && tg.openLink) { tg.openLink(url); return; }
+      window.open(url, "_blank");
+    });
+  }
+
+  function showExternal(data) {
+    clear($("scene"));
+    var card = el("div", "ui-file__card");
+    card.appendChild(el("p", "ui-file__card-name", data.name || "Ссылка на Drive"));
+    card.appendChild(el("p", "ui-file__card-meta",
+      metaText(data) + (data.description ? "" : "")));
+    card.appendChild(el("p", "ui-file__note",
+      "Это ссылка на Drive — файл открывается в Drive, копии у студии нет."));
+    if (data.description) {
+      card.appendChild(el("p", "ui-file__note", "Что это: " + data.description));
+    }
+    if (data.drive_path) {
+      card.appendChild(el("p", "ui-file__note",
+        "в Drive на момент регистрации: " + data.drive_path));
+    }
+    $("scene").appendChild(card);
+    setActions([openDriveButton(data.open_url)]);
   }
 
   // Свежая ссылка на каждое нажатие: подпись живёт 15 минут, и «Открыть в браузере»
@@ -237,7 +271,8 @@ _SCRIPT_FILE = r"""
 
   function show(data) {
     setHead(data.name, metaText(data));
-    var word = kindWord(data.kind, data.name);
+    if (data.type === "external") { showExternal(data); return; }
+    var word = data.kind_word || "файл";
     if (data.kind === "image") { showImage(data); return; }
     if (data.kind === "audio") { showAudio(data); return; }
     if (word === "документ") {
@@ -285,5 +320,5 @@ _SCRIPT_FILE = r"""
 """
 
 FILE_PAGE = layout.page("Файл", _BODY_FILE, back="/webapp/files", head=_STYLE_FILE,
-                        scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FILE
+                        scripts="<script>\n" + CORE + _SCRIPT_FILE
                         + "\n})();\n</script>", zoom=True)

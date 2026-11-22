@@ -26,6 +26,15 @@ from urllib.parse import quote
 from . import audio, extract
 from .errors import ApiError
 from .external import SQL_ERRORS, STORAGE_ERRORS
+from .file_kind import (
+    AUDIO_EXT,
+    IMAGE_EXT,
+    TEXT_EXT,
+    extension,
+    kind_by_name,
+    kind_predicate,
+    kind_word,
+)
 from .settings import DEFAULT_ZIP_MAX_BYTES
 
 log = logging.getLogger("files_store")
@@ -49,10 +58,8 @@ FEEDBACK_TOO_LARGE_MESSAGE = "Скриншот больше 8 МБ — приш�
 PRESIGN_TTL = 900                            # ссылка на загрузку живёт 15 минут
 MAGIC_BYTES = 16
 
-# Расширения → вид файла. Вид определяет папку и обработку, а не то, как файл назвали.
-TEXT_EXT = {".txt", ".md", ".csv", ".pdf", ".docx", ".xlsx", ".pptx", ".odt", ".ods", ".rtf"}
-IMAGE_EXT = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".tif", ".tiff"}
-AUDIO_EXT = {".mp3", ".wav", ".ogg", ".opus", ".flac", ".m4a", ".aac", ".wma"}
+# Наборы расширений живут в `file_kind.py` — единственном месте, где решается вид файла.
+# Здесь остаются только те, что про приём, а не про слово: архив, видео, исполняемое, Office.
 
 ARCHIVE_EXT = {".zip", ".rar", ".7z", ".tar", ".gz", ".tgz", ".bz2", ".xz"}
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".m4v", ".wmv", ".flv", ".mpg", ".mpeg"}
@@ -61,6 +68,10 @@ EXEC_EXT = {".exe", ".dll", ".so", ".dylib", ".bat", ".cmd", ".sh", ".ps1", ".ms
 
 # Контейнеры Office: по сигнатуре это zip, но по смыслу — документ.
 OFFICE_EXT = {".docx", ".xlsx", ".pptx", ".odt", ".ods"}
+
+# Всё, что принимаем по имени. Собрано из наборов `file_kind`, чтобы второй список
+# расширений не завёлся здесь снова; используется проверками и тестами приёма.
+ACCEPTED_EXT = TEXT_EXT | IMAGE_EXT | AUDIO_EXT
 
 FOLDER_BY_KIND = {"text": "Мои документы", "image": "Фото", "audio": "Аудио"}
 PERSONAL_ROOT = "Личное"
@@ -90,20 +101,31 @@ class SavedFile:
     quota_left: int
     duration_sec: int | None = None
     warning: str | None = None
+    storage: str = "garage"
+    description: str | None = None
+    folder_id: int | None = None
+
+
+MAX_DESCRIPTION = 500
+
+
+def clean_description(raw: str | None) -> str | None:
+    """Описание от загрузившего: обрезка по краям, пустая строка → `null` (V-124).
+
+    Описание — по желанию: поле необязательное, и «ничего не написал» не отличается от
+    «стёр написанное». Поэтому пустое значение хранится как `null`, а не как `''`.
+    Длину проверяет ручка (400 словами); здесь — защита домена от обхода.
+    """
+    if raw is None:
+        return None
+    text = " ".join(str(raw).split())
+    if not text:
+        return None
+    return text[:MAX_DESCRIPTION]
 
 
 # ------------------------------------------------------------------ тип файла
-def extension(name: str) -> str:
-    """Расширение в нижнем регистре. Файл с именем «.docx» тоже считается документом.
-
-    `os.path.splitext('.docx')` возвращает пустое расширение — для бота это неожиданность:
-    человек переслал документ, а расширения «нет». Поэтому ведущая точка — тоже расширение.
-    """
-    name = (name or "").strip()
-    root, ext = os.path.splitext(name)
-    if not ext and name.startswith(".") and len(name) > 1:
-        return name.lower()
-    return ext.lower()
+# `extension` живёт в `file_kind` и импортирована выше: одно правило на Python и SQL.
 
 
 def sniff(head: bytes) -> str | None:
@@ -157,11 +179,13 @@ def detect_kind(name: str, mime: str, head: bytes = b"") -> str:
     if fmt == "exe":
         raise FileRejected("file_executable", "Исполняемые файлы бот не принимает.")
 
-    if ext in TEXT_EXT:
-        return "text"
-    if ext in IMAGE_EXT or fmt in ("png", "jpeg", "gif", "webp"):
+    # Положительная ветка — из одного правила (`file_kind`): pdf/docx → text, картинка → image.
+    by_name = kind_by_name(name)
+    if by_name:
+        return by_name
+    if fmt in ("png", "jpeg", "gif", "webp"):
         return "image"
-    if ext in AUDIO_EXT or fmt in ("mp3", "wav", "ogg", "flac", "m4a"):
+    if fmt in ("mp3", "wav", "ogg", "flac", "m4a"):
         return "audio"
 
     if mime.startswith("image/"):
@@ -263,16 +287,34 @@ def _ensure_folder(conn, participant_id: int, parent_id: int | None,
     return row["id"]
 
 
-def used_bytes(conn, participant_id: int) -> int:
-    """Занятое личное место. Скриншоты обращений не считаются (V-055 (а), §4.2).
+# Один SQL на оба места — чтение и вставку (V-125, docs/development/192 §5).
+#
+# Личное место считает только то, что (а) моё, (б) не удалено, (в) лежит байтами в Garage,
+# (г) не скриншот обращения, (д) не лежит ни в одной общей папке. Файл в общей папке,
+# ссылка на Drive и вложение обращения личного места не занимают: за общее место отвечает
+# потолок диска (FR-K15, отдельная карта), а не личные 2 ГБ.
+_USED_BYTES_SQL = (
+    "select coalesce(sum(f.size_bytes), 0) as used"
+    "  from file_object f"
+    " where f.participant_id = %(pid)s"
+    "   and f.deleted_at is null"
+    "   and f.storage = 'garage'"
+    "   and f.scope <> %(scope)s"
+    "   and not exists (select 1 from file_folder ff join folder fo on fo.id = ff.folder_id"
+    "                    where ff.file_id = f.id and fo.deleted_at is null"
+    "                      and fo.scope = 'shared')"
+)
 
-    Иначе человек с забитыми 2 ГБ не мог бы даже сообщить о дефекте, а каждый
-    приложенный скриншот «дарил» бы ему 8 МБ сверх квоты.
+
+def used_bytes(conn, participant_id: int) -> int:
+    """Занятое личное место по правилу V-125 (docs/development/192 §5).
+
+    Скриншоты обращений не считаются (V-055 (а)): иначе человек с забитыми 2 ГБ не мог бы
+    даже сообщить о дефекте. Ссылка на Drive не считается: байтов у нас нет, `size_bytes`
+    у неё `null`. Файл в общей папке не считается: он занимает общий диск, а не личный.
     """
-    row = conn.execute(
-        "select coalesce(sum(size_bytes), 0) as used from file_object"
-        " where participant_id = %s and deleted_at is null and scope <> %s",
-        (participant_id, FEEDBACK_SCOPE)).fetchone()
+    row = conn.execute(_USED_BYTES_SQL,
+                       {"pid": participant_id, "scope": FEEDBACK_SCOPE}).fetchone()
     return int(row["used"] or 0)
 
 
@@ -288,8 +330,10 @@ def _quota_error(conn, participant_id: int, size: int) -> FileRejected:
 
 def _insert_with_quota(conn, *, participant_id: int, name: str, mime: str, size: int,
                        via: str, key: str, digest: str | None, kind: str,
-                       scope: str = "personal") -> int | None:
-    """Вставить строку файла, только если место ещё есть — одним запросом.
+                       scope: str = "personal", storage: str = "garage",
+                       description: str | None = None,
+                       quota: bool = True) -> int | None:
+    """Вставить строку файла, только если личное место ещё есть — одним запросом.
 
     Отдельный `select used_bytes` перед вставкой гоняется с параллельным подтверждением:
     оба запроса видят одинаковую сумму, оба проходят, и квота превышается на размер
@@ -297,27 +341,37 @@ def _insert_with_quota(conn, *, participant_id: int, name: str, mime: str, size:
     что пишет строку, а строка участника берётся `for update`: второй коммит ждёт первый
     и считает сумму уже с его файлом. `None` — места не хватило, строки нет.
 
-    Для `scope='feedback'` условия по сумме нет вовсе (V-055 (а)): скриншот обращения —
-    не личный файл, и забитая квота не должна мешать сообщить о дефекте.
+    Сумма — по тому же правилу, что `used_bytes` (§5): только `storage='garage'`, без
+    скриншотов обращений и без файлов в общей папке. Раньше проверка при вставке
+    `scope='feedback'` не исключала, а `used_bytes` исключал — и человек с заполненным
+    личным местом получал отказ на файл, который счётчик считал свободным.
+
+    `quota=False` — загрузка в общую папку: файл личного места не занимает вовсе, поэтому
+    проверки нет. Скриншот обращения — та же причина (V-055 (а)).
     """
-    if scope == FEEDBACK_SCOPE:
+    if scope == FEEDBACK_SCOPE or not quota:
         row = conn.execute(
             "insert into file_object (participant_id, name, mime, size_bytes, scope, uploaded_via,"
-            " object_key, bucket, sha256, kind)"
-            " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id",
+            " object_key, bucket, sha256, kind, storage, description)"
+            " values (%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s) returning id",
             (participant_id, name, mime, size, scope, via, key, bucket_private(), digest,
-             kind)).fetchone()
+             kind, storage, description)).fetchone()
         return None if row is None else int(row["id"])
     conn.execute("select id from participant where id = %s for update", (participant_id,))
     row = conn.execute(
         "insert into file_object (participant_id, name, mime, size_bytes, scope, uploaded_via,"
-        " object_key, bucket, sha256, kind)"
-        " select %s,%s,%s,%s,'personal',%s,%s,%s,%s,%s"
-        "  where (select coalesce(sum(size_bytes), 0) from file_object"
-        "          where participant_id = %s and deleted_at is null) + %s <= %s"
+        " object_key, bucket, sha256, kind, storage, description)"
+        " select %s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s"
+        "  where (select coalesce(sum(f.size_bytes), 0) from file_object f"
+        "          where f.participant_id = %s and f.deleted_at is null"
+        "            and f.storage = 'garage' and f.scope <> %s"
+        "            and not exists (select 1 from file_folder ff"
+        "                              join folder fo on fo.id = ff.folder_id"
+        "                             where ff.file_id = f.id and fo.deleted_at is null"
+        "                               and fo.scope = 'shared')) + %s <= %s"
         " returning id",
-        (participant_id, name, mime, size, via, key, bucket_private(), digest, kind,
-         participant_id, size, QUOTA_BYTES)).fetchone()
+        (participant_id, name, mime, size, scope, via, key, bucket_private(), digest, kind,
+         storage, description, participant_id, FEEDBACK_SCOPE, size, QUOTA_BYTES)).fetchone()
     return None if row is None else int(row["id"])
 
 
@@ -350,6 +404,7 @@ def file_for(conn, file_id: int, participant_id: int) -> dict | None:
 _FILE_SELECT = (
     "select f.id, f.name, f.mime, f.size_bytes, f.kind, f.object_key, f.bucket,"
     "       f.sha256, f.scope, f.participant_id, f.created_at, f.cold_at,"
+    "       f.storage, f.description, f.drive_url, f.drive_path, f.drive_file_id,"
     "       (select path from folder fo join file_folder ff on ff.folder_id = fo.id"
     "         where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder"
     "  from file_object f"
@@ -491,10 +546,12 @@ def list_files(conn, participant_id: int, limit: int = 20) -> list[dict]:
     """Последние файлы человека: то, что бот покажет списком с кнопками.
 
     Скриншоты обращений не показываются (V-055 (а), §4.5): они живут при обращении,
-    а не в «Моих файлах» и не в «Фото».
+    а не в «Моих файлах» и не в «Фото». Строка несёт `kind_word`, `storage` и `description`:
+    слово вида приходит с сервера, а не собирается в браузере (docs/development/192 §4.4).
     """
     rows = conn.execute(
         "select f.id, f.name, f.kind, f.size_bytes, f.created_at, a.duration_sec,"
+        "       f.storage, f.description, f.drive_url, f.drive_path,"
         "       (select path from folder fo join file_folder ff on ff.folder_id = fo.id"
         "         where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder,"
         "       (select fo.id from folder fo join file_folder ff on ff.folder_id = fo.id"
@@ -503,7 +560,13 @@ def list_files(conn, participant_id: int, limit: int = 20) -> list[dict]:
         " where f.participant_id = %s and f.deleted_at is null and f.scope <> %s"
         " order by f.created_at desc, f.id desc limit %s",
         (participant_id, FEEDBACK_SCOPE, limit)).fetchall()
-    return [dict(row) for row in rows]
+    return [_with_word(dict(row)) for row in rows]
+
+
+def _with_word(row: dict) -> dict:
+    """Добавить слово вида к строке файла: одно правило — `file_kind.kind_word`."""
+    row["kind_word"] = kind_word(row.get("kind"), row.get("name") or "")
+    return row
 
 
 def open_stream(key: str):
@@ -726,11 +789,20 @@ def delete_object(key: str) -> None:
 
 def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
                    sha256: str | None, key: str, head: bytes,
-                   via: str = "webapp", scope: str = "personal") -> SavedFile:
+                   via: str = "webapp", scope: str = "personal",
+                   folder_id: int | None = None,
+                   description: str | None = None) -> SavedFile:
     """Записать в БД файл, который уже лежит в хранилище.
 
     Один путь записи на оба входа: браузер положил байты по presigned-ссылке, бот —
     потоком через `upload_stream`. Отличается только `uploaded_via`.
+
+    `folder_id` — выбранная при загрузке папка (docs/development/192 §6.2): файл получает
+    связь с этой папкой вместо `Личное/<вид>`, а `scope` берётся у папки (`shared` для
+    общей). Загрузка в общую папку проверку квоты не выполняет: файл личного места не
+    занимает (V-125).
+
+    `description` — подпись загрузившего (V-124): по желанию, пустое — `null`.
 
     `scope='feedback'` — скриншот обращения (Э6, D1). Тогда: личной папки и связи
     `file_folder` не создаётся (файл не появляется в «Моих файлах»), квота не считается
@@ -743,24 +815,44 @@ def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
     digest = (sha256 or "").strip().lower() or None
     if digest and len(digest) != 64:
         digest = None
+    note = clean_description(description)
+
+    folder = None
+    if folder_id is not None and scope != FEEDBACK_SCOPE:
+        folder = conn.execute(
+            "select id, path, scope from folder where id = %s and deleted_at is null",
+            (folder_id,)).fetchone()
+        if folder is None:
+            raise FileRejected("folder_not_found", "Папка не найдена.", 404)
+        scope = folder["scope"]
 
     if digest and scope != FEEDBACK_SCOPE:
         dup = find_duplicate(conn, participant_id, digest)
         if dup is not None:
             delete_object(key)                    # байты уже есть: второй экземпляр не нужен
-            _, path = ensure_personal_folder(conn, participant_id, dup["kind"] or kind)
+            if folder is not None:
+                # Выбранная папка не должна молча остаться без файла: у найденной строки
+                # та же байтовая копия, поэтому связь добавляется к ней (docs 192 §6.2).
+                add_to_folder(conn, int(dup["id"]), int(folder["id"]))
+                path = folder["path"]
+            else:
+                _, path = ensure_personal_folder(conn, participant_id, dup["kind"] or kind)
             known = conn.execute(
                 "select duration_sec from file_audio where file_id = %s",
                 (dup["id"],)).fetchone()
             return SavedFile(int(dup["id"]), dup["name"], dup["kind"] or kind,
                              int(dup["size_bytes"]), path, True,
                              QUOTA_BYTES - used_bytes(conn, participant_id),
-                             duration_sec=known["duration_sec"] if known else None)
+                             duration_sec=known["duration_sec"] if known else None,
+                             description=note,
+                             folder_id=int(folder["id"]) if folder is not None else None)
 
     try:
         file_id = _insert_with_quota(
             conn, participant_id=participant_id, name=name, mime=mime, size=size,
-            via=via, key=key, digest=digest, kind=kind, scope=scope)
+            via=via, key=key, digest=digest, kind=kind, scope=scope,
+            storage="garage", description=note,
+            quota=(folder is None or folder["scope"] != "shared"))
     except SQL_ERRORS:
         delete_object(key)                        # тот же принцип: без записи байты не нужны
         raise
@@ -772,10 +864,17 @@ def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
         # Скриншот обращения живёт без папки: он не «файл» в личном месте.
         return SavedFile(file_id, name, kind, size, "", False,
                          QUOTA_BYTES - used_bytes(conn, participant_id),
-                         warning=_warning(kind, size))
-    folder_id, path = ensure_personal_folder(conn, participant_id, kind)
-    conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
-                 " on conflict do nothing", (file_id, folder_id))
+                         warning=_warning(kind, size), description=note)
+
+    if folder is not None:
+        path = folder["path"]
+        files_folder_id = int(folder["id"])
+        conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
+                     " on conflict do nothing", (file_id, files_folder_id))
+    else:
+        files_folder_id, path = ensure_personal_folder(conn, participant_id, kind)
+        conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
+                     " on conflict do nothing", (file_id, files_folder_id))
     if kind == "text":
         tmp_text = _download_tmp(key, suffix=".doc")
         try:
@@ -791,7 +890,8 @@ def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
             os.unlink(tmp)                        # временная копия трека жить не должна
     return SavedFile(file_id, name, kind, size, path, False,
                      QUOTA_BYTES - used_bytes(conn, participant_id),
-                     duration_sec=duration, warning=_warning(kind, size))
+                     duration_sec=duration, warning=_warning(kind, size),
+                     description=note, folder_id=files_folder_id)
 
 
 def _store_text(conn, file_id: int, path: str, name: str) -> None:
@@ -831,15 +931,20 @@ def natural_key(name: str) -> tuple[int, str]:
 
 
 def folder_files(conn, folder_id: int, *, position_first: bool = True) -> list[dict]:
-    """Файлы папки в порядке воспроизведения: сперва `position`, потом числовой префикс."""
+    """Файлы папки в порядке воспроизведения: сперва `position`, потом числовой префикс.
+
+    Ссылка на Drive (`storage='drive'`) приходит сюда же: слово вида, адрес и описание
+    отдаются строке, а плеер и скачивание решает экран (docs/development/192 §6.7).
+    """
     rows = conn.execute(
         "select f.id, f.name, f.kind, f.size_bytes, f.mime, f.object_key, f.created_at,"
+        "       f.storage, f.description, f.drive_url, f.drive_path,"
         "       ff.position, a.duration_sec, a.bitrate_kbps"
         "  from file_folder ff join file_object f on f.id = ff.file_id"
         "  left join file_audio a on a.file_id = f.id"
         " where ff.folder_id = %s and f.deleted_at is null",
         (folder_id,)).fetchall()
-    items = [dict(row) for row in rows]
+    items = [_with_word(dict(row)) for row in rows]
     if position_first:
         items.sort(key=lambda item: (item["position"] is None,
                                      item["position"] if item["position"] is not None else 0,
@@ -944,49 +1049,267 @@ def stream_zip_size(handle) -> int:
 
 
 # ------------------------------------------------------------------ поиск
-def search(conn, participant_id: int, query: str, limit: int = 20) -> list[dict]:
-    """Поиск по своим файлам: имя, теги, извлечённый текст (FR-K15).
+def search_files(conn, who: dict, q: str = "", folder: str = "", kind: str = "",
+                 storage: str = "", limit: int = 100, *, only_mine: bool = False) -> list[dict]:
+    """Поиск по файлам: имя, текст, папка, тип, место (docs/development/192 §6.6).
 
-    Морфология — русский словарь Postgres: «антракт» находит «антракта». Если запрос
-    не дал лексем (одна буква, набор знаков) — честный пустой результат, а не «всё подряд»:
-    бот так и скажет «не нашёл», без догадок (правило проекта).
+    Видимость — существующее правило `file_for_reader`, переведённое в предикат списка:
+    свой файл **или** файл в общей папке. Скриншоты обращений не попадают никогда,
+    грант `access_grant` поштучный и в список не идёт. `only_mine=True` — чат: он ищет
+    только свои файлы, как и раньше.
+
+    Почему в выдаче есть файлы общей папки: их уже отдаёт экран папки, и поиск, который
+    не находит файл, только что открытый человеком, — это ложь.
+
+    Совпадение по имени выше остальных (`order by ... desc` у булева выражения), дальше
+    свежие сверху. Запрос из двух знаков («пд») полнотекстовый поиск не берёт, но имя
+    находит: `ilike` стоит в том же условии, а не в запасном проходе.
+    """
+    me = int(who.get("id") or 0)
+    where = ["f.deleted_at is null", "f.scope <> %(feedback)s"]
+    params: dict = {"feedback": FEEDBACK_SCOPE, "limit": max(1, min(int(limit), 200))}
+    if only_mine:
+        where.append("f.participant_id = %(me)s")
+    else:
+        where.append("(f.participant_id = %(me)s or exists ("
+                     "select 1 from file_folder vf join folder vfo on vfo.id = vf.folder_id"
+                     " where vf.file_id = f.id and vfo.deleted_at is null"
+                     "   and vfo.scope = 'shared'))")
+    params["me"] = me
+
+    text = " ".join((q or "").split())
+    order = "f.created_at desc, f.id desc"
+    if text:
+        where.append("(f.name ilike %(like)s"
+                     " or f.search_tsv @@ websearch_to_tsquery('russian', %(q)s))")
+        params["like"] = f"%{text}%"
+        params["q"] = text
+        # Совпадение по имени выше остальных: текст нашёлся через индекс, а имя человек видит.
+        order = "(f.name ilike %(like)s) desc, f.created_at desc, f.id desc"
+
+    path = " ".join((folder or "").split())
+    if path:
+        where.append("(exists (select 1 from file_folder qf join folder qfo on qfo.id = qf.folder_id"
+                     " where qf.file_id = f.id and qfo.deleted_at is null"
+                     "   and (qfo.path = %(path)s or qfo.path like %(path_like)s))"
+                     " or (f.drive_path is not null and f.drive_path ilike %(path_any)s))")
+        params["path"] = path
+        params["path_like"] = f"{path}/%"
+        params["path_any"] = f"%{path}%"
+
+    if kind:
+        clause, values = _kind_where(kind)
+        where.append(clause)
+        params["kind_0"] = values[0]
+        if len(values) > 1:
+            params["kind_1"] = values[1]
+
+    if storage:
+        where.append("f.storage = %(storage)s")
+        params["storage"] = storage
+
+    rows = conn.execute(
+        "select f.id, f.name, f.kind, f.size_bytes, f.created_at, f.storage, f.description,"
+        "       f.drive_url, f.drive_path,"
+        "       (select path from folder fo join file_folder ff on ff.folder_id = fo.id"
+        "         where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder,"
+        "       (select fo.id from folder fo join file_folder ff on ff.folder_id = fo.id"
+        "         where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder_id,"
+        "       ts_rank(f.search_tsv, websearch_to_tsquery('russian', %(tsq)s)) as rank"
+        "  from file_object f"
+        f" where {' and '.join(where)}"
+        f" order by {order} limit %(limit)s",
+        {**params, "tsq": text}).fetchall()
+    return [_with_word(dict(row)) for row in rows]
+
+
+def _kind_where(word: str) -> tuple[str, list]:
+    """Предикат чипа с именованными параметрами: `kind_predicate` — из одного списка.
+
+    `kind_predicate` отдаёт `(sql, [массив, …])`: у «текста» два массива (простые и
+    документные расширения), у остальных один. Здесь плейсхолдеры получают имена, чтобы
+    параметры не зависели от порядка `dict`.
+    """
+    clause, values = kind_predicate(word)
+    clause = clause.replace("= any(%s)", "= any(%(kind_0)s)", 1)
+    if "= any(%s)" in clause:
+        clause = clause.replace("= any(%s)", "= any(%(kind_1)s)", 1)
+    return clause, values
+
+def search(conn, participant_id: int, query: str, limit: int = 20) -> list[dict]:
+    """Поиск по своим файлам для чата: та же ручка, но без общих папок (FR-K15).
+
+    Чат-контракт по форме не меняется: имя, теги, извлечённый текст — и только свои файлы.
     """
     text = " ".join((query or "").split())
     if not text:
         return []
-    rows = conn.execute(
-        """
-        select f.id, f.name, f.kind, f.size_bytes, f.created_at,
-               (select path from folder fo join file_folder ff on ff.folder_id = fo.id
-                 where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder,
-               ts_rank(f.search_tsv, websearch_to_tsquery('russian', %(q)s)) as rank,
-               ts_headline('russian', coalesce(nullif(ft.body, ''), f.name),
-                           websearch_to_tsquery('russian', %(q)s),
-                           'MaxWords=20, MinWords=8, StartSel=[, StopSel=]') as snippet
-          from file_object f
-          left join file_text ft on ft.file_id = f.id
-         where f.participant_id = %(pid)s and f.deleted_at is null
-           and f.scope <> %(scope)s
-           and f.search_tsv @@ websearch_to_tsquery('russian', %(q)s)
-         order by rank desc, f.created_at desc
-         limit %(limit)s
-        """, {"q": text, "pid": participant_id, "limit": limit,
-              "scope": FEEDBACK_SCOPE}).fetchall()
-    if rows:
-        return [dict(row) for row in rows]
+    return search_files(conn, {"id": participant_id}, text, limit=limit, only_mine=True)
 
-    # запасной путь: короткий запрос («пдф») полнотекстовый поиск не берёт, но имя найти должен
-    if len(text) < 3:
-        return []
-    rows = conn.execute(
-        """
-        select f.id, f.name, f.kind, f.size_bytes, f.created_at,
-               (select path from folder fo join file_folder ff on ff.folder_id = fo.id
-                 where ff.file_id = f.id and fo.deleted_at is null limit 1) as folder,
-               0::float as rank, null::text as snippet
-          from file_object f
-         where f.participant_id = %s and f.deleted_at is null and f.name ilike %s
-           and f.scope <> %s
-         order by f.created_at desc limit %s
-        """, (participant_id, f"%{text}%", FEEDBACK_SCOPE, limit)).fetchall()
-    return [dict(row) for row in rows]
+
+
+# ------------------------------------------------------------------ ссылка на Drive
+DRIVE_HOSTS = {"drive.google.com", "docs.google.com"}
+DRIVE_DOC_KINDS = ("document", "spreadsheets", "presentation", "forms", "drawings")
+_DRIVE_ID = re.compile(r"[A-Za-z0-9_-]{10,}")
+# Формы адреса разбираются правилом, а не списком: `/file/d/<id>`, `/drive/folders/<id>`,
+# `/drive/u/<n>/folders/<id>`, `/<вид>/d/<id>`, `open?id=<id>` и `?id=<id>` (§6.3).
+_DRIVE_PATHS = (
+    re.compile(r"/file/d/([A-Za-z0-9_-]+)"),
+    re.compile(r"/drive/(?:u/\d+/)?folders/([A-Za-z0-9_-]+)"),
+    re.compile(r"/(?:" + "|".join(DRIVE_DOC_KINDS) + r")/d/([A-Za-z0-9_-]+)"),
+)
+_DRIVE_QUERY = re.compile(r"[?&]id=([A-Za-z0-9_-]+)")
+
+
+def parse_drive_url(raw: str) -> dict:
+    """Разобрать ссылку на Google Drive без сетевых запросов (docs/development/192 §6.3).
+
+    Возвращает `{file_id, drive_url, is_folder}`; отказы — `FileRejected` с кодом и словами.
+    Схема — только `https`: `http://` отвергается до разбора хоста, иначе человек получит
+    ссылку, которую браузер откроет, а мы — нет.
+    """
+    from urllib.parse import urlsplit
+
+    url = (raw or "").strip()
+    if not url.lower().startswith("https://"):
+        raise FileRejected("link_not_https", "Ссылка должна начинаться с https://", 400)
+    parts = urlsplit(url)
+    host = (parts.hostname or "").lower()
+    if host.startswith("www."):
+        host = host[4:]
+    if host not in DRIVE_HOSTS:
+        raise FileRejected(
+            "link_host_not_allowed",
+            "Ссылку можно добавить только из Google Drive — drive.google.com или docs.google.com.",
+            400)
+
+    target = parts.path or ""
+    is_folder = False
+    match = None
+    for pattern in _DRIVE_PATHS:
+        match = pattern.search(target)
+        if match:
+            is_folder = "folders" in pattern.pattern
+            break
+    if match is None:
+        match = _DRIVE_QUERY.search("?" + (parts.query or ""))
+        is_folder = False
+    if match is None or not _DRIVE_ID.fullmatch(match.group(1)):
+        raise FileRejected(
+            "link_not_parsed",
+            "Не понял адрес: скопируйте ссылку из Drive целиком — в ней есть «/file/d/…», "
+            "«/document/d/…» или «/drive/folders/…».", 400)
+
+    file_id = match.group(1)
+    if is_folder:
+        canonical = f"https://drive.google.com/drive/folders/{file_id}"
+    else:
+        canonical = f"https://drive.google.com/file/d/{file_id}/view"
+    return {"file_id": file_id, "drive_url": canonical, "is_folder": is_folder}
+
+
+def link_drive(conn, who: dict, url: str, *, name: str | None = None,
+               description: str | None = None, folder_id: int | None = None,
+               drive_path: str | None = None) -> dict:
+    """Зарегистрировать ссылку на Drive отдельной записью (V-123, docs/development/192 §6.3).
+
+    Байтов у нас нет: строку пишем прямой вставкой, `save_committed` не участвует —
+    квота, дедупликация по `sha256` и разбор аудио/текста не вызываются.
+
+    Дубль: своя строка или строка из общей папки — 409 `link_exists` с именем; чужая
+    закрытая — 409 `link_exists_other` **без имени**: иначе `FR-K8` нарушается перебором
+    адресов (человек узнаёт, что чужая закрытая ссылка существует, и как она называется).
+    """
+    parsed = parse_drive_url(url)
+    file_id = parsed["file_id"]
+    is_folder = parsed["is_folder"]
+
+    owner = int(who.get("id") or 0)
+    known = conn.execute(
+        "select f.id, f.name, f.participant_id,"
+        "       exists (select 1 from file_folder ff join folder fo on fo.id = ff.folder_id"
+        "                where ff.file_id = f.id and fo.deleted_at is null"
+        "                  and fo.scope = 'shared') as in_shared"
+        "  from file_object f where f.drive_file_id = %s and f.deleted_at is null"
+        " limit 1", (file_id,)).fetchone()
+    if known is not None:
+        if int(known["participant_id"] or 0) == owner or known["in_shared"]:
+            raise FileRejected("link_exists", f"Эта ссылка уже есть: «{known['name']}».", 409)
+        raise FileRejected("link_exists_other", "Эта ссылка уже добавлена в студию.", 409)
+
+    title = " ".join((name or "").split())[:200]
+    if not title:
+        title = "Папка в Drive" if is_folder else "Ссылка на Drive"
+    kind = "folder" if is_folder else kind_by_name(title)
+    note = clean_description(description)
+    path = " ".join((drive_path or "").split())[:200] or None
+
+    folder = None
+    if folder_id is not None:
+        folder = conn.execute(
+            "select id, path, scope from folder where id = %s and deleted_at is null",
+            (folder_id,)).fetchone()
+        if folder is None:
+            raise FileRejected("folder_not_found", "Папка не найдена.", 404)
+    scope = folder["scope"] if folder is not None else "personal"
+
+    row = conn.execute(
+        "insert into file_object (participant_id, name, mime, size_bytes, scope, uploaded_via,"
+        " drive_file_id, drive_url, drive_path, drive_mime, description, kind, storage)"
+        " values (%s,%s,null,null,%s,'human_drive',%s,%s,%s,null,%s,%s,'drive')"
+        " returning id", (owner, title, scope, file_id, parsed["drive_url"], path, note, kind)
+    ).fetchone()
+    new_id = int(row["id"])
+    if folder is not None:
+        conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
+                     " on conflict do nothing", (new_id, int(folder["id"])))
+    return {"id": new_id, "name": title, "kind": kind, "kind_word": kind_word(kind, title),
+            "storage": "drive", "description": note,
+            "folder": folder["path"] if folder is not None else None,
+            "folder_id": int(folder["id"]) if folder is not None else None,
+            "drive_url": parsed["drive_url"], "drive_path": path, "size_bytes": None}
+
+
+def update_meta(conn, who: dict, file_id: int, *, name: str | None = None,
+                description: str | None = None, touch_name: bool = False,
+                touch_description: bool = False) -> dict:
+    """Название и описание файла: только владелец (V-124, docs/development/192 §6.4).
+
+    Чужой и несуществующий неотличимы — 404, а не 403 (`FR-K8`). `kind`, `storage`, связи
+    с папками и `created_at` не меняются; переименование garage-файла меняет слово и чип
+    (расширение в имени) — это ожидаемо.
+    """
+    row = file_for(conn, file_id, int(who.get("id") or 0))
+    if row is None:
+        raise FileRejected("file_not_found", "Файл не найден.", 404)
+
+    before: dict = {}
+    after: dict = {}
+    new_name = row["name"]
+    new_note = row["description"]
+    if touch_name:
+        clean = " ".join((name or "").split())
+        if not clean:
+            raise FileRejected("file_name_empty", "Название не может быть пустым.", 400)
+        if len(clean) > 200:
+            raise FileRejected("file_name_empty", "Название длиннее 200 знаков — сократите.", 400)
+        if clean != row["name"]:
+            before["name"] = row["name"]
+            after["name"] = clean
+            new_name = clean
+    if touch_description:
+        clean_note = clean_description(description)
+        if description is not None and len(" ".join(description.split())) > MAX_DESCRIPTION:
+            raise FileRejected("file_description_too_long",
+                               "Описание длиннее 500 знаков — сократите.", 400)
+        if clean_note != row["description"]:
+            before["description"] = row["description"]
+            after["description"] = clean_note
+            new_note = clean_note
+    if after:
+        conn.execute("update file_object set name = %s, description = %s where id = %s",
+                     (new_name, new_note, file_id))
+    kind = row["kind"]
+    return {"id": file_id, "name": new_name, "description": new_note, "kind": kind,
+            "kind_word": kind_word(kind, new_name), "before": before, "after": after}
