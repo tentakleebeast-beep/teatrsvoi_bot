@@ -45,56 +45,39 @@ def test_без_права_действие_закрыто(client):
     _api()
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 783001, "Действие Без Прав")
-        target = _person(conn, 783002, "Заявка Без Прав", status="pending")
+        target = _person(conn, 783002, "Цель Без Прав")
     headers = _token(client, 783001)
 
-    r = client.post("/webapp/admin/approve",
-                    json={"participant_id": target, "approve": True}, headers=headers)
+    r = client.post("/webapp/admin/grant",
+                    json={"participant_id": target, "role": "org", "enabled": True},
+                    headers=headers)
     assert r.status_code == 403
-    assert "registration.approve" in r.json()["detail"]
+    assert r.json()["code"] == "participants_manage_forbidden"
 
     with psycopg.connect(_test_dsn()) as conn:
-        status = conn.execute("select status from participant where id = %s",
-                              (target,)).fetchone()[0]
+        roles = [row[0] for row in conn.execute(
+            "select role from participant_role where participant_id = %s", (target,))]
         denied = conn.execute(
             "select count(*) from audit_event where action = 'access.denied' "
             "and after->>'via' = 'webapp'").fetchone()[0]
-    assert status == "pending", "без права заявка не должна меняться"
+    assert roles == ["troupe"], "без права роль не должна меняться"
     assert denied == 1, "отказ в праве должен попасть в аудит"
 
 
-def test_заявку_подтверждают_из_панели(client):
+def test_пути_заявок_в_miniapp_больше_нет(client):
+    """Экран «Заявки» снят вместе с реестром разделов (docs/development/182 §4.1)."""
     _api()
     with psycopg.connect(_test_dsn()) as conn:
-        _person(conn, 783010, "Действие Админ", role="admin")
-        target = _person(conn, 783011, "Заявка Из Панели", status="pending")
-    headers = _token(client, 783010)
+        _person(conn, 783005, "Заявки Админ", role="admin")
+    headers = _token(client, 783005)
+    assert client.post("/webapp/admin/approve",
+                       json={"participant_id": 1, "approve": True},
+                       headers=headers).status_code == 404
+    page = client.get("/webapp/admin/t/pending")
+    assert page.status_code == 404
 
-    r = client.post("/webapp/admin/approve",
-                    json={"participant_id": target, "approve": True}, headers=headers)
-    assert r.status_code == 200
-    assert r.json()["status"] == "active"
-
-    with psycopg.connect(_test_dsn()) as conn:
-        status = conn.execute("select status from participant where id = %s",
-                              (target,)).fetchone()[0]
-        actions = [row[0] for row in conn.execute(
-            "select action from audit_event where entity_id = %s", (str(target),))]
-    assert status == "active"
-    assert "participant.approve" in actions
-
-
-def test_заявку_отклоняют_из_панели(client):
-    _api()
-    with psycopg.connect(_test_dsn()) as conn:
-        _person(conn, 783020, "Действие Админ Отказ", role="admin")
-        target = _person(conn, 783021, "Заявка Отклонённая", status="pending")
-    headers = _token(client, 783020)
-
-    body = client.post("/webapp/admin/approve",
-                       json={"participant_id": target, "approve": False},
-                       headers=headers).json()
-    assert body["status"] == "archived"
+    overview = client.get("/webapp/admin/overview", headers=headers).json()
+    assert "pending" not in overview["blocks"]
 
 
 def test_роль_выдаётся_из_панели(client):
@@ -161,12 +144,12 @@ def test_панель_отдаёт_разрешённые_действия(clien
     _allow(reader, "participants.view")
 
     admin_view = client.get("/webapp/admin/overview", headers=_token(client, 783070)).json()
-    assert admin_view["actions"] == {"approve_pending": True, "manage_rights": True,
-                                     "set_tariff": True, "accrue_dues": True,
-                                     "retry_sheet": True, "issue_codes": True}
+    assert admin_view["actions"] == {"manage_rights": True, "set_tariff": True,
+                                     "accrue_dues": True, "retry_sheet": True,
+                                     "issue_codes": True}
 
     reader_view = client.get("/webapp/admin/overview", headers=_token(client, 783071)).json()
-    assert reader_view["actions"] == {"approve_pending": False, "manage_rights": False,
-                                      "set_tariff": False, "accrue_dues": False,
-                                      "retry_sheet": False, "issue_codes": False}
+    assert reader_view["actions"] == {"manage_rights": False, "set_tariff": False,
+                                      "accrue_dues": False, "retry_sheet": False,
+                                      "issue_codes": False}
     assert "approvals" not in reader_view["blocks"], "чужая очередь сумм не отдаётся"

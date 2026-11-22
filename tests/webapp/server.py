@@ -566,7 +566,7 @@ HOME_DATA = ({
 })
 
 # Счётчики бейджей: в бою их считает `webapp_api` по базе, на стенде — фикстура.
-HOME_COUNTS = {"pending": 2, "feedback": 1}
+HOME_COUNTS = {"feedback": 1}
 
 
 def _home_rows(caps: list[str]) -> dict:
@@ -916,7 +916,7 @@ ADMIN_OVERVIEW = {
     "actions": {"manage_rights": True, "set_tariff": True,
                 "accrue_dues": True, "issue_codes": True},
     "blocks": {
-        "people": {"counts": {"active": 17, "pending": 2}, "data": [
+        "people": {"counts": {"active": 17}, "data": [
             {"id": 1, "display_name": "Иванов Виктор", "roles": ["admin"], "status": "active"},
             {"id": 2, "display_name": "Валерий", "roles": ["troupe"], "status": "active"},
         ]},
@@ -943,7 +943,7 @@ ADMIN_OVERVIEW = {
                 "feedback.send", "feedback.triage", "files.access", "howto.read",
                 "notes.write", "notify.send", "participants.contact",
                 "participants.manage", "participants.view", "poll.manage", "quota.manage",
-                "registration.approve", "registration.code.issue",
+                "registration.code.issue",
                 "schedule.availability.self", "schedule.read.all", "schedule.slots",
                 "schedule.write", "system.health"]},
             {"role": "org", "caps": [

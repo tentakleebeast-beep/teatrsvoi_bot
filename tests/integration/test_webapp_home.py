@@ -60,9 +60,14 @@ def test_хаб_отдаёт_блоки_и_счётчики(client):
     attention = body["attention"]
     assert attention, "хаб пуст: ни одного блока «требует внимания»"
     urls = {row["url"] for row in attention}
-    assert "/webapp/admin/t/pending" in urls, "не пришёл блок заявок"
-    assert body["counts"]["pending"] >= 1
+    assert "/webapp/admin/t/feedback" in urls, "не пришёл блок обращений"
     assert body["counts"]["feedback"] >= 1
+
+    # Заявок в боте больше нет (docs/development/182 §4.1, V-116/V-117): раздел
+    # `pending` снят из реестра, и счётчик не должен вернуться ни строкой, ни числом.
+    assert "pending" not in body["counts"], "вернулся счётчик заявок"
+    assert all("/pending" not in row["url"] and row["title"] != "Заявки" for row in attention), \
+        "вернулся бейдж «Заявки»"
 
     # Бейдж «Крупные суммы, ждут подтверждения» убран решением 30.10.2026: механизма
     # второго подтверждения нет, счётчик в approval_request не мог быть непустым.
@@ -70,11 +75,9 @@ def test_хаб_отдаёт_блоки_и_счётчики(client):
     assert all(row["title"] != "Крупные суммы" for row in attention), \
         "вернулся бейдж «Крупные суммы, ждут подтверждения»"
 
-    # Бейдж «ждут решения» живёт в блоке внимания у раздела «Заявки», а не на «Людях»:
-    # иначе человек жмёт раздел со счётчиком и не находит там действий
-    pending = next(row for row in attention if row["url"] == "/webapp/admin/t/pending")
-    assert pending["meta"] == "ждут решения", "нет счётчика заявок в блоке внимания"
-    assert pending["count"] >= 1
+    feedback = next(row for row in attention if row["url"] == "/webapp/admin/t/feedback")
+    assert feedback["meta"] == "открытые", "нет счётчика обращений в блоке внимания"
+    assert feedback["count"] >= 1
 
     management = {row["url"] for row in body["more"]["management"]}
     assert "/webapp/admin/t/people" in management, "в «Управлении» нет людей"

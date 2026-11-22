@@ -1,4 +1,13 @@
-"""UC-06 (участники и заявки), UC-07 (код приглашения) — приёмка из docs/development/28."""
+"""UC-06 (люди) и UC-08 (проверка кода) — приёмка из docs/development/28.
+
+UC-06 «заявки» и UC-07 «выпуск кода из чата» после docs/development/182 §4.1
+и §4.3.3 больше не существуют: заявок нет, коды выпускаются только из Mini App.
+Их приёмка живёт в `tests/integration/test_personal_invite_code.py`
+и `test_admin_invites.py`.
+
+Обоснование: FR-A2 (код приглашения), FR-G16 (первый вход), docs/development/28
+UC-06, UC-08; docs/development/182 §4.1, §4.3.3.
+"""
 
 import datetime as dt
 
@@ -22,6 +31,17 @@ def _person(conn, chat_id: int | None, name: str, status: str = "active",
     return pid
 
 
+def _code(code: str, expires_in: int, *, participant_id: int | None = None,
+          uses: int = 0) -> None:
+    with psycopg.connect(_test_dsn()) as conn:
+        conn.execute("""insert into invite_code (code, role, participant_id, created_by,
+                                                 expires_at, max_uses, uses)
+                        values (%s,'troupe',%s,0,%s,1,%s)""",
+                     (code, participant_id,
+                      dt.datetime.now(dt.UTC) + dt.timedelta(days=expires_in), uses))
+        conn.commit()
+
+
 def test_uc06_архивные_не_показываются(client):
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 250364801, "Живой Участник")
@@ -33,73 +53,27 @@ def test_uc06_архивные_не_показываются(client):
     assert "Архивный Участник" not in names
 
 
-def test_uc06_заявок_нет_пустой_список(client):
-    body = client.get("/admin/pending", headers=HEADERS).json()
-    assert body["ok"] is True
-    assert body["data"] == []
-
-
-def test_uc06_подтверждение_меняет_статус_и_пишет_аудит(client):
+def test_uc06_человек_без_telegram_виден_в_списке(client):
+    """Новый человек заводится без Telegram (V-117): список его показывает."""
     with psycopg.connect(_test_dsn()) as conn:
-        pid = _person(conn, 250364803, "Заявка Тест", status="pending")
+        _person(conn, None, "Заведённый Вручную")
 
-    approved = client.post("/admin/approve", headers=HEADERS,
-                           json={"participant_id": pid, "approve": True}).json()
-    assert approved["ok"] is True
-
-    with psycopg.connect(_test_dsn()) as conn:
-        status = conn.execute("select status from participant where id = %s",
-                              (pid,)).fetchone()[0]
-        audits = [row[0] for row in conn.execute(
-            "select action from audit_event where entity_id = %s", (str(pid),)).fetchall()]
-    assert status == "active"
-    assert any("approve" in (action or "") for action in audits), audits
+    body = client.get("/tools/participants", headers=HEADERS).json()
+    names = [row["display_name"] for row in body["data"]]
+    assert "Заведённый Вручную" in names
 
 
-def test_uc07_код_создаётся_с_ролью_и_сроком(client):
-    body = client.post("/admin/invite", headers=HEADERS,
-                       json={"role": "org", "ttl_days": 7}).json()
-    assert body["ok"] is True
-    assert len(body["code"]) == 8
-    assert body["role"] == "org"
-
-    with psycopg.connect(_test_dsn()) as conn:
-        row = conn.execute("select role, expires_at, uses, max_uses "
-                           "from invite_code where code = %s", (body["code"],)).fetchone()
-    assert row[0] == "org" and row[2] == 0 and row[3] == 1
-
-
-def test_uc07_код_админа_запрещён(client):
-    response = client.post("/admin/invite", headers=HEADERS, json={"role": "admin"})
-    assert response.status_code == 400
-
-
-def test_uc07_неизвестная_роль_отклоняется(client):
-    response = client.post("/admin/invite", headers=HEADERS, json={"role": "student"})
-    assert response.status_code in (400, 422)
-
-
-def test_uc07_просроченный_код_не_работает(client):
-    with psycopg.connect(_test_dsn()) as conn:
-        conn.execute("""insert into invite_code (code, role, created_by, expires_at, max_uses)
-                        values ('EXPIRED1','troupe',0,%s,1)""",
-                     (dt.datetime.now(dt.UTC) - dt.timedelta(days=1),))
-        conn.commit()
-
+def test_uc08_просроченный_код_не_работает(client):
+    _code("EXPIRED1", -1)
     body = client.post("/tools/participants/check_code", headers=HEADERS,
                        json={"code": "EXPIRED1", "chat_id": 250364810}).json()
     assert body["ok"] is False
-    assert body["error"] in ("code_not_found", "code_expired", "expired")
+    assert body["error"] == "code_expired"
 
 
-def test_uc07_использованный_код_не_работает(client):
-    with psycopg.connect(_test_dsn()) as conn:
-        conn.execute("""insert into invite_code (code, role, created_by, expires_at,
-                                                 max_uses, uses)
-                        values ('USEDCODE','troupe',0,%s,1,1)""",
-                     (dt.datetime.now(dt.UTC) + dt.timedelta(days=3),))
-        conn.commit()
-
+def test_uc08_использованный_код_не_работает(client):
+    _code("USEDCODE", 3, uses=1)
     body = client.post("/tools/participants/check_code", headers=HEADERS,
                        json={"code": "USEDCODE", "chat_id": 250364811}).json()
     assert body["ok"] is False
+    assert body["error"] == "code_exhausted"

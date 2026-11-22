@@ -1,18 +1,18 @@
-"""Приглашения в админ-панели: код выпускается, виден и отзывается кнопками.
+"""Приглашения: персональный код на человека, список, отзыв, инструкция в чат.
 
-Раньше единственным способом было напечатать `/invite org` в чате. Теперь код
-создаётся в панели Mini App теми же обработчиками, что и раньше, и с тем же
-правом `registration.code.issue`; список открытых кодов виден рядом.
+Код выписывается на конкретного человека, у которого ещё нет Telegram
+(docs/development/182 §1.1, §4.3.4, V-116 б). Роль берётся из записи, а не из
+тела запроса: выбора роли при выпуске больше нет. Экран Mini App — единственный
+вход, из чата коды не выпускаются (V-118 а, §4.3.3).
 
-У выпуска из Mini App есть и вторая половина: код остаётся на экране, а
-инструкция получателю уходит в чат уведомлением (`docs/development/179`).
+Вторая половина выпуска — инструкция получателю: код остаётся на экране, а
+текст уходит уведомлением тому, кто выпустил (docs/development/179).
 
-Правила и требования раздела: docs/development/73-admin-panel-webapp.md.
+Обоснование: FR-A2 (код приглашения), FR-A5 (роли), docs/development/182 §4.3.4,
+docs/development/179 §5.
 """
 
 from __future__ import annotations
-
-from datetime import timedelta
 
 import psycopg
 from app.person_key import make_key
@@ -26,11 +26,12 @@ from tests.integration.test_webapp_profile import _api, init_data
 HEADERS = {"Authorization": f"Bearer {TOKEN}", "X-Actor-Chat-Id": "123456789"}
 
 
-def _person(conn, chat_id: int, name: str, role: str = "troupe") -> int:
+def _person(conn, chat_id: int | None, name: str, role: str = "troupe",
+            status: str = "active") -> int:
     pid = conn.execute(
         "insert into participant (tg_chat_id, display_name, person_key, role, status) "
-        "values (%s,%s,%s,%s,'active') returning id",
-        (chat_id, name, make_key(name), role)).fetchone()[0]
+        "values (%s,%s,%s,%s,%s) returning id",
+        (chat_id, name, make_key(name), role, status)).fetchone()["id"]
     conn.execute("insert into participant_role (participant_id, role) values (%s,%s)",
                  (pid, role))
     conn.commit()
@@ -42,24 +43,95 @@ def _token(client, chat_id: int) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
-def test_код_выпускается_и_виден_в_списке(client, auth) -> None:
-    created = client.post("/admin/invite", json={"role": "troupe", "ttl_days": 7},
-                          headers=auth).json()
-    assert created["ok"] is True and created["code"]
+def _admin(client) -> dict:
+    """Сессия администратора из фикстуры плюс человек без Telegram для кода."""
+    _api()
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        admin_id = conn.execute("select id from participant where tg_chat_id = %s",
+                                (123456789,)).fetchone()["id"]
+        conn.execute("insert into participant_role (participant_id, role) values (%s, 'admin') "
+                     "on conflict do nothing", (admin_id,))
+        conn.commit()
+        person = _person(conn, None, "Кодов Получатель")
+    return {"headers": _token(client, 123456789), "person": person}
 
-    listed = client.get("/admin/invites", headers=auth).json()
-    codes = [item["code"] for item in listed["data"]]
-    assert created["code"] in codes
-    item = next(i for i in listed["data"] if i["code"] == created["code"])
+
+def test_код_выпускается_на_человека_и_виден_в_списке(client) -> None:
+    setup = _admin(client)
+    created = client.post("/webapp/admin/invite", json={"participant_id": setup["person"]},
+                          headers=setup["headers"])
+    assert created.status_code == 200, created.text
+    body = created.json()
+    assert body["ok"] is True and body["code"]
+    assert body["role"] == "troupe"
+    assert body["participant_id"] == setup["person"]
+    assert body["display_name"] == "Кодов Получатель"
+
+    listed = client.get("/webapp/admin/invites", headers=setup["headers"]).json()
+    item = next(i for i in listed["data"] if i["code"] == body["code"])
     assert item["role"] == "troupe" and item["uses"] == 0 and item["max_uses"] == 1
+    assert item["participant_id"] == setup["person"]
+    assert item["display_name"] == "Кодов Получатель"
 
 
-def test_отозванный_код_исчезает_из_списка_и_не_впускает(client, auth) -> None:
-    code = client.post("/admin/invite", json={"role": "org"}, headers=auth).json()["code"]
-    revoked = client.post("/admin/invite/revoke", json={"code": code}, headers=auth).json()
-    assert revoked["ok"] is True
+def test_код_на_привязанного_человека_не_выпускается(client) -> None:
+    """Персональный код — вход для того, у кого Telegram ещё нет (§1.1)."""
+    setup = _admin(client)
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        bound = _person(conn, 785101, "Уже В Боте")
+    response = client.post("/webapp/admin/invite", json={"participant_id": bound},
+                           headers=setup["headers"])
+    assert response.status_code == 400
+    assert "participant_already_bound" in response.text
 
-    listed = client.get("/admin/invites", headers=auth).json()
+
+def test_код_на_архивного_человека_не_выпускается(client) -> None:
+    setup = _admin(client)
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        archived = _person(conn, None, "Архивный Человек", status="archived")
+    response = client.post("/webapp/admin/invite", json={"participant_id": archived},
+                           headers=setup["headers"])
+    assert response.status_code == 400
+    assert "participant_not_available" in response.text
+
+
+def test_код_на_несуществующего_человека_не_выпускается(client) -> None:
+    setup = _admin(client)
+    response = client.post("/webapp/admin/invite", json={"participant_id": 999999},
+                           headers=setup["headers"])
+    assert response.status_code == 404
+    assert "participant_not_found" in response.text
+
+
+def test_код_дминистратору_не_выпускается(client) -> None:
+    setup = _admin(client)
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        admin_id = _person(conn, None, "Второй Админ", role="admin")
+    response = client.post("/webapp/admin/invite", json={"participant_id": admin_id},
+                           headers=setup["headers"])
+    assert response.status_code == 400
+    assert "ADMIN_CHAT_ID" in response.text
+
+
+def test_роль_в_теле_игнорируется(client) -> None:
+    """Роль берётся из записи: поля `role` в теле выпуска больше нет (§4.3.2)."""
+    setup = _admin(client)
+    created = client.post("/webapp/admin/invite",
+                          json={"participant_id": setup["person"], "role": "org"},
+                          headers=setup["headers"])
+    assert created.status_code == 200, created.text
+    assert created.json()["role"] == "troupe"
+
+
+def test_отозванный_код_исчезает_из_списка_и_не_впускает(client) -> None:
+    setup = _admin(client)
+    code = client.post("/webapp/admin/invite", json={"participant_id": setup["person"]},
+                       headers=setup["headers"]).json()["code"]
+    revoked = client.post("/webapp/admin/invite-revoke", json={"code": code},
+                          headers=setup["headers"])
+    assert revoked.status_code == 200
+
+    listed = client.get("/webapp/admin/invites", headers=setup["headers"]).json()
     assert code not in [item["code"] for item in listed["data"]]
 
     check = client.post("/tools/participants/check_code",
@@ -67,71 +139,23 @@ def test_отозванный_код_исчезает_из_списка_и_не_
     assert check["ok"] is False, "отозванный код не должен пускать в бота"
 
 
-def test_повторный_отзыв_не_молчит(client, auth) -> None:
+def test_повторный_отзыв_не_молчит(client) -> None:
     """Уже отозванный код — это ошибка, а не тихий «ок»: иначе непонятно, сработало ли."""
-    code = client.post("/admin/invite", json={"role": "troupe"}, headers=auth).json()["code"]
-    client.post("/admin/invite/revoke", json={"code": code}, headers=auth)
-    again = client.post("/admin/invite/revoke", json={"code": code}, headers=auth)
+    setup = _admin(client)
+    code = client.post("/webapp/admin/invite", json={"participant_id": setup["person"]},
+                       headers=setup["headers"]).json()["code"]
+    client.post("/webapp/admin/invite-revoke", json={"code": code}, headers=setup["headers"])
+    again = client.post("/webapp/admin/invite-revoke", json={"code": code},
+                        headers=setup["headers"])
     assert again.status_code == 404
 
 
 def test_без_права_список_кодов_закрыт(client) -> None:
-    with psycopg.connect(_test_dsn()) as conn:
-        _person(conn, 785002, "Коды Без Прав")
-    response = client.get("/admin/invites", headers={
-        "Authorization": f"Bearer {TOKEN}", "X-Actor-Chat-Id": "785002"})
-    assert response.status_code == 403
-
-
-def test_в_панели_код_выпускается_кнопкой(client) -> None:
-    """Mini App: тот же выпуск, но через подпись initData и право из БД."""
     _api()
-    with psycopg.connect(_test_dsn()) as conn:
-        _person(conn, 785010, "Коды Админ", role="admin")
-    headers = _token(client, 785010)
-
-    created = client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers)
-    assert created.status_code == 200 and created.json()["code"]
-
-    listed = client.get("/webapp/admin/invites", headers=headers).json()
-    assert created.json()["code"] in [item["code"] for item in listed["data"]]
-
-    revoked = client.post("/webapp/admin/invite-revoke",
-                          json={"code": created.json()["code"]}, headers=headers)
-    assert revoked.status_code == 200
-
-def test_код_педагога_выпускается_из_mini_app(client, auth) -> None:
-    """Роль `master` — такая же кнопка, как труппа и организатор (карта E10, дефект L-049).
-
-    Дефект: тело `POST /webapp/admin/invite` объявляло `Literal["org", "troupe"]`, поэтому
-    третий сегмент экрана отдавал 422 «Unprocessable Entity». Бот тот же код выпускал
-    (`InviteIn` знал `master`), а стенд Mini App отвечал успехом — расхождение живого
-    API со стендом и не заметили.
-    """
-    session = _token(client, 123456789)          # сессия Mini App, не токен бота
-    created = client.post("/webapp/admin/invite", json={"role": "master", "ttl_days": 7},
-                          headers=session)
-    assert created.status_code == 200, created.text
-    assert created.json()["role"] == "master"
-
-    listed = client.get("/webapp/admin/invites", headers=session).json()
-    assert created.json()["code"] in [item["code"] for item in listed["data"]]
-
-
-def test_мини_app_и_бот_принимают_один_набор_ролей() -> None:
-    """Сторож расхождения: стенд и API не должны знать разные наборы ролей.
-
-    Сравниваются сами модели, а не экран: экран рисует кнопки, а отказывает модель.
-    """
-    from typing import get_args
-
-    from app.api.admin import InviteIn, WebAppInviteIn
-
-    bot_roles = set(get_args(InviteIn.model_fields["role"].annotation))
-    app_roles = set(get_args(WebAppInviteIn.model_fields["role"].annotation))
-    assert app_roles == bot_roles - {"admin"}, (
-        f"Mini App принимает {sorted(app_roles)}, бот {sorted(bot_roles)}: "
-        "роль, добавленная в один вход, обязана появиться и в другом")
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
+        _person(conn, 785002, "Коды Без Прав")
+    response = client.get("/webapp/admin/invites", headers=_token(client, 785002))
+    assert response.status_code == 403
 
 
 def _notes(recipient_id: int) -> list[dict]:
@@ -149,11 +173,12 @@ def test_выпуск_из_mini_app_ставит_инструкцию_в_оче�
     код. Текста кода в сообщении нет — код виден только на экране шторки.
     """
     _api()
-    with psycopg.connect(_test_dsn()) as conn:
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
         pid = _person(conn, 785020, "Инструкция Выпустил", role="admin")
+        person = _person(conn, None, "Инструкция Получатель")
     headers = _token(client, 785020)
 
-    created = client.post("/webapp/admin/invite", json={"role": "troupe"},
+    created = client.post("/webapp/admin/invite", json={"participant_id": person},
                           headers=headers).json()
     code = created["code"]
 
@@ -169,21 +194,6 @@ def test_выпуск_из_mini_app_ставит_инструкцию_в_оче�
     assert code not in note["payload"]["body"]
 
 
-def test_выпуск_из_бота_инструкцию_в_чат_не_ставит(client, auth) -> None:
-    """E12 (docs/development/179 §5.2): бот присылает код и инструкцию одним сообщением.
-
-    Оба входа сходятся в `create_invite`, поэтому уведомление ставится только в
-    `webapp_admin_invite`: иначе админ получил бы инструкцию дважды.
-    """
-    _api()
-    created = client.post("/admin/invite", json={"role": "troupe"}, headers=auth)
-    assert created.status_code == 200, created.text
-    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
-        rows = conn.execute("select id from notification where kind = 'invite_instruction'"
-                            ).fetchall()
-    assert rows == [], "бот-путь не должен ставить инструкцию в очередь"
-
-
 def test_повторное_нажатие_не_плодит_инструкцию(client) -> None:
     """E12 (docs/development/179 §5.3, правило Д4): второй код — та же инструкция.
 
@@ -191,12 +201,16 @@ def test_повторное_нажатие_не_плодит_инструкци�
     поэтому вторую строку отсекает правило «не чаще одной инструкции в сутки».
     """
     _api()
-    with psycopg.connect(_test_dsn()) as conn:
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
         pid = _person(conn, 785021, "Инструкция Дважды", role="admin")
+        first_person = _person(conn, None, "Дважды Первый")
+        second_person = _person(conn, None, "Дважды Второй")
     headers = _token(client, 785021)
 
-    first = client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers).json()
-    second = client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers).json()
+    first = client.post("/webapp/admin/invite", json={"participant_id": first_person},
+                        headers=headers).json()
+    second = client.post("/webapp/admin/invite", json={"participant_id": second_person},
+                         headers=headers).json()
     assert first["code"] != second["code"], "каждое нажатие выпускает новый код"
 
     codes = [item["code"] for item in
@@ -213,15 +227,16 @@ def test_вчерашняя_инструкция_не_мешает_новой(cl
     него в чате, но человеку он его уже отдал.
     """
     _api()
-    with psycopg.connect(_test_dsn()) as conn:
+    with psycopg.connect(_test_dsn(), row_factory=dict_row) as conn:
         pid = _person(conn, 785022, "Инструкция Вчера", role="admin")
+        person = _person(conn, None, "Вчера Получатель")
     headers = _token(client, 785022)
-    client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers)
+    client.post("/webapp/admin/invite", json={"participant_id": person}, headers=headers)
 
     with psycopg.connect(_test_dsn()) as conn:
         conn.execute("update notification set status = 'sent', sent_at = now() - interval '25 hours' "
                      "where recipient_id = %s and kind = 'invite_instruction'", (pid,))
         conn.commit()
 
-    client.post("/webapp/admin/invite", json={"role": "troupe"}, headers=headers)
+    client.post("/webapp/admin/invite", json={"participant_id": person}, headers=headers)
     assert len(_notes(pid)) == 2, "старше суток — новое сообщение ставится"

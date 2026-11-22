@@ -44,6 +44,26 @@ def _grant_manage() -> int:
     return pid
 
 
+def _unbound(name: str) -> int:
+    """Человек без Telegram — на него выписывается персональный код."""
+    return _person(name)
+
+
+def _admin_session(client) -> dict:
+    """Сессия Mini App администратора: код выпускается только оттуда (§4.3.3)."""
+    from tests.integration.test_webapp_profile import _api, init_data
+
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        pid = conn.execute("select id from participant where tg_chat_id = %s",
+                           (ADMIN_CHAT,)).fetchone()[0]
+        conn.execute("insert into participant_role (participant_id, role) "
+                     "values (%s, 'admin') on conflict do nothing", (pid,))
+        conn.commit()
+    token = client.post("/webapp/auth", json={"init_data": init_data(ADMIN_CHAT)}).json()["token"]
+    return {"Authorization": f"Bearer {token}"}
+
+
 def test_архив_из_чата_отказывает_без_права(client) -> None:
     """FR-A7: организатор без participants.manage — 403, а не тихая запись."""
     pid = _person("Архив Без Прав")
@@ -86,18 +106,24 @@ def test_себя_в_архив_нельзя(client) -> None:
 
 def test_отзыв_кода_отказывает_без_права(client) -> None:
     """FR-A2: без registration.code.issue отзыв кода — 403, а код остаётся живым."""
-    code = client.post("/admin/invite", json={"role": "troupe", "ttl_days": 7},
-                       headers=ORG_HEADERS).json()["code"]
+    person = _unbound("Отзыв Получатель")
+    code = client.post("/webapp/admin/invite", json={"participant_id": person},
+                       headers=_admin_session(client)).json()["code"]
 
     with psycopg.connect(_test_dsn()) as conn:
         conn.execute("insert into participant (tg_chat_id, display_name, person_key, "
                      "role, status) values (%s, %s, %s, 'troupe', 'active')",
                      (785100, "Отзыв Без Прав", make_key("Отзыв Без Прав")))
         conn.commit()
-    stranger = {"Authorization": f"Bearer {TOKEN}", "X-Actor-Chat-Id": "785100"}
+    from tests.integration.test_webapp_profile import _api, init_data
 
-    response = client.post("/admin/invite/revoke", json={"code": code}, headers=stranger)
+    _api()
+    token = client.post("/webapp/auth", json={"init_data": init_data(785100)}).json()["token"]
+    stranger = {"Authorization": f"Bearer {token}"}
+
+    response = client.post("/webapp/admin/invite-revoke", json={"code": code},
+                           headers=stranger)
     assert response.status_code == 403, response.text
 
-    alive = client.get("/admin/invites", headers=ORG_HEADERS).json()["data"]
+    alive = client.get("/webapp/admin/invites", headers=_admin_session(client)).json()["data"]
     assert code in [item["code"] for item in alive], "отказ не должен гасить код"

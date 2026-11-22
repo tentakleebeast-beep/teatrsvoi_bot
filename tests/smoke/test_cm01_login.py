@@ -18,7 +18,7 @@ SCENARIO = {
 }
 
 
-def test_cm01_login(journal, stand, admin, people, org, troupe, master):
+def test_cm01_login(journal, stand, admin, admin_webapp, people, org, troupe, master):
     """Регистрация, повторная регистрация, отказы по праву, архив, аудит."""
     # 1. Сервис жив и отвечает полями здоровья (FR-H1).
     health = admin.get("/health")
@@ -42,36 +42,36 @@ def test_cm01_login(journal, stand, admin, people, org, troupe, master):
         and "admin.panel" in (caps_admin.field("capabilities") or []),
         requirements=["FR-A1"])
 
-    # 3. Регистрация по одноразовому коду: приглашение админа → код → регистрация (FR-A2).
-    invite = admin.post("/admin/invite", body={"role": "troupe", "ttl_days": 1, "max_uses": 1})
-    code = invite.field("code")
+    # 3. Персональный код: новый человек без Telegram → код → вход (FR-A2, docs/182 §4.3).
     new_chat = chat_id(stand, 5)
-    registered = org.post("/tools/participants/register", body={
-        "chat_id": new_chat, "code": code,
-        "display_name": f"Смоук Приглашённый {stand['marker']}"})
-    participant_id = (registered.field("participant") or {}).get("id")
+    made = admin_webapp.post("/webapp/admin/person-new",
+                             body={"display_name": f"Смоук Приглашённый {stand['marker']}",
+                                   "role": "troupe"})
+    participant_id = (made.field("participant") or {}).get("id")
+    invite = admin_webapp.post("/webapp/admin/invite",
+                               body={"participant_id": participant_id, "ttl_days": 1})
+    code = invite.field("code")
+    attached = org.post("/tools/participants/attach", body={
+        "chat_id": new_chat, "code": code})
     journal.check(
-        "3. POST /admin/invite + /tools/participants/register",
-        expected="код приглашения выдан, регистрация дала участника",
-        actual=f"код {registered.code}, статус {registered.field('status')}, "
+        "3. POST /webapp/admin/person-new + /webapp/admin/invite + attach",
+        expected="человек без Telegram заведён, код выписан на него, вход привязал chat_id",
+        actual=f"person-new {made.code}, invite {invite.code}, attach {attached.code}, "
                f"participant_id={participant_id}",
-        evidence=f"{invite.evidence(80)}; {registered.evidence()}",
-        ok=invite.ok and registered.ok and registered.field("status") == "registered"
-        and bool(participant_id),
+        evidence=f"{made.evidence(80)}; {invite.evidence(80)}; {attached.evidence(80)}",
+        ok=made.ok and invite.ok and attached.ok and bool(participant_id)
+        and (attached.field("participant") or {}).get("chat_id") == new_chat,
         requirements=["FR-A2"])
 
-    # 4. Повторная регистрация того же chat_id не создаёт второго человека (FR-A2).
-    again = org.post("/tools/participants/register", body={
-        "chat_id": new_chat, "code": code,
-        "display_name": f"Смоук Приглашённый {stand['marker']}"})
+    # 4. Повторный вход тем же кодом не привязывает второй раз (FR-A2).
+    again = org.post("/tools/participants/attach", body={"chat_id": new_chat, "code": code})
     again_id = (again.field("participant") or {}).get("id")
     journal.check(
-        "4. повторная регистрация того же chat_id",
-        expected="участник тот же (already_registered), дубля нет",
-        actual=f"код {again.code}, статус {again.field('status')}, id={again_id}",
+        "4. повторный вход тем же кодом",
+        expected="отказ code_exhausted, дубля привязки нет",
+        actual=f"код {again.code}, ошибка {again.field('error')}, id={again_id}",
         evidence=again.evidence(),
-        ok=again.ok and again.field("status") == "already_registered"
-        and again_id == participant_id,
+        ok=not again.ok and again.field("error") == "code_exhausted",
         requirements=["FR-A2"])
 
     # 5. Привязка идёт к существующей записи, без дублей: у зарегистрированного id один (FR-A3).

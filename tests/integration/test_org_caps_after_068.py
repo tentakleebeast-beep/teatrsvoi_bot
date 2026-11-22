@@ -43,10 +43,10 @@ def test_у_организатора_нет_права_на_заявки(test_db
     assert "registration.approve" not in _caps(test_db, "org")
 
 
-def test_у_администратора_право_на_заявки_осталось(test_db: str) -> None:
-    """Снятие у `org` не задело `admin`: заявки он обрабатывает по-прежнему."""
+def test_у_администратора_права_на_заявки_больше_нет(test_db: str) -> None:
+    """069 снимает `registration.approve` у всех ролей: заявок в боте нет (§4.1)."""
     caps = _caps(test_db, "admin")
-    assert "registration.approve" in caps
+    assert "registration.approve" not in caps
     assert {"registration.code.issue", "participants.manage"} <= caps
 
 
@@ -70,8 +70,8 @@ def test_повторный_накат_068_ничего_не_меняет(test_d
     assert _caps(test_db, "org") == before
 
 
-def test_голова_alembic_после_068(test_db: str) -> None:
-    """Учёт версий совпадает с файлом: накат дошёл до 068, а не остановился раньше."""
+def test_голова_alembic_после_069(test_db: str) -> None:
+    """Учёт версий совпадает с файлом: накат дошёл до 069, а не остановился раньше."""
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "068_org_without_approve"
+    assert head == "069_personal_invite_code"
