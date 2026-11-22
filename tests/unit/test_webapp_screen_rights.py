@@ -53,15 +53,15 @@ ROLE_CAPS = {
         "budget.read.self", "registration.code.issue", "registration.approve",
         "participants.view", "participants.manage", "budget.read", "budget.write",
         "budget.import", "schedule.read.all", "schedule.slots", "calendar.write",
-        "notify.send", "audit.view", "quota.manage", "system.health", "admin.panel",
+        "notify.send", "audit.view", "system.health", "admin.panel",
         "feedback.triage",
     },
     "org": set(UNIVERSAL_CAPS) | {
         "budget.read.self", "participants.view", "participants.contact", "budget.read",
         "budget.write", "budget.import", "schedule.read.all", "schedule.slots",
-        "schedule.write", "calendar.write", "feedback.send", "poll.manage", "system.health",
+        "schedule.write", "calendar.write", "feedback.send", "poll.manage",
     },
-    "troupe": set(UNIVERSAL_CAPS) | {"budget.read.self", "system.health"},
+    "troupe": set(UNIVERSAL_CAPS) | {"budget.read.self", "feedback.send"},
     "master": set(UNIVERSAL_CAPS) | {
         "schedule.read.all", "schedule.slots", "schedule.write", "participants.view",
     },

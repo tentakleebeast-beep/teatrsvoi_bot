@@ -55,3 +55,7 @@ services/tool-api/app/subject.py::role_hint
 
 # Сброс флага отмены между тестами: зовётся только из tests/, в рантайме не нужен.
 services/tool-api/app/agently/tasks.py::clear_all
+
+# Список исключений «Что умею» — контракт со сторожем ответа (docs/development/188 §5.4):
+# в рантайме читается только CAP_LINES, а SKIP сверяет tests/unit/test_help_capabilities.py.
+services/tg-gateway/app/texts.py::CAP_LINES_SKIP

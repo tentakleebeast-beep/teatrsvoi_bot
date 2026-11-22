@@ -67,7 +67,7 @@ def test_порядок_правил_фиксирован():
     # availability_q стоит перед availability: вопрос «кто сегодня занят» —
     # диалог, а не ввод своих данных (возврат ревью A-4, 02.11.2026).
     assert [name for name, _ in routing.RULES] == [
-        "about_me", "list_people", "howto", "slots", "money", "schedule",
+        "about_me", "list_people", "capabilities", "howto", "slots", "money", "schedule",
         "availability_q", "availability", "assign", "budget",
     ]
 

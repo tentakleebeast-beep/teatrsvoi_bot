@@ -456,17 +456,17 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | сообщение `intro_trainings` | Intro.trainings, F.text | `services/tg-gateway/app/routers/intro.py:221` | — | нет | — |
 | сообщение `intro_manifest` | Intro.manifest, F.text | `services/tg-gateway/app/routers/intro.py:226` | — | нет | — |
 | кнопка `intro_skip` | F.data == 'intro:skip' | `services/tg-gateway/app/routers/intro.py:231` | — | нет | — |
-| сообщение `start` | CommandStart() | `services/tg-gateway/app/routers/menu.py:144` | — | нет | `/admin/bootstrap`, `/tools/participants/me` |
-| сообщение `on_menu_button` | StateFilter(None, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text.in_(keyboards.MENU_SURFACE) | `services/tg-gateway/app/routers/menu.py:360` | — | нет | — |
-| кнопка `menu_item_cb` | F.data.startswith('mi:') | `services/tg-gateway/app/routers/menu.py:367` | — | test_agent_features.py, test_gateway_menu_rights.py | — |
-| сообщение `on_dialog_control` | F.text.in_(keyboards.DIALOG_CONTROLS) | `services/tg-gateway/app/routers/menu.py:603` | — | нет | — |
-| сообщение `task_frame_text` | TaskFrame.await_text, F.text, ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:608` | — | нет | — |
-| сообщение `on_text` | StateFilter(None, Reg.await_code, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text & ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:643` | budget.write | нет | `/tools/assistant/ask`, `/tools/participants/check_code` |
-| кнопка `reg_discipline` | Reg.await_discipline, F.data.startswith('reg:disc:') | `services/tg-gateway/app/routers/menu.py:808` | — | test_onboarding_sequence.py | — |
-| сообщение `cmd_help` | Command('help') | `services/tg-gateway/app/routers/menu.py:827` | — | test_gateway_help_memo.py | — |
-| сообщение `menu_cmd` | Command('menu') | `services/tg-gateway/app/routers/menu.py:837` | — | test_gateway_assign_dialog.py | — |
-| сообщение `cmd_quiet` | lambda message: parsers.command_name(message.text) in QUIET_COMMANDS | `services/tg-gateway/app/routers/menu.py:905` | — | нет | — |
-| кнопка `quiet_action` | F.data.startswith('quiet:') | `services/tg-gateway/app/routers/menu.py:934` | — | test_gateway_quiet.py | — |
+| сообщение `start` | CommandStart() | `services/tg-gateway/app/routers/menu.py:145` | — | нет | `/admin/bootstrap`, `/tools/participants/me` |
+| сообщение `on_menu_button` | StateFilter(None, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text.in_(keyboards.MENU_SURFACE) | `services/tg-gateway/app/routers/menu.py:375` | — | нет | — |
+| кнопка `menu_item_cb` | F.data.startswith('mi:') | `services/tg-gateway/app/routers/menu.py:382` | — | test_agent_features.py, test_gateway_menu_rights.py | — |
+| сообщение `on_dialog_control` | F.text.in_(keyboards.DIALOG_CONTROLS) | `services/tg-gateway/app/routers/menu.py:623` | — | нет | — |
+| сообщение `task_frame_text` | TaskFrame.await_text, F.text, ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:628` | — | нет | — |
+| сообщение `on_text` | StateFilter(None, Reg.await_code, AssignDraft.await_kind, AssignDraft.await_date, AssignDraft.await_time), F.text & ~F.text.startswith('/') | `services/tg-gateway/app/routers/menu.py:668` | budget.write | нет | `/tools/assistant/ask`, `/tools/participants/check_code` |
+| кнопка `reg_discipline` | Reg.await_discipline, F.data.startswith('reg:disc:') | `services/tg-gateway/app/routers/menu.py:833` | — | test_onboarding_sequence.py | — |
+| сообщение `cmd_help` | Command('help') | `services/tg-gateway/app/routers/menu.py:852` | — | test_gateway_help_memo.py | — |
+| сообщение `menu_cmd` | Command('menu') | `services/tg-gateway/app/routers/menu.py:862` | — | test_gateway_assign_dialog.py | — |
+| сообщение `cmd_quiet` | lambda message: parsers.command_name(message.text) in QUIET_COMMANDS | `services/tg-gateway/app/routers/menu.py:930` | — | нет | — |
+| кнопка `quiet_action` | F.data.startswith('quiet:') | `services/tg-gateway/app/routers/menu.py:959` | — | test_gateway_quiet.py | — |
 | сообщение `cmd_notes` | Command('заметки', 'notes') | `services/tg-gateway/app/routers/notes.py:104` | — | нет | `/webapp/notes` |
 | кнопка `note_confirm` | F.data.startswith('note:') | `services/tg-gateway/app/routers/notes.py:112` | notes.write | test_gateway_notes.py | `/tools/notes` |
 | сообщение `cmd_note` | Command('заметка', 'note') | `services/tg-gateway/app/routers/notes.py:98` | — | test_gateway_command_hints.py, test_gateway_notes.py | — |
@@ -480,16 +480,17 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 
 | Правило | Роль | Что ловит | Точка входа |
 |---|---|---|---|
-| `about_me` | вопрос | ^(кто я\|кто я такой\|кто я такая\|мой профиль\|мои роли\|моя роль\|кто я в боте) | `services/tg-gateway/app/routing.py:59` |
-| `list_people` | вопрос | (список.*(участник\|людей\|пользовател)\|кто\s+(зарегистр\|в\s+системе\|у\s+нас\s+в\s+боте)\|зарегистрирован\|состав\s+(студи\|т | `services/tg-gateway/app/routing.py:60` |
-| `howto` | вопрос | ^(как\|где\|чем\|почему\|зачем\|можно\s+ли\|подскажи\|объясни\|научи)\b | `services/tg-gateway/app/routing.py:61` |
-| `slots` | вопрос | (окн[оа]\b\|когда\s+(все\s+)?свободн\|найди\s+(время\|окно)\|общее\s+время\|когда\s+можно\s+собрат\|свободные\s+часы) | `services/tg-gateway/app/routing.py:62` |
-| `money` | вопрос | (сколько\s+(у\s+нас\s+)?(денег\|средств\|на\s+счет\|осталось)\|какой\s+баланс\|баланс\s+студи\|сколько\s+потратили\|сколько\s+з | `services/tg-gateway/app/routing.py:63` |
-| `schedule` | вопрос | (расписан\|что\s+у\s+меня\s+(сегодня\|завтра\|послезавтра\|на\s+неделе)\|что\s+(у\s+нас\s+)?(на\|в)\s+(неделе\|пн\|вт\|ср\|чт\|пт\|с | `services/tg-gateway/app/routing.py:64` |
-| `availability_q` | вопрос | (кто\s+((сегодня\|завтра\|послезавтра\|сейчас)\s+)?(занят\|свободен)\|покажи\s+занятост\|занятость\s+на\s+(сегодня\|завтра)) | `services/tg-gateway/app/routing.py:65` |
-| `availability` | ввод данных | занят\|свобод\|могу\|не могу\|не смогу\|удобн\|работаю | `services/tg-gateway/app/routing.py:66` |
-| `assign` | ввод данных | (назначь\|назначить\|запланируй\|поставь\s+(репетици\|показ\|тренинг\|аренд\|встреч)) | `services/tg-gateway/app/routing.py:68` |
-| `budget` | ввод данных | расход\|потрат\|оплат\|заплат\|купил\|отдал\|приход\|поступ\|взнос\|перевел | `services/tg-gateway/app/routing.py:69` |
+| `about_me` | вопрос | ^(кто я\|кто я такой\|кто я такая\|мой профиль\|мои роли\|моя роль\|кто я в боте) | `services/tg-gateway/app/routing.py:80` |
+| `list_people` | вопрос | (список.*(участник\|людей\|пользовател)\|кто\s+(зарегистр\|в\s+системе\|у\s+нас\s+в\s+боте)\|зарегистрирован\|состав\s+(студи\|т | `services/tg-gateway/app/routing.py:81` |
+| `capabilities` | вопрос | (что\s+(ты\s+\|вы\s+)?(вообще\s+)?(умеешь\|умеете\|можешь\|можете)\b\|что\s+(бот\|ассистент)\s+(вообще\s+)?(умеет\|может)\b\|что | `services/tg-gateway/app/routing.py:84` |
+| `howto` | вопрос | ^(как\|где\|чем\|почему\|зачем\|можно\s+ли\|подскажи\|объясни\|научи)\b | `services/tg-gateway/app/routing.py:85` |
+| `slots` | вопрос | (окн[оа]\b\|когда\s+(все\s+)?свободн\|найди\s+(время\|окно)\|общее\s+время\|когда\s+можно\s+собрат\|свободные\s+часы) | `services/tg-gateway/app/routing.py:86` |
+| `money` | вопрос | (сколько\s+(у\s+нас\s+)?(денег\|средств\|на\s+счет\|осталось)\|какой\s+баланс\|баланс\s+студи\|сколько\s+потратили\|сколько\s+з | `services/tg-gateway/app/routing.py:87` |
+| `schedule` | вопрос | (расписан\|что\s+у\s+меня\s+(сегодня\|завтра\|послезавтра\|на\s+неделе)\|что\s+(у\s+нас\s+)?(на\|в)\s+(неделе\|пн\|вт\|ср\|чт\|пт\|с | `services/tg-gateway/app/routing.py:88` |
+| `availability_q` | вопрос | (кто\s+((сегодня\|завтра\|послезавтра\|сейчас)\s+)?(занят\|свободен)\|покажи\s+занятост\|занятость\s+на\s+(сегодня\|завтра)) | `services/tg-gateway/app/routing.py:89` |
+| `availability` | ввод данных | занят\|свобод\|могу\|не могу\|не смогу\|удобн\|работаю | `services/tg-gateway/app/routing.py:90` |
+| `assign` | ввод данных | (назначь\|назначить\|запланируй\|поставь\s+(репетици\|показ\|тренинг\|аренд\|встреч)) | `services/tg-gateway/app/routing.py:92` |
+| `budget` | ввод данных | расход\|потрат\|оплат\|заплат\|купил\|отдал\|приход\|поступ\|взнос\|перевел | `services/tg-gateway/app/routing.py:93` |
 
 ## 5. Инструменты агента
 

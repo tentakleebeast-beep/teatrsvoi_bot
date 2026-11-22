@@ -29,7 +29,7 @@ ADMIN = ["*"]
 ORG = ["budget.import", "budget.read", "budget.read.self", "budget.write", "calendar.write",
        "feedback.send", "files.access", "notes.write", "participants.contact",
        "participants.view", "poll.manage", "schedule.availability.self",
-       "schedule.read.all", "schedule.slots", "schedule.write", "system.health"]
+       "schedule.read.all", "schedule.slots", "schedule.write"]
 TROUPE = ["schedule.availability.self", "budget.read.self"]
 STUDENT = ["schedule.availability.self"]
 
@@ -302,7 +302,7 @@ def test_обратная_связь_живёт_в_помощи(gw):
     groups = dict(gw.menu_groups(ADMIN))
     assert "Обратная связь" not in groups["Профиль"]
     assert inline_labels(gw.group_kb(ADMIN, "Помощь")) == ["Обратная связь", "Что умею", "Справка"]
-    assert "Обратная связь" in gw.help_text(ADMIN)
+    assert "Оставить замечание или пожелание" in gw.help_text(ADMIN)
 
 
 def test_пункт_что_умею_отвечает_справкой(gw, monkeypatch):
@@ -315,7 +315,7 @@ def test_пункт_что_умею_отвечает_справкой(gw, monkey
     asyncio.run(gw.run_menu_action(message, FakeState(), "Что умею"))
     text, _ = message.answers[-1]
     assert text.startswith("Что умею:")
-    assert "Управление" in text
+    assert "Выдать роль или право, убрать в архив" in text
 
 
 def test_Ш49_справка_только_по_праву(gw):
@@ -324,8 +324,8 @@ def test_Ш49_справка_только_по_праву(gw):
     assert "Справка" in dict(gw.menu_groups(with_right))["Помощь"]
     assert "Справка" not in dict(gw.menu_groups(TROUPE))["Помощь"]
     assert "Справка" not in dict(gw.menu_groups(ORG))["Помощь"]
-    assert "Справка" not in gw.help_text(TROUPE)
-    assert "Справка" in gw.help_text(with_right)
+    assert "Показать инструкцию по роли" not in gw.help_text(TROUPE)
+    assert "Показать инструкцию по роли" in gw.help_text(["howto.read"])
 
 
 def test_Ш49_справка_отдаётся_разделами(gw, monkeypatch):

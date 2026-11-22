@@ -221,23 +221,22 @@ MAIN_MENU = menu_kb(["*"])      # полный набор — справка, т
 
 
 def help_text(caps: list[str], ui_texts: dict | None = None) -> str:
-    """Что умеет бот — ровно то, что доступно этому человеку, пункт за пунктом.
+    """Что умею — одна строка на право, порядок от частого к редкому (188).
 
-    Подписи берутся из конфигурации (`config/ui-texts.yaml`), умолчания — из
-    `MENU_HELP`: правка текста не требует релиза.
+    Строка видна, если её право есть у человека: набор строк не может разойтись
+    с матрицей прав, а механики («нажатие», «окно», «переход») здесь нет вовсе.
+    Подписи правятся в `config/ui-texts.yaml` (блок `capabilities`), умолчания — в
+    `texts.CAP_LINES`: правка текста не требует релиза.
     """
-    menu_texts = (ui_texts or {}).get("menu") or {}
-    help_texts = (ui_texts or {}).get("help") or {}
-    lines = ["Что умею:"]
-    for group, items in menu_groups(caps):
-        lines.append("")
-        lines.append(group)
-        for item in items:
-            help_line = menu_texts.get(item) or texts.MENU_HELP.get(item)
-            lines.append(f"· {item} — {help_line}" if help_line else f"· {item}")
-    lines.append("")
-    lines.append(help_texts.get("free_text") or
-                 f"Свободным текстом тоже можно: {texts.FREE_TEXT_EXAMPLES}.")
+    overrides = (ui_texts or {}).get("capabilities") or {}
+    lines = [texts.HELP_TITLE]
+    for code, default in texts.CAP_LINES:
+        if code and not core.has(caps, code):
+            continue
+        lines.append("· " + (overrides.get(code) or default))
+    footer = ((ui_texts or {}).get("help") or {}).get("free_text") or texts.HELP_FOOTER
+    if footer:
+        lines += ["", footer]
     return "\n".join(lines)
 
 
