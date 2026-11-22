@@ -24,10 +24,10 @@ TABLES = ("poll", "poll_question", "poll_option", "poll_audience", "poll_person"
           "poll_run", "poll_answer", "poll_viewer")
 
 
-def test_alembic_дошёл_до_069(test_db: str) -> None:
+def test_alembic_дошёл_до_070(test_db: str) -> None:
     with psycopg.connect(test_db, row_factory=dict_row) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()
-    assert head["version_num"] == "069_personal_invite_code"
+    assert head["version_num"] == "070_personal_invite_code"
 
 
 def test_восемь_таблиц_на_месте(test_db: str) -> None:

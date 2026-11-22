@@ -4,11 +4,11 @@
 (фикстура `test_db`), а не чтением SQL глазами: `delete ... where`,
 `on conflict` и учёт версий ломаются молча, если их только читать.
 
-Что проверяется (критерии карты t_848c60ed, пункты 4–5; после миграции 069):
-  * у `org` нет `registration.approve` (068), и 069 сняла его у всех ролей;
+Что проверяется (критерии карты t_848c60ed, пункты 4–5; после миграции 070):
+  * у `org` нет `registration.approve` (068), и 070 сняла его у всех ролей;
   * у `org` ровно 16 возможностей, и это именно ожидаемый набор;
   * повторный накат `db/init/068_org_without_approve.sql` не падает и чисел не меняет;
-  * голова Alembic — `069_personal_invite_code`.
+  * голова Alembic — `070_personal_invite_code`.
 
 Обоснование: FR-A6 (права решает сервер), FR-A2 (код приглашения),
 docs/architecture/02-access-control.md §1, карта t_848c60ed.
@@ -44,7 +44,7 @@ def test_у_организатора_нет_права_на_заявки(test_db
 
 
 def test_у_администратора_права_на_заявки_больше_нет(test_db: str) -> None:
-    """069 снимает `registration.approve` у всех ролей: заявок в боте нет (§4.1)."""
+    """070 снимает `registration.approve` у всех ролей: заявок в боте нет (§4.1)."""
     caps = _caps(test_db, "admin")
     assert "registration.approve" not in caps
     assert {"registration.code.issue", "participants.manage"} <= caps
@@ -70,8 +70,8 @@ def test_повторный_накат_068_ничего_не_меняет(test_d
     assert _caps(test_db, "org") == before
 
 
-def test_голова_alembic_после_069(test_db: str) -> None:
-    """Учёт версий совпадает с файлом: накат дошёл до 069, а не остановился раньше."""
+def test_голова_alembic_после_070(test_db: str) -> None:
+    """Учёт версий совпадает с файлом: накат дошёл до головы 070, а не остановился раньше."""
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "069_personal_invite_code"
+    assert head == "070_personal_invite_code"

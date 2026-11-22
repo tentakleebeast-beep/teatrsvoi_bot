@@ -1,6 +1,6 @@
-"""db/init/069_personal_invite_code.sql
+"""db/init/069_poll_interview_drafts.sql
 
-Revision ID: 069_personal_invite_code
+Revision ID: 069_poll_interview_drafts
 Revises: 068_org_without_approve
 Create Date: 2026-11-05
 
@@ -12,17 +12,17 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "069_personal_invite_code"
+revision = "069_poll_interview_drafts"
 down_revision = "068_org_without_approve"
 branch_labels = None
 depends_on = None
 
-SQL_FILE = "069_personal_invite_code.sql"
-SQL_SHA256 = "69087cce21367d77e91ff99efd645ab85f42edc8f8b773eee5581a9ca12f2268"
+SQL_FILE = "069_poll_interview_drafts.sql"
+SQL_SHA256 = "963487440ff3e874db64468621f206ae4211c44ac0bbb1f95d2a1211dabf107a"
 
 
 def upgrade() -> None:
-    """Накат db/init/069_personal_invite_code.sql целиком."""
+    """Накат db/init/069_poll_interview_drafts.sql целиком."""
     # Импорт внутри функции: `alembic heads/history` читают ревизии без env.py,
     # а путь к пакету `migrations` добавляет env.py от своего __file__, не от cwd.
     from migrations.sql import run_sql  # noqa: PLC0415

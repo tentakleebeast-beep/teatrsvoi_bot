@@ -7,6 +7,7 @@
 
 import importlib.util
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -160,6 +161,39 @@ def test_задокументированный_разрыв_не_найден(t
     assert metric(DRIFT.measure_migrations(tmp_path), "migration_gaps")["value"] == 0
 
 
+def test_пропуск_с_записанной_причиной_не_считается(tmp_path):
+    """Случай V-097: 049 и 051 на месте, 050 занят невлитой веткой — это не дефект.
+
+    Причина записана в `db/init/055:22-25` и `db/init/051:12-13`, а реестр её повторяет:
+    без записи в реестре тот же разрыв обязан остаться находкой (тест ниже).
+    """
+    for number in list(range(1, 50)) + [51]:
+        write(tmp_path, f"db/init/{number:03d}_step.sql", "select 1;\n")
+    result = metric(DRIFT.measure_migrations(tmp_path), "migration_gaps")
+    assert result["value"] == 0, result["details"]
+    assert "050" in result["note"]           # причина видна в отчёте, а не спрятана
+
+
+def test_пропуск_без_записи_в_реестре_остаётся_находкой(tmp_path):
+    """Обратная сторона реестра: 052 не записан — значит находка, а не тишина."""
+    for number in list(range(1, 52)) + [53]:
+        write(tmp_path, f"db/init/{number:03d}_step.sql", "select 1;\n")
+    result = metric(DRIFT.measure_migrations(tmp_path), "migration_gaps")
+    assert result["value"] == 1
+    assert result["details"] == ["052"]
+
+
+def test_причина_пропуска_ссылается_на_существующий_файл():
+    """Реестр — с причиной, а не глушилка: причина обязана указывать на файл дерева."""
+    paths_in_reason = re.compile(r"(?:docs|db|scripts|config)/[\w./-]+\.\w+")
+    assert DRIFT.DOCUMENTED_GAPS, "реестр пуст: тест ничего не проверяет"
+    for number, reason in DRIFT.DOCUMENTED_GAPS.items():
+        cited = [match.rstrip(".") for match in paths_in_reason.findall(reason)]
+        assert cited, f"пропуск {number:03d}: причина без ссылки на файл — {reason}"
+        for rel in cited:
+            assert (PROJECT / rel).exists(), f"пропуск {number:03d}: {rel} не существует"
+
+
 # --- публичные маршруты -----------------------------------------------------
 
 PUBLIC_ROUTE = """
@@ -282,6 +316,80 @@ def test_guard_passes():
 def test_фикстура_conftest_не_считается_тестом(tmp_path):
     write(tmp_path, "tests/conftest.py", "def test_db():\n    return 'dsn'\n")
     assert DRIFT.measure_tests_without_assert(tmp_path)["value"] == 0
+
+
+def test_тест_с_assert_в_локальном_помощнике_не_пустой(tmp_path):
+    """Случай V-097: `_no_right()` с восемью `assert` внутри — проверка, а не пустота."""
+    write(tmp_path, "tests/webapp/test_rights.py", """\
+def _screen(page):
+    return page.locator(".ui-screen").inner_text()
+
+
+def _no_right(page):
+    assert "Вернуть" not in _screen(page)
+    assert page.locator("#list").inner_text().strip() == ""
+
+
+def test_org_без_права():
+    _no_right(object())
+""")
+    assert DRIFT.measure_tests_without_assert(tmp_path)["value"] == 0
+
+
+def test_помощник_через_цепочку_считается_проверкой(tmp_path):
+    """Помощник может звать помощника: проверка ищется по всей цепочке файла."""
+    write(tmp_path, "tests/unit/test_chain.py", """\
+def _bottom(page):
+    assert page.ok
+
+
+def _middle(page):
+    _bottom(page)
+
+
+def test_через_два_помощника():
+    _middle(object())
+""")
+    assert DRIFT.measure_tests_without_assert(tmp_path)["value"] == 0
+
+
+def test_метод_класса_как_помощник_считается_проверкой(tmp_path):
+    write(tmp_path, "tests/unit/test_methods.py", """\
+class TestRights:
+    def _check(self, page):
+        assert page.ok
+
+    def test_права(self):
+        self._check(object())
+""")
+    assert DRIFT.measure_tests_without_assert(tmp_path)["value"] == 0
+
+
+def test_помощник_без_assert_не_спасает_тест(tmp_path):
+    """Помощник без проверки ничего не доказывает: тест остаётся пустым."""
+    write(tmp_path, "tests/unit/test_helper_empty.py", """\
+def _settle(page):
+    page.wait()
+
+
+def test_подождали_и_всё():
+    _settle(object())
+""")
+    result = DRIFT.measure_tests_without_assert(tmp_path)
+    assert result["value"] == 1
+    assert "test_подождали_и_всё" in result["details"][0]
+
+
+def test_рекурсивный_помощник_не_вешает_метр(tmp_path):
+    write(tmp_path, "tests/unit/test_loop.py", """\
+def _again(page):
+    _again(page)
+
+
+def test_цикл():
+    _again(object())
+""")
+    assert DRIFT.measure_tests_without_assert(tmp_path)["value"] == 1
 
 
 # --- сводный замер, CLI, дельта --------------------------------------------

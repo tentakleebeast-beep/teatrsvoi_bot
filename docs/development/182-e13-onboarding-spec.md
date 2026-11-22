@@ -416,10 +416,10 @@ roles/trainings/manifest (или всё, что успел), поэтому `bui
 
 ### 4.3. Персональный код: схема, API, экран
 
-#### 4.3.1. Миграция `069`
+#### 4.3.1. Миграция `070`
 
-Миграция `db/init/069_personal_invite_code.sql` (одна на оба дела; файлов и ревизий
-65 → 66, голова `069_personal_invite_code`; ревизия — `scripts/gen_alembic_revisions.py`;
+Миграция `db/init/070_personal_invite_code.sql` (одна на оба дела; файлов и ревизий
+66 → 67, голова `070_personal_invite_code`; ревизия — `scripts/gen_alembic_revisions.py`);
 в `tests/unit/test_migrations_registry.py` правятся число файлов (`:50`) и голова (`:61`)):
 
 ```sql
@@ -606,9 +606,9 @@ class InviteIn(core.ApiIn):
 | `tests/unit/test_menu_invites.py` | `POST /admin/invite {role, ttl_days}` (`:118`) |
 | `tests/unit/test_webapp_admin_pages.py`, `test_webapp_admin_pagination.py`, `test_webapp_stand_invite.py` | форма выпуска кода на экране «Приглашения» |
 | `tests/unit/test_webapp_sections.py`, `test_webapp_layout.py`, `test_webapp_admin_blocks.py` | раздел/действие/счётчик `pending` |
-| `tests/unit/test_org_without_approve.py` | `registration.approve` у ролей; миграция `069` снимает у всех |
+| `tests/unit/test_org_without_approve.py` | `registration.approve` у ролей; миграция `070` снимает у всех |
 | `tests/unit/test_agent_features.py` | новая кнопка «Знакомство» без записи в реестре и снятая «Скопировать код» с осиротевшей записью `chat.copy_code` |
-| `tests/unit/test_migrations_registry.py` | файлов и ревизий 65 → 66 (`:50`), голова `069_personal_invite_code` (`:61`) |
+| `tests/unit/test_migrations_registry.py` | файлов и ревизий 66 → 67 (`:50`), голова `070_personal_invite_code` (`:61`) |
 | `tests/integration/test_registration.py` | `pending`-ветки, `check_code` с кандидатами |
 | `tests/integration/test_admin_invites.py`, `test_master_invite.py`, `test_uc_admin_flows.py` | `check_code`/`attach`/выпуск кода |
 | `tests/webapp/test_miniapp_pending_rights.py` | экрана «Заявки» не будет |

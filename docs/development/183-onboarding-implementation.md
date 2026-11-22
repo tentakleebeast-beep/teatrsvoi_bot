@@ -21,7 +21,7 @@
 | API регистрации | `services/tool-api/app/api/people.py` | `check_code` отдаёт имя человека, `attach` без `participant_id`, `register` удалён |
 | Экран | `services/tool-api/app/pages/admin_invites.py` | поиск человека, «Новый участник», выпуск на выбранного, лист кода с именем |
 | Реестры | `services/tool-api/app/webapp.py`, `app/api/webapp_api.py` | раздел `pending` снят, счётчик «ждут решения» удалён |
-| Схема | `db/init/069_personal_invite_code.sql`, `services/tool-api/migrations/versions/069_personal_invite_code.py` | `invite_code.participant_id`; снятие `registration.approve` у всех ролей |
+| Схема | `db/init/070_personal_invite_code.sql`, `services/tool-api/migrations/versions/070_personal_invite_code.py` | `invite_code.participant_id`; снятие `registration.approve` у всех ролей |
 
 ## 2. Тексты и дословность
 
@@ -35,9 +35,9 @@
 `participant_blocked`. Первые три строки цитируются в памятке, поэтому меняются
 только вместе с ней — это проверяет `tests/unit/test_onboarding_sequence.py`.
 
-## 3. Схема и миграция 069
+## 3. Схема и миграция 070
 
-`db/init/069_personal_invite_code.sql`:
+`db/init/070_personal_invite_code.sql`:
 
 1. `invite_code.participant_id bigint references participant(id) on delete set null`
    плюс индекс `invite_code_participant_idx`;
@@ -52,8 +52,8 @@
 `status='active'` (§4.2 спеки). Скопом переводить `pending` в `active` нельзя — это
 выдало бы доступ без проверки.
 
-Номер 069 выбран как максимум+1 по всем веткам (`068_org_without_approve` — голова
-`main`); свободность проверена по удалённым веткам.
+Номер 070 выбран как максимум+1 по всем веткам (`069_poll_interview_drafts` — голова
+`main`); свободность проверена по удалённым ветвям.
 
 ## 4. Экран «Приглашения»
 
