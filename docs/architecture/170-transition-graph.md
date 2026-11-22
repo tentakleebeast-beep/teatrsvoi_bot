@@ -1,8 +1,8 @@
-# 170. Единый граф переходов: чат бота → экраны Mini App
+# 167. Единый граф переходов: чат бота → экраны Mini App
 
 **Дата:** 17.11.2026. **Собирается:** `scripts/build_screen_map.py` — не правится руками.
 **Заменяет:** `docs/archive/prototypes/44-menu-map.html` (описывал меню и шесть экранов;
-в коде четыре вкладки и 36 экранов).
+в коде четыре вкладки и 35 экранов).
 **Связано:** `docs/development/92-navigation-model.md` (модель навигации),
 `docs/development/141-miniapp-design-review.md` (инвентарь экранов),
 `docs/development/91-design-system.md` (вид), `docs/development/173-prototype-workspace.md`
@@ -14,9 +14,8 @@
 
 ## 1. Граф
 
-Полоса вкладок («Главная · Время · Деньги · Ещё») есть на каждом экране и ведёт в четыре
-корня. У ролей с управленческими правами четвёртая вкладка называется «Управление» и
-открывает те же десять разделов, что и «Ещё» у остальных (`pages/layout.py:38-52`). На графе она не нарисована: 36 × 4 одинаковых линий сделали бы схему нечитаемой.
+Полоса вкладок («Главная · Время · Деньги · Управление») есть на каждом экране и ведёт в
+четыре корня. На графе она не нарисована: 35 × 4 одинаковых линий сделали бы схему нечитаемой.
 Так же не нарисована стрелка «‹»: возврат на уровень выше есть на каждом вложенном экране и
 всегда ведёт к корню своей вкладки.
 
@@ -35,7 +34,6 @@ flowchart LR
     direction TB
     nwebapp_admin_t_people["Люди"]
     nwebapp_admin_t_dues["Взносы"]
-    nwebapp_admin_t_pending["Заявки"]
     nwebapp_admin_t_rights["Права"]
     nwebapp_admin_t_archive["Архив"]
     nwebapp_admin_t_audit["Аудит"]
@@ -86,7 +84,6 @@ flowchart LR
   nwebapp_admin_t_people -->|"Взносы: тариф и начисление"| nwebapp_admin_t_dues
   nwebapp_admin_t_notifications -->|"Мои настройки уведомлений"| nwebapp_notifications
   nwebapp_home -->|"Мои опросы"| nwebapp_polls_mine
-  nwebapp_home -->|"Заявки"| nwebapp_admin_t_pending
   nwebapp_home -->|"Обращения"| nwebapp_admin_t_feedback
   nwebapp_home -->|"Отметить занятость"| nwebapp_week
   nwebapp_home -->|"Записать операцию"| nwebapp_tx
@@ -103,22 +100,21 @@ flowchart LR
   chat -->|"Открыть поиск окон"| nwebapp_slots
   chat -->|"Открыть анкету"| nwebapp
   chat -->|"Открыть заметки"| nwebapp_notes
-  nwebapp_more -->|"10 разделов"| g2
+  nwebapp_more -->|"9 разделов"| g2
   nwebapp_more -->|"5 экранов"| g7
 ```
 
 ## 2. Экраны
 
-Права — из `SCREEN_CAPS` (`services/tool-api/app/webapp.py`): экран рисуется, только если
-возможность есть; данные всё равно проверяются в API. Пустая клетка — экран открыт всем
-ролям, он показывает лишь своё (`/webapp/home`, `/webapp/polls/mine`, `/webapp/feedback`).
+Права — из реестра `SECTIONS` (`services/tool-api/app/webapp.py`): экран рисуется, только если
+возможность есть; данные всё равно проверяются в API.
 
 | Адрес | Экран | Права |
 |---|---|---|
-| `/webapp` | Профиль | — |
-| `/webapp/home` | Главная | — |
+| `/webapp` | Профиль |  |
+| `/webapp/home` | Главная |  |
 | `/webapp/money` | Деньги | budget.read.self, budget.read |
-| `/webapp/more` | Ещё | — |
+| `/webapp/more` | Ещё |  |
 | `/webapp/week` | Занятость | schedule.availability.self |
 | `/webapp/admin/t/agent` | Разбор агента | admin.panel |
 | `/webapp/admin/t/archive` | Архив | participants.manage |
@@ -127,28 +123,27 @@ flowchart LR
 | `/webapp/admin/t/feedback` | Обращения | feedback.triage |
 | `/webapp/admin/t/invites` | Приглашения | registration.code.issue |
 | `/webapp/admin/t/notifications` | Уведомления | admin.panel |
-| `/webapp/admin/t/pending` | Заявки | registration.approve |
 | `/webapp/admin/t/people` | Люди | participants.view |
 | `/webapp/admin/t/rights` | Права | participants.manage |
 | `/webapp/broadcast` | Рассылка | notify.send |
 | `/webapp/dues` | Мои взносы | budget.read.self |
-| `/webapp/feedback` | Обратная связь | — |
+| `/webapp/feedback` | Обратная связь |  |
 | `/webapp/file` | Файл | files.access |
 | `/webapp/files` | Файлы | files.access |
 | `/webapp/folder` | Папка | files.access |
 | `/webapp/notes` | Заметки | notes.write |
-| `/webapp/notifications` | Уведомления | — |
+| `/webapp/notifications` | Уведомления |  |
 | `/webapp/person` | Карточка участника | participants.view |
 | `/webapp/polls` | Опросы | poll.manage |
-| `/webapp/polls/answer` | Опрос | — |
+| `/webapp/polls/answer` | Опрос |  |
 | `/webapp/polls/edit` | Конструктор опроса | poll.manage |
-| `/webapp/polls/mine` | Мои опросы | — |
+| `/webapp/polls/mine` | Мои опросы |  |
 | `/webapp/polls/results` | Результаты опроса | poll.results.all, poll.manage |
 | `/webapp/reconcile` | Сверка листов | budget.import |
 | `/webapp/services` | Сервисы | admin.panel |
 | `/webapp/slots` | Поиск окон | schedule.slots |
 | `/webapp/tx` | Операция | budget.write |
-| `/webapp/ui` | Элементы интерфейса | — |
+| `/webapp/ui` | Элементы интерфейса |  |
 | `/webapp/week/month` | Сетка месяца | schedule.read.all |
 | `/webapp/week/summary` | Сводка занятости | schedule.read.all |
 
@@ -180,9 +175,8 @@ env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
 
 ## 5. Что не попало на граф
 
-- **Пункты меню чата** (Деньги · Занятость · Профиль · Участники · Админ · Помощь) — это
-  `callback_data`, а не адреса: они не ведут в Mini App, а работают в чате. Их состав —
-  `keyboards.MENU_GROUPS`, и он зависит от прав: пустые группы не рисуются.
+- **Пункты меню чата** (Деньги · Время · Админ · Профиль · Помощь) — это `callback_data`,
+  а не адреса: они не ведут в Mini App, а работают в чате. Их состав — `keyboards.menu_groups`.
 - **Динамические кнопки** бота: адрес собирается из переменной (`screen`, константы страниц).
   Они видны на графе как сами экраны, к которым ведут.
 - **Веера.** «Ещё» открывает десять разделов и пять прочих экранов: на графе это одна
@@ -196,8 +190,5 @@ env -u PYTHONPATH .venv/bin/python scripts/build_screen_map.py
 
 - `/webapp/person` — старый экран, вход убран: `routes.py` помечает его «ждёт переезда в лист человека»
 - `/webapp/dues` — «Мои взносы»: в чате `/dues` отдаёт текст, кнопки в Mini App нет
-- `/webapp/admin/t/dues` — «Взносы» в «Управлении»: вход есть только обработчиком на экране
-  «Люди» (`pages/admin_people.py:335`, `location.href`), сборщик его пока не видит и валит
-  сборку. Разбор — план 175, до него атлас и граф не пересобираются
 
 
