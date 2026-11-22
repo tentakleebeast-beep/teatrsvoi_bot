@@ -710,8 +710,10 @@ drive_url, drive_path, size_bytes}}`.
     вместо права.
 22. **AC-22.** Документы и снимки: `scripts/db_schema_snapshot.py --write` и
     `scripts/openapi_snapshot.py --write` выполнены, `tests/integration/test_openapi_contract.py`
-    зелёный; `scripts/audit_actions.py --write` и `--check` — код 0, у `/webapp/files` в отчёте
-    117 в колонке зависимостей стоят его API-адреса, а не «—»;
+    зелёный; `scripts/audit_actions.py --write` и `--check` — код 0, в отчёте 117 у новых ручек
+    (`/webapp/files/search`, `/webapp/files/link`, `/webapp/files/{id}/meta`) в колонке
+    зависимостей стоят вызывающие их экраны, а не «—», и у `/webapp/files/presign` и
+    `/webapp/files/commit` экран не потерялся после выноса модулей страниц;
     `scripts/check_action_matrix.py` — код 0; `scripts/build_docs_index.py` выполнен,
     `docs/README.md` содержит 192; `tests/unit/test_docs_links.py` зелёный.
 23. **AC-23.** `tests/unit/test_webapp_pages_split.py` зелёный: все модули страниц ≤ 400 строк,
