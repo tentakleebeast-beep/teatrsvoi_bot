@@ -21,8 +21,8 @@
     {
       "ok": true, "name": "…", "role": "admin", "role_label": "администратор",
       "staff": true,
-      "attention": [{"title": "Заявки", "meta": "ждут решения",
-                     "url": "/webapp/admin/t/pending", "count": 2}],
+      "attention": [{"title": "Обращения", "meta": "ждут ответа",
+                     "url": "/webapp/admin/t/feedback", "count": 2}],
       "today": {"label": "31 октября, суббота",
                 "event": {"time": "19:00", "title": "Репетиция", "place": "Зал"}},
       "week": {"title": "26 октября — 1 ноября", "marked": 4, "days": 7},
@@ -30,8 +30,8 @@
       "polls": {"count": 2, "open": 2, "done": 3, "meta": "2 ждут ответа · 3 пройдено",
                 "url": "/webapp/polls/mine"},
       "can_record": true,
-      "more": {"management": [{"title": "Заявки", "meta": "ждут решения",
-                               "url": "/webapp/admin/t/pending", "count": 2}],
+      "more": {"management": [{"title": "Обращения", "meta": "ждут ответа",
+                               "url": "/webapp/admin/t/feedback", "count": 2}],
                "personal": [{"title": "Файлы студии", "meta": "записи, фонограммы, тексты",
                              "url": "/webapp/files"}]}
     }
