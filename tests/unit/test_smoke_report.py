@@ -414,7 +414,9 @@ def test_источник_чисел_из_документа_19():
     block = smoke_report.source_block(rows, matrix)
     assert block["rows"] == 114
     assert (block["p0"], block["p1"], block["p2"], block["unset"]) == (50, 50, 14, 0)
-    assert block["with_tests"] == 60
+    assert block["with_tests"] == 61, (
+        "тестов стало на один больше: FR-A2 покрыт тестами первого входа E13 "
+        "(docs/development/182); число берётся из матрицы, а не из прозы")
     assert block["unique_pairs"] == len(smoke_report.test_pairs(matrix))
     assert smoke_report.requirements_revision() == "04.11.2026"
     report = _minimal_report(source=block)

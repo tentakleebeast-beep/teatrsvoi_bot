@@ -81,7 +81,7 @@ def test_в_меню_чата_у_организатора_нет_заявок_и
         "рабочие пункты организатора сузились"
 
     admin_items = {item for _, values in keyboards.menu_groups(ADMIN_CAPS) for item in values}
-    assert GONE <= admin_items, "у администратора заявки и приглашения остаются"
+    assert not (GONE & admin_items), "заявки и приглашения убраны из чата у всех (V-118)"
 
 
 def test_в_mini_app_у_организатора_нет_разделов_заявок_и_приглашений() -> None:
@@ -93,7 +93,8 @@ def test_в_mini_app_у_организатора_нет_разделов_зая�
         "рабочие разделы организатора сузились"
 
     admin_keys = {section.key for section in webapp.sections_for(ADMIN_CAPS)}
-    assert {"pending", "invites"} <= admin_keys
+    assert "invites" in admin_keys, "коды остались у администратора — только в Mini App"
+    assert "pending" not in admin_keys, "раздела «Заявки» нет ни у кого (docs/182 §4.1)"
 
 
 def test_справка_организатора_не_обещает_заявок_и_кодов() -> None:

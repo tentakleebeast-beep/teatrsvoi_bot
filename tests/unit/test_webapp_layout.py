@@ -67,7 +67,9 @@ def test_четвёртая_вкладка_по_правам():
     assert layout.tab_label("more", ["budget.read.self"]) == "Ещё"
     # Организатор: одного управленческого права достаточно.
     assert layout.tab_label("more", ["participants.view"]) == "Управление"
-    assert layout.tab_label("more", ["registration.approve"]) == "Управление"
+    # Заявок нет (docs/development/182 §4.1): `registration.approve` не открывает
+    # управление — ни раздела, ни вкладки.
+    assert layout.tab_label("more", ["registration.approve"]) == "Ещё"
     # Админ: «*» покрывает всё.
     assert layout.tab_label("more", ["*"]) == "Управление"
     # Бюджетные права в управление не входят — они на вкладке «Деньги».

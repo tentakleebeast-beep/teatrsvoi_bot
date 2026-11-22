@@ -202,13 +202,13 @@ def test_webapp_body_require_names_capability(inventory):
 def test_service_token_routes_are_not_reported_as_unchecked(inventory):
     """Сверка Bearer-токена сервиса — проверка на входе, а не «—».
 
-    POST /admin/bootstrap создаёт администратора, GET /tools/participants/search ищет
-    людей до входа: оба зовёт гейтвей по служебному токену, и в списке «без права»
-    им не место.
+    POST /admin/bootstrap создаёт администратора и зовётся гейтвеем по служебному
+    токену; служебного `/tools/participants/search` больше нет (docs/development/182
+    §1.4: код выписан человеку, искать себя не нужно).
     """
     _, data = inventory
     no_right = {(route.method, route.path) for route in data["no_right"]}
-    for path in ("/admin/bootstrap", "/tools/participants/search"):
+    for path in ("/admin/bootstrap",):
         route = _route(data, path)
         assert route.service_token, path
         assert route.right_text == "сервисный токен", route.right_text

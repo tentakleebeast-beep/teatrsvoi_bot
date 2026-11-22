@@ -19,14 +19,12 @@ from app.pages.admin_dues import DUES_ADMIN_PAGE
 from app.pages.admin_feedback import FEEDBACK_QUEUE_PAGE
 from app.pages.admin_invites import INVITES_PAGE
 from app.pages.admin_notifications import NOTIFICATION_DEFAULTS_PAGE
-from app.pages.admin_pending import PENDING_PAGE
 from app.pages.admin_people import PEOPLE_PAGE
 from app.pages.admin_rights import RIGHTS_PAGE
 from app.pages.polls import POLLS_PAGE
 
 __all__ = [
     "PEOPLE_PAGE",
-    "PENDING_PAGE",
     "RIGHTS_PAGE",
     "ARCHIVE_PAGE",
     "AUDIT_PAGE",

@@ -5,7 +5,6 @@ from __future__ import annotations
 import core
 import texts
 from aiogram.types import (
-    CopyTextButton,
     InlineKeyboardButton,
     InlineKeyboardMarkup,
     KeyboardButton,
@@ -20,23 +19,10 @@ from config import WEBAPP_BASE_URL
 # поверхность `chat`) сверяется с этим кортежем, поэтому новая кнопка чата без
 # записи в реестре роняет тест, а не появляется молча.
 BTN_OPEN_MENU = "Открыть меню"
-BTN_COPY_CODE = "Скопировать код"
 CHAT_BUTTONS: tuple[str, ...] = (
     BTN_OPEN_MENU,
     texts.BTN_OPEN_WEEK,
-    BTN_COPY_CODE,
 )
-
-
-def copy_code_kb(code: str,
-                 rows: list[list[tuple[str, str]]] | None = None) -> InlineKeyboardMarkup:
-    """Клавиатура: кнопка «Скопировать код» + обычные строки кнопок."""
-    keyboard = [[InlineKeyboardButton(text=BTN_COPY_CODE,
-                                      copy_text=CopyTextButton(text=code))]]
-    for row in rows or []:
-        keyboard.append([InlineKeyboardButton(text=text, callback_data=data)
-                         for text, data in row])
-    return InlineKeyboardMarkup(inline_keyboard=keyboard)
 
 
 def _buttons_with_week(rows: list[list[tuple[str, str]]]) -> InlineKeyboardMarkup:
@@ -103,13 +89,6 @@ def skip_note_kb() -> InlineKeyboardMarkup:
     return kb([[(texts.BTN_SKIP, "av:n:skip")]])
 
 
-def _candidates_kb(cands: list[dict]) -> InlineKeyboardMarkup:
-    """Кнопки «кто из них вы»: только имена, не больше восьми (Ш-46, V-006)."""
-    rows = [[(c["display_name"], f"reg:pick:{c['id']}")] for c in cands[:8]]
-    rows.append([("Меня нет в списке", "reg:none")])
-    return kb(rows)
-
-
 # Панель — только у администратора (решение 29.10.2026). Организатору она не нужна:
 # заявки и приглашения — работа администратора (решение 19.11.2026, миграция 068). Подтверждения крупных сумм
 # нет — расход пишется сразу, любой суммы (снято 30.10.2026, docs/architecture/25 §4).
@@ -127,8 +106,6 @@ def panel_rows(caps: list[str]) -> list[list[tuple[str, str]]]:
     cells: list[tuple[str, str]] = []
     if core.has(caps, "participants.view", "participants.manage"):
         cells.append((texts.TITLE_PEOPLE, "panel:people"))
-    if core.has(caps, "registration.approve", "participants.manage"):
-        cells.append((texts.TITLE_REQUESTS, "panel:pending"))
     if core.has(caps, "participants.manage"):
         cells.append(("Права", "panel:rights"))
     if core.has(caps, "participants.manage"):
@@ -145,10 +122,6 @@ def panel_rows(caps: list[str]) -> list[list[tuple[str, str]]]:
         cells.append(("Сверка файл ↔ база", "panel:reconcile"))
     if core.has(caps, "budget.import"):
         cells.append((texts.BTN_SHEET_RETRY, "panel:sheet_retry"))
-    if core.has(caps, "registration.code.issue"):
-        cells.append(("Выпустить инвайт-код", "panel:invite"))
-    if core.has(caps, "registration.code.issue"):
-        cells.append((texts.TITLE_CODES, "panel:codes"))
     return [cells[i:i + 2] for i in range(0, len(cells), 2)]
 
 
@@ -166,17 +139,17 @@ MENU_GROUPS: tuple[tuple[str, tuple[tuple[str, tuple[str, ...]], ...]], ...] = (
     (texts.TITLE_AVAILABILITY, ((texts.TITLE_AVAILABILITY, ("schedule.availability.self",)),
                (texts.TITLE_SCHEDULE, ("schedule.read.all",)),
                (texts.TITLE_SLOTS, ("schedule.slots",)))),
-    ("Профиль", ((texts.TITLE_PROFILE, ()),)),
+    ("Профиль", ((texts.TITLE_PROFILE, ()), (texts.TITLE_FILL, ()))),
     # «Люди» — чтение состава по `participants.view`. Отдельная группа, а не пункт
     # «Управление»: это право есть и у педагога (master), а группа рисовалась бы
     # ему целиком и вела в отказ (140 §4.1). У администратора и организатора пункт
     # «Участники» переехал сюда же — набор пунктов не изменился, изменилась группа.
     (texts.TITLE_PEOPLE_GROUP, ((texts.TITLE_PEOPLE, ("participants.view",)),)),
-    # «Управление»: панель и заявки — только у админа; опросы — у админа и организатора.
+    # «Управление»: панель — только у админа; опросы — у админа и организатора.
+    # Коды приглашений и заявки из чата убраны (E13, docs/182 §4.3.3): коды
+    # выпускаются только в Mini App, заявок больше нет.
     ("Управление", ((texts.TITLE_ADMIN, PANEL_ENTRY_CAPS),
-               (texts.TITLE_REQUESTS, ("registration.approve",)),
-               (texts.TITLE_INVITES, ("registration.code.issue",)),
-               # E8: опросы — своя фича под отдельным правом (docs/162 §14.3).
+               # E8: опросы — своя фича под своим правом (docs/162 §14.3).
                (texts.TITLE_POLLS, ("poll.manage",)))),
     # Ш-49, V-010: «Справка» — отдельный раздел под правом howto.read, пока только у админа.
     ("Помощь", ((texts.TITLE_FEEDBACK, ()), (texts.TITLE_CAPABILITIES, ()), (texts.TITLE_HELP, ("howto.read",)))),

@@ -104,23 +104,29 @@ def buttons(markup) -> list[str]:
     return [b.text for row in markup.inline_keyboard for b in row]
 
 
-def run_code(gw, monkeypatch, answer: dict):
+def run_code(gw, monkeypatch, answer: dict, attach: dict | None = None):
     calls: list[tuple] = []
 
     async def fake_api(path, payload, chat_id, method="POST"):
         calls.append((path, payload))
         if path == "/tools/participants/check_code":
             return answer
+        if path == "/tools/participants/attach":
+            return attach or {"ok": False, "error": "code_not_personal"}
         raise AssertionError(f"неожиданный вызов {path}")
 
     async def fake_menu(message, chat_id, name, roles, caps):
         calls.append(("menu", name))
+
+    async def fake_intro(message, chat_id, state):
+        calls.append(("intro", chat_id))
 
     async def no_router(text, user=None, categories=None):
         raise AssertionError("код ушёл в n8n-роутер")
 
     monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
     monkeypatch.setattr(gateway_modules.load("routers.menu"), "send_menu", fake_menu)
+    monkeypatch.setattr(gateway_modules.load("routers.intro"), "intro_start", fake_intro)
     monkeypatch.setattr(gateway_modules.load("core"), "router_ask", no_router)
 
     state = FakeState(gw.Reg.await_code.state)
@@ -129,55 +135,20 @@ def run_code(gw, monkeypatch, answer: dict):
     return calls, message, state
 
 
-def test_код_принимается_и_показывает_кандидатов(gw, monkeypatch):
-    calls, message, state = run_code(gw, monkeypatch, {
-        "ok": True, "role": "troupe",
-        "candidates": [{"id": 7, "display_name": "Фомина Арина"}],
-    })
+def test_код_принимается_и_начинает_знакомство(gw, monkeypatch):
+    """V-116 б (docs/development/182 §1): код привязывает запись и ведёт в знакомство.
+
+    Меню до знакомства не приходит, кандидатов и «Меня нет в списке» больше нет:
+    код выписан на конкретного человека, привязка — единственный вход.
+    """
+    calls, message, state = run_code(
+        gw, monkeypatch, {"ok": True, "role": "troupe"},
+        attach={"ok": True, "participant": {"display_name": "Фомина Арина", "role": "troupe"}})
     assert calls[0][0] == "/tools/participants/check_code"
-    # Ш-46: список кандидатов — отдельное состояние, ввод букв сужает кнопки
-    assert state.state == gw.Reg.choose.state
-    assert state.data.get("code") == CODE
-    assert any("Код принят" in text for text, _ in message.answers)
-    assert "Фомина Арина" in buttons(message.markup)
-    assert "Меня нет в списке" in buttons(message.markup)
-
-
-def run_filter(gw, monkeypatch, answer: dict, query: str = "Смирнова"):
-    calls: list[tuple] = []
-
-    async def fake_api(path, payload, chat_id, method="POST"):
-        calls.append((path, method))
-        assert path.startswith("/tools/participants/search?q=")
-        return answer
-
-    monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
-    state = FakeState(gw.Reg.choose.state)
-    state.data["code"] = CODE
-    message = FakeMessage(query)
-    asyncio.run(gw.reg_filter(message, state))
-    return calls, message, state
-
-
-def test_ввод_букв_сужает_список_кандидатов(gw, monkeypatch):
-    """Ш-46 (V-006): «Смирнова» находит «Дарья Смирнова», и кнопка одна — своя."""
-    calls, message, state = run_filter(gw, monkeypatch, {
-        "ok": True,
-        "candidates": [{"id": 42, "display_name": "Дарья Смирнова", "role": "troupe"}],
-    })
-    assert calls and calls[0][1] == "GET"
-    assert state.state == gw.Reg.choose.state
-    assert "Дарья Смирнова" in buttons(message.markup)
-    assert "Меня нет в списке" in buttons(message.markup)
-
-
-def test_пустой_поиск_ведёт_в_заявку(gw, monkeypatch):
-    """Ш-46: никого не нашли — человек пишет имя, чужой профиль не привязывается."""
-    _, message, state = run_filter(gw, monkeypatch, {"ok": True, "candidates": []},
-                                   query="Несуществующий")
-    assert state.state == gw.Reg.await_name.state
-    assert any("никого не нашёл" in text for text, _ in message.answers)
-    assert message.markup is None, "выбирать не из чего — кнопок быть не должно"
+    assert any("Код принят: Фомина Арина." in text for text, _ in message.answers)
+    assert ("intro", 901) in calls, "после кода начинается знакомство, а не меню"
+    assert not any(call[0] == "menu" for call in calls), "меню до знакомства не приходит"
+    assert "Меня нет в списке" not in buttons(message.markup)
 
 
 def test_неверный_код_объясняет_причину(gw, monkeypatch):
@@ -227,9 +198,12 @@ def test_панель_организатора_без_прав_и_с_аудит�
 
 
 def test_панель_админа_со_звёздочкой_полная(gw):
+    """V-118: чатового выпуска кодов нет — панель без «Заявок» и «Выпустить инвайт-код»."""
     labels = [b[0] for row in gw.panel_rows(ADMIN_CAPS) for b in row]
-    assert {"Участники", "Заявки", "Права", "Бюджет", "Аудит", "Сервисы",
-            "Выпустить инвайт-код"} <= set(labels)
+    assert {"Участники", "Права", "Бюджет", "Аудит", "Сервисы"} <= set(labels)
+    assert "Заявки" not in labels
+    assert "Выпустить инвайт-код" not in labels
+    assert "Коды приглашений" not in labels
 
 
 def test_панель_труппы_пуста(gw):
@@ -254,17 +228,17 @@ def test_организатору_панель_не_нужна(gw, monkeypatch):
     assert buttons(message.markup) == []
 
 
-def test_заявки_и_приглашения_у_того_у_кого_есть_права(gw):
-    """Пункты меню — по праву, а не по названию роли.
+def test_заявки_и_приглашения_убраны_из_меню_у_всех(gw):
+    """V-117/V-118: заявок нет, коды — только в Mini App; пунктов в чате нет ни у кого.
 
-    С 068 у организатора прав на заявки и коды нет: обработка заявок
-    и выпуск приглашений — работа администратора. Проверяем обе стороны:
-    у администратора пункты на месте, у организатора их нет ни в одной группе,
-    а «Участники» он не теряет.
+    У администратора пункты «Заявки» и «Приглашения» удалены (docs/development/182
+    §4.1 и §4.3.3), у организатора их не было с 068. «Участники» не теряются.
     """
     admin_groups = dict(gw.menu_groups(ADMIN_CAPS))
     assert admin_groups["Люди"] == ["Участники"]
-    assert {"Заявки", "Приглашения"} <= set(admin_groups["Управление"])
+    admin_items = {item for items in admin_groups.values() for item in items}
+    assert "Заявки" not in admin_items
+    assert "Приглашения" not in admin_items
 
     org_groups = dict(gw.menu_groups(ORG_CAPS))
     org_items = {item for items in org_groups.values() for item in items}

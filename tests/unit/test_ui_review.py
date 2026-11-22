@@ -37,7 +37,9 @@ def test_инвентарь_из_кода_совпадает_со_стендом
     inventory = review.build_inventory()
     stand = set(review.stand_inventory())
     # 34 → 36 на 16.11.2026: «Мои опросы» и экран вопроса (E8-D4, docs/development/164 §12.1).
-    assert len(inventory) == 36, f"экранов {len(inventory)}, а в чек-листе 36"
+    # 36 → 35 на 22.11.2026: экран «Заявки» удалён вместе с `pending`
+    # (docs/development/182 §4.1), номер 21 в чек-листе остаётся свободным.
+    assert len(inventory) == 35, f"экранов {len(inventory)}, а в чек-листе 35"
     assert set(inventory) == stand, "код и стенд описывают разные экраны"
     assert review.verify_inventory() == 0
 
@@ -47,9 +49,10 @@ def test_у_каждого_экрана_есть_номер_чеклиста(rev
     assert inventory == set(review.SCREEN_LABELS), (
         "нет номера: " + ", ".join(sorted(inventory - set(review.SCREEN_LABELS))))
     numbers = [value[0] for value in review.SCREEN_LABELS.values()]
-    assert sorted(numbers) == list(range(1, 37)), "номера идут не подряд 1…36"
+    assert sorted(numbers) == [n for n in range(1, 37) if n != 21], \
+        "номера уникальны, 1…36; номер 21 свободен — экрана «Заявки» больше нет"
     slugs = [value[1] for value in review.SCREEN_LABELS.values()]
-    assert len(set(slugs)) == 36, "имена снимков повторяются"
+    assert len(set(slugs)) == 35, "имена снимков повторяются"
 
 
 def test_десять_экранов_которых_нет_в_ux_audit(review):

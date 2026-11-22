@@ -111,40 +111,53 @@ def chat_id(stand: dict, offset: int) -> int:
 
 
 @pytest.fixture(scope="session")
-def people(stand, admin) -> dict:
-    """Три смоук-человека: труппа, организатор, педагог — с маркером в имени.
+def admin_webapp(stand, admin) -> Api:
+    """Клиент Mini App владельца: коды выпускаются только оттуда (docs/182 §4.3.3)."""
+    init_data = sign_init_data(admin.actor_chat, stand["bot_token"], name="Смоук админ")
+    auth = Api(stand["base_url"], stand["token"]).post("/webapp/auth",
+                                                      body={"init_data": init_data})
+    if not auth.ok:
+        pytest.fail(f"вход в Mini App: {auth.evidence()}")
+    token = auth.field("token")
+    return Api(stand["base_url"], stand["token"], webapp_token=token)
 
-    Создаются тем же путём, что у людей: приглашение админа → регистрация по коду.
-    Роль `master` выдаётся отдельно (`POST /admin/grant`) — она не выбирается при
-    регистрации, и это же доказывает FR-A6.
+
+@pytest.fixture(scope="session")
+def people(stand, admin, admin_webapp) -> dict:
+    """Три смоук-человека: актёр, организатор, педагог — с маркером в имени.
+
+    Путь как у людей после V-116/V-117 (docs/development/182 §4.3): человек
+    заводится без Telegram на экране «Приглашения» (`POST /webapp/admin/person-new`),
+    на него выпускается персональный код (`POST /webapp/admin/invite`), вход
+    (`POST /tools/participants/attach`) дописывает `tg_chat_id`. Роль `master`
+    выбирается в шторке создания — при регистрации роль не спрашивают.
     """
     created: dict[str, dict] = {}
     suffix = stand["marker"]
 
     def register(role: str, name: str, chat_id: int) -> dict:
-        invite = admin.post("/admin/invite", body={"role": role, "ttl_days": 1, "max_uses": 1})
+        display = f"{name} {suffix}"
+        made = admin_webapp.post("/webapp/admin/person-new",
+                                 body={"display_name": display, "role": role})
+        if not made.ok:
+            pytest.fail(f"новый участник {role}: {made.evidence()}")
+        participant_id = (made.field("participant") or {}).get("id")
+        invite = admin_webapp.post("/webapp/admin/invite",
+                                   body={"participant_id": participant_id, "ttl_days": 1})
         if not invite.ok:
             pytest.fail(f"приглашение {role}: {invite.evidence()}")
-        code = invite.field("code")
-        registered = Api(stand["base_url"], stand["token"]).post(
-            "/tools/participants/register",
-            body={"chat_id": chat_id, "code": code, "display_name": f"{name} {suffix}"})
-        if not registered.ok:
-            pytest.fail(f"регистрация {name}: {registered.evidence()}")
-        person = registered.field("participant") or {}
-        return {"chat_id": chat_id, "role": role, "name": f"{name} {suffix}",
-                "participant_id": person.get("id")}
+        attached = Api(stand["base_url"], stand["token"]).post(
+            "/tools/participants/attach", body={"chat_id": chat_id,
+                                                "code": invite.field("code")})
+        if not attached.ok:
+            pytest.fail(f"привязка {name}: {attached.evidence()}")
+        return {"chat_id": chat_id, "role": role, "name": display,
+                "participant_id": participant_id}
 
     base_chat = chat_id(stand, 0)
     created["troupe"] = register("troupe", "Смоук Актёр", base_chat + 1)
     created["org"] = register("org", "Смоук Организатор", base_chat + 2)
-    created["master"] = register("troupe", "Смоук Педагог", base_chat + 3)
-    grant = admin.post("/admin/grant", body={
-        "participant_id": created["master"]["participant_id"], "role": "master",
-        "enabled": True, "disciplines": ["acting"],
-        "reason": f"смоук: педагог стенда {suffix}"})
-    if not grant.ok:
-        pytest.fail(f"выдача роли master: {grant.evidence()}")
+    created["master"] = register("master", "Смоук Педагог", base_chat + 3)
     yield created
     # Уборку делает scripts/smoke_data.py (runbook §5), а не фикстура: в отчёте должно
     # быть видно код возврата скрипта, а не «тест прибрался сам».

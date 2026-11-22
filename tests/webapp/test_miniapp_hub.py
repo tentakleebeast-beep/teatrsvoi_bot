@@ -20,7 +20,9 @@ def test_главная_отвечает_что_требует_решения(de
     page.wait_for_timeout(600)
     text = page.inner_text("body")
     assert "Требует внимания" in text, "нет блока с задачами"
-    assert "Заявки" in text, "нет строки заявок"
+    # Заявок в боте нет (docs/development/182 §4.1), блок внимания — обращения.
+    assert "Обращения" in text, "нет строки обращений"
+    assert "Заявки" not in text, "вернулась строка заявок"
     assert "Занятость на неделе" in text
     # Вкладки: четыре слова, четвёртая — «Управление» (стенд изображает админа).
     tabs = [tab.inner_text().strip() for tab in page.locator(".ui-tabbar__item").all()]
@@ -76,7 +78,7 @@ def test_взносы_показывают_сумму_и_остаток(device_p
     assert overflow <= 1, f"{device}: экран взносов шире экрана"
 
 
-@pytest.mark.parametrize("tab", ("people", "pending", "audit", "feedback", "notifications"))
+@pytest.mark.parametrize("tab", ("people", "audit", "feedback", "notifications"))
 def test_раздел_управления_открывается_своим_адресом(device_page, tab):
     page = device_page("/webapp/admin/t/" + tab, "iPhone 14")
     page.wait_for_timeout(800)

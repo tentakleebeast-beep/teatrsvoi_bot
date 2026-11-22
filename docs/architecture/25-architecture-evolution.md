@@ -322,13 +322,13 @@ Google Sheets) — тогда вход даёт ссылку, а данные ж
 
 | № | Действие | Кто | Право | Путь записи (канон) | Дом | Входы | Требования | Было |
 |---|---|---|---|---|---|---|---|---|
-| Л1 | Зарегистрироваться по коду и выбрать себя | новый | нет (до сессии) | `POST /tools/participants/check_code`, `POST /tools/participants/attach`, `POST /tools/participants/register` | чат | — (дом — сам чат) | FR-A2, A3 | чат |
-| Л2 | Подать заявку «меня нет в списке» | новый | нет (до сессии) | `POST /tools/participants/register` (`pending`) | чат | — (дом — сам чат) | FR-A4 | чат |
-| Л3 | Подтвердить или отклонить заявку | админ | `registration.approve` | `POST /admin/approve` (оболочка `POST /webapp/admin/approve`) | Mini App «Управление → Заявки» | кнопки в уведомлении и в панели | FR-A4 | оба |
+| Л1 | Зарегистрироваться по коду | новый | нет (до сессии) | `POST /tools/participants/check_code`, `POST /tools/participants/attach` | чат | — (дом — сам чат) | FR-A2, A3 | чат |
+| Л2 | Дозаполнить профиль кнопкой «Знакомство» | участник | нет (до сессии) | `POST /tools/profile/me` | чат: диалог знакомства | «Профиль» → «Знакомство», `/intro` | FR-A2, A4 | чат |
+| Л3 | Завести нового участника на экране «Приглашения» | админ | `registration.code.issue` | `POST /webapp/admin/person-new` | Mini App «Управление → Приглашения» | кнопка «Новый участник» | FR-A2, A4 | нет |
 | Л4 | Выдать или отозвать роль и возможность | админ | `participants.manage` | `POST /admin/grant` (второй путь того же действия — `POST /admin/participant/discipline`; отзыв — `enabled=false` / `allowed=false`) | Mini App «Управление → Права» и лист человека в «Люди» | «Права» и «Участники» в панели чата | FR-A6 | оба + нет (Л5) |
 | Л6 | Архивировать и вернуть человека | админ | `participants.manage` | `POST /admin/archive`, `POST /admin/unarchive` | Mini App «Управление → Архив» | карточка человека → «В архив», панель → «Архив» | FR-A7 | оба |
 | Л7 | Заблокировать человека | админ | `participants.manage` | `POST /admin/block` (`blocked=false` — вернуть доступ) | Mini App «Люди» (лист человека) | карточка человека в чате → «Заблокировать» | FR-A9 | нет |
-| Л8 | Выдать и отозвать инвайт-код | админ | `registration.code.issue` | `POST /admin/invite`, `POST /admin/invite/revoke` | Mini App «Управление → Приглашения» | кнопки панели «Выпустить инвайт-код» и «Коды приглашений» | FR-A2 | оба |
+| Л8 | Выдать и отозвать инвайт-код | админ | `registration.code.issue` | `POST /webapp/admin/invite`, `POST /webapp/admin/invite-revoke` | Mini App «Управление → Приглашения» | кнопки экрана «Выпустить код» и «Отозвать» | FR-A2 | оба |
 | Л9 | Посмотреть карточку человека | организатор | `participants.view` | чтение `GET /tools/participants/{participant_id}/card` | Mini App «Люди» (лист человека) | карточка в чате | FR-A10 (новое) | оба |
 
 ### Профиль, файлы, заметки

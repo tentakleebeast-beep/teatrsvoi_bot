@@ -184,7 +184,6 @@ PROBLEM_SCHEMA = {
 PARTIAL_SUCCESS = {
     "/tools/route": "модель не ответила или текст пуст — смотреть ok и error; "
                     "gateway уходит в кнопки, а не показывает «сервис недоступен»",
-    "/tools/participants/register": "шаг диалога регистрации: need_name, already_registered, code_*",
     "/tools/participants/check_code": "код не подошёл — это ответ диалога, а не сбой",
     "/tools/participants/attach": "привязка не удалась — смотреть error",
     "/tools/events/preview": "проверка карточки не прошла — смотреть errors",

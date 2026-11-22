@@ -25,7 +25,6 @@ from app.pages import admin, home, layout, routes  # noqa: E402
 
 #: Порядок «Управления»: он же порядок записей реестра (сначала то, что ждёт решения).
 MANAGEMENT_URLS = [
-    "/webapp/admin/t/pending",
     "/webapp/admin/t/people",
     "/webapp/admin/t/invites",
     "/webapp/admin/t/rights",
@@ -102,10 +101,16 @@ def test_человек_без_возможности_не_видит_разде
 
 
 def test_сигнал_внимания_из_того_же_реестра():
-    """«Требует внимания» не дублирует название и адрес: они в записи раздела."""
-    assert webapp_api.attention_rows(["registration.approve"], {"pending": 2}) == [
-        {"title": "Заявки", "meta": "ждут решения",
-         "url": "/webapp/admin/t/pending", "count": 2}]
+    """«Требует внимания» не дублирует название и адрес: они в записи раздела.
+
+    Заявок больше нет (docs/development/182 §4.1): `attention_rows` не знает
+    счётчика `pending` и на прежний вызов отвечает пустым списком.
+    """
+    assert webapp_api.attention_rows(["registration.approve"], {"pending": 2}) == []
+    rows = webapp_api.attention_rows(["feedback.triage"], {"feedback": 2})
+    assert rows == [
+        {"title": "Обращения", "meta": "открытые", "url": "/webapp/admin/t/feedback",
+         "count": 2}]
     assert webapp_api.attention_rows(["registration.approve"], {"pending": 0}) == []
     assert [row["title"] for row in webapp_api.attention_rows(["*"], {"feedback": 1})] \
         == ["Обращения"]

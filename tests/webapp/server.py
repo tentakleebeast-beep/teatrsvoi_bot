@@ -57,7 +57,6 @@ PAGE_ROUTES = {
     "/webapp/slots": pages.SLOTS_PAGE,
     "/webapp/admin/t/people": pages.PEOPLE_PAGE,
     "/webapp/admin/t/dues": pages.DUES_ADMIN_PAGE,
-    "/webapp/admin/t/pending": pages.PENDING_PAGE,
     "/webapp/admin/t/rights": pages.RIGHTS_PAGE,
     "/webapp/admin/t/archive": pages.ARCHIVE_PAGE,
     "/webapp/admin/t/audit": pages.AUDIT_PAGE,
@@ -567,7 +566,7 @@ HOME_DATA = ({
 })
 
 # Счётчики бейджей: в бою их считает `webapp_api` по базе, на стенде — фикстура.
-HOME_COUNTS = {"pending": 2, "feedback": 1}
+HOME_COUNTS = {"feedback": 1}
 
 
 def _home_rows(caps: list[str]) -> dict:
@@ -882,8 +881,16 @@ async def feedback_send(request: Request):
 #: списка «Активные коды» была на экране без выпуска: иначе проверка строки и
 #: слова «педагог» держалась бы только на выпущенном коде (карта t_806a633e).
 INVITE_SAMPLES = [
-    {"code": "PED4GOG2", "role": "master", "created_at": "2026-11-19T09:00:00+04:00",
+    {"code": "PED4GOG2", "role": "master", "participant_id": 5,
+     "display_name": "Кузнецова Мария", "created_at": "2026-11-19T09:00:00+04:00",
      "expires_at": "2026-11-26T09:00:00+04:00", "max_uses": 1, "uses": 0},
+]
+
+#: Люди без Telegram — кандидаты на персональный код (`GET /webapp/admin/invite-candidates`,
+#: docs/development/182 §4.3.2). Тесты возвращают список через `reset_invites()`.
+INVITE_CANDIDATES = [
+    {"id": 5, "display_name": "Кузнецова Мария", "role": "master"},
+    {"id": 6, "display_name": "Сидоров Пётр", "role": "troupe"},
 ]
 
 
@@ -892,29 +899,30 @@ def reset_invites(empty: bool = False) -> None:
 
     Список меняется выпуском и отзывом кода, как боевая таблица, поэтому тестам
     нужен возврат к исходному: без него код, выпущенный одним сценарием, менял бы
-    «Активных кодов нет» в другом (карта t_806a633e).
+    «Активных кодов нет» в другом (карта t_806a633e). Кандидаты и созданные
+    люди тоже возвращаются к фикстуре.
     """
     invites = ADMIN_OVERVIEW["blocks"]["invites"]
     invites[:] = [] if empty else list(INVITE_SAMPLES)
+    INVITE_CANDIDATES[:] = list(_CANDIDATES_SEED)
+
+
+_CANDIDATES_SEED = [dict(item) for item in INVITE_CANDIDATES]
 
 
 ADMIN_OVERVIEW = {
     "ok": True,
-    "allowed": ["people", "pending", "rights", "budget", "feedback", "audit", "invites"],
-    "actions": {"approve_pending": True, "manage_rights": True, "set_tariff": True,
+    "allowed": ["people", "rights", "budget", "feedback", "audit", "invites"],
+    "actions": {"manage_rights": True, "set_tariff": True,
                 "accrue_dues": True, "issue_codes": True},
     "blocks": {
-        "people": {"counts": {"active": 17, "pending": 2}, "data": [
+        "people": {"counts": {"active": 17}, "data": [
             {"id": 1, "display_name": "Иванов Виктор", "roles": ["admin"], "status": "active"},
             {"id": 2, "display_name": "Валерий", "roles": ["troupe"], "status": "active"},
         ]},
         "archive": {"data": [
             {"id": 9, "display_name": "Ушедший", "roles": ["troupe"], "status": "archived"},
         ]},
-        "pending": [
-            {"id": 3, "display_name": "Новичок", "role": "troupe", "invite_code": "AB12CD34",
-             "phone": "+7 900 000-00-00", "created_at": "2026-10-29T10:00:00"},
-        ],
         "budget": {"period_title": "октябрь 2026", "data": []},
         "feedback": {"data": []},
         "audit": {"data": []},
@@ -935,7 +943,7 @@ ADMIN_OVERVIEW = {
                 "feedback.send", "feedback.triage", "files.access", "howto.read",
                 "notes.write", "notify.send", "participants.contact",
                 "participants.manage", "participants.view", "poll.manage", "quota.manage",
-                "registration.approve", "registration.code.issue",
+                "registration.code.issue",
                 "schedule.availability.self", "schedule.read.all", "schedule.slots",
                 "schedule.write", "system.health"]},
             {"role": "org", "caps": [
@@ -960,8 +968,8 @@ async def _admin_overview(request: Request) -> JSONResponse:
     """Панель по роли: master видит только людей, troupe не видит панели вовсе.
 
     В бою разделы приходят списком `allowed` (`allowed_admin_blocks`): у master
-    есть `participants.view`, а `pending` требует `registration.approve` или
-    `participants.manage`. Без этого стенд отдавал всем админа, и дефект экрана 21
+    есть `participants.view`, а `invites` требует `registration.code.issue`.
+    Без этого стенд отдавал всем админа, и дефект экрана 21
     (карта t_8111b38d) на нём не воспроизводился.
     """
     denied = _guard(request)
@@ -973,16 +981,15 @@ async def _admin_overview(request: Request) -> JSONResponse:
                              "blocks": {"people": ADMIN_OVERVIEW["blocks"]["people"]}})
     if role == "org":
         # У организатора есть `participants.view`, `budget.read` и `budget.write`,
-        # а `registration.approve` снято миграцией 068 (19.11.2026): заявки и коды —
-        # работа администратора. Поэтому `pending` и `invites` не приходят ни блоком,
-        # ни в `allowed`, `approve_pending` и `issue_codes` в ответе ложно, а
-        # `manage_rights` нет — как в бою (карта t_343d42fe: у org экран звал
-        # к кнопке, которой у него нет; карта t_c6a13266: без `manage_rights` нет
-        # и архива; карта t_eb9e0661: без права нет ни матрицы, ни формы выдачи).
+        # а `registration.code.issue` у него нет: коды — работа администратора.
+        # Поэтому `invites` не приходят ни блоком, ни в `allowed`, `issue_codes`
+        # в ответе ложно, а `manage_rights` нет — как в бою (карта t_343d42fe:
+        # у org экран звал к кнопке, которой у него нет; карта t_c6a13266: без
+        # `manage_rights` нет и архива; карта t_eb9e0661: без права нет ни
+        # матрицы, ни формы выдачи).
         blocks = {name: ADMIN_OVERVIEW["blocks"][name] for name in ("people", "budget")}
         actions = {name: value for name, value in ADMIN_OVERVIEW["actions"].items()
                    if name != "issue_codes"}
-        actions["approve_pending"] = False
         actions["manage_rights"] = False
         return JSONResponse({"ok": True, "allowed": ["people", "budget"],
                              "actions": actions, "blocks": blocks})
@@ -1138,14 +1145,66 @@ INVITE_ROLES = ("admin", "org", "troupe", "master")
 INVITE_ISSUE_REQUIRED = "registration.code.issue"
 
 
+@app.get("/webapp/admin/invite-candidates")
+def stand_invite_candidates(request: Request, q: str = "") -> JSONResponse:
+    """Кандидаты на персональный код: люди без Telegram (docs/development/182 §4.3.2).
+
+    Форма ответа боевая: `{"ok": true, "data": [{id, display_name, role}]}`.
+    Пустой `q` отдаёт всех — как `_search_candidates` в бою.
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _role_of(request) != "admin":
+        return JSONResponse({"detail": f"capability required: {INVITE_ISSUE_REQUIRED}"},
+                            status_code=403)
+    needle = (q or "").strip().lower()
+    rows = [dict(item) for item in INVITE_CANDIDATES
+            if not needle or needle in item["display_name"].lower()]
+    return JSONResponse({"ok": True, "data": rows})
+
+
+@app.post("/webapp/admin/person-new")
+async def stand_person_new(request: Request) -> JSONResponse:
+    """Завести человека без Telegram: правила `api/admin.py:1074-1112`.
+
+    Одно слово в имени — 400 `need_full_name`, дубль фамилии и имени — 409
+    `person_key_taken`; созданный человек сразу виден в поиске кандидатов.
+    """
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if _role_of(request) != "admin":
+        return JSONResponse({"detail": f"capability required: {INVITE_ISSUE_REQUIRED}"},
+                            status_code=403)
+    body = await request.json()
+    display_name = " ".join(str((body or {}).get("display_name") or "").split())
+    role = (body or {}).get("role") or "troupe"
+    if role not in {"org", "troupe", "master"}:
+        return JSONResponse({"detail": "validation_failed"}, status_code=422)
+    if len(display_name.split()) < 2:
+        return JSONResponse({"detail": "Напишите фамилию и имя: «Фамилия Имя».",
+                             "code": "need_full_name"}, status_code=400)
+    key = display_name.lower()
+    if any(item["display_name"].lower() == key for item in INVITE_CANDIDATES):
+        return JSONResponse({"detail": "Такой человек уже есть в списке — найдите его "
+                                       "поиском или уточните имя.",
+                             "code": "person_key_taken"}, status_code=409)
+    person = {"id": max([item["id"] for item in INVITE_CANDIDATES] or [0]) + 1,
+              "display_name": display_name, "role": role}
+    INVITE_CANDIDATES.append(person)
+    return JSONResponse({"ok": True, "participant": dict(person)})
+
+
 @app.post("/webapp/admin/invite")
 async def stand_admin_invite(request: Request) -> JSONResponse:
-    """Выпуск кода приглашения: та же форма ответа и те же отказы, что у сервера.
+    """Выпуск персонального кода: та же форма ответа и те же отказы, что у сервера.
 
     Без этого обработчика браузерный сценарий выпуска уходил в 404 и лист не
-    открывался (docs/development/176 §9.9). Проверки идут в порядке боевого пути:
-    токен (`_guard`), право `registration.code.issue`, отказ по `admin`, набор
-    роли, дисциплина только у педагога (`api/admin.py:43-46`).
+    открывался (docs/development/176 §9.9). Проверки идут в порядке боевого пути
+    (`docs/development/182 §4.3.4`): токен (`_guard`), право
+    `registration.code.issue`, существование человека без Telegram и не-`admin`
+    роль; роль берётся из записи, а не из тела.
 
     Выпущенный код дописывается в `blocks["invites"]`, как бой пишет строку в
     `invite_code`: иначе экран после выпуска звал бы `refresh()`, получал прежний
@@ -1161,23 +1220,24 @@ async def stand_admin_invite(request: Request) -> JSONResponse:
         return JSONResponse({"detail": f"capability required: {INVITE_ISSUE_REQUIRED}"},
                             status_code=403)
     body = await request.json()
-    role = body.get("role")
-    if role == "admin":
+    participant_id = (body or {}).get("participant_id")
+    person = next((item for item in INVITE_CANDIDATES if item["id"] == participant_id), None)
+    if person is None:
+        return JSONResponse({"detail": "participant_not_found"}, status_code=404)
+    role = person["role"]
+    if role not in INVITE_ROLES or role == "admin":
         return JSONResponse({"detail": "admin не выдаётся кодом: только через ADMIN_CHAT_ID"},
-                            status_code=400)
-    if role not in INVITE_ROLES:
-        return JSONResponse({"detail": "validation_failed"}, status_code=422)
-    if body.get("discipline_code") and role != "master":
-        return JSONResponse({"detail": "discipline_code допустим только для роли master"},
                             status_code=400)
     expires_at = "2026-11-26T12:00:00+04:00"
     invites = ADMIN_OVERVIEW["blocks"]["invites"]
     invites[:] = [item for item in invites if item.get("code") != INVITE_CODE]
     invites.insert(0, {"code": INVITE_CODE, "role": role,
+                       "participant_id": person["id"], "display_name": person["display_name"],
                        "created_at": "2026-11-19T12:00:00+04:00",
-                       "expires_at": expires_at,
-                       "max_uses": int(body.get("max_uses") or 1), "uses": 0})
+                       "expires_at": expires_at, "max_uses": 1, "uses": 0})
     return JSONResponse({"ok": True, "code": INVITE_CODE, "role": role,
+                         "participant_id": person["id"],
+                         "display_name": person["display_name"],
                          "expires_at": expires_at})
 
 

@@ -189,7 +189,14 @@ def test_сценарий_с_чужим_файлом_отклоняется(tmp_
 
 
 def test_сценарии_репозитория_читаются() -> None:
-    assert len(features.scenarios()) >= 5
+    """Четыре места с подписями из данных: их число не должно тихо уменьшаться.
+
+    Было шесть: сценарии `scenario.copy_code_rows` и `scenario.candidates` ушли
+    вместе с чатовым выпуском кодов (docs/development/182 §4.3.3), потому что
+    подписей, которые они описывали, в исходниках больше нет. Оставшиеся четыре —
+    ровно `button_scan.unresolved` текущего дерева.
+    """
+    assert len(features.scenarios()) >= 4
     assert all(len(scenario.reason) > 10 for scenario in features.scenarios())
 
 

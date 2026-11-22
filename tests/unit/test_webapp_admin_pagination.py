@@ -41,7 +41,7 @@ def test_код_копируется_нажатием() -> None:
 
 def test_таблиц_и_горизонтального_скролла_нет() -> None:
     """Главный дефект прежней панели: таблица и лента вкладок уезжали вбок."""
-    for page in (admin.PEOPLE_PAGE, admin.PENDING_PAGE, admin.RIGHTS_PAGE,
+    for page in (admin.PEOPLE_PAGE, admin.RIGHTS_PAGE,
                  admin.ARCHIVE_PAGE, admin.AUDIT_PAGE, admin.INVITES_PAGE,
                  admin.FEEDBACK_QUEUE_PAGE):
         assert "<table" not in page
@@ -49,5 +49,5 @@ def test_таблиц_и_горизонтального_скролла_нет() 
 
 
 def test_опасное_действие_называет_объект() -> None:
-    """Отклонение заявки — с именем человека, а не «Вы уверены?»."""
-    assert "Отклонить заявку: " in admin.PENDING_PAGE
+    """Отзыв кода — с самим кодом, а не «Вы уверены?»."""
+    assert "Отозвать код: " in admin.INVITES_PAGE

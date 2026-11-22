@@ -98,12 +98,13 @@ def test_состав_групп_по_решению_28_10(gw):
     groups = dict(gw.menu_groups(ADMIN))
     assert groups["Деньги"] == ["Расход и доход", "Бюджет", "Сверка листов", "Мои взносы"]
     assert groups["Занятость"] == ["Занятость", "Расписание", "Поиск окон"]
-    assert groups["Профиль"] == ["Мой профиль"]
+    assert groups["Профиль"] == ["Мой профиль", "Знакомство"], "кнопка «Знакомство» — docs/182 §2.3"
     assert groups["Помощь"] == ["Обратная связь", "Что умею", "Справка"]
     # «Участники» переехали в группу «Люди» картой Э1: право `participants.view` есть
     # и у педагога, а группа «Управление» ему не рисуется (docs/architecture/140 §4.1).
     assert groups["Люди"] == ["Участники"]
-    assert groups["Управление"] == ["Админ-панель", "Заявки", "Приглашения", "Опросы"]
+    assert groups["Управление"] == ["Админ-панель", "Опросы"], \
+        "заявок и приглашений в чате нет (V-117/V-118)"
 
 
 def test_труппа_видит_свои_пункты_в_группах(gw):
@@ -243,7 +244,7 @@ def test_таблица_участников_с_колонками(gw):
     people = [
         {"display_name": "Виктор", "roles": ["admin", "org"], "status": "active"},
         {"display_name": "Арина", "roles": ["troupe"], "status": "active"},
-        {"display_name": "Новичок", "roles": ["student"], "status": "pending"},
+        {"display_name": "Ушедший", "roles": ["troupe"], "status": "left"},
     ]
     text = gw.people_table(people)
     assert text.startswith("<pre>") and text.endswith("</pre>")
@@ -251,7 +252,9 @@ def test_таблица_участников_с_колонками(gw):
     assert lines[0].startswith("ИМЯ") and "РОЛИ" in lines[0] and "СТАТУС" in lines[0]
     assert lines[1].startswith("---")
     assert len(lines) == 5
-    assert "активен" in lines[2] and "заявка" in lines[4]
+    # Подписи статусов берутся из одного словаря; заявок (`pending`) больше не бывает
+    # (docs/development/182 §4.1), поэтому проверяем активную и архивную строки.
+    assert "активен" in lines[2] and "вышел" in lines[4]
     # колонки выровнены: статус начинается на одной позиции
     assert lines[2].index("активен") == lines[3].index("активен")
 

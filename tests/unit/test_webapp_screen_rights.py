@@ -120,8 +120,9 @@ def test_словарь_покрывает_ровно_экраны_маршру�
     routes_found = _screen_routes()
     # 31 → 34 на 15.11.2026: экраны опросов (E8, docs/development/162 §14.5) —
     # список, конструктор и сводка. 34 → 36 на 16.11.2026: «Мои опросы» и экран
-    # вопроса (E8-D4, docs/development/164 §12.1).
-    assert len(routes_found) == 36, f"экранов {len(routes_found)}, ожидалось 36"
+    # вопроса (E8-D4, docs/development/164 §12.1). 36 → 35 на 22.11.2026: экран
+    # «Заявки» удалён вместе с `pending` (docs/development/182 §4.1).
+    assert len(routes_found) == 35, f"экранов {len(routes_found)}, ожидалось 35"
     missing = sorted(routes_found - set(SCREEN_CAPS))
     assert not missing, "экраны без решения о правах: " + ", ".join(missing)
     extra = sorted(set(SCREEN_CAPS) - routes_found)

@@ -66,12 +66,17 @@ def test_админских_команд_больше_нет(gw):
 
 
 def test_все_админские_действия_есть_в_панели(gw):
-    """Каждое действие, которое раньше делали командой, доступно кнопкой."""
+    """Каждое действие, которое раньше делали командой, доступно кнопкой.
+
+    Заявок и кодов в чате нет (docs/development/182 §4.1, §4.3.3): их кнопки
+    удалены вместе с обработчиками, поэтому в списке их тоже нет.
+    """
     source = gateway_modules.source()
-    for callback in ("panel:people", "panel:pending", "panel:rights", "panel:invite",
-                     "panel:proles:", "panel:caps:", "panel:tariff:",
-                     "panel:sheet_retry"):
+    for callback in ("panel:people", "panel:rights", "panel:proles:",
+                     "panel:caps:", "panel:tariff:", "panel:sheet_retry"):
         assert callback in source, f"нет кнопки {callback}"
+    for gone in ("panel:pending", "panel:invite", "panel:codes", "inv:role:"):
+        assert gone not in source, f"чатовое действие вернулось: {gone}"
 
 
 def test_нет_дублей_обработчиков(gw):

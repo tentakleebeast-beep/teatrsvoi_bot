@@ -188,7 +188,6 @@ def verify_export_link(token: str, secret: str, now: int | None = None) -> dict:
 # и свой порядок, как в панели бота. Названий и адресов у блоков нет — только ключи.
 ADMIN_BLOCKS: dict[str, tuple[str, ...]] = {
     "people": ("participants.view", "participants.manage"),
-    "pending": ("registration.approve", "participants.manage"),
     # «Права» — не просмотр, а управление: матрица роль → возможности отдаётся тому,
     # кто выдаёт права (FR-A6, docs/development/92 §2.4). С `participants.view` панель
     # показывала организатору вход, а действие отвечало 403 (Ш-02, Л4).
@@ -217,7 +216,6 @@ def allowed_admin_blocks(caps: list[str]) -> list[str]:
 # сервере той же возможностью, что и одноимённая кнопка бота; список ниже нужен
 # странице, чтобы не рисовать кнопку, которая всё равно получит 403.
 ADMIN_ACTIONS: dict[str, tuple[str, ...]] = {
-    "approve_pending": ("registration.approve",),
     "manage_rights": ("participants.manage",),
     "set_tariff": ("budget.write",),
     # Д6: начисление взносов за месяц — то же право, что у `POST /tools/dues/accrue`.
@@ -278,9 +276,6 @@ class WebappSection:
 
 
 SECTIONS: tuple[WebappSection, ...] = (
-    WebappSection("pending", ("registration.approve",), "Заявки",
-                  "/webapp/admin/t/pending", "ждут решения", count="pending",
-                  attention="ждут решения", page="PENDING_PAGE"),
     WebappSection("people", ("participants.view",), "Люди",
                   "/webapp/admin/t/people", "роли, блокировка, архив", page="PEOPLE_PAGE"),
     # Д6/Д8: вложенный экран «Люди → Взносы» начисляет взносы и правит тариф.

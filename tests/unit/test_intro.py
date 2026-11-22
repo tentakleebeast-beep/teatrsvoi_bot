@@ -114,14 +114,19 @@ def test_тело_запроса_по_шагам(intro):
 
 
 def test_план_не_переспрашивает_известное_V009(intro):
-    """Телефон и день рождения спрашиваются только когда их нет; имя — если одно слово."""
-    plan = intro.build_plan({"name": "Иванов Виктор", "phone": "+79171234567",
-                             "birth_date": "1990-03-12"})
-    assert plan[:2] == ["alias", "travel"]
-    assert "phone" not in plan and "birthday" not in plan and "name" not in plan
-    plan = intro.build_plan({"name": "Витя"})
-    assert plan[0] == "name"
-    assert "phone" in plan and "birthday" in plan
+    """Вход спрашивает 1–3 поля, дозаполнение — только пустые из шести (docs/182 §2.1)."""
+    plan = intro.build_entry_plan({"name": "Иванов Виктор", "phone": "+791****4567",
+                                   "birth_date": "1990-03-12"})
+    assert plan == ["alias"], "известное имя и телефон не переспрашиваются"
+    plan = intro.build_entry_plan({"name": "Витя"})
+    assert plan == ["name", "alias", "phone"], "одно слово в записи — спрашиваем имя"
+    assert intro.build_entry_plan({}) == ["name", "alias", "phone"]
+
+    filled = {"birth_date": "1990-03-12", "travel_minutes": 30, "plays": "Чайка",
+              "roles_note": "Треплев", "interests": "импровизация", "ai_manifest": "машина"}
+    assert intro.build_fill_plan(filled) == [], "заполненное не переспрашиваем"
+    assert intro.build_fill_plan({}) == list(intro.FILL_FIELDS)
+    assert "alias" not in intro.build_fill_plan({}), "короткое имя в дозаполнении не спрашивают"
 
 
 def test_сводка_и_одно_тело_запроса_V009(intro):
@@ -241,11 +246,16 @@ def test_старт_строит_план_по_профилю_V009(gw, monkeypat
     state = FakeState(None)
     message = FakeMessage()
     asyncio.run(gw.intro_start(message, 901, state))
-    assert state.data["plan"] == ["alias", "travel", "plays", "roles",
-                                  "trainings", "manifest"]
+    assert state.data["plan"] == ["alias"], "имя и телефон в профиле уже есть"
+    assert state.data["mode"] == "entry"
     assert state.state == gw.Intro.alias.state
     assert "Как вас называть" in message.answers[-1]
-    assert "Пропустить" in buttons(message.markup)
+    assert message.answers[-1].startswith(intro_head_for(gw)), "первым идёт текст входа"
+    assert buttons(message.markup) == [], "короткое имя не пропускается (docs/182 §2.2)"
+
+
+def intro_head_for(gw) -> str:
+    return sys.modules["intro"].INTRO_HEAD_ENTRY
 
 
 def test_ответ_копит_и_не_пишет_в_профиль_V009(gw, monkeypatch):
@@ -284,24 +294,49 @@ def test_пропуск_ничего_не_копит_V009(gw, monkeypatch):
 
 
 def test_подтверждение_пишет_одним_запросом_V009(gw, monkeypatch):
+    """Запись входа: один `POST /tools/profile/me`, потом меню по свежему профилю."""
     calls: list[tuple] = []
+    menu: list[tuple] = []
 
     async def fake_api(path, payload, chat_id, method="POST"):
-        calls.append((path, payload))
+        calls.append((path, payload, method))
+        if path == "/tools/participants/me":
+            return {"ok": True, "data": {"display_name": "Витя", "role": "troupe",
+                                         "roles": ["troupe"], "capabilities": []}}
+        return {"ok": True}
+
+    async def fake_menu(message, chat_id, name, roles, caps, disciplines=None):
+        menu.append((name, roles))
+
+    monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
+    monkeypatch.setattr(gateway_modules.load("routers.menu"), "send_menu", fake_menu)
+    state = FakeState(gw.Intro.confirm.state, {
+        "mode": "entry",
+        "plan": ["alias", "phone", "birthday", "travel"],
+        "answers": {"alias": "Витя", "phone": "+791****4567",
+                    "birthday": "1990-03-12", "travel": 30}})
+    message = FakeMessage()
+    asyncio.run(gw.intro_save(FakeCallback(message), state))
+    posts = [call for call in calls if call[2] == "POST"]
+    assert posts == [("/tools/profile/me", {
+        "alias_add": "Витя", "phone": "+791****4567",
+        "birth_date": "1990-03-12", "travel_minutes": 30}, "POST")]
+    assert state.state is None and state.data == {}
+    assert menu == [("Витя", ["troupe"])], "после входа приходит меню"
+    assert message.answers[-1] == sys.modules["intro"].DONE_ENTRY
+
+
+def test_дозаполнение_говорит_спасибо_без_меню(gw, monkeypatch):
+    """«Знакомство» — режим fill: `DONE_FILL` без меню (docs/182 §2.4)."""
+    async def fake_api(path, payload, chat_id, method="POST"):
         return {"ok": True}
 
     monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
     state = FakeState(gw.Intro.confirm.state, {
-        "plan": ["alias", "phone", "birthday", "travel"],
-        "answers": {"alias": "Витя", "phone": "+79171234567",
-                    "birthday": "1990-03-12", "travel": 30}})
+        "mode": "fill", "plan": ["travel"], "answers": {"travel": 30}})
     message = FakeMessage()
     asyncio.run(gw.intro_save(FakeCallback(message), state))
-    assert calls == [("/tools/profile/me", {
-        "alias_add": "Витя", "phone": "+79171234567",
-        "birth_date": "1990-03-12", "travel_minutes": 30})]
-    assert state.state is None and state.data == {}
-    assert "Спасибо" in message.answers[-1]
+    assert message.answers[-1] == sys.modules["intro"].DONE_FILL
 
 
 def test_отмена_не_пишет_и_очищает_V009(gw, monkeypatch):
@@ -309,15 +344,15 @@ def test_отмена_не_пишет_и_очищает_V009(gw, monkeypatch):
 
     async def fake_api(path, payload, chat_id, method="POST"):
         calls.append((path, payload))
-        return {"ok": True}
+        return {"ok": False}
 
     monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
-    state = FakeState(gw.Intro.confirm.state, {"answers": {"alias": "Витя"}})
+    state = FakeState(gw.Intro.confirm.state, {"mode": "fill", "answers": {"alias": "Витя"}})
     message = FakeMessage()
     asyncio.run(gw.intro_cancel(FakeCallback(message), state))
     assert calls == []
     assert state.state is None and state.data == {}
-    assert "ничего не записал" in message.answers[-1]
+    assert message.answers[-1] == sys.modules["intro"].CANCELLED
 
 
 def test_пустая_сводка_не_пишет_V009(gw, monkeypatch):
@@ -368,26 +403,32 @@ def test_кнопка_вне_сценария_подсказывает_кома�
     assert "/intro" in message.answers[-1]
 
 
-def test_регистрация_из_списка_начинает_знакомство(gw, monkeypatch):
-    """V-009: после привязки к человеку из списка сразу идёт знакомство."""
-    started: list[int] = []
-
+def test_кнопка_знакомство_спрашивает_только_пустое(gw, monkeypatch):
+    """«Знакомство»: план из шести необязательных, заполненное не переспрашивается."""
     async def fake_api(path, payload, chat_id, method="POST"):
-        assert path == "/tools/participants/attach"
-        return {"ok": True, "participant": {"display_name": "Фомина Арина",
-                                            "role": "troupe", "roles": ["troupe"],
-                                            "capabilities": []}}
-
-    async def fake_menu(*args, **kwargs):
-        return None
-
-    async def fake_intro(message, chat_id, state):
-        started.append(chat_id)
+        assert path == "/tools/profile/me" and method == "GET"
+        return {"ok": True, "name": "Иванов Виктор", "phone": "+791****4567",
+                "birth_date": "1990-03-12", "travel_minutes": 30,
+                "plays": "", "roles_note": "", "interests": "", "ai_manifest": ""}
 
     monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
-    monkeypatch.setattr(gateway_modules.load("routers.menu"), "send_menu", fake_menu)
-    monkeypatch.setattr(gateway_modules.load("routers.intro"), "intro_start", fake_intro)
-    state = FakeState(None, {"code": "ABCD1234"})
+    state = FakeState(None)
     message = FakeMessage()
-    asyncio.run(gw.reg_pick(FakeCallback(message, "reg:pick:5"), state))
-    assert started == [901]
+    asyncio.run(gw.intro_fill(message, state))
+    assert state.data["plan"] == ["plays", "roles", "trainings", "manifest"]
+    assert state.data["mode"] == "fill"
+    assert message.answers[-1].startswith(sys.modules["intro"].INTRO_HEAD_FILL)
+
+
+def test_знакомство_при_заполненном_профиле_ничего_не_спрашивает(gw, monkeypatch):
+    async def fake_api(path, payload, chat_id, method="POST"):
+        return {"ok": True, "birth_date": "1990-03-12", "travel_minutes": 30,
+                "plays": "Чайка", "roles_note": "Треплев", "interests": "импровизация",
+                "ai_manifest": "машина"}
+
+    monkeypatch.setattr(gateway_modules.load("core"), "api", fake_api)
+    state = FakeState(None)
+    message = FakeMessage()
+    asyncio.run(gw.intro_fill(message, state))
+    assert state.state is None
+    assert message.answers[-1] == sys.modules["intro"].FILL_NOTHING

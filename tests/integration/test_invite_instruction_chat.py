@@ -20,7 +20,8 @@ from app.person_key import make_key
 from psycopg.rows import dict_row
 
 from scripts import send_notifications as sender
-from services.shared.invite import INVITE_INSTRUCTION, INVITE_LINK
+from services.shared.invite import INVITE_LINK
+from services.shared.onboarding import INVITE_INSTRUCTION
 from tests.conftest import _test_dsn
 
 TZ = timezone(timedelta(hours=4))            # Самара

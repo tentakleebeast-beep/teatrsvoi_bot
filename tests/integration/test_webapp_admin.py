@@ -32,22 +32,22 @@ def test_без_права_панель_закрыта(client):
     assert body.json()["detail"] == "admin_panel_forbidden"
 
 
-def test_админ_видит_участников_заявки_и_права(client):
+def test_админ_видит_участников_права_и_приглашения(client):
     _api()
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 782002, "Панель Админ", role="admin")
-        _person(conn, 782003, "Панель Заявка", status="pending")
+        _person(conn, 782003, "Панель Без Телеграма")
     headers = _token(client, 782002)
 
     result = client.get("/webapp/admin/overview", headers=headers)
     assert result.status_code == 200
     body = result.json()
     assert body["ok"] is True
-    assert set(body["allowed"]) >= {"people", "pending", "rights", "budget", "audit"}
+    allowed = set(body["allowed"])
+    assert {"people", "rights", "budget", "audit", "invites"} <= allowed
+    # Заявок в боте нет (docs/development/182 §4.1): раздела и блока `pending` не должно быть.
+    assert "pending" not in allowed and "pending" not in body["blocks"]
     assert body["blocks"]["people"]["counts"]["active"] >= 1
-    assert body["blocks"]["people"]["counts"]["pending"] >= 1
-    names = [p["display_name"] for p in body["blocks"]["pending"]]
-    assert "Панель Заявка" in names
     roles = [m["role"] for m in body["blocks"]["rights"]["matrix"]]
     assert "admin" in roles
     assert "period_title" in body["blocks"]["budget"]

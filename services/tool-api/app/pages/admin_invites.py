@@ -1,16 +1,19 @@
-"""Админский экран «Приглашения». «Приглашения»: выпуск кода в листе с «Копировать» и список активных.
+"""Админский экран «Приглашения»: выбор человека, «Новый участник», выпуск персонального кода.
+
+Код выписывается на конкретного человека (docs/development/182 §4.3): форма
+«роль → код» больше не существует. На экране — поиск людей без Telegram,
+кнопка «Новый участник» (шторка: фамилия и имя + роль) и список активных кодов.
 
 Модуль — только своя разметка и скрипт: общее ядро (токен, запросы, строки,
 листы) и каркас лежат в `admin_core.py`. Границы и права — как в `docs/development/73`.
 
 Форма выпуска рисуется только по праву `registration.code.issue`: оно есть у
-администратора и нет у труппы, организатора и мастера (`db/init/008`, `db/init/061`).
-Право приходит данными — список `allowed` и `actions.issue_codes` ответа
-`/webapp/admin/overview`; форма отдаётся скрытой и показывается только по явному
-«да». Без права (org, master — панель есть, `invites` в `allowed` нет) пустое
-состояние говорит «Коды выпускает администратор», а не зовёт к несуществующей
-кнопке; у труппы панель закрыта вовсе (403) и причину печатает отказ, но формы
-на экране тоже нет (отчёт 142 §3 строка 24, принципы 91: 8, 9, Б3; карта t_343d42fe).
+администратора и нет у труппы, организатора и мастера (`db/init/008`, `db/init/061`,
+`db/init/068`). Право приходит данными — список `allowed` и `actions.issue_codes`
+ответа `/webapp/admin/overview`; форма отдаётся скрытой и показывается только по
+явному «да». Без права (org, master — панель есть, `invites` в `allowed` нет)
+пустое состояние говорит «Коды выпускает администратор», а не зовёт к
+несуществующей кнопке; у труппы панель закрыта вовсе (403).
 """
 
 from __future__ import annotations
@@ -19,14 +22,61 @@ from app.pages.admin_core import screen
 
 _SCRIPT_INVITES = r"""
   var invites = [];
-  var role = "troupe";
+  var people = [];
+  var chosen = null;
   var canIssue = false;
+  var searchTimer = null;
+
+  function selectPerson(person) {
+    chosen = person;
+    renderPeople();
+    $("invite-issue").disabled = !chosen;
+  }
+
+  function personRow(person) {
+    var row = el("button", "ui-row admin-row--stack");
+    row.type = "button";
+    row.setAttribute("data-person", String(person.id));
+    if (chosen && chosen.id === person.id) row.classList.add("ui-row--attention");
+    row.setAttribute("aria-pressed", chosen && chosen.id === person.id ? "true" : "false");
+    row.appendChild(el("span", "ui-row__title", person.display_name));
+    row.appendChild(el("span", "ui-row__meta", ROLE[person.role] || person.role || ""));
+    row.onclick = function () { selectPerson(person); };
+    return row;
+  }
+
+  function renderPeople() {
+    var list = $("invite-people");
+    clear(list);
+    if (!people.length) {
+      list.appendChild(el("p", "ui-small ui-muted",
+        "Людей без Telegram нет — заведите кнопкой «Новый участник»."));
+      return;
+    }
+    people.forEach(function (person) { list.appendChild(personRow(person)); });
+  }
+
+  function loadPeople() {
+    var query = $("invite-search").value || "";
+    return api("/webapp/admin/invite-candidates?q=" + encodeURIComponent(query))
+      .then(function (res) {
+        if (res.status >= 200 && res.status < 300 && res.body) {
+          people = res.body.data || [];
+          if (chosen && !people.some(function (p) { return p.id === chosen.id; })) {
+            chosen = null;
+            $("invite-issue").disabled = true;
+          }
+          renderPeople();
+        }
+      });
+  }
 
   function issue() {
-    api("/webapp/admin/invite", { role: role, ttl_days: 7, max_uses: 1 })
+    if (!chosen) return;
+    api("/webapp/admin/invite", { participant_id: chosen.id, ttl_days: 7 })
       .then(function (res) {
         if (res.status >= 200 && res.status < 300 && res.body && res.body.code) {
-          showCode(res.body.code);
+          showCode(res.body);
           refresh();
         } else {
           toast(problem(res));
@@ -34,16 +84,17 @@ _SCRIPT_INVITES = r"""
       });
   }
 
-  function showCode(code) {
+  function showCode(data) {
     var body = el("div", "admin-sheet");
-    body.appendChild(el("span", "ui-amount ui-num admin-code", code));
-    body.appendChild(el("p", "ui-text",
-      "Роль: " + (ROLE[role] || role) + ". Действует 7 дней, вход один."));
+    body.appendChild(el("span", "ui-amount ui-num admin-code", data.code));
+    var who = [data.display_name, ROLE[data.role] || data.role].filter(Boolean).join(" · ");
+    if (who) body.appendChild(el("p", "ui-text", who));
+    body.appendChild(el("p", "ui-text", "Действует 7 дней, вход один."));
     body.appendChild(el("p", "ui-small ui-muted",
       "Передайте код человеку — он введёт его в боте."));
     sheet("Код приглашения", body, [
       { label: "Закрыть" },
-      { label: "Копировать", primary: true, onTap: function () { copyText(code); } }
+      { label: "Копировать", primary: true, onTap: function () { copyText(data.code); } }
     ]);
   }
 
@@ -73,9 +124,10 @@ _SCRIPT_INVITES = r"""
     var row = el("div", "ui-row admin-row--stack");
     var main = el("span", "ui-row__main");
     main.appendChild(el("span", "ui-row__title admin-code", invite.code));
-    var meta = [ROLE[invite.role] || invite.role];
+    var meta = [];
+    if (invite.display_name) meta.push(invite.display_name);
+    meta.push(ROLE[invite.role] || invite.role);
     if (invite.expires_at) meta.push("до " + when(invite.expires_at));
-    if (invite.max_uses) meta.push("использован " + (invite.uses || 0) + " из " + invite.max_uses);
     main.appendChild(el("span", "ui-row__meta", meta.join(" · ")));
     row.appendChild(main);
     if (ACTIONS.issue_codes) {
@@ -109,6 +161,79 @@ _SCRIPT_INVITES = r"""
     invites.forEach(function (invite) { list.appendChild(inviteRow(invite)); });
   }
 
+  /* Шторка «Новый участник»: запись заводится здесь же, где выпускается код
+     (V-117, docs/development/182 §4.3.2). Роль перенесена из формы выпуска. */
+  function createPerson(name, role) {
+    api("/webapp/admin/person-new", { display_name: name, role: role })
+      .then(function (res) {
+        if (!(res.status >= 200 && res.status < 300 && res.body && res.body.participant)) {
+          toast(problem(res));
+          return null;
+        }
+        var person = res.body.participant;
+        return api("/webapp/admin/invite", { participant_id: person.id, ttl_days: 7 })
+          .then(function (issued) {
+            closeSheet();
+            if (issued.status >= 200 && issued.status < 300 && issued.body && issued.body.code) {
+              showCode(issued.body);
+            } else {
+              toast("Человек создан, код не выпущен — выпустите ещё раз");
+            }
+            refresh();
+          });
+      });
+  }
+
+  function openNewPerson() {
+    var body = el("div", "admin-sheet");
+    var field = el("div", "ui-field");
+    var label = el("label", "ui-field__label", "Фамилия Имя");
+    label.setAttribute("for", "new-person-name");
+    var input = el("input", "ui-input");
+    input.id = "new-person-name";
+    input.type = "text";
+    input.setAttribute("autocomplete", "off");
+    input.setAttribute("placeholder", "Например: Иванов Виктор");
+    field.appendChild(label);
+    field.appendChild(input);
+    body.appendChild(field);
+
+    var role = "troupe";
+    var segments = el("div", "ui-segmented");
+    segments.id = "new-person-role";
+    segments.setAttribute("role", "group");
+    segments.setAttribute("aria-label", "Роль");
+    [["troupe", "Актёр"], ["org", "Организатор"], ["master", "Педагог"]].forEach(function (item) {
+      var button = el("button", "ui-segmented__item" + (item[0] === role ? " ui-segmented__item--on" : ""),
+        item[1]);
+      button.type = "button";
+      button.setAttribute("data-role", item[0]);
+      button.setAttribute("aria-pressed", item[0] === role ? "true" : "false");
+      button.onclick = function () {
+        role = item[0];
+        segments.querySelectorAll(".ui-segmented__item").forEach(function (other) {
+          var on = other === button;
+          other.classList.toggle("ui-segmented__item--on", on);
+          other.setAttribute("aria-pressed", on ? "true" : "false");
+        });
+        hint.hidden = role !== "master";
+      };
+      segments.appendChild(button);
+    });
+    body.appendChild(segments);
+    var hint = el("span", "ui-small ui-muted", "Дисциплину педагог выберет при регистрации.");
+    hint.id = "new-person-hint";
+    hint.hidden = true;
+    body.appendChild(hint);
+
+    sheet("Новый участник", body, [
+      { label: "Отмена" },
+      { label: "Создать и выпустить код", primary: true, keepOpen: true,
+        onTap: function () { createPerson(input.value, role); } }
+    ]);
+    input.focus();
+  }
+
   /* Право `registration.code.issue` приходит данными: список `allowed` и
      `actions.issue_codes` ответа `/webapp/admin/overview`. Роль на экране не
      решает: у troupe панель закрыта вовсе (403), у org и master панель есть, а
@@ -135,22 +260,16 @@ _SCRIPT_INVITES = r"""
         if (!data) { toggle($("invite-new"), false); return null; }
         applyRights((data.allowed || []).indexOf("invites") !== -1
           && Boolean(ACTIONS.issue_codes));
-        return data;
+        return canIssue ? loadPeople() : null;
       });
     });
   }
 
-  document.querySelectorAll("#invite-role .ui-segmented__item").forEach(function (button) {
-    button.onclick = function () {
-      role = button.getAttribute("data-role");
-      document.querySelectorAll("#invite-role .ui-segmented__item").forEach(function (item) {
-        var on = item === button;
-        item.classList.toggle("ui-segmented__item--on", on);
-        item.setAttribute("aria-pressed", on ? "true" : "false");
-      });
-      $("invite-hint").hidden = role !== "master";
-    };
+  $("invite-search").addEventListener("input", function () {
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(loadPeople, 250);
   });
+  $("invite-new-person").addEventListener("click", openNewPerson);
   $("invite-issue").addEventListener("click", issue);
   refresh();
 """
@@ -158,18 +277,16 @@ _SCRIPT_INVITES = r"""
 _BODY_INVITES = """
 <div class="ui-card" id="invite-new" hidden>
   <h2 class="ui-h2">Новый код</h2>
-  <div class="ui-segmented" id="invite-role" role="group" aria-label="Роль">
-    <button type="button" class="ui-segmented__item ui-segmented__item--on"
-            data-role="troupe" aria-pressed="true">Труппа</button>
-    <button type="button" class="ui-segmented__item" data-role="org"
-            aria-pressed="false">Организатор</button>
-    <button type="button" class="ui-segmented__item" data-role="master"
-            aria-pressed="false">Педагог</button>
+  <div class="ui-field">
+    <label class="ui-field__label" for="invite-search">Фамилия или имя</label>
+    <input class="ui-input" id="invite-search" type="search" inputmode="search"
+           autocomplete="off" placeholder="Имя или фамилия">
   </div>
-  <span class="ui-small ui-muted" id="invite-hint" hidden>Дисциплину педагог выберет при регистрации.</span>
-  <span class="ui-small ui-muted">Действует 7 дней, вход один.</span>
-  <button type="button" class="ui-btn ui-btn--primary ui-btn--block" id="invite-issue">
-    Выпустить код</button>
+  <div class="ui-list" id="invite-people"></div>
+  <button type="button" class="ui-btn ui-btn--block" id="invite-new-person">
+    Новый участник</button>
+  <button type="button" class="ui-btn ui-btn--primary ui-btn--block" id="invite-issue"
+          disabled>Выпустить код</button>
 </div>
 
 <section class="ui-section">

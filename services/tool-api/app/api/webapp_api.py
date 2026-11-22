@@ -321,9 +321,6 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
         row = conn.execute("select role from participant where id = %s", (who["id"],)).fetchone()
         roles = core.resolve_roles(conn, who["id"])
         disciplines = core.disciplines_out(conn, who["id"])
-        if page_layout.has(caps, "registration.approve"):
-            counts["pending"] = conn.execute(
-                "select count(*) as n from participant where status = 'pending'").fetchone()["n"]
         if page_layout.has(caps, "feedback.triage"):
             counts["feedback"] = conn.execute(
                 "select count(*) as n from feedback where status in ('new', 'seen', 'planned')"

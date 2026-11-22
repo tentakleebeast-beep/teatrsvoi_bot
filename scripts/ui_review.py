@@ -96,7 +96,6 @@ SCREEN_LABELS: dict[str, tuple[int, str, str]] = {
     "/webapp/person": (18, "person", "Карточка участника"),
     "/webapp/services": (19, "services", "Сервисы"),
     "/webapp/ui": (20, "ui", "Справочник компонентов"),
-    "/webapp/admin/t/pending": (21, "admin-t-pending", "Заявки"),
     "/webapp/admin/t/people": (22, "admin-t-people", "Люди"),
     "/webapp/admin/t/dues": (23, "admin-t-dues", "Взносы (админ)"),
     "/webapp/admin/t/invites": (24, "admin-t-invites", "Приглашения"),

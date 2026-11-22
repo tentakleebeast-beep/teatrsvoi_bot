@@ -15,18 +15,18 @@ from __future__ import annotations
 
 import re
 
-# Порядок вопросов. Состав плана зависит от того, что уже известно в профиле
-# (см. `build_plan`), поэтому это база, а не жёсткий сценарий.
-STEPS = ("name", "alias", "phone", "birthday", "travel", "plays", "roles",
-         "trainings", "manifest")
+#: Знакомство при входе: без этого человек не получает короткого имени.
+ENTRY_FIELDS = ("name", "alias", "phone")
+#: Дозаполнение по кнопке «Знакомство»: всё необязательное.
+FILL_FIELDS = ("birthday", "travel", "plays", "roles", "trainings", "manifest")
 
 QUESTIONS = {
     "name": ("Как вас зовут полностью — имя и фамилия? Так вас будет видно "
              "в расписании и финансовых листах."),
     "alias": ("Как вас называть в боте коротко? Одно слово — так проще узнавать "
               "вас в сообщениях. Например: Витя."),
-    "phone": ("Телефон для связи? Напишите номер — он виден только вам и организатору. "
-              "Можно пропустить."),
+    "phone": ("Телефон для связи? Напишите номер — его видят только вы и сотрудники студии "
+              "с доступом к составу: администратор, организатор, педагоги. Можно пропустить."),
     "birthday": ("День рождения? Напишите дату с годом: «12.03.1990». "
                  "Нужен, чтобы поздравлять и не ставить репетиции в этот день."),
     "travel": ("Сколько минут обычно занимает дорога до студии? Напишите числом "
@@ -77,16 +77,24 @@ FIELD = {
     "manifest": "ai_manifest",
 }
 
-INTRO_HEAD = ("Давайте познакомимся — несколько коротких вопросов, каждый можно "
-              "пропустить. Это для расписания и подсказок; ответы видите только вы "
-              "и организатор. Запишу в профиль только после вашего подтверждения.")
+INTRO_HEAD_ENTRY = ("Давайте познакомимся — пара коротких вопросов. Как называть вас "
+                    "в боте, нужно, чтобы вас узнавали в сообщениях; телефон можно "
+                    "пропустить. Ответы видите только вы и сотрудники студии с доступом "
+                    "к составу. Запишу в профиль только после вашего подтверждения.")
+INTRO_HEAD_FILL = ("Дозаполним профиль — несколько необязательных вопросов, каждый можно "
+                   "пропустить. Ответы видите только вы и сотрудники студии с доступом "
+                   "к составу. Запишу в профиль только после вашего подтверждения.")
 
 SUMMARY_HEAD = "Так записать? Проверьте, пожалуйста:"
 
-DONE = ("Спасибо, записал. Помощник будет учитывать дорогу и подсказки, а в сообщениях "
-        "вас узнают по короткому имени. Переделать можно командой /intro.")
+DONE_ENTRY = ("Спасибо, записал. В сообщениях вас узнают по короткому имени. Остальное "
+              "можно дозаполнить позже: «Профиль» → «Знакомство». Пройти знакомство "
+              "заново — /intro.")
+DONE_FILL = ("Спасибо, записал. Поправить ответы можно там же: «Профиль» → «Знакомство».")
 
-CANCELLED = "Хорошо, ничего не записал. Вернуться можно командой /intro."
+CANCELLED = ("Хорошо, ничего не записал. Дозаполнить остальное можно в «Профиль» → "
+             "«Знакомство», пройти знакомство заново — /intro.")
+FILL_NOTHING = "Профиль заполнен полностью — дозаполнять нечего."
 
 SKIP_WORDS = {
     "нет", "не", "не надо", "не хочу", "не знаю", "ничего", "пропустить",
@@ -134,26 +142,30 @@ def is_skip(text: str | None) -> bool:
     return low in SKIP_WORDS or low.startswith("не хочу") or low.startswith("пропуст")
 
 
-def build_plan(profile: dict | None) -> list[str]:
-    """Какие вопросы задавать: известное не переспрашиваем.
-
-    Имя спрашиваем, только если в профиле одно слово (короткое имя или ник из
-    регистрации). Телефон и день рождения — только когда их ещё нет.
-    Короткое имя, дорога, спектакли, роли, тренинги и заметка — всегда: их можно
-    уточнить. Тариф не спрашиваем никогда (решение V-009).
-    """
+def build_entry_plan(profile: dict | None) -> list[str]:
+    """Имя — если в записи одно слово; короткое имя — всегда; телефон — если пуст."""
     profile = profile or {}
     plan: list[str] = []
-    name = " ".join(str(profile.get("name") or "").split())
-    if len(name.split()) < 2:
+    if len(" ".join(str(profile.get("name") or "").split()).split()) < 2:
         plan.append("name")
     plan.append("alias")
     if not profile.get("phone"):
         plan.append("phone")
-    if not profile.get("birth_date"):
-        plan.append("birthday")
-    plan.extend(["travel", "plays", "roles", "trainings", "manifest"])
     return plan
+
+
+def build_fill_plan(profile: dict | None) -> list[str]:
+    """Только пустые необязательные поля; заполненное не переспрашиваем."""
+    profile = profile or {}
+    empty = {
+        "birthday": not profile.get("birth_date"),
+        "travel": profile.get("travel_minutes") in (None, 0),
+        "plays": not str(profile.get("plays") or "").strip(),
+        "roles": not str(profile.get("roles_note") or "").strip(),
+        "trainings": not str(profile.get("interests") or "").strip(),
+        "manifest": not str(profile.get("ai_manifest") or "").strip(),
+    }
+    return [step for step in FILL_FIELDS if empty[step]]
 
 
 def next_step(plan: list[str] | tuple[str, ...], step: str) -> str | None:
@@ -325,7 +337,7 @@ def render_value(step: str, value) -> str:
 def summary(answers: dict) -> str:
     """Сводка перед записью: только заполненные поля, по строке на поле."""
     lines = []
-    for step in STEPS:
+    for step in ENTRY_FIELDS + FILL_FIELDS:
         if step not in answers:
             continue
         text = render_value(step, answers[step])

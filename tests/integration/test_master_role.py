@@ -319,23 +319,31 @@ def test_Г6_инвариант_M1_предупреждает_а_не_падае
 
 # -------------------------------------------------- Г7: инвайт-код мастера (064)
 def test_Г7_инвайт_мастера_выпускается_кодом(client):
-    """064 (15.11.2026): код несёт роль `master`, дисциплина спрашивается при онбординге.
+    """064 (15.11.2026): код мастера существует; после V-116 он персональный.
 
-    До 064 критерий был обратным — «кодом мастер не выдаётся, 422»: у кода не было
-    дисциплины, а мастер без предмета считался ошибкой. Решение владельца 15.11.2026
-    отменило запрет: дисциплина — необязательное поле кода, мастер без предмета
-    допустим (V-037), вопрос задаёт бот перед выбором себя.
+    Роль берётся из записи человека, а не из тела запроса, поэтому код на
+    мастера выпускается так же, как на любого другого (docs/development/182 §1.1).
+    Дисциплина — вопрос онбординга, а не поле кода.
     """
     with psycopg.connect(_test_dsn()) as conn:
         _admin(conn)
+        master_id = _master_only(conn, chat_id=None, name="Педагог Кодовый")
 
-    res = client.post("/admin/invite", headers=headers(ADMIN_CHAT),
-                      json={"role": "master", "ttl_days": 7})
+    from tests.integration.test_webapp_profile import _api, init_data
+
+    _api()
+    token = client.post("/webapp/auth",
+                        json={"init_data": init_data(ADMIN_CHAT)}).json()["token"]
+    res = client.post("/webapp/admin/invite",
+                      headers={"Authorization": f"Bearer {token}"},
+                      json={"participant_id": master_id})
     assert res.status_code == 200, res.text
     assert res.json()["role"] == "master" and res.json()["code"]
     with psycopg.connect(_test_dsn()) as conn:
-        assert conn.execute("select role, discipline_code from invite_code").fetchone() \
-            == ("master", None), "код без дисциплины валиден (064)"
+        row = conn.execute("select role, participant_id, discipline_code from invite_code "
+                           "where code = %s", (res.json()["code"],)).fetchone()
+    assert row[0] == "master" and row[1] == master_id
+    assert row[2] is None, "код без дисциплины валиден (064)"
 
 
 # --------------------------------------------------------- Г8: отзыв роли
