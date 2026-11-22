@@ -27,6 +27,7 @@
 | Проверено прогоном на живой БД | Создана пустая база, накатаны все `db/init/*.sql` (67 файлов, 0 ошибок), затем черновик миграции 072 — **дважды** (второй накат без ошибок). Замеры ниже в §3.4, §4.3, §5 |
 | Проверено прогоном на коде | `scripts/gen_alembic_revisions.py --check`, `openapi_snapshot.py --write`, `db_schema_snapshot.py --write`, `audit_actions.py --check/--write/--json`, `check_action_matrix.py` (проверка режимом по умолчанию) — флаги сверены через `--help`; `ls db/init/*.sql` — 67, голова ревизий `070_personal_invite_code` |
 | Не проверено | Живой Drive: 21 папка / 273 файла / 11,24 ГБ — снимок `docs/development/160` (11.11.2026), не перепроверялся. Прод-база: сколько строк `file_object` (в dev 0) |
+| Сверено при мерже | `main` на момент слияния — `9e30ae4`: **68** файлов `db/init`, голова `071_drop_dead_capabilities` (E9-6 влит уже после базы спецификации). Числа «сколько файлов станет» в §10, AC-1 и §12 поправлены на 68 → 69 и сверены с этим деревом |
 | Что не запускал | `pytest` по файловым тестам: код не менялся, прогон ничего не доказывает. Гейт спецификации — §11 |
 
 **Что из этого следует.** Таблица `file_object` в dev пуста, поэтому миграция ничего не
@@ -85,7 +86,9 @@
 ### 3.2. `kind`: добавляется одно значение
 
 `file_object_kind_check` сейчас: `kind is null or kind in ('text','image','audio')`
-(`db/init/046:25–27`). Становится `('text','image','audio','folder')`.
+(`db/init/046:25–27`). Становится `kind is null or kind in ('text','image','audio','folder')`
+— дизъюнкция `kind is null` остаётся: `null` в `check` не «проходит», а отвергается, а
+строки с `kind = null` («файл», §3.1, §4.2) обязаны вставляться.
 
 Значение `folder` ставит **только** регистрация ссылки на папку Drive. Ни один другой путь
 (`save_committed`, `detect_kind`, бот, агент) его не выставляет, и `detect_kind` по-прежнему
@@ -96,12 +99,12 @@
 ```sql
 -- F11: garage держит байты, а не ссылку
 not exists (select 1 from file_object
-             where storage = 'garage'
+             where deleted_at is null and storage = 'garage'
                and (object_key is null or bucket is null or drive_url is not null))
 
 -- F12: ссылка не держит байтов
 not exists (select 1 from file_object
-             where storage = 'drive'
+             where deleted_at is null and storage = 'drive'
                and (drive_url is null or object_key is not null or bucket is not null
                     or sha256 is not null or cold_at is not null or last_access_at is not null))
 
@@ -112,10 +115,16 @@ not exists (select 1 from file_object where kind = 'folder' and storage <> 'driv
 F1–F10 не меняются. F2 («файл знает, где его байты») остаётся как есть и продолжает ловить
 строку, у которой нет ни `object_key`, ни `drive_file_id`.
 
+`deleted_at is null` в F11 и F12 — не поблажка: мягко удалённая строка не видна ни в одном
+списке (`list_files`, `folder_files`, `search`, `used_bytes`), и F2, из которого эти два
+инварианта растут, считает так же. Без фильтра миграция краснила бы `check_invariants.py`
+на legacy-строке «удалена и без ключа»: она проходит мимо F2 именно потому, что удалена.
+Ветка «удалена, но ключ и байты на месте» остаётся видимой для F11 в любом случае.
+
 ### 3.4. Миграция: номер, порядок шагов, backfill
 
-**Номер — 072** при сегодняшнем максимуме `071_drop_dead_capabilities.sql` (ветка
-`wt/t_a487695a`, карта E9-6 в работе). Номер берётся как максимум + 1 по **всем** ветвям
+**Номер — 072** при сегодняшнем максимуме `071_drop_dead_capabilities.sql` (влит в `main`
+коммитом `9e30ae4`, карта E9-6). Номер берётся как максимум + 1 по **всем** ветвям
 в момент работы: если E1-4 или E5-4 займут 072 раньше — следующий свободный. Проверка:
 `ls db/init/*.sql | tail -3` во всех живых `wt/*`.
 
@@ -132,8 +141,10 @@ F1–F10 не меняются. F2 («файл знает, где его бай�
    update file_object set storage = 'garage' where storage is null;
    ```
    Адрес собирается по форме файла: заглушка `001` заводилась под файлы, папок в ней быть
-   не могло. Строк, у которых есть и `object_key`, и `drive_file_id`, схема не допускает
-   (`ux_file_object_key` + `unique (drive_file_id)`), поэтому ветки не пересекаются.
+   не могло. Строку, у которой есть и `object_key`, и `drive_file_id`, схема не запрещает
+   (`ux_file_object_key` и `unique (drive_file_id)` — уникальность, а не взаимоисключение),
+   но backfill её не трогает: в условии стоит `object_key is null`, такая строка остаётся
+   `garage`, F11 у неё зелёный и F12 её не касается.
 3. `alter column storage set default 'garage'`, `set not null`; `file_object_storage_check`
    (`in ('garage','drive')`); пересоздание `file_object_kind_check` с `folder`.
 4. Функция `file_ext(text)` (§4.3) — до представления.
@@ -629,10 +640,10 @@ drive_url, drive_path, size_bytes}}`.
 | `services/tool-api/migrations/versions/072_*.py` | ревизия через `scripts/gen_alembic_revisions.py` |
 | `contracts/openapi.json`, `contracts/db-schema.json` | пересобрать скриптами |
 | `tests/webapp/server.py` | ответы стенда: `kind_word`, `storage`, `description`, `/search`, `/link`, `/meta`, `view` для `drive` |
-| `tests/unit/test_migrations_registry.py` | 67 → 68 файлов, голова `072_…` |
+| `tests/unit/test_migrations_registry.py` | 68 → 69 файлов, голова `072_…` |
 | `docs/development/86` | FR-K1/K3/K14/K17 — уточнения §3.1, §5, §6 (без новых FR-ID) |
 | `docs/development/19` | строка FR-F5: два расположения, описание, поиск, тесты |
-| `docs/development/189` | одна пометка с датой: AC-3 про папку и «имя из заголовка» уточнены спецификацией 192 |
+| `docs/development/189` | одна пометка с датой: AC-3 про папку и «имя из заголовка» уточнены спецификацией 192; отдельные пометки у §D5 (квота и видимость читают папку, а не колонку `scope`) и §D8 (`drive_path` — необязательное поле формы) |
 | `docs/architecture/172`, `docs/reports/117`, `docs/README.md` | пересобираются скриптами |
 
 ---
@@ -643,7 +654,7 @@ drive_url, drive_path, size_bytes}}`.
 
 1. **AC-1.** Миграция накатывается на пустую базу (`alembic upgrade head`), повторный прогон
    SQL идемпотентен; `scripts/gen_alembic_revisions.py --check` — код 0;
-   `tests/unit/test_migrations_registry.py` зелёный (68 файлов, голова `072_…`).
+   `tests/unit/test_migrations_registry.py` зелёный (69 файлов, голова `072_…`).
 2. **AC-2.** `storage` — `not null default 'garage'`; `description`, `drive_url`, `drive_path`,
    `drive_mime` допускают `null`; `file_object_kind_check` принимает `folder` и по-прежнему
    отвергает `video`.
@@ -738,7 +749,7 @@ drive_url, drive_path, size_bytes}}`.
 | `tests/unit/test_file_kind.py` | таблица `kind_word` (5 слов + «файл»), `kind_by_name` без отказов, `kind_predicate` для 4 слов, `ValueError` на неизвестном слове, `folder` вне чипов (`V-123`, `189 §D4`) |
 | `tests/unit/test_file_kind_partition.py` | свойство: на наборе пар `(kind, name)` строка попадает ровно под один чип, и это чип слова; `(text,Смета.pdf)` — «документ» (`FR-K17`, `189 §D4`) |
 | `tests/integration/test_files_ext_function.py` | SQL `file_ext` = Python `extension` на 12 именах; `''` вместо `null`; известное расхождение `..` (`189 §D4`) |
-| `tests/integration/test_files_two_locations.py` | F11/F12/F13 краснеют на нарушениях, зелёные после backfill; `kind='folder'` только с `storage='drive'` (`189 §D1`, AC-1…AC-5) |
+| `tests/integration/test_files_two_locations.py` | F11/F12/F13 краснеют на нарушениях, зелёные после backfill; `kind='folder'` только с `storage='drive'`; мягко удалённая строка без ключа F11 не краснит (`189 §D1`, AC-1…AC-5) |
 | `tests/integration/test_files_quota_shared.py` | общая папка, ссылка 5 ГБ, скриншот обращения не в квоте; перенос в обе стороны; вставка считает так же (`FR-K14`, `V-125`) |
 | `tests/integration/test_webapp_files_link_api.py` | разбор 7 форм адреса, отказы хоста/https/разбора, `kind='folder'`, канонический адрес, имя по умолчанию, `drive_path`, дубль свой и чужой без утечки имени (`V-123`, `189 §D6`) |
 | `tests/integration/test_webapp_files_search.py` | матрица `q`/`folder`/`kind`/`storage`, видимость (свой, общая папка, чужой личный, скриншот), порядок, пустой результат (`FR-K17`, `189 §D8`) |
@@ -756,7 +767,7 @@ drive_url, drive_path, size_bytes}}`.
 - `tests/unit/test_webapp_files_pages.py`, `test_webapp_files_view_page.py` — новые модули
   и поля ответа.
 - `tests/unit/test_webapp_pages_split.py` — новые модули под порогом.
-- `tests/unit/test_migrations_registry.py` — 68 файлов, голова 072.
+- `tests/unit/test_migrations_registry.py` — 69 файлов, голова 072.
 - `tests/integration/test_files_quota.py`, `test_files_upload.py`, `test_webapp_files.py`,
   `test_webapp_files_view.py`, `test_webapp_files_link.py`, `test_files_delete.py`,
   `test_files_actions_screen.py`, `test_files_studio_roles.py` — ожидания по новым полям
@@ -774,7 +785,7 @@ drive_url, drive_path, size_bytes}}`.
 |---|---|
 | `docs/development/86` | FR-K1/K3 (папка и описание при загрузке), FR-K14 (квота — только личный Garage), FR-K17 (имя, папка, тип; ссылки Drive), FR-K15 — пометка «в коде нет, карта …» |
 | `docs/development/19` | строка FR-F5: два расположения, описание, поиск, список тестов; статус остаётся «частично» до E4-2 |
-| `docs/development/189` | пометка с датой у AC-3 и §D6: папка принимается (V-123), имя не из заголовка страницы |
+| `docs/development/189` | пометка с датой у AC-3 и §D6: папка принимается (V-123), имя не из заголовка страницы; у §D5: «общий/личный» читается по папке, а не по колонке `scope`; у §D8: `drive_path` берётся из необязательного поля формы |
 | `docs/architecture/172` | пересобирается `scripts/db_schema_snapshot.py --write`; в §4.5 перечисление `kind` дополняется `folder` |
 | `docs/reports/117` | пересобирается `scripts/audit_actions.py --write` |
 | `docs/README.md` | пересобирается `scripts/build_docs_index.py` (номер 192 свободен на 22.11.2026: максимум по всем ветвям — 191) |
