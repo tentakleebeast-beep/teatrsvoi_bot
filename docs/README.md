@@ -131,6 +131,7 @@
 | 181 | [181-e13-onboarding-sequence.md](development/181-e13-onboarding-sequence.md) | 181. Онбординг: одна последовательность шагов, два текста, без заявок (E13-1, дизайн) |
 | 182 | [182-e13-onboarding-spec.md](development/182-e13-onboarding-spec.md) | 182. Онбординг E13: шаги, тексты и судьба `pending` (E13-2, спецификация) |
 | 183 | [183-onboarding-implementation.md](development/183-onboarding-implementation.md) | 183. Онбординг E13: реализация — тексты, знакомство, /help |
+| 185 | [185-google-process-design.md](development/185-google-process-design.md) | 185. Google: целевой процесс «файлы + календарь + Sheets + бот» — дизайн (E1-2) |
 
 ## Планы
 
@@ -217,6 +218,7 @@
 | 163 | [163-miniapp-polls-design-run.md](reports/163-miniapp-polls-design-run.md) | 163. E8: дизайн-прогон в браузере — конструктор опросов и опросы в чате |
 | 165 | [165-arch-drift-2026-11-16.md](reports/165-arch-drift-2026-11-16.md) | Дрейф архитектуры: 2026-11-16 |
 | 180 | [180-arch-drift-2026-11-22.md](reports/180-arch-drift-2026-11-22.md) | Дрейф архитектуры: 2026-11-22 |
+| 184 | [184-changelog-0.11.0-0.12.0.md](reports/184-changelog-0.11.0-0.12.0.md) | 184. Сводный журнал изменений v0.11.0 → v0.12.0 |
 
 ---
 
