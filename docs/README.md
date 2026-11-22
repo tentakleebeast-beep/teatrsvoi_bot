@@ -132,6 +132,7 @@
 | 182 | [182-e13-onboarding-spec.md](development/182-e13-onboarding-spec.md) | 182. Онбординг E13: шаги, тексты и судьба `pending` (E13-2, спецификация) |
 | 183 | [183-onboarding-implementation.md](development/183-onboarding-implementation.md) | 183. Онбординг E13: реализация — тексты, знакомство, /help |
 | 185 | [185-google-process-design.md](development/185-google-process-design.md) | 180. Google: целевой процесс «файлы + календарь + Sheets + бот» — дизайн (E1-2) |
+| 186 | [186-e1-google-process-spec.md](development/186-e1-google-process-spec.md) | 186. Google: контракты процесса «файлы + календарь + бот» (E1-3, спецификация) |
 | 187 | [187-e5-calendar-card-design.md](development/187-e5-calendar-card-design.md) | 187. Календарь: карточка события, сверка и настройка типов и цветов — дизайн (E5) |
 
 ## Планы
