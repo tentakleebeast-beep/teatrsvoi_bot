@@ -136,6 +136,7 @@
 | 187 | [187-e5-calendar-card-design.md](development/187-e5-calendar-card-design.md) | 187. Календарь: карточка события, сверка и настройка типов и цветов — дизайн (E5) |
 | 188 | [188-what-i-can-text.md](development/188-what-i-can-text.md) | 188. «Что умею»: одна строка на право, отдельный текст каждой роли (дизайн) |
 | 189 | [189-files-two-locations.md](development/189-files-two-locations.md) | 189. Файлы: два расположения, описание, папки, поиск — дизайн (E4) |
+| 190 | [190-e5-calendar-spec.md](development/190-e5-calendar-spec.md) | 190. Календарь: карточка события, сверка, типы и цвета — спецификация (E5-3) |
 
 ## Планы
 
