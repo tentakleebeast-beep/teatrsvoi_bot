@@ -49,7 +49,6 @@ PAGES = {
     "reconcile": "/webapp/reconcile",
     "services": "/webapp/services",
     "admin_people": "/webapp/admin/t/people",
-    "admin_pending": "/webapp/admin/t/pending",
     "admin_audit": "/webapp/admin/t/audit",
     "admin_agent": "/webapp/admin/t/agent",
     "admin_feedback": "/webapp/admin/t/feedback",
