@@ -171,12 +171,63 @@ def test_вопрос_что_умеешь_не_уходит_в_модель(gw, 
     У модели нет ни матрицы прав, ни `CAP_LINES`: её свободный ответ называл
     несуществующие действия. Поэтому фраза перехватывается до `agent_ask`, и в
     ответе только строки по правам человека.
+
+    Проверка идёт через обработчик входа (`on_text`), а не поиском по шаблону:
+    regex-тест доказывает только совпадение строки, а не то, что фраза не ушла в
+    модель другим путём (возврат ревью 22.11.2026, docs/development/69 L-051).
     """
-    for phrase in ("что ты умеешь", "что можешь", "ты что вообще можешь"):
+    phrases = (
+        "что ты умеешь",
+        "что можешь",
+        "ты что вообще можешь",
+        # Русский порядок слов свободный: эти три уходили в agent+router, пока
+        # правило требовало только «что умеет бот» (возврат ревью 22.11.2026).
+        "что бот умеет",
+        "что может бот",
+        "умеешь что-нибудь?",
+    )
+    for phrase in phrases:
         order, message = run(gw, monkeypatch, phrase=phrase)
 
         assert "agent" not in order and "router" not in order, (
             f"«{phrase}» ушло в агент/каскад: {order}")
+        assert message.sent[-1].text.startswith("Что умею:"), message.sent[-1].text
+
+
+def run_task_frame(gw, monkeypatch, phrase: str):
+    """Фраза внутри рамки «Озадачить»: тот же перехват, что и в свободном тексте."""
+    order: list[str] = []
+
+    async def fake_agent(chat_id, text, task=False):
+        order.append("agent")
+        return {}
+
+    async def fake_api(path, payload, chat_id, method="POST"):
+        order.append(path)
+        return {"ok": False, "error": "llm_unavailable"}
+
+    monkeypatch.setattr(gw, "agent_ask", fake_agent)
+    monkeypatch.setattr(gw, "api", fake_api)
+    monkeypatch.setattr(gw, "caps_of", lambda chat_id: _value([]))
+
+    state = FakeState()
+    asyncio.run(state.set_state(gw.TaskFrame.await_text))
+    message = FakeMessage(phrase)
+    asyncio.run(gw.task_frame_text(message, state))
+    return order, message
+
+
+def test_вопрос_что_умеешь_в_рамке_озадачить_не_уходит_в_модель(gw, monkeypatch):
+    """Рамка «Озадачить» — тот же вопрос, значит тот же перехват до модели.
+
+    В рамке проверки не было вовсе: «что ты умеешь» уходило в `agent_ask(task=True)`
+    и получало свободный ответ модели (возврат ревью 22.11.2026).
+    """
+    for phrase in ("что ты умеешь", "что может бот", "умеешь что-нибудь?"):
+        order, message = run_task_frame(gw, monkeypatch, phrase)
+
+        assert "agent" not in order and "router" not in order, (
+            f"«{phrase}» в рамке ушло в модель: {order}")
         assert message.sent[-1].text.startswith("Что умею:"), message.sent[-1].text
 
 
