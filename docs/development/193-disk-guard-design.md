@@ -22,7 +22,7 @@
 |---|---|
 | База | `main`, коммит `9e30ae4` («merge: E9-6 „Что умею“»), 22.11.2026 |
 | Ветка дизайна | `wt/fr-k15-disk-guard`, worktree `$HERMES_KANBAN_WORKSPACE/wt` |
-| Проверено в коде | `scripts/watchdog.sh` (34–35 — единственный сегодняшний порог диска), `scripts/alerts.py` (`dedupe_key` 47–52, `admin_ids` 58–80, `queue_admins` 83–110), `deploy/systemd/svoi-watchdog.timer` (10 мин), `svoi-health.timer` (5 мин), `svoi-cold-rotate.timer` (05:10), `services/tool-api/app/cold.py` (`status` 55, `move_to_cold` 68–105, `free_space` 140–145), `app/api/admin.py` (`/admin/files/storage` 1668–1690), `app/api/files.py` (`/files/upload` 19–61, `presign` 295–322, `commit` 326–366), `app/files_store.py` (`QUOTA_BYTES` 35, `MAX_MINIAPP_BYTES` 36, `FileRejected` 69–79, `used_bytes` 266, `_insert_with_quota` 289, `presign_put` 686–698, `save_committed` 727–794), `app/external.py` (`STORAGE_ERRORS` 39), `app/pages/files.py` (`uploadOne` 184–205, текст «Хранилище не приняло файл: код N» 193, очередь 240–250), `app/pages/admin_core.py` (`ERRORS` 57–73, `problem` 126–145), `services/tool-api/app/main.py` (`/health` 244–260), `scripts/check_settings.py`, `scripts/storage_up.py` (`CAPACITY` 41), `config/garage.toml`, `docker-compose.yml` (garage, том `s3-storage_gardata`), `db/init/001_schema.sql` (`file_object` 242–254) |
+| Проверено в коде | `scripts/watchdog.sh` (34–35 — единственный сегодняшний порог диска), `scripts/alerts.py` (`dedupe_key` 43–48, `admin_ids` 56–75, `queue_admins` 77–108), `deploy/systemd/svoi-watchdog.timer` (10 мин), `svoi-health.timer` (5 мин), `svoi-cold-rotate.timer` (05:10), `services/tool-api/app/cold.py` (`status` 55, `move_to_cold` 68–105, `free_space` 140–145), `app/api/admin.py` (`/admin/files/storage` 1668–1690), `app/api/files.py` (`/files/upload` 19–61, `presign` 295–322, `commit` 326–366), `app/files_store.py` (`QUOTA_BYTES` 35, `MAX_MINIAPP_BYTES` 36, `FileRejected` 69–79, `used_bytes` 266, `_insert_with_quota` 289, `presign_put` 686–698, `save_committed` 727–794), `app/external.py` (`STORAGE_ERRORS` 39), `app/pages/files.py` (`uploadOne` 184–205, текст «Хранилище не приняло файл: код N» 193, очередь 240–250), `app/pages/admin_core.py` (`ERRORS` 57–73, `problem` 126–145), `services/tool-api/app/main.py` (`/health` 244–260), `scripts/check_settings.py`, `scripts/storage_up.py` (`CAPACITY` 41), `config/garage.toml`, `docker-compose.yml` (garage, том `s3-storage_gardata`), `db/init/001_schema.sql` (`file_object` 242–254) |
 | Проверено на стенде (живые сервисы, 22.11.2026) | `docker ps`: `svoi-postgres`, `svoi-garage-dev` (Up 7 days). Garage: `garage status` — узел `f20385a02aaf3446`, **Capacity 40.0 GB**, DataAvail 441.6 GB / 485.5 GB (91.0%); `garage layout show` — usable capacity 40.0 GB (100%); `GET :3903/metrics` — `garage_local_disk_total{volume="data"} 485 473 984 512`, `garage_local_disk_avail{volume="data"} 441 616 449 536` (занято 9,1 %); `garage bucket info svoi-private` — **834 объекта, 1,2 MiB**, `svoi-shared` — 1 объект, 6,3 KiB; `garage bucket set-quotas --help` — есть `--max-size` и `--max-objects` |
 | Проверено в dev-базе | `file_object` — **0 строк**; колонки: `bucket`, `object_key`, `cold_at`, `size_bytes`, `scope`… — **колонки `storage` нет** (её добавляет миграция 072 из `192` §3, ещё не накатана). Права `files.access` — admin, org, master |
 | Проверено на хосте стенда | `shutil.disk_usage("/")` — 494,4 ГБ всего, 52,5 % занято; `df -P /` — 7 % (системный том macOS), `df -P /System/Volumes/Data` — 47 %. **Два способа мерить один диск дают 7 % и 52,5 %** |
@@ -47,8 +47,9 @@
 | Ёмкость Garage | `storage_up.py:41` | `GARAGE_CAPACITY` по умолчанию `40G` — объявленная ёмкость узла в layout |
 
 Вывод из таблицы: **метра два, а сторожа нет.** Порог 85 % живёт в bash и считает `df /`; модуль
-`cold.free_space()` считает тот же диск через `shutil` и никем не спрашивается. На Linux это одно
-и то же число, на стенде macOS — разные тома (7 % против 52,5 %, §1). Порога 92 % нет нигде:
+`cold.free_space()` считает тот же диск через `shutil` и никем не спрашивается. На Linux оба
+смотрят на один и тот же том, на стенде macOS — на разные (7 % против 52,5 %, §1). Порога 92 % нет
+нигде:
 единственный отказ при переполненном хранилище — ответ Garage на `PUT`, и человек видит
 «Хранилище не приняло файл: код 507».
 
@@ -191,7 +192,7 @@ watchdog.sh:34-35         вместо `df / >85` — вызов CLI (порог
 | `org`, `master` | Mini App, `presign` | отказ **507** `file_storage_full`: «Место на сервере почти закончилось: свободно 4,7 ГБ. Загружать файлы сейчас может только администратор — напишите ему.» |
 | `org`, `master` | бот, `POST /files/upload` | тот же код и тот же текст (`FileRejected` доходит до клиента без переупаковки) |
 | `org`, `master` | Mini App, `commit` (загрузка уже началась) | тот же отказ; байты удаляются (§8) |
-| `admin` | Mini App, экран «Файлы» | загрузка проходит; над списком плашка «Общий диск занят 92% — свободно 4,7 ГБ. Загрузка открыта только администратору.», кнопка «Сколько места» ведёт в служебные цифры (§10) |
+| `admin` | Mini App, экран «Файлы» | загрузка проходит; над списком плашка «Общий диск занят 92% — свободно 4,7 ГБ. Загрузка открыта только администратору.» Числа для неё приходят в ответе `/webapp/files/list` (поле `disk`, только админу) — отдельного маршрута для человека не заводим |
 | любой | скриншот обращения (`scope='feedback'`) | **не блокируется**: 8 МБ не решают судьбу диска, а это сообщение о дефекте (то же основание, что V-055 (а)) |
 
 **Чтобы не было 500 и «кода N».** Три точки, каждая обязательна:
@@ -266,6 +267,7 @@ watchdog.sh:34-35         вместо `df / >85` — вызов CLI (порог
 | CLI для таймера | `scripts/disk_guard.py` | `--json`, `--dry-run`; зовёт `alerts.queue_admins(problems, title="Общий диск SVOI", db=…)`; код выхода 1 при `alert`/`admin_only` |
 | Сторож | `scripts/watchdog.sh:34-35` | вместо `df /` и порога 85 — вызов CLI; строка «диск занят N %» уходит из bash |
 | Служебный ответ | `GET /admin/files/storage` | `+ "guard": {"percent": 81, "level": "alert", "path": "/", "free": 12240656793, "alert_pct": 80, "block_pct": 92}` |
+| Числа для плашки админа | `GET /webapp/files/list` | `+ "disk": {"percent": 92, "free": 5046586572, "block_pct": 92}` — только когда у актора есть роль `admin`; `org` и `master` поля не получают |
 | Отказ приёма | `POST /webapp/files/presign`, `files_store.save_committed` | `FileRejected("file_storage_full", <текст §7>, 507)` |
 | Каталог ошибок | `docs/architecture/85-error-catalog.md` | строка `file_storage_full` \| 507 \| общий диск занят ≥ 92 % \| освободить место или попросить админа |
 | Текст на экране | `pages/admin_core.py` `ERRORS` | `"file_storage_full": "Место на сервере почти закончилось…"` |
@@ -295,6 +297,8 @@ watchdog.sh:34-35         вместо `df / >85` — вызов CLI (порог
 9. `scripts/watchdog.sh` больше не содержит своего `df` и своего порога: единственный порог — 80 %.
 10. При 90 % холодного тома (по V-130) ротация не переносит ни одного файла, пишет причину
     в журнал и ставит алерт; при 89 % работает как раньше.
+11. В ответе `/webapp/files/list` поле `disk` есть у `admin` и отсутствует у `org` и `master`
+    (проверка — тест на два актора, не на глаз).
 
 ---
 
@@ -311,6 +315,7 @@ watchdog.sh:34-35         вместо `df / >85` — вызов CLI (порог
 | `test_files_presign_storage_full` | `org` → 507 `file_storage_full`; `admin` → 200 | `monkeypatch.setattr(disk_guard, "usage", …)`, клиент FastAPI как в `test_files_store.py` |
 | `test_files_commit_storage_full_deletes` | 507 на `commit`, `delete_object` вызван, строки нет | подмена `files_store.storage()` (уже делается в файловых тестах) |
 | `test_feedback_scope_not_blocked` | скриншот обращения при 92 % проходит | тот же стенд, `scope='feedback'` |
+| `test_files_list_disk_only_for_admin` | `disk` в ответе есть у `admin`, нет у `org`/`master` | два актора, подмена `disk_guard.usage` |
 | `test_watchdog_no_own_disk_threshold` | в `watchdog.sh` нет `df ` и нет порога 85 | чтение файла, регексп |
 | `test_disk_guard_cli_dry_run` | CLI печатает тот же текст, ничего не отправляет | `--dry-run` |
 | `test_cold_rotate_stops_at_90` (V-130) | ротация при 90 % не переносит и алертит | подмена `cold.free_space` |
