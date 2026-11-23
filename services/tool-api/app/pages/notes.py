@@ -5,9 +5,12 @@
 * **Один путь записи.** Экран зовёт `/webapp/notes/save`, а тот — те же
   `create_note` / `update_note`, что и маршруты чата (`app/api/notes.py`). Правила
   видимости не дублируются на клиенте: сервер не присылает чужую личную заметку вовсе.
-* **Чужая личная не правится.** У такой заметки в ответе `editable: false`, кнопки
-  «Изменить» нет; повторная попытка всё равно получит 404 от эндпоинта — страница лишь
-  не показывает лишнего.
+* **Чужая личная не правится и не удаляется.** У такой заметки в ответе
+  `editable: false` и `deletable: false`, кнопок «Изменить» и «Удалить» нет; повторная
+  попытка всё равно получит 404 от эндпоинта — страница лишь не показывает лишнего.
+* **Удаление — мягкое и с подтверждением.** Кнопка «Удалить» в листе зовёт
+  `DELETE /webapp/notes/{id}` только после второго листа «Удалить заметку?»; вернуть
+  заметку кнопкой нельзя, поэтому спрашиваем до, а не после (обращение №46).
 * **Лист заметки — нижний лист дизайн-системы.** Длинный текст читается целиком,
   а не обрезается в строке списка; строки сохраняют переносы (`white-space: pre-wrap`).
 * **Никаких вложений.** В заметке текст, заголовок и теги — файлы живут в своём разделе
@@ -149,11 +152,44 @@ _SCRIPT_NOTES = r"""
   }
 
   function openNote(note) {
-    var actions = [{ label: "Закрыть" }];
+    var actions = [];
     if (note.editable) {
-      actions.unshift({ label: "Изменить", primary: true, onTap: function () { editNote(note); } });
+      actions.push({ label: "Изменить", primary: true, onTap: function () { editNote(note); } });
     }
+    if (note.deletable) {
+      // `keepOpen`: кнопка открывает второй лист «Удалить заметку?». Без него
+      // оболочка закрыла бы уже открытое подтверждение (как в меню папки).
+      actions.push({ label: "Удалить", danger: true, keepOpen: true,
+                     onTap: function () { askDeleteNote(note); } });
+    }
+    actions.push({ label: "Закрыть" });
     SVOI.sheet({ title: note.title, body: sheetBody(note), actions: actions });
+  }
+
+  // Удаление спрашивает второго подтверждения: вернуть заметку кнопкой нельзя,
+  // а «правка в пустоту» мусор не убирает (обращение №46).
+  function askDeleteNote(note) {
+    var body = el("div");
+    body.appendChild(el("p", "ui-text",
+      "Заметка исчезнет из списка и из чата. Вернуть её кнопкой будет нельзя."));
+    sheet("Удалить заметку?", body, [
+      { label: "Отмена" },
+      { label: "Удалить", primary: true, danger: true,
+        onTap: function () { deleteNote(note); } }
+    ]);
+  }
+
+  function deleteNote(note) {
+    api("/webapp/notes/" + note.id, { method: "DELETE" }).then(function (res) {
+      if (res.status !== 200) { toast(problem(res)); return; }
+      // Форма возвращается к «Новой заметке»: текст удалённой в ней не остаётся.
+      resetForm();
+      status("");
+      toast("Заметка удалена");
+      load();
+    }, function () {
+      toast("Нет связи. Проверьте сеть и повторите.");
+    });
   }
 
   function editNote(note) {

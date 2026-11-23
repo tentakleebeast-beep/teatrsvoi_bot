@@ -393,6 +393,8 @@ def reset_events() -> dict:
     DISCIPLINE_EVENTS.clear()
     # Активные коды: выпуск и отзыв меняют фикстуру панели (карта t_806a633e).
     reset_invites()
+    # Заметки: создание и удаление меняют список экрана.
+    reset_notes()
     return {"ok": True}
 
 
@@ -664,18 +666,34 @@ app.add_api_route("/webapp/notifications/settings", _data({
 NOTES = [
     {"id": 11, "title": "Взять реквизит", "body": "Взять реквизит из склада.\nСпросить у Иры.",
      "tags": ["реквизит", "зал"], "scope": "personal", "scope_title": "личная",
-     "author": "Тестовый Участник", "mine": True, "editable": True,
+     "author": "Тестовый Участник", "mine": True, "editable": True, "deletable": True,
      "created_at": "2026-11-03T10:00:00+04:00", "updated_at": "2026-11-03T10:00:00+04:00"},
     {"id": 12, "title": "Зал на Обороны", "body": "В зале переставили станки.",
      "tags": ["зал"], "scope": "shared", "scope_title": "общая",
-     "author": "Иванов Виктор", "mine": False, "editable": False,
+     "author": "Иванов Виктор", "mine": False, "editable": False, "deletable": False,
      "created_at": "2026-11-02T18:00:00+04:00", "updated_at": "2026-11-02T18:00:00+04:00"},
 ]
-NOTES_STATE: dict = {"notes": [dict(note) for note in NOTES], "saved": []}
+NOTES_STATE: dict = {"notes": [dict(note) for note in NOTES], "saved": [], "deleted": []}
 
-app.add_api_route("/webapp/notes/list", _data({
-    "ok": True, "count": len(NOTES), "notes": NOTES,
-}), methods=["GET"])
+
+def reset_notes() -> None:
+    """Вернуть заметки стенда к фикстуре — для тестов и `/__reset`.
+
+    Список меняется сохранением и удалением, как боевая таблица `note`; без возврата
+    заметка, созданная одним сценарием, попадала бы в «ровно две строки» другого.
+    """
+    NOTES_STATE["notes"] = [dict(note) for note in NOTES]
+    NOTES_STATE["saved"] = []
+    NOTES_STATE["deleted"] = []
+
+
+@app.get("/webapp/notes/list")
+async def notes_list(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    rows = NOTES_STATE["notes"]
+    return JSONResponse({"ok": True, "count": len(rows), "notes": rows})
 
 
 @app.post("/webapp/notes/save")
@@ -691,8 +709,36 @@ async def notes_save(request: Request):
             "scope": body.get("scope") or "personal",
             "scope_title": "общая" if body.get("scope") == "shared" else "личная",
             "author": "Тестовый Участник", "mine": True, "editable": True,
+            "deletable": True,
             "created_at": "2026-11-04T12:00:00+04:00", "updated_at": "2026-11-04T12:00:00+04:00"}
+    if body.get("id"):
+        rows = NOTES_STATE["notes"]
+        for index, row in enumerate(rows):
+            if row["id"] == body["id"]:
+                rows[index] = {**row, **note}
+                note = rows[index]
+                break
+    else:
+        NOTES_STATE["notes"].append(dict(note))
     return JSONResponse({"ok": True, "note": note})
+
+
+@app.delete("/webapp/notes/{note_id}")
+async def notes_delete(request: Request, note_id: int):
+    """Удаление заметки на стенде: строка исчезает из списка, как у боевого `deleted_at`."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    rows = NOTES_STATE["notes"]
+    for index, row in enumerate(rows):
+        if row["id"] == note_id:
+            if not row.get("deletable", False):
+                return JSONResponse({"detail": "Заметка не найдена.",
+                                     "code": "note_not_found"}, status_code=404)
+            NOTES_STATE["deleted"].append(rows.pop(index))
+            return JSONResponse({"ok": True, "id": note_id})
+    return JSONResponse({"detail": "Заметка не найдена.", "code": "note_not_found"},
+                        status_code=404)
 
 
 @app.post("/webapp/notifications/settings")
