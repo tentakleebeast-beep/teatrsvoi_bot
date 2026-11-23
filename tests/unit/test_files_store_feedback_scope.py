@@ -33,7 +33,7 @@ def test_скриншот_без_личной_папки(monkeypatch):
     monkeypatch.setattr(STORE, "delete_object", lambda key: pytest.fail("объект трогать нельзя"))
     conn = _ScriptedConn([
         ("insert into file_object", [{"id": 91}]),
-        ("select coalesce(sum(size_bytes), 0) as used", [{"used": 0}]),
+        ("select coalesce(sum(f.size_bytes), 0) as used", [{"used": 0}]),
     ])
 
     saved = STORE.save_committed(conn, 7, "IMG_0421.png", "image/png", 1800, None,
@@ -55,7 +55,7 @@ def test_скриншот_не_считается_в_квоте(monkeypatch):
     monkeypatch.setattr(STORE, "delete_object", lambda key: pytest.fail("объект трогать нельзя"))
     conn = _ScriptedConn([
         ("insert into file_object", [{"id": 92}]),
-        ("select coalesce(sum(size_bytes), 0) as used", [{"used": STORE.QUOTA_BYTES}]),
+        ("select coalesce(sum(f.size_bytes), 0) as used", [{"used": STORE.QUOTA_BYTES}]),
     ])
 
     saved = STORE.save_committed(conn, 7, "IMG_0001.png", "image/png", 8 * 1024 ** 2, None,
@@ -63,10 +63,10 @@ def test_скриншот_не_считается_в_квоте(monkeypatch):
 
     assert saved.id == 92
     insert = [sql for sql in conn.sql if "insert into file_object" in sql][0]
-    assert "where (select coalesce(sum(size_bytes), 0)" not in insert, \
+    assert "where (select coalesce(sum(f.size_bytes), 0)" not in insert, \
         "условие по сумме для скриншота выключено (V-055 (а))"
-    used = [sql for sql in conn.sql if "select coalesce(sum(size_bytes), 0) as used" in sql]
-    assert used and "scope <> %s" in used[0], "квота считается без скриншотов обращения"
+    used = [sql for sql in conn.sql if "select coalesce(sum(f.size_bytes), 0) as used" in sql]
+    assert used and "%(scope)s" in used[0], "квота считается без скриншотов обращения"
 
 
 def test_квота_личных_файлов_осталась(monkeypatch):
@@ -75,7 +75,7 @@ def test_квота_личных_файлов_осталась(monkeypatch):
     conn = _ScriptedConn([
         ("select id from participant", [{"id": 7}]),
         ("insert into file_object", []),
-        ("select coalesce(sum(size_bytes), 0) as used", [{"used": STORE.QUOTA_BYTES}]),
+        ("select coalesce(sum(f.size_bytes), 0) as used", [{"used": STORE.QUOTA_BYTES}]),
     ])
 
     with pytest.raises(STORE.FileRejected) as caught:
@@ -83,7 +83,7 @@ def test_квота_личных_файлов_осталась(monkeypatch):
 
     assert caught.value.code == "file_quota_exceeded"
     insert = [sql for sql in conn.sql if "insert into file_object" in sql][0]
-    assert "where (select coalesce(sum(size_bytes), 0)" in insert, \
+    assert "where (select coalesce(sum(f.size_bytes), 0)" in insert, \
         "фильтр не должен «выключать» квоту для личных файлов"
 
 
@@ -99,18 +99,18 @@ def test_скриншот_не_виден_в_списке(monkeypatch):
 
 
 def test_скриншот_не_находится_поиском(monkeypatch):
-    """К4: обе ветки поиска — полнотекстовая и `ilike` — фильтруют скриншоты."""
-    full_text = _ScriptedConn([("websearch_to_tsquery", [{"id": 5, "name": "смета.pdf"}])])
-    assert [row["id"] for row in STORE.search(full_text, 7, "смета")] == [5]
-    assert "f.scope <> %(scope)s" in full_text.sql[0]
-    assert STORE.FEEDBACK_SCOPE in str(full_text.params[0])
+    """К4, docs/development/192 §6.6: поиск фильтрует скриншоты обращения.
 
-    # полнотекстовый путь не нашёл ничего — включается запасной `ilike`
-    short = _ScriptedConn([("websearch_to_tsquery", []),
-                           ("f.name ilike", [{"id": 5, "name": "смета.pdf"}])])
-    assert [row["id"] for row in STORE.search(short, 7, "смт")] == [5]
-    assert "f.scope <> %s" in short.sql[1]
-    assert STORE.FEEDBACK_SCOPE in short.params[1]
+    Поиск стал одним запросом: имя (`ilike`) и полнотекстовый индекс стоят в одном
+    условии, поэтому короткий запрос («пд») находит файл по имени, а не уходит в
+    запасной проход. Оба пути обязаны исключать `scope='feedback'`.
+    """
+    conn = _ScriptedConn([("websearch_to_tsquery", [{"id": 5, "name": "смета.pdf"}])])
+    assert [row["id"] for row in STORE.search(conn, 7, "смета")] == [5]
+    sql, params = conn.sql[0], conn.params[0]
+    assert "f.scope <> %(feedback)s" in sql
+    assert "f.name ilike %(like)s" in sql, "имя ищется в том же запросе, что и текст"
+    assert STORE.FEEDBACK_SCOPE in str(params)
 
 
 def test_дедупликация_не_подменяет_скриншот_личным(monkeypatch):
@@ -118,7 +118,7 @@ def test_дедупликация_не_подменяет_скриншот_ли�
     monkeypatch.setattr(STORE, "delete_object", lambda key: pytest.fail("объект трогать нельзя"))
     conn = _ScriptedConn([
         ("insert into file_object", [{"id": 93}]),
-        ("select coalesce(sum(size_bytes), 0) as used", [{"used": 0}]),
+        ("select coalesce(sum(f.size_bytes), 0) as used", [{"used": 0}]),
     ])
 
     saved = STORE.save_committed(conn, 7, "IMG_0421.png", "image/png", 1800, SHA,

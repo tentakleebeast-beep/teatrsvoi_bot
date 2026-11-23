@@ -20,6 +20,7 @@ import ast
 import hashlib
 import importlib.util
 import pathlib
+import re
 
 import pytest
 import yaml
@@ -46,8 +47,8 @@ SQL_FILES = sorted(INIT_DIR.glob("*.sql"))
 
 
 def test_one_revision_per_sql_file() -> None:
-    """69 файлов → 69 ревизий с теми же именами: ни лишних, ни забытых."""
-    assert len(SQL_FILES) == 69, f"файлов db/init: {len(SQL_FILES)}, ожидалось 69"
+    """70 файлов → 70 ревизий с теми же именами: ни лишних, ни забытых."""
+    assert len(SQL_FILES) == 70, f"файлов db/init: {len(SQL_FILES)}, ожидалось 70"
     assert [path.stem for path in REVISION_PATHS] == [path.stem for path in SQL_FILES]
 
 
@@ -58,7 +59,7 @@ def test_chain_is_linear_with_one_head() -> None:
     assert down[1:] == [path.stem for path in REVISION_PATHS[:-1]]
     heads = [module.revision for module in REVISIONS
              if module.revision not in set(down)]
-    assert heads == ["072_google_event_calendar"]
+    assert heads == ["073_files_two_locations"]
 
 
 def test_revision_points_to_its_sql_file() -> None:
@@ -80,6 +81,22 @@ def test_downgrade_is_disabled() -> None:
     for module in REVISIONS:
         with pytest.raises(NotImplementedError):
             module.downgrade()
+
+
+def test_doc_mentions_existing_migration_numbers() -> None:
+    """Номер миграции в docs/architecture указывает на существующий файл.
+
+    Перенумерация 072 → 073 оставила в `172-db-schema.md` строку «E4, миграция 072»:
+    читатель открывал чужую миграцию E1-4, а гейт был зелёным — номер жил только
+    прозой. Правило и разбор: docs/development/69-lessons.md, L-057.
+    """
+    numbers = {path.name[:3] for path in SQL_FILES}
+    cited: set[str] = set()
+    for doc in sorted((ROOT / "docs" / "architecture").glob("*.md")):
+        for match in re.finditer(r"миграци\S* (\d{3})", doc.read_text(encoding="utf-8")):
+            cited.add(match.group(1))
+    assert cited, "в docs/architecture нет ссылок на миграции — проверка обесценилась"
+    assert cited <= numbers, f"номера без файла в db/init: {sorted(cited - numbers)}"
 
 
 def test_core_has_no_schema_description() -> None:

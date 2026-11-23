@@ -24,18 +24,18 @@ docs/development/91-design-system.md §4.11, §4.13.
 
 from __future__ import annotations
 
-# Вид файла → символ спрайта. Возвращается имя без «#»: ссылка собирается в `iconSvg`.
+# Вид файла → символ спрайта. Слово приходит с сервера (`kind_word`), а не собирается
+# из расширений здесь: второй список расширений на клиенте — это ровно то, из-за чего
+# pdf показывался как «текст» (docs/development/192 §4.4).
+# Новый символ в спрайт не заводится: набор из семи согласован владельцем (V-063,
+# `tests/unit/test_webapp_files_grid.py` держит ровно семь). Иконка декоративна —
+# смысл несёт слово.
 ICON_FOR = r"""
-  function iconFor(kind, name) {
-    var ext = String(name || "").split(".").pop().toLowerCase();
-    if (["pdf", "docx", "xlsx", "pptx", "odt", "ods", "rtf"].indexOf(ext) >= 0) {
-      return "ui-i-document";
-    }
-    if (["txt", "md", "csv"].indexOf(ext) >= 0) return "ui-i-text";
-    if (kind === "image") return "ui-i-image";
-    if (kind === "audio") return "ui-i-audio";
-    if (kind === "document") return "ui-i-document";
-    if (kind === "text") return "ui-i-text";
+  function iconFor(word) {
+    if (word === "документ") return "ui-i-document";
+    if (word === "текст") return "ui-i-text";
+    if (word === "картинка") return "ui-i-image";
+    if (word === "аудио") return "ui-i-audio";
     return "ui-i-file";
   }
 """
@@ -57,21 +57,34 @@ SCRIPT = r"""
 
   function fileTile(file) {
     var cell = el("div", "ui-grid__cell");
+    var word = file.kind_word || "файл";
     // Вся плитка — ссылка: клавиатурный фокус и цель во всю площадь, чего у
     // `.ui-row__main` с обработчиком click не было (155 §3 D3).
     var link = el("a", "ui-grid__tile");
     link.href = "/webapp/file?id=" + file.id;
+    // Ссылка на Drive открывается там, где живёт файл (§8.3): карточка нужна для
+    // описания и пути, а байтов у нас нет — «Открыть в Drive» через `tg.openLink`.
+    var driveUrl = file.storage === "drive" ? (file.drive_url || "") : "";
+    if (driveUrl) {
+      link.href = driveUrl;
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        if (tg && tg.openLink) { tg.openLink(driveUrl); return; }
+        window.open(driveUrl, "_blank");
+      });
+    }
     var box = el("span", "ui-grid__icon");
     box.setAttribute("aria-hidden", "true");
-    box.appendChild(iconSvg(iconFor(file.kind, file.name)));
+    box.appendChild(iconSvg(iconFor(word)));
     link.appendChild(box);
 
     var body = el("span", "ui-grid__body");
     body.appendChild(el("span", "ui-grid__name", file.name));
-    var meta = [humanSize(file.size_bytes), kindWord(file.kind, file.name)];
+    // У ссылки на Drive размера нет: «в Drive» честнее пустого «0 Б» (§8.3).
+    var meta = [file.storage === "drive" ? "в Drive" : humanSize(file.size_bytes), word];
     if (file.duration_sec) meta.push(mmss(file.duration_sec));
     if (file.folder) meta.push(file.folder);
-    body.appendChild(el("span", "ui-grid__meta", meta.join(" \u00b7 ")));
+    body.appendChild(el("span", "ui-grid__meta", meta.filter(Boolean).join(" \u00b7 ")));
     link.appendChild(body);
     cell.appendChild(link);
 
