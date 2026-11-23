@@ -25,7 +25,7 @@
 | Дата | 23.11.2026 |
 | Проверено в коде | `services/tool-api/app/api/events.py`: `AssignIn` 34–47, `_prepare_assignment` 199–324, `events_preview` 326–404, `events_assign` 407–512, `_create_draft_event` 514–545, `_update_calendar_event` 689–711, `events_card` 841–870, `events_move` 716–800, `events_cancel` 606–670; `app/pages/misc_slots.py` 1–270 (форма поиска окон); `app/pages/misc_common.py`, `app/static/webapp-shell.js:383–470` (`SVOI.sheet`); `db/init/001_schema.sql:197–212` (`event_plan`), `db/init/022_roles_and_cast.sql:18–21` (типы), `db/init/029_disciplines.sql:39` (`discipline_id`), `db/init/072_google_event_calendar.sql:29` (`gcal_calendar_id`) |
 | Проверено в dev-базе | `svoi-postgres`: `event_plan` — 0 строк; `discipline` — 4 строки (`acting`, `music`, `dance`, `speech`); колонка `discipline_id` в `event_plan` есть |
-| Проверено прогоном | `grep -n "description" services/tool-api/app/api/events.py` — пусто; `grep -n "scen"` по `services/` и `db/init/` — пусто |
+| Проверено прогоном | `grep -n "description" services/tool-api/app/api/events.py` — пусто; `grep -rni "scene\|сцен"` по `services/` и `db/init/` — только «сцена» (площадка) и «сценарий», сцен как фрагментов спектакля нет |
 | Не проверено | Боевая база: сколько строк `event_plan` и сколько из них с `discipline_id`. Живой Google не читался: 446 событий на 11.11.2026, 457 на 20.11.2026, `description` пуст у всех — числа из `docs/development/160` §3.4 и §4. Перед реализацией перепроверяются |
 
 **Три расхождения, которые важны для дизайна.**
