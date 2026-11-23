@@ -29,15 +29,15 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 
 | Показатель | Значение |
 |---|---|
-| Маршрутов (методов) в `contracts/openapi.json` | 258 |
-| Маршрутов в коде, которые есть в контракте | 258 |
-| Всего маршрутов в коде (с редиректами и ресурсами) | 259 |
-| Из них с тестом (по вызову пути в `tests/`) | 246 |
+| Маршрутов (методов) в `contracts/openapi.json` | 260 |
+| Маршрутов в коде, которые есть в контракте | 260 |
+| Всего маршрутов в коде (с редиректами и ресурсами) | 261 |
+| Из них с тестом (по вызову пути в `tests/`) | 248 |
 | Действий без права (ни возможности, ни сессии) | 53 |
-| Действий с правом, проверенным в теле через `core._webapp_require(…)` | 60 |
+| Действий с правом, проверенным в теле через `core._webapp_require(…)` | 61 |
 | Действий с правом, проверенным в теле через «*» в caps | 3 |
 | Маршрутов с сервисным Bearer-токеном на входе | 3 |
-| Эндпоинтов, которые не зовёт ни один интерфейс | 33 |
+| Эндпоинтов, которые не зовёт ни один интерфейс | 34 |
 | Экранов Mini App | 35 |
 | Обработчиков чата (команды, кнопки, тексты) | 122 |
 | Инструментов агента | 13 |
@@ -144,9 +144,10 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/tools/intent/resolve` | `services/tool-api/app/api/admin.py:728` | — | любой активный | test_intent_log.py | никто не зовёт |
 | GET `/tools/intent/sheet` | `services/tool-api/app/api/admin.py:783` | скрипты: cmd_pull | admin.panel | test_intent_sheet.py | — |
 | GET `/tools/me/capabilities` | `services/tool-api/app/api/people.py:637` | чат: caps_of | любой активный | test_admin_people_actions.py, test_cm01_login.py | — |
-| GET `/tools/notes` | `services/tool-api/app/api/notes.py:235` | чат: note_confirm | notes.write | test_cm07_files.py, test_cm12_audit_cleanup.py, test_gateway_notes.py (+1) | — |
-| POST `/tools/notes` | `services/tool-api/app/api/notes.py:244` | чат: note_confirm | notes.write | test_cm07_files.py, test_cm12_audit_cleanup.py, test_gateway_notes.py (+1) | — |
-| POST `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:253` | — | notes.write | test_notes_api.py | никто не зовёт |
+| GET `/tools/notes` | `services/tool-api/app/api/notes.py:260` | чат: note_confirm | notes.write | test_cm07_files.py, test_cm12_audit_cleanup.py, test_gateway_notes.py (+1) | — |
+| POST `/tools/notes` | `services/tool-api/app/api/notes.py:269` | чат: note_confirm | notes.write | test_cm07_files.py, test_cm12_audit_cleanup.py, test_gateway_notes.py (+1) | — |
+| DELETE `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:288` | — | notes.write | test_notes_api.py | никто не зовёт |
+| POST `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:278` | — | notes.write | test_notes_api.py | никто не зовёт |
 | GET `/tools/notifications/settings` | `services/tool-api/app/api/webapp_api.py:443` | чат: _quiet_settings, _save_quiet | любой активный | test_cm05_notifications.py, test_gateway_quiet.py, test_gateway_quiet_parity.py | — |
 | POST `/tools/notifications/settings` | `services/tool-api/app/api/webapp_api.py:455` | чат: _quiet_settings, _save_quiet | любой активный | test_cm05_notifications.py, test_gateway_quiet.py, test_gateway_quiet_parity.py | — |
 | GET `/tools/participants` | `services/tool-api/app/api/people.py:63` | чат: _send_archive, list_people, panel_people, send_people | participants.view | test_admin_api.py, test_admin_archive_chat.py, test_cm01_login.py (+6) | — |
@@ -257,8 +258,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/my/sheet` | `services/tool-api/app/pages/routes.py:263` | Mini App: routes; скрипты: ui_review | — | test_miniapp_system.py, test_webapp_merge_deps.py | — |
 | GET `/webapp/nav` | `services/tool-api/app/pages/routes.py:74` | Mini App: home_loading, layout, misc_reconcile, routes, webapp-shell.js, week_template | сессия Mini App | server.py, test_miniapp_net_guard.py, test_miniapp_reconcile_rights.py (+8) | — |
 | GET `/webapp/notes` | `services/tool-api/app/pages/routes.py:168` | Mini App: routes; чат: cmd_notes, note_start, notes; скрипты: ui_review | — | server.py, test_agent_task.py, test_miniapp_notes.py (+3) | экран Mini App: HTML без данных |
-| GET `/webapp/notes/list` | `services/tool-api/app/api/notes.py:263` | Mini App: notes | сессия Mini App + notes.write | server.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
-| POST `/webapp/notes/save` | `services/tool-api/app/api/notes.py:272` | Mini App: notes | сессия Mini App + notes.write | server.py, test_cm08_miniapp.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
+| GET `/webapp/notes/list` | `services/tool-api/app/api/notes.py:296` | Mini App: notes | сессия Mini App + notes.write | server.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
+| POST `/webapp/notes/save` | `services/tool-api/app/api/notes.py:305` | Mini App: notes | сессия Mini App + notes.write | server.py, test_cm08_miniapp.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
+| DELETE `/webapp/notes/{note_id}` | `services/tool-api/app/api/notes.py:319` | Mini App: notes | сессия Mini App + notes.write | server.py, test_cm08_miniapp.py, test_notes_api.py | право проверяется в теле обработчика, а не в зависимости: notes.write |
 | GET `/webapp/notifications` | `services/tool-api/app/pages/routes.py:128` | Mini App: admin_notifications, home, routes; чат: quiet_text; скрипты: build_screen_map, ui_review, ux_audit | — | server.py, test_gateway_quiet.py, test_miniapp_hub.py | экран Mini App: HTML без данных |
 | GET `/webapp/notifications/settings` | `services/tool-api/app/api/webapp_api.py:430` | Mini App: misc_notifications | сессия Mini App | server.py, test_gateway_quiet_parity.py, test_notification_defaults.py | — |
 | POST `/webapp/notifications/settings` | `services/tool-api/app/api/webapp_api.py:436` | Mini App: misc_notifications | сессия Mini App | server.py, test_gateway_quiet_parity.py, test_notification_defaults.py | — |
@@ -626,8 +628,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/webapp/folders/{folder_id}/rename` | `services/tool-api/app/api/files.py:745` | files.access | сессия Mini App | server.py, test_files_actions_screen.py |
 | GET `/webapp/grid` | `services/tool-api/app/api/schedule.py:49` | schedule.read.all | сессия Mini App | server.py, test_cm10_reports.py, test_miniapp_system.py (+3) |
 | GET `/webapp/month-grid` | `services/tool-api/app/api/schedule.py:111` | schedule.read.all | сессия Mini App | server.py, test_webapp_month_grid.py, test_webapp_week_page.py |
-| GET `/webapp/notes/list` | `services/tool-api/app/api/notes.py:263` | notes.write | сессия Mini App | server.py, test_notes_api.py |
-| POST `/webapp/notes/save` | `services/tool-api/app/api/notes.py:272` | notes.write | сессия Mini App | server.py, test_cm08_miniapp.py, test_notes_api.py |
+| GET `/webapp/notes/list` | `services/tool-api/app/api/notes.py:296` | notes.write | сессия Mini App | server.py, test_notes_api.py |
+| POST `/webapp/notes/save` | `services/tool-api/app/api/notes.py:305` | notes.write | сессия Mini App | server.py, test_cm08_miniapp.py, test_notes_api.py |
+| DELETE `/webapp/notes/{note_id}` | `services/tool-api/app/api/notes.py:319` | notes.write | сессия Mini App | server.py, test_cm08_miniapp.py, test_notes_api.py |
 | GET `/webapp/person/info` | `services/tool-api/app/api/people.py:643` | participants.view | сессия Mini App | server.py, test_org_miniapp_screens.py |
 | POST `/webapp/person/tariff` | `services/tool-api/app/api/people.py:669` | budget.write | сессия Mini App | server.py, test_org_miniapp_screens.py |
 | POST `/webapp/polls/audience` | `services/tool-api/app/api/polls.py:422` | no_poll_manage, poll.manage | сессия Mini App | polls_helpers.py, server.py |
@@ -694,7 +697,8 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/intent/categories` | `services/tool-api/app/api/admin.py:718` | любой активный | test_intent_log.py |
 | GET `/tools/intent/report` | `services/tool-api/app/api/admin.py:766` | audit.view | test_intent_log.py, test_smoke_api_fixes.py |
 | POST `/tools/intent/resolve` | `services/tool-api/app/api/admin.py:728` | любой активный | test_intent_log.py |
-| POST `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:253` | notes.write | test_notes_api.py |
+| DELETE `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:288` | notes.write | test_notes_api.py |
+| POST `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:278` | notes.write | test_notes_api.py |
 | GET `/tools/participants/find` | `services/tool-api/app/api/people.py:574` | participants.view | test_find_person.py, test_registration.py |
 | GET `/tools/venues` | `services/tool-api/app/api/events.py:871` | любой активный | test_venues_api.py |
 | GET `/webapp/admin/invites` | `services/tool-api/app/api/admin.py:1050` | сессия Mini App + registration.code.issue | test_admin_archive_chat.py, test_admin_invites.py |
@@ -706,7 +710,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 
 ## 9. Самопроверка
 
-* маршрутов в контракте: 258, в коде: 258
+* маршрутов в контракте: 260, в коде: 260
 * нет в коде, но есть в контракте: 0
 * есть в коде, но нет в контракте: 0
 <!-- audit-actions:end -->

@@ -68,6 +68,24 @@ def stand_invites_fresh() -> Iterator[None]:
     stand.reset_invites()
 
 
+@pytest.fixture(autouse=True)
+def stand_notes_fresh() -> Iterator[None]:
+    """Заметки стенда — к фикстуре перед каждым тестом.
+
+    Экран заметок меняет список сохранением и удалением, как боевая таблица `note`.
+    Без возврата заметка, созданная одним сценарием, попадала бы в проверку
+    «ровно две строки» другого, а удалённая не возвращалась бы никогда.
+    """
+    if not ENABLED:
+        yield
+        return
+    from tests.webapp import server as stand
+
+    stand.reset_notes()
+    yield
+    stand.reset_notes()
+
+
 def _free_port() -> int:
     with socket.socket() as sock:
         sock.bind(("127.0.0.1", 0))
