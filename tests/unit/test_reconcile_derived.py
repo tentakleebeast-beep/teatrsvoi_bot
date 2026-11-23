@@ -76,7 +76,7 @@ class _Conn:
             self.updates.append((sql, params or ()))
         return _Result()
 
-    def __enter__(self) -> "_Conn":
+    def __enter__(self) -> _Conn:
         return self
 
     def __exit__(self, *exc) -> bool:
