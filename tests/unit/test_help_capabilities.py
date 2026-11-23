@@ -48,7 +48,7 @@ MASTER = {
     "schedule.read.all", "schedule.slots", "schedule.write",
 }
 TROUPE = {"budget.read.self", "feedback.send", "notes.write",
-          "schedule.availability.self"}
+          "schedule.availability.self", "schedule.read.all"}
 
 ROLE_CAPS = {"admin": ADMIN, "org": ORG, "master": MASTER, "troupe": TROUPE}
 
@@ -147,6 +147,7 @@ MASTER_TEXT = """Что умею:
 
 TROUPE_TEXT = """Что умею:
 · Отметить, когда свободен: дни и часы
+· Показать, что идёт на неделе
 · Посчитать, сколько внёс и сколько осталось
 · Записать заметку: себе или всем
 · Оставить замечание или пожелание

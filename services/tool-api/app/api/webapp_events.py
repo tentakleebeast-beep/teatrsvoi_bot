@@ -167,9 +167,11 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
 
     Право `schedule.read.all` — то же, что у списка календаря: карточка показывает
     расписание, а не личные данные. `editable` решает `events._can_move`.
+    С V-132 право есть и у роли `troupe`: актёр видит расписание студии, а запись
+    (`editable`) по-прежнему решает `schedule.write`.
     """
     viewer = core._webapp_require(who, "schedule.read.all",
-                                  deny_text="Календарь смотрит организатор и педагог.")
+                                  deny_text="Календарь закрыт: нет права на расписание.")
     calendar = _calendar_name(calendar)
     if not str(event_id or "").strip():
         raise ApiError(400, "event_id_required: нужен id события Google",

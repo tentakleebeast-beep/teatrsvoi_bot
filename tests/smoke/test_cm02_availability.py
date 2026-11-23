@@ -114,14 +114,15 @@ def test_cm02_availability(journal, stand, people, troupe, org, db):
         evidence=summary.evidence(),
         ok=summary.ok and seen.get("known_cnt", 0) > 0, requirements=["FR-C5"])
 
-    # 7. Чужую неделю труппа не читает (FR-C5, права): отказ кодом 403.
+    # 7. Чужую неделю труппа читает: расписание студии видят все действующие роли
+    #    (решение V-132 от 23.11.2026), а не только организатор (FR-C5).
     foreign = troupe.get("/tools/availability/week", params={
         "start": day, "participant_id": people["master"]["participant_id"]})
     journal.check(
         "8. GET /tools/availability/week?participant_id=чужой (troupe)",
-        expected="403: чужая неделя закрыта без schedule.read.all",
+        expected="200: расписание студии читает и актёр (V-132)",
         actual=f"код {foreign.code}, code={foreign.field('code')}",
-        evidence=foreign.evidence(), ok=foreign.code == 403,
+        evidence=foreign.evidence(), ok=foreign.code == 200,
         requirements=["FR-C5"])
 
     # 8. Импорт из Google-таблицы не проверяется на стенде (FR-C1, FR-C4).

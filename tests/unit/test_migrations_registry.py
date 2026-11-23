@@ -47,13 +47,14 @@ SQL_FILES = sorted(INIT_DIR.glob("*.sql"))
 
 
 def test_one_revision_per_sql_file() -> None:
-    """72 файла → 72 ревизии с теми же именами: ни лишних, ни забытых.
+    """73 файла → 73 ревизии с теми же именами: ни лишних, ни забытых.
 
     69 → 70 на 23.11.2026: типы и цвета событий (E5, docs/development/190 §7);
     70 → 71 тем же днём: файлы в двух расположениях (E4-4, 072 → 073) и проекты
-    (E6-2, 075 — календарь E5 встал перед ними как 074).
+    (E6-2, 075 — календарь E5 встал перед ними как 074);
+    72 → 73: V-132 выдал роли `troupe` чтение расписания студии (076).
     """
-    assert len(SQL_FILES) == 72, f"файлов db/init: {len(SQL_FILES)}, ожидалось 72"
+    assert len(SQL_FILES) == 73, f"файлов db/init: {len(SQL_FILES)}, ожидалось 73"
     assert [path.stem for path in REVISION_PATHS] == [path.stem for path in SQL_FILES]
 
 
@@ -64,7 +65,7 @@ def test_chain_is_linear_with_one_head() -> None:
     assert down[1:] == [path.stem for path in REVISION_PATHS[:-1]]
     heads = [module.revision for module in REVISIONS
              if module.revision not in set(down)]
-    assert heads == ["075_projects_money"]
+    assert heads == ["076_troupe_schedule_read"]
 
 
 def test_revision_points_to_its_sql_file() -> None:

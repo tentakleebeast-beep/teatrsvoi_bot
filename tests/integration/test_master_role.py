@@ -373,7 +373,9 @@ def test_Г8_отзыв_роли_оставляет_предметную_свя�
 
     me = _me(client, MASTER_CHAT)
     # возможности педагога сняты; остаться могут только те, что даёт роль студийца
-    master_only = MASTER_CAPS - {"schedule.availability.self", "notes.write", "files.access"}
+    # (`schedule.read.all` — с V-132, расписание студии видят все действующие роли)
+    master_only = MASTER_CAPS - {"schedule.availability.self", "notes.write",
+                                 "files.access", "schedule.read.all"}
     assert not master_only & set(me["capabilities"]), f"права мастера остались: {me['capabilities']}"
 
 

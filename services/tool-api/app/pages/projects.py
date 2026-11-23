@@ -263,12 +263,14 @@ _SCRIPT_CARD = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + _S
   var KINDS = [["show", "Спектакль"], ["event", "Мероприятие"], ["rental", "Арендатор"]];
   KINDS.forEach(function (pair) { fillOption($("f-kind"), pair[0], pair[1]); });
 
-  function moneyText(value) { return value === null ? "не задан" : money(value); }
-
   function renderMoney(moneyBlock) {
-    var parts = ["план " + moneyText(moneyBlock.plan),
-                 "факт " + moneyText(moneyBlock.fact)];
-    if (moneyBlock.rest !== null) { parts.push("остаток " + money(moneyBlock.rest)); }
+    // Пустое — фразой, а не пустой подписью: «не задан» и «ноль» разные ответы,
+    // поэтому строки не исчезают (196 §6.2: «План не задан» / «Операций нет»).
+    var parts = [moneyBlock.plan === null ? "План не задан" : "план " + money(moneyBlock.plan),
+                 moneyBlock.fact === null ? "Операций нет" : "факт " + money(moneyBlock.fact)];
+    if (moneyBlock.plan !== null && moneyBlock.rest !== null) {
+      parts.push("остаток " + money(moneyBlock.rest));
+    }
     $("c-money").textContent = parts.join(" · ");
     $("c-more-money").textContent = "расходы " + money(moneyBlock.expenses)
       + " · доходы " + money(moneyBlock.income);
