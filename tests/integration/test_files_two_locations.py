@@ -166,3 +166,24 @@ def test_backfill_переносит_заглушку_и_печатает_notice
         conn.execute(sql)
         conn.commit()
         assert _check(conn, "F11") and _check(conn, "F12") and _check(conn, "F13")
+
+
+def test_форма_колонок_двух_расположений(test_db: str, client) -> None:
+    """AC-2: `storage` — not null default 'garage'; метаданные ссылки и описание — nullable.
+
+    Проверяется фактическая схема, а не текст миграции: снимок формы живёт в
+    `contracts/db-schema.json`, и колонка, добавленная без `default`, дала бы строки
+    с `null` в `storage` — а F11/F12 считают по ней.
+    """
+    wanted = {"storage": (True, "'garage'::text"),
+              "description": (False, None),
+              "drive_url": (False, None),
+              "drive_path": (False, None),
+              "drive_mime": (False, None)}
+    with psycopg.connect(test_db) as conn:
+        rows = conn.execute(
+            "select column_name, is_nullable, column_default from information_schema.columns"
+            " where table_schema = 'public' and table_name = 'file_object'"
+            "   and column_name = any(%s)", (list(wanted),)).fetchall()
+    found = {name: (nullable == "NO", default) for name, nullable, default in rows}
+    assert found == wanted, found
