@@ -88,7 +88,11 @@ def test_чужой_файл_отвечает_404(client) -> None:
 
 
 def test_пустое_имя_и_длинное_описание_отказывают_словами(client) -> None:
-    """Границы входа: пустое имя — 400 `file_name_empty`, >500 знаков — свой код."""
+    """Границы входа: пустое имя — 400 `file_name_empty`, >500 знаков — свой код.
+
+    Длинное описание ловит домен, а не pydantic: ответ 400 с текстом из §9, а не 422
+    `validation_failed`. Допуска `in (400, 422)` тут быть не может — он и скрывал дефект.
+    """
     me = participant(ADMIN_CHAT)
     file_id = _file(me)
 
@@ -99,9 +103,16 @@ def test_пустое_имя_и_длинное_описание_отказыва
 
     long = client.post(f"/webapp/files/{file_id}/meta", json={"description": "я" * 501},
                        headers=headers(client))
-    assert long.status_code in (400, 422)
-    if long.status_code == 400:
-        assert long.json()["code"] == "file_description_too_long"
+    assert long.status_code == 400, long.text
+    assert long.json()["code"] == "file_description_too_long"
+    assert long.json()["detail"] == "Описание длиннее 500 знаков — сократите."
+    assert file_row(file_id)["description"] is None, "отказ не пишет половину правки"
+
+    edge = client.post(f"/webapp/files/{file_id}/meta", json={"description": "я" * 500},
+                       headers=headers(client))
+    assert edge.status_code == 200, edge.text
+    assert edge.json()["description"] == "я" * 500
+    assert file_row(file_id)["description"] == "я" * 500
 
 
 def test_описание_не_ищется(client) -> None:

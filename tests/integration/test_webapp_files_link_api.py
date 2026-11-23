@@ -14,11 +14,13 @@
 
 from __future__ import annotations
 
+import json
+
 import psycopg
 import pytest
 
 from tests.conftest import _test_dsn
-from tests.integration.webapp_files_support import file_row, headers
+from tests.integration.webapp_files_support import file_row, headers, participant
 
 ACCEPTED = [
     ("https://drive.google.com/file/d/abcdefghijklmnop/view", False),
@@ -134,9 +136,194 @@ def test_дубль_чужой_закрытой_ссылки_без_имени(c
     assert "Чужая смета" not in body["detail"], "имя чужой закрытой ссылки утекло"
 
 
+def test_описание_длиннее_500_отбивает_схема_входа(client) -> None:
+    """`commit` и `link`: >500 знаков — 422 `validation_failed` до обработчика (§6.2, §6.3).
+
+    Предел этих двух ручек живёт в схеме входа, а не в домене: отказ приходит конвертом
+    валидации со списком полей, человеческого текста у него нет (в §9 это сказано прямо).
+    У `/meta` тот же предел проверяет домен и отвечает 400 `file_description_too_long` —
+    отдельный тест в `test_webapp_files_meta.py`. Тест фиксирует, что расхождение осознано:
+    если кто-то снимет `max_length`, здесь появится 200 вместо 422.
+    """
+    long = "я" * 501
+    head = headers(client)
+
+    link = client.post("/webapp/files/link",
+                       json={"url": "https://drive.google.com/file/d/abcdefghijklmnop/view",
+                             "description": long}, headers=head)
+    assert link.status_code == 422, link.text
+    assert link.json()["code"] == "validation_failed"
+    assert [err["loc"] for err in link.json()["detail"]] == [["body", "description"]]
+
+    commit = client.post("/webapp/files/commit",
+                         json={"object_key": "p1/описание.pdf", "name": "описание.pdf",
+                               "mime": "application/pdf", "description": long}, headers=head)
+    assert commit.status_code == 422, commit.text
+    assert commit.json()["code"] == "validation_failed"
+    assert [err["loc"] for err in commit.json()["detail"]] == [["body", "description"]]
+
+
 def _count() -> int:
     with psycopg.connect(_test_dsn()) as conn:
         return int(conn.execute("select count(*) from file_object").fetchone()[0])
+
+
+def test_удалённая_своя_ссылка_воскрешается(client) -> None:
+    """Удалил ссылку → добавил тот же адрес: 200, прежний `id`, одна живая строка.
+
+    Уникальность `drive_file_id` в схеме переживает мягкое удаление, поэтому вставка второй
+    строки падала `UniqueViolation` и ручка отвечала 500. Экрана восстановления удалённых
+    файлов нет: строка поднимается (`deleted_at = null`), поля берутся из запроса.
+    """
+    url = "https://drive.google.com/file/d/reviveOWN01/view"
+    auth = headers(client)
+    first = client.post("/webapp/files/link", json={"url": url, "name": "Смета Пурги"},
+                        headers=auth)
+    assert first.status_code == 200, first.text
+    row_id = first.json()["file"]["id"]
+    assert client.delete(f"/webapp/files/{row_id}", headers=auth).status_code == 200
+    assert file_row(row_id)["deleted_at"] is not None, "перед воскрешением строка должна быть удалена"
+
+    again = client.post("/webapp/files/link",
+                        json={"url": url, "name": "Смета Пурги — новая",
+                              "description": "  версия после правок  "},
+                        headers=auth)
+    assert again.status_code == 200, again.text
+    revived = again.json()["file"]
+    assert revived["id"] == row_id, "воскрешение сохраняет id, а не заводит вторую строку"
+    assert revived["name"] == "Смета Пурги — новая"
+    assert "revived" not in revived, "служебный флаг аудита не уходит клиенту"
+
+    stored = file_row(row_id)
+    assert stored["deleted_at"] is None, "строка снова живая"
+    assert stored["description"] == "версия после правок"
+    assert stored["storage"] == "drive" and stored["drive_file_id"] == "reviveOWN01"
+
+    listing = client.get("/webapp/files/list", headers=auth).json()["data"]
+    assert [int(item["id"]) for item in listing].count(row_id) == 1
+    assert _rows_for("reviveOWN01") == 1, "строка ровно одна — иначе уникальность съехала"
+
+
+def test_воскрешение_пишет_событие_с_revived(client) -> None:
+    """Аудит `file.drive_link` различает воскрешение: `revived: true` в записи события."""
+    url = "https://drive.google.com/file/d/reviveAUD01/view"
+    auth = headers(client)
+    first = client.post("/webapp/files/link", json={"url": url, "name": "Афиша"}, headers=auth)
+    row_id = first.json()["file"]["id"]
+    client.delete(f"/webapp/files/{row_id}", headers=auth)
+    assert client.post("/webapp/files/link", json={"url": url, "name": "Афиша"},
+                       headers=auth).status_code == 200
+
+    events = _drive_audit(row_id)
+    assert len(events) == 2, "две регистрации — два события, удаление своим флагом не пишется"
+    assert events[0]["after"]["revived"] is True, "воскрешение помечено в аудите"
+    assert events[1]["after"]["revived"] is False, "первая регистрация — не воскрешение"
+
+
+def test_удалённая_чужая_закрытая_ссылка_без_имени(client) -> None:
+    """Чужую удалённую закрытую не воскрешаем: 409 `link_exists_other`, имени нет."""
+    url = "https://drive.google.com/file/d/reviveOTH01/view"
+    owner = headers(client, 770201)
+    first = client.post("/webapp/files/link", json={"url": url, "name": "Чужая афиша"},
+                        headers=owner)
+    assert first.status_code == 200, first.text
+    row_id = first.json()["file"]["id"]
+    assert client.delete(f"/webapp/files/{row_id}", headers=owner).status_code == 200
+
+    answer = client.post("/webapp/files/link", json={"url": url}, headers=headers(client, 770202))
+    assert answer.status_code == 409, answer.text
+    body = answer.json()
+    assert body["code"] == "link_exists_other"
+    assert "Чужая афиша" not in body["detail"], "имя чужой закрытой ссылки утекло"
+    assert file_row(row_id)["deleted_at"] is not None, "чужую строку не воскрешаем"
+    assert _rows_for("reviveOTH01") == 1
+
+
+def test_гонка_мимо_проверки_дубля_даёт_409(client, monkeypatch) -> None:
+    """Проверка дубля разошлась с вставкой: отказ словами, а не 500.
+
+    Первое чтение подменено на «строки нет» — так выглядит окно между проверкой и вставкой.
+    Вставка упирается в уникальный индекс (`on conflict (drive_file_id) do nothing`),
+    строка перечитывается и человек получает 409 с именем своей живой ссылки.
+    """
+    from app import files_store
+
+    url = "https://drive.google.com/file/d/raceWIND01/view"
+    auth = headers(client)
+    first = client.post("/webapp/files/link", json={"url": url, "name": "Гонка формы"},
+                        headers=auth)
+    assert first.status_code == 200, first.text
+    row_id = first.json()["file"]["id"]
+
+    real = files_store._drive_known
+    missed = {"n": 0}
+
+    def first_read_misses(conn, file_id):
+        missed["n"] += 1
+        return None if missed["n"] == 1 else real(conn, file_id)
+
+    monkeypatch.setattr(files_store, "_drive_known", first_read_misses)
+    second = client.post("/webapp/files/link", json={"url": url}, headers=auth)
+    assert missed["n"] >= 2, "вставка должна была перечитать строку"
+    assert second.status_code == 409, second.text
+    body = second.json()
+    assert body["code"] == "link_exists" and "Гонка формы" in body["detail"]
+    assert file_row(row_id)["deleted_at"] is None and _rows_for("raceWIND01") == 1
+
+
+def test_гонка_двух_регистраций_без_500(client) -> None:
+    """Два соединения на один адрес: второй `insert` ждёт первый и получает 409, не 500.
+
+    Соперник держит незакоммиченную строку, поэтому проверка дубля в ручке её не видит;
+    ручка встаёт на уникальном индексе и разбирает занятую строку после подтверждения.
+    """
+    import threading
+    import time
+
+    url = "https://drive.google.com/file/d/raceREAL01/view"
+    auth = headers(client)
+    owner = participant()
+    rival = psycopg.connect(_test_dsn())
+    answer: dict = {}
+    try:
+        rival.execute(
+            "insert into file_object (participant_id, drive_file_id, name, scope,"
+            " uploaded_via, storage, drive_url)"
+            " values (%s, %s, 'Гонка соединений', 'personal', 'human_drive', 'drive', %s)",
+            (owner, "raceREAL01", url))
+        thread = threading.Thread(
+            target=lambda: answer.update(r=client.post("/webapp/files/link", json={"url": url},
+                                                       headers=auth)),
+            daemon=True)
+        thread.start()
+        time.sleep(0.5)                 # ручка успела дойти до вставки и встала на индексе
+        rival.commit()
+        thread.join(30)
+        assert not thread.is_alive(), "запрос не дождался освобождения индекса"
+        result = answer["r"]
+        assert result.status_code == 409, result.text
+        assert result.json()["code"] == "link_exists"
+        assert _rows_for("raceREAL01") == 1, "второй регистрации строки не появилось"
+    finally:
+        rival.close()
+
+
+def _rows_for(drive_file_id: str) -> int:
+    """Сколько строк в БД несут этот `drive_file_id` — включая мягко удалённые."""
+    with psycopg.connect(_test_dsn()) as conn:
+        return int(conn.execute("select count(*) from file_object where drive_file_id = %s",
+                                (drive_file_id,)).fetchone()[0])
+
+
+def _drive_audit(file_id: int) -> list[dict]:
+    """События `file.drive_link` по файлу — последние сверху."""
+    with psycopg.connect(_test_dsn()) as conn:
+        rows = conn.execute(
+            "select after from audit_event where action = 'file.drive_link'"
+            " and entity_type = 'file_object' and entity_id = %s order by id desc",
+            (str(file_id),)).fetchall()
+    return [{"after": row[0] if isinstance(row[0], dict) else json.loads(row[0] or "{}")}
+            for row in rows]
 
 
 def _shared(name: str) -> int:

@@ -325,10 +325,15 @@ class WebAppLinkIn(core.ApiIn):
 
 
 class WebAppMetaIn(core.ApiIn):
-    """Хотя бы одно поле — иначе правка пустая и её нечем записать в аудит (§6.4)."""
+    """Хотя бы одно поле — иначе правка пустая и её нечем записать в аудит (§6.4).
+
+    У `description` нет `max_length`: длину проверяет домен (`files_store.update_meta`)
+    и отвечает парой из §9 — 400 `file_description_too_long` со своим текстом. Ограничение
+    pydantic отбило бы вход раньше обработчика и вернуло 422 `validation_failed`.
+    """
 
     name: str | None = Field(default=None, max_length=200)
-    description: str | None = Field(default=None, max_length=files_store.MAX_DESCRIPTION)
+    description: str | None = None
 
 
 
@@ -452,11 +457,12 @@ def webapp_files_link(body: WebAppLinkIn, who: dict = Depends(core.webapp_actor)
                 folder_id=body.folder_id, drive_path=body.drive_path)
         except files_store.FileRejected:
             raise
+        revived = bool(row.pop("revived", False))
         core.audit(conn, "human", viewer["id"], "file.drive_link", "file_object",
                    str(row["id"]),
                    after={"name": row["name"], "drive_url": row["drive_url"],
                           "is_folder": row["kind"] == "folder",
-                          "folder_id": row["folder_id"]})
+                          "folder_id": row["folder_id"], "revived": revived})
     return {"ok": True, "file": row}
 
 
