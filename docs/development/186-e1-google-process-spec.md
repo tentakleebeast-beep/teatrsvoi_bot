@@ -466,6 +466,10 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 
 1. `python scripts/google_rights.py --json > /tmp/e1-rights.json` — таблица прав.
 2. `python scripts/google_seed_bindings.py --apply && python scripts/google_seed_bindings.py --check`.
+   У тестового листа цветов страниц столько, сколько людей в месяце, а строка привязки
+   одна: страница берётся единственная под шаблоном `MM.YYYY · Ник` (пустой
+   `SCHEDULE_TEST_SHEET_PATTERN` — это и есть шаблон), а при нескольких совпадениях
+   скрипт отказывает и просит назвать её: `--page "11.2026 · Дарья"`.
 3. `python scripts/fill_test_schedule.py --list` (только чтение) — страницы на месте.
 4. Запись в тестовый лист через рабочий путь: `POST /tools/availability/sheet` с
    `target=<тестовый участник>` либо API, указанный в реализации; проверить поимённо

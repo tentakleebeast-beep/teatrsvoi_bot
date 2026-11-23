@@ -63,6 +63,7 @@ def _setup(client, monkeypatch) -> tuple[int, int]:
     from app import core as api
 
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
 
@@ -170,6 +171,7 @@ def test_Г11_мастер_без_дисциплины_назначает_тре
     from app import core as api
 
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:

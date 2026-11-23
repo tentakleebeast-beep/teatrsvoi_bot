@@ -43,4 +43,5 @@ tests/webapp/baseline/
 # зависимости по requirements.txt, CI uv не использует.
 uv.lock
 
+result.log
 cache/

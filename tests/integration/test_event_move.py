@@ -1,7 +1,10 @@
 """FR-D19: перенос события — организатор своё, администратор любое (решение 27.10).
 
-Проверяется: сдвиг времени в БД и календаре, сохранение длительности, повторная
-проверка занятости, уведомление «было → стало», аудит и права.
+Проверяется: сдвиг времени в БД и **черновом** календаре, сохранение длительности,
+повторная проверка занятости, уведомление «было → стало», аудит и права.
+
+Боевой календарь вне записи (docs/development/186 §5.2): событие, которого нет в
+черновом, бот не правит — `not_bot_event`, БД меняется, Google не вызывается.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -9,24 +12,37 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from tests.conftest import TOKEN, _test_dsn
+from tests.conftest import TOKEN, _test_dsn, google_error
 
 TZ = timezone(timedelta(hours=4))
 
 
 class FakeEvents:
-    def __init__(self, fail: bool = False):
+    """Журнал обращений к календарю: чтение черновика и правка — раздельно."""
+
+    def __init__(self, fail: bool = False, missing: bool = False):
         self.fail = fail
-        self.updated = []
+        self.missing = missing
+        self.calls: list[tuple[str, str, str]] = []
+        self.updated: list[tuple[str, str, dict]] = []
+        self._pending = ""
+
+    def get(self, calendarId, eventId):
+        self.calls.append(("get", calendarId, eventId))
+        self._pending = "get"
+        return self
 
     def update(self, calendarId, eventId, body):
+        self.calls.append(("update", calendarId, eventId))
         self.updated.append((calendarId, eventId, body))
+        self._pending = "update"
         return self
 
     def execute(self):
-        if self.fail:
-            from tests.conftest import google_error
-
+        action, self._pending = self._pending, ""
+        if action == "get" and self.missing:
+            raise google_error(404)
+        if action != "get" and self.fail:
             raise google_error()
         return {}
 
@@ -101,7 +117,7 @@ def test_организатор_переносит_своё_событие(clien
     event_id = _add_event(owner, [owner, actor])
     old = _event_row(event_id)
     fake = FakeEvents()
-    monkeypatch.setattr(api, "_calendar", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
 
@@ -124,6 +140,8 @@ def test_организатор_переносит_своё_событие(clien
     assert fake.updated[0][0] == "draft-calendar"
     assert fake.updated[0][1] == "gcal-1"
     assert fake.updated[0][2]["start"]["dateTime"].startswith(new_date)
+    assert not [call for call in fake.calls if call[1] == "read-calendar"], \
+        "боевой календарь бот не трогает"
 
     notes = _notifications(event_id)
     assert {note["recipient_id"] for note in notes} == {owner, actor}
@@ -144,7 +162,7 @@ def test_админ_переносит_чужое_событие(client, monkeyp
     event_id = _add_event(owner, [owner])
     old = _event_row(event_id)
     fake = FakeEvents()
-    monkeypatch.setattr(api, "_calendar", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "")
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
 
@@ -154,8 +172,11 @@ def test_админ_переносит_чужое_событие(client, monkeyp
                        json={"event_id": event_id, "date": new_date}).json()
 
     assert body["ok"] is True
-    assert fake.updated[0][0] == "read-calendar", "чернового нет — правим боевой"
-    assert _event_row(event_id)["starts_at"].astimezone(TZ).date().isoformat() == new_date
+    assert body["calendar_updated"] is False
+    assert body["calendar_error"] == "not_bot_event"
+    assert fake.calls == [], "чернового нет — Google не вызывается вообще"
+    assert _event_row(event_id)["starts_at"].astimezone(TZ).date().isoformat() == new_date, \
+        "БД меняется, календарь — нет"
 
 
 def test_чужое_событие_перенести_нельзя(client):
@@ -186,7 +207,8 @@ def test_недоступный_календарь_не_мешает_перен�
 
     owner = _add_person(883401, "Организатор Гугл Перенос")
     event_id = _add_event(owner, [owner])
-    monkeypatch.setattr(api, "_calendar", lambda: FakeCalendar(FakeEvents(fail=True)))
+    fake = FakeEvents(fail=True)
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
 

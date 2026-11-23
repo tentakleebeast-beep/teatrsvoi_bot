@@ -41,7 +41,7 @@ TABLES = (
     "approval_request", "notification", "notification_pref",
     "intent_log", "category_candidate",
     "availability_hour", "dues_charge", "budget_tx", "budget_month_total",
-    "row_map", "import_row", "import_batch", "audit_event", "message_event",
+    "row_map", "sheet_binding", "import_row", "import_batch", "audit_event", "message_event",
     "invite_attempt", "invite_code", "llm_usage", "participant_role",
     "participant_capability_override", "note",
     "access_grant", "agent_action", "file_tag", "file_folder", "file_text",
@@ -186,6 +186,19 @@ def client(api):
         # корни общих папок — это состояние прода, а не мусор теста: возвращаем их после чистки
         for root in ("Хозяйство", "Соцсети", "Документы", "Спектакли"):
             conn.execute("select ensure_shared_folder(null, %s, %s)", (root, root))
+        # привязки листов: в бою их засевает scripts/google_seed_bindings.py, тестам нужен
+        # тот же набор строк — без привязки запись честно отказывает `binding_missing`
+        # (docs/development/186 §4.3). `header_checksum` пуст: первая запись запомнит шапку.
+        conn.execute("""insert into sheet_binding
+                          (key, spreadsheet_id, sheet_title, layout, header_row,
+                           first_data_row, first_col, last_col)
+                        values
+                          ('budget.transactions','test-budget','Транзакции','flat_table',1,2,1,13),
+                          ('budget.live','test-finance','','flat_table',1,null,1,null),
+                          ('schedule.workload','test-schedule','','monthly_blocks',1,null,1,null),
+                          ('schedule.human','test-human','студийцы','monthly_blocks',1,null,1,null),
+                          ('schedule.test','test-test-sheet','','hour_matrix',1,null,1,null)
+                        on conflict (key) do nothing""")
         # справочник пространств восстанавливаем: он нужен почти всем сценариям
         conn.execute("""insert into venue (code, name, kind, sort_order) values
                           ('stage','Сцена','stage',10),

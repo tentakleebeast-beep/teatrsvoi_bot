@@ -54,6 +54,16 @@ class Settings(BaseSettings):
     schedule_sheet_title: str = ""
     schedule_human_spreadsheet_id: str = DEFAULT_SCHEDULE_HUMAN_SPREADSHEET_ID
     schedule_human_sheet_title: str = DEFAULT_SCHEDULE_HUMAN_SHEET_TITLE
+    # Тестовый лист цветов (docs/development/186 §2.2): раньше идентификатор жил только
+    # в .env и скриптах, поэтому сервис не мог писать в свой же объект записи.
+    schedule_test_spreadsheet_id: str = ""
+    # Пустое значение — не «страницы нет», а штатный шаблон `MM.YYYY · Ник`
+    # (`sheet_binding.DEFAULT_TEST_PAGE_PATTERN`): иначе пустая настройка останавливала
+    # бы каждую пробу цветов.
+    schedule_test_sheet_pattern: str = ""
+    # Живой источник бюджета «СВОИ 2025» и корень Drive: только чтение (186 §3).
+    finance_source_id: str = ""
+    drive_root_id: str = ""
     calendar_id_read: str = ""
     calendar_id_venue: str = ""
     calendar_id_draft: str = ""
@@ -107,6 +117,10 @@ class Settings(BaseSettings):
                 src, "SCHEDULE_HUMAN_SPREADSHEET_ID", DEFAULT_SCHEDULE_HUMAN_SPREADSHEET_ID),
             schedule_human_sheet_title=env_str(
                 src, "SCHEDULE_HUMAN_SHEET_TITLE", DEFAULT_SCHEDULE_HUMAN_SHEET_TITLE),
+            schedule_test_spreadsheet_id=env_str(src, "SCHEDULE_TEST_SPREADSHEET_ID"),
+            schedule_test_sheet_pattern=env_str(src, "SCHEDULE_TEST_SHEET_PATTERN"),
+            finance_source_id=env_str(src, "FINANCE_SOURCE_ID"),
+            drive_root_id=env_str(src, "DRIVE_ROOT_ID"),
             calendar_id_read=env_str(src, "CALENDAR_ID_READ"),
             calendar_id_venue=env_str(src, "CALENDAR_ID_VENUE"),
             calendar_id_draft=env_str(src, "CALENDAR_ID_DRAFT"),

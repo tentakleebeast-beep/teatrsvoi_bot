@@ -90,6 +90,7 @@ def test_uc04_расписание_без_календаря_не_падает(c
 
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "cal")
     monkeypatch.setattr(api, "_calendar", broken)
+    monkeypatch.setattr(api, "_calendar_write", broken)
     body = client.get("/tools/calendar/events", headers=HEADERS).json()
     assert body["ok"] is False
     assert body["error"] == "calendar_unavailable"
@@ -111,6 +112,7 @@ def test_uc04_пустой_календарь_даёт_пустой_список
             return Empty()
 
     monkeypatch.setattr(api, "_calendar", lambda: Service())
+    monkeypatch.setattr(api, "_calendar_write", lambda: Service())
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "cal")
     body = client.get("/tools/calendar/events", headers=HEADERS).json()
     assert body["ok"] is True

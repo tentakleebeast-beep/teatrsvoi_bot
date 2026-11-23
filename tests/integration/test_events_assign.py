@@ -73,6 +73,7 @@ def test_предпросмотр_по_тексту(client, monkeypatch):
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService(FakeEvents()))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService(FakeEvents()))
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
         vitya = _person(conn, 783001, "Новиков Виктор", "Витя")
@@ -179,6 +180,7 @@ def test_назначение_создаёт_запись_и_уведомлен�
     _allow(client)
     fake = FakeEvents()
     monkeypatch.setattr(api, "_calendar", lambda: FakeService(fake))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
 
@@ -222,6 +224,7 @@ def test_назначение_пишет_машинные_свойства(clien
     _allow(client)
     fake = FakeEvents()
     monkeypatch.setattr(api, "_calendar", lambda: FakeService(fake))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
@@ -252,6 +255,7 @@ def test_конец_дня_обрезается_до_23_55(client, monkeypatch):
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService(FakeEvents()))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService(FakeEvents()))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
@@ -294,6 +298,7 @@ def test_повторное_назначение_отклоняется(client, 
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService(FakeEvents()))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService(FakeEvents()))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
