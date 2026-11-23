@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
 
-from .. import core, google_targets
+from .. import core, google_targets, project_money
 from ..assign import parse_assignment
 from ..calendar_blocks import (
     PROP_EVENT_ID,
@@ -447,10 +447,33 @@ def events_assign(payload: dict,
         start = datetime.combine(day, datetime.min.time(), core.TZ) + timedelta(hours=from_hour)
         end = datetime.combine(day, datetime.min.time(), core.TZ) + timedelta(hours=min(to_hour, 23),
                                                                         minutes=55 if to_hour >= 24 else 0)
+        # Доходное событие — только у арендатора (196 §4.5). Без суммы оно нарушило бы
+        # I11, поэтому отказ до записи; у проекта другого типа сумма не принимается.
+        project_id = card.get("project_id")
+        revenue_amount = card.get("revenue_amount")
+        project = None
+        if project_id:
+            project = conn.execute("select id, kind from project where id = %s",
+                                   (project_id,)).fetchone()
+        if project is not None and project["kind"] == "rental":
+            if revenue_amount is None or float(revenue_amount) <= 0:
+                raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                               "Укажите сумму аренды — из неё считается доход",
+                               code="revenue_amount_required")
+            if card.get("kind") not in ("rental", "show"):
+                raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                               "Этот проект не принимает такие события",
+                               code="event_kind_not_allowed")
+        else:
+            revenue_amount = None
+
         private = {PROP_KIND: card["kind"], PROP_SOURCE: SOURCE_VALUE,
                    PROP_SOURCE_MARK: SOURCE_VALUE, PROP_EVENT_ID: "", "svoi_venue": venue}
-        if card.get("project_id"):
-            private[PROP_PROJECT] = str(card["project_id"])
+        if project_id:
+            private[PROP_PROJECT] = str(project_id)
+        if revenue_amount is not None:
+            # Зеркало «лучшее усилие»: правда в базе (196 §3.2, R-11).
+            private["svoi_revenue_amount"] = str(revenue_amount)
         people = [person["id"] for person in card.get("participants") or []]
         if people:
             # порядок id в свойстве не значим, но должен быть стабильным: список
@@ -464,18 +487,24 @@ def events_assign(payload: dict,
         plan = conn.execute("""
             insert into event_plan (title, kind, project_id, starts_at, ends_at,
                                     location, participant_ids, status, gcal_event_id,
-                                    gcal_calendar_id, created_by, discipline_id)
+                                    gcal_calendar_id, created_by, discipline_id,
+                                    revenue_amount)
             values (%s, %s, %s, %s, %s, %s, %s, 'confirmed', null, null, %s,
-                    (select id from discipline where code = %s)) returning id""",
-            (card["title"], card["kind"], card.get("project_id"), start, end,
+                    (select id from discipline where code = %s), %s) returning id""",
+            (card["title"], card["kind"], project_id, start, end,
              card.get("venue") or card.get("venue_name"), people,
-             who["id"], card.get("discipline"))).fetchone()
+             who["id"], card.get("discipline"), revenue_amount)).fetchone()
 
         gcal_id, gcal_calendar_id = _create_draft_event(plan["id"], private, start, end,
                                                         card)
         if gcal_id:
             conn.execute("update event_plan set gcal_event_id = %s, gcal_calendar_id = %s "
                          "where id = %s", (gcal_id, gcal_calendar_id, plan["id"]))
+
+        # Производная операция в той же транзакции: доходное событие без неё нарушило
+        # бы I11, и оставлять его нельзя (§4.5). Откат события при сбое операции —
+        # свойство транзакции, а не отдельный путь.
+        operation = project_money.create_for_event(conn, plan["id"], who)
 
         if proposal_id:
             conn.execute("update slot_proposal set event_plan_id = %s, chosen_index = 0 "
@@ -501,6 +530,7 @@ def events_assign(payload: dict,
 
     return {"ok": True, "event_id": plan["id"], "gcal_event_id": gcal_id,
             "in_calendar": bool(gcal_id), "notified": notified,
+            "operation_id": operation["id"] if operation is not None else None,
             "card": card}
 
 
@@ -638,6 +668,9 @@ def events_cancel(body: EventCancelIn,
 
         conn.execute("update event_plan set status = 'cancelled' where id = %s",
                      (plan["id"],))
+        # Производная операция остаётся, но перестаёт быть доходом (196 §7.1): I11
+        # требует, чтобы у отменённого события не было `confirmed` операции.
+        project_money.cancel(conn, plan["id"], who)
 
         recipients = set(plan["participant_ids"] or [])
         if plan["created_by"]:
@@ -784,6 +817,13 @@ def events_move(body: EventMoveIn,
                 and item.ends_at > start):
             raise HTTPException(status.HTTP_409_CONFLICT, "slot_taken")
 
+    # Закрытый месяц проверяется до календаря и до записи: иначе событие уже сдвинуто,
+    # а доход остался в прежнем периоде (196 §7.5).
+    if plan["revenue_amount"] is not None and float(plan["revenue_amount"]) > 0:
+        with core.pool.connection() as conn:
+            project_money.ensure_period_open(conn, start.strftime("%Y-%m"), who,
+                                             "event.move")
+
     title_ru = core.KIND_TITLES_RU.get(plan["kind"], "Событие")
     calendar_updated, calendar_error = False, None
     if plan["gcal_event_id"]:
@@ -794,6 +834,8 @@ def events_move(body: EventMoveIn,
     with core.pool.connection() as conn:
         conn.execute("update event_plan set starts_at = %s, ends_at = %s where id = %s",
                      (start, end, plan["id"]))
+        # Дата и период производной операции следуют за событием (196 §7.1).
+        project_money.move_date(conn, plan["id"], start, who)
 
         recipients = set(plan["participant_ids"] or [])
         if plan["created_by"]:
