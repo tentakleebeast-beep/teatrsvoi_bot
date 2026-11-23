@@ -3,13 +3,13 @@
 **Дата:** 22.11.2026. **Карта:** `t_4e7f0dbc`. **Основание:** дизайн `docs/development/187`
 (влит в `main` коммитом `c17a58d`), дизайн `docs/development/185`, исследование
 `docs/development/160` §3.4, ответы владельца V-080, V-081, V-084, V-086, V-087,
-спецификация `docs/development/186` (ветка `wt/t_f30d8579`, в `main` не влита).
+спецификация `docs/development/186` (в `main` с мержем E1-4, `e18c88c`).
 
 **Что это.** Контракты трёх экранов Mini App — карточка события, «Сверить» по календарю,
 «Типы и цвета событий» — и модели данных, на которую они опираются. Здесь же точные правила
 типов и цветов как инварианты с проверками, перечень точек правки и зависимость от карты
-реализации E1-4 (`t_279e41d2`: эндпоинтов `POST /tools/google/refresh` и
-`GET /tools/google/freshness` в коде нет).
+реализации E1-4 (`t_279e41d2`, влита в `main` коммитом `e18c88c`: эндпоинты
+`POST /tools/google/refresh` и `GET /tools/google/freshness` — `services/tool-api/app/api/google.py`).
 
 **Чего здесь нет.** Кода, миграций, ролей. Кто переносит и отменяет события, чьи события видит
 роль — карта `t_4d081225`, она ждёт анкету `docs/development/161`. Здесь только то, что от ролей
@@ -492,15 +492,15 @@ alter table event_plan add constraint event_plan_kind_fkey
 
 ### 7.5. Номер миграции
 
-Максимальный файл `db/init` сегодня — `070_personal_invite_code.sql` (67 файлов, голова ревизий
-`070_personal_invite_code`). Карта E1-4 планирует `071_google_event_calendar.sql`
-(`event_plan.gcal_calendar_id`, `app_setting.google.mode`). Поэтому:
+Пока карта писалась, максимальным файлом `db/init` был `070_personal_invite_code.sql`
+(67 файлов). E1-4 влит (`e18c88c`): файлов 69, голова ревизий — `072_google_event_calendar`,
+номер `071` занял `071_drop_dead_capabilities.sql` (`down_revision` ревизии E1-4 —
+`071_drop_dead_capabilities`). Поэтому:
 
-- номер этой миграции — **следующий свободный на момент реализации**, а не «071» по порядку
-  карт: если E1-4 уже влит, это `072`, если нет — `071` и в карте E5 учитывается, что E1-4
-  возьмёт следующий;
+- номер этой миграции — **следующий свободный на момент реализации**, а не «072» по порядку
+  карт: сегодня это `073`, а если раньше появится чужой файл — следующий за ним;
 - после файла — `scripts/gen_alembic_revisions.py` (генерирует ревизию и хэш);
-- `tests/unit/test_migrations_registry.py`: `len(SQL_FILES) == 67` → `68` (или больше) и голова —
+- `tests/unit/test_migrations_registry.py`: `len(SQL_FILES) == 69` → `70` (или больше), голова —
   имя нового файла. Тест держит число литералом, поэтому правка обязательна;
 - в карте реализации проверяется `gen_alembic_revisions.py --check` (код 0).
 
@@ -585,7 +585,7 @@ alter table event_plan add constraint event_plan_kind_fkey
 | `services/tool-api/app/webapp.py` | 278 (`SECTIONS`), 355 (`SCREEN_CAPS`) | две строки реестра (`events_reconcile` после `reconcile`, `event_types` после `notifications`); `/webapp/event` в `SCREEN_CAPS` |
 | `services/tool-api/app/webapp_page.py` | импорты/имена | новые константы страниц для стенда и тестов |
 | `services/tool-api/app/static/ui.css` | — | классы `.ev-color-1…11`, `.ev-plashka` (плашка типа) |
-| `db/init/071_…` или следующий | новый файл | `calendar_event_type`, засев, внешний ключ `event_plan_kind_fkey`, название возможности `calendar.write` |
+| `db/init/073_…` или следующий | новый файл | `calendar_event_type`, засев, внешний ключ `event_plan_kind_fkey`, название возможности `calendar.write` |
 | `services/tool-api/migrations/versions/` | новый файл | ревизия через `scripts/gen_alembic_revisions.py` |
 | `tests/webapp/server.py` | `PAGE_ROUTES`, фикстуры | три страницы + ответы `events/card`, `events/list`, `events/types`, `google/refresh`, `google/freshness` |
 | `tests/unit/test_webapp_screen_rights.py` | ~124 | счётчик экранов 35 → 38 с комментарием даты и карты |

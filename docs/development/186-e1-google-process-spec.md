@@ -9,6 +9,11 @@
 права сервисного аккаунта, таблица «событие → действие», коды ошибок, критерии и тесты.
 Код здесь не пишется, в Google ничего не меняется.
 
+Сверено с итоговым деревом `e18c88c` (мерж E1-4, 23.11.2026): миграция — `072_google_event_calendar`
+(номер `071` занят `071_drop_dead_capabilities`), AC-1 проверяет пишущие методы, а не строку
+`calendarId=`, время правки листа берётся у Drive (`files.get(fields="modifiedTime")`), в
+`SpreadsheetProperties` поля `modifiedTime` нет.
+
 ## 0. Что и зачем
 
 Дизайн 185 ответил «что читаем и куда пишем», но не ответил «как именно и что делать,
@@ -91,7 +96,7 @@ READ_SOURCES = {
 ### 2.3. Режим приложения
 
 Ключ `app_setting.google.mode`, значения `transitional` и `target`, по умолчанию
-`transitional`. Миграция `db/init/071_google_event_calendar.sql` вставляет строку
+`transitional`. Миграция `db/init/072_google_event_calendar.sql` вставляет строку
 `('google.mode','transitional') on conflict do nothing`; код дополнительно считает
 отсутствующую строку значением `transitional` (защита от базы, поднятой до миграции).
 Читается одной функцией `google_mode()`; пишется эндпоинтом `POST /tools/google/mode`
@@ -139,7 +144,7 @@ READ_SOURCES = {
 | `first_col`, `last_col` | границы заголовка; `last_col = null` — до последней заполненной | `1..13` для `Транзакции`; `null` для занятости |
 | `header_checksum` | контрольная сумма заголовка (§4.2) | считается при засеве |
 | `meta` | раскладка | `{"date_col": 2, "people_from": 4}`; `{"hours": ["08:00"…"23:00"], "dates_row": 1}` |
-| `last_read_at`, `last_edit_time` | свежесть | обновляются чтением и записью |
+| `last_read_at`, `last_edit_time` | свежесть | `last_edit_time` — `modifiedTime` файла из Drive (`files.get(fields="modifiedTime")`), а не поле Sheets: в `SpreadsheetProperties` нет ни `modifiedTime`, ни `lastEditTime`. Обновляются чтением и записью |
 
 Засев — идемпотентный скрипт `scripts/google_seed_bindings.py`: читает `Settings`,
 поднимает шапку каждого объекта, считает сумму, делает `insert … on conflict (key) do
@@ -173,7 +178,7 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 | 1 | `google_targets.resolve(key)` — получить id | `write_target_refused` / `write_target_unset` |
 | 2 | `google_mode()` — режим известен и допустим для ключа | `write_target_refused` |
 | 3 | Чтение `sheet_binding` по ключу | `binding_missing` |
-| 4 | `spreadsheets.get(fields="properties.modifiedTime,sheets(properties(sheetId,title))")`, выбор листа **по имени**; несколько совпадений или пустое имя → отказ | `sheet_ambiguous` (409) |
+| 4 | `spreadsheets.get(fields="properties.title,sheets.properties(sheetId,title)")` — метаданные листа и его `sheetId`; выбор листа **по имени**; несколько совпадений или пустое имя → отказ. `modifiedTime` в этом запросе не запрашивается: в `SpreadsheetProperties` такого поля нет, время правки файла берётся у Drive (`files.get(fields="modifiedTime")`, шаг 6) | `sheet_ambiguous` (409) |
 | 5 | `values.get` шапки, сверка `header_checksum` | `header_mismatch` |
 | 6 | `modifiedTime` ≤ `last_edit_time`; иначе перечитать и пересчитать план | `sheet_changed_since_read` (409) |
 | 7 | План записи: адреса из раскладки, `row_map` для дедупа | `plan_problems` (409, как сейчас в `schedule.py`) |
@@ -223,7 +228,7 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 4. **Отмена человеком в боевом.** Если событие с нашим `svoi_event_id` в боевом имеет
    `status = "cancelled"`, бот помечает `event_plan.status = "cancelled"` и пишет причину
    в историю. Отсутствие события в боевом **не** считается отменой.
-5. **Хранение календаря события.** `event_plan.gcal_calendar_id` (миграция 071) — календарь,
+5. **Хранение календаря события.** `event_plan.gcal_calendar_id` (миграция 072) — календарь,
    в котором бот создал событие. Без этой колонки нельзя отличить «своё черновое» от
    «чужое боевое» иначе как лишним запросом; с ней отказ `not_bot_event` решается по базе.
 6. **Что запрещено.** `calendarId=calendar_id_read` в вызовах `insert/update/delete/patch/
@@ -331,7 +336,7 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 | R-4 | Запись в бюджет без сверки шапки и свежести | `budget.py:181` | §4.3 шаги 5–6 |
 | R-5 | Клиенты Google с пишущими областями используют и читающие пути | `core.py:562,739` | §2.2 п.4: read-only клиенты |
 | R-6 | Тестовый лист недоступен сервису | `SCHEDULE_TEST_SPREADSHEET_ID` только в скрипте | §2.2: поле `Settings` |
-| R-7 | Календарь события не хранится | у `event_plan` есть только `gcal_event_id` | миграция 071: `gcal_calendar_id` |
+| R-7 | Календарь события не хранится | у `event_plan` есть только `gcal_event_id` | миграция 072: `gcal_calendar_id` |
 | R-8 | План 157 §E1 обещал запись «только в тестовый лист», дизайн 185 добавил копии `Бюджет`/`Занятость` | `plan 157:21`, `185` D3/D9 | следуем дизайну: копии — зона бота; живые листы по-прежнему только чтение |
 
 ## 11. Критерии приёмки
@@ -342,9 +347,16 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 **Границы записи**
 
 1. **AC-1 (R-1).** Ни один модуль сервиса не вызывает `insert/update/delete/patch/move`
-   с `calendarId` боевого календаря. Проверка: `grep -rn "calendarId=core.CALENDAR_ID_READ"
-   services/` — пусто; `grep -rn "CALENDAR_ID_READ" services/tool-api/app/api/events.py`
-   — только чтение (`fetch_events`, `events.list`).
+   с `calendarId` боевого календаря. Проверка — тест `tests/unit/test_google_write_boundary.py`:
+   обход AST по `services/`, список пишущих методов (`WRITE_METHODS`) и идентификаторов
+   чтения (`READ_IDS`), плюс самопроверка синтетическим модулем; тест зелёный. Быстрая
+   сверка того же факта: `grep -rnE "\.(insert|update|delete|patch|move)\(.*CALENDAR_ID_READ"
+   services/` — пусто (записи идут с `calendarId=calendar_id` из
+   `google_targets.resolve("calendar.draft")` и с `draft_id`). Чтение боевого календаря
+   `calendarId=core.CALENDAR_ID_READ` (`services/tool-api/app/api/webapp_api.py:222`, блок
+   «Сегодня») §3 разрешает, критерий его не запрещает: граница проходит по пишущим методам,
+   а не по строке `calendarId=`. В `api/events.py` `CALENDAR_ID_READ` встречается только
+   в проверках настроек и в чтении (`fetch_events`, `events.list`).
 2. **AC-2 (R-1).** Перенос и отмена события, которого нет в черновом календаре, не делают
    ни одного пишущего вызова Google и возвращают `calendar_updated: false`,
    `calendar_error: "not_bot_event"`; в БД изменение применено. Тест: §12.2.
@@ -386,7 +398,7 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 
 **Календарь, ошибки, данные**
 
-14. **AC-14 (R-7).** Миграция `db/init/071_google_event_calendar.sql` накатывается на
+14. **AC-14 (R-7).** Миграция `db/init/072_google_event_calendar.sql` накатывается на
     пустую БД (`alembic upgrade head`), `test_migrations_registry.py` зелёный,
     `gen_alembic_revisions.py` не находит дрейфа; `google.mode` вставлен.
 15. **AC-15.** Событие, созданное ботом, несёт `svoi_event_id`; сверка находит его в
@@ -456,7 +468,9 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 
 ### 12.5. Миграция
 
-- `tests/unit/test_migrations_registry.py` — зелёный после 071; голова — 071.
+- `tests/unit/test_migrations_registry.py` — зелёный после `072_google_event_calendar`;
+  голова — `072_google_event_calendar` (номер `071` занят файлом
+  `071_drop_dead_capabilities.sql`, `down_revision` ревизии — `071_drop_dead_capabilities`).
 
 ## 13. Живой прогон (E1-4)
 

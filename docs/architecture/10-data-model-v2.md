@@ -140,7 +140,7 @@ values (<id>, 'иванов', 'name', 'import'),
 | Занятость из чата | личный лист человека, ячейка `[day, hour]` | `values.update` по `cell_key` |
 | Свод | **никогда** | формулы человека не трогаем |
 
-Перед любой записью — проверка свежести (`properties.lastEditTime` vs `sheet_binding.last_read_at`, ADR-3). Файл новее индекса → перечитать, обновить, потом писать.
+Перед любой записью — проверка свежести (`modifiedTime` файла из Drive vs `sheet_binding.last_edit_time`, ADR-3; в `SpreadsheetProperties` полей `modifiedTime`/`lastEditTime` нет). Файл новее индекса → перечитать, обновить, потом писать.
 
 ---
 
