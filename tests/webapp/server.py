@@ -2738,6 +2738,13 @@ async def webapp_event_types_save_stand(request: Request):
     body = await request.json()
     EVENT_TYPES_CALLS.append(body)
     apply = body.get("apply")
+    mode = (request.headers.get("x-svoi-google-mode") or "").strip().lower()
+    if mode == "target" and apply == "all":
+        # I-7 / AC-15: в целевом режиме боевой календарь не пишется, отказ — до
+        # сохранения настройки, поэтому стенд отвечает 409 без записи.
+        return JSONResponse({"code": "recolor_target_forbidden",
+                             "detail": "перекраска в боевом календаре не включена"},
+                            status_code=409)
     if apply == "all":
         return JSONResponse({"ok": True, "saved": True, "recolored": 3, "total": 4,
                              "failed": [{"plan_id": 414, "gcal_event_id": "ev-4",

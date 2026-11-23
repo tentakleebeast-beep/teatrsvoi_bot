@@ -1,17 +1,21 @@
 """Перекраска событий при сохранении типов (docs/development/190 §6.4–§6.5).
 
-Обоснование: FR-D3, `docs/development/190` §6.5, AC-19, AC-20, AC-21; решение
-владельца V-120 б (22.11.2026): «Перекрасить все» работает и в боевом календаре,
-поэтому отказа `recolor_target_forbidden` больше нет — в целевом режиме цвет
-правится в `calendar.read` (исключение из V-072).
+Обоснование: FR-D3, `docs/development/190` §6.5, AC-19, AC-20, AC-21 (в редакции
+возврата ревью: I-7 и п. 15 тела карты — в целевом режиме `apply: "all"` отказывает
+409 `recolor_target_forbidden` до сохранения). Боевой календарь есть только в
+`READ_SOURCES` реестра `google_targets`; ключа записи для него не существует, и
+перекраска обязана идти ключом `calendar.draft`, а не id из `read_id`.
 
 Проверяется поведение, а не текст: какие события попали в правку, в какой
-календарь ушёл вызов, что осталось при частичном сбое.
+календарь ушёл вызов, что осталось при частичном сбое и что аудит записан в то же
+соединение, в котором работала перекраска.
 """
 
 from __future__ import annotations
 
-from app import event_types, google_targets
+import pytest
+from app import core, event_types, google_targets
+from app.errors import ApiError
 
 from tests.conftest import google_error
 
@@ -85,14 +89,26 @@ class FakeConn:
         return [params[3] for sql, params in self.calls
                 if sql.startswith("insert into audit_event") and len(params) > 3]
 
+    def writes(self) -> list[str]:
+        return [sql for sql, _params in self.calls
+                if sql.lower().startswith(("update ", "insert into calendar_event_type",
+                                           "delete "))]
+
 
 def _ids(service: FakeService) -> list[str]:
     return [event for _calendar, event, _body in service.events().updated]
 
 
-def test_только_новые_не_делают_ни_одного_пишущего_вызова(monkeypatch) -> None:
+@pytest.fixture
+def calendars(monkeypatch) -> tuple[str, str]:
+    """Черновой и боевой id настроены: перекраска проверяет, куда именно пишет."""
+    monkeypatch.setattr(core, "CALENDAR_ID_DRAFT", "draft-cal")
+    monkeypatch.setattr(core, "CALENDAR_ID_READ", "live-cal")
+    return "draft-cal", "live-cal"
+
+
+def test_только_новые_не_делают_ни_одного_пишущего_вызова(calendars) -> None:
     """AC-19: `apply: "new"` сохраняет настройку и не трогает Google."""
-    monkeypatch.setattr(google_targets, "resolve", lambda key: "draft-cal")
     service = FakeService(FakeEvents())
     result = event_types.recolor(FakeConn(), ["show"], apply_mode="new",
                                  actor_id=1, write_service=service)
@@ -100,39 +116,56 @@ def test_только_новые_не_делают_ни_одного_пишущ�
     assert service.events().updated == []
 
 
-def test_перекрашиваются_только_изменённые_типы_в_черновом(monkeypatch) -> None:
+def test_перекрашиваются_только_изменённые_типы_в_черновом(calendars) -> None:
     """AC-19: в переходном режиме правится черновик, чужие типы не трогаются."""
-    seen: list[str] = []
+    service = FakeService(FakeEvents())
+    conn = FakeConn()
+    result = event_types.recolor(conn, ["show"], apply_mode="all",
+                                 actor_id=1, write_service=service)
+    assert result["recolored"] == 1 and result["total"] == 1
+    assert service.events().updated == [("draft-cal", "ev-1", {"colorId": "11"})]
+    # Аудит — в том же соединении, которым работала перекраска (не в новом FakeConn):
+    # иначе проверка утверждала бы «вызовов нет» о постороннем объекте.
+    assert "event_types.recolor" in conn.audits(), conn.calls
+    audit = next(params for sql, params in conn.calls
+                 if sql.startswith("insert into audit_event")
+                 and len(params) > 3 and params[3] == "event_types.recolor")
+    assert '"calendar": "draft"' in str(audit[7]), audit[7]
 
-    def resolve(key):
-        seen.append(key)
-        return "draft-cal"
 
-    monkeypatch.setattr(google_targets, "resolve", resolve)
+def test_боевой_id_не_используется_даже_через_read_id(calendars, monkeypatch) -> None:
+    """Граница записи: перекраска не читает id боевого календаря вовсе.
+
+    Имя `read_id` здесь — не стиль, а проверка: прежняя реализация брала
+    `read_id("calendar.read")` и передавала его в пишущий вызов, обходя реестр.
+    """
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("перекраска обратилась к источнику чтения за адресом записи")
+
+    monkeypatch.setattr(google_targets, "read_id", forbidden)
     service = FakeService(FakeEvents())
     result = event_types.recolor(FakeConn(), ["show"], apply_mode="all",
                                  actor_id=1, write_service=service)
-    assert seen == ["calendar.draft"]
-    assert result["recolored"] == 1 and result["total"] == 1
-    assert service.events().updated == [("draft-cal", "ev-1", {"colorId": "11"})]
-    assert "event_types.recolor" in FakeConn().audits() or result["recolored"] == 1
+    assert result["recolored"] == 1
+    assert [calendar for calendar, _e, _b in service.events().updated] == ["draft-cal"]
 
 
-def test_в_целевом_режиме_правится_боевой_календарь(monkeypatch) -> None:
-    """AC-21 / V-120 б: в `target` перекраска идёт в боевой и не отказывает."""
-    monkeypatch.setattr(google_targets, "read_id", lambda key: "live-cal")
-    conn = FakeConn(mode="target")
+def test_в_целевом_режиме_перекраска_отказывает_до_записи(calendars) -> None:
+    """AC-21 / I-7: в `target` `apply: "all"` — 409, ноль пишущих вызовов Google."""
     service = FakeService(FakeEvents())
-    result = event_types.recolor(conn, ["show", "rehearsal"], apply_mode="all",
-                                 actor_id=1, write_service=service)
-    assert result["recolored"] == 2
-    assert {calendar for calendar, _event, _body in service.events().updated} == {"live-cal"}
-    assert {body["colorId"] for _c, _e, body in service.events().updated} == {"11", "9"}
+    conn = FakeConn(mode="target")
+    with pytest.raises(ApiError) as caught:
+        event_types.recolor(conn, ["show", "rehearsal"], apply_mode="all",
+                            actor_id=1, write_service=service)
+    assert caught.value.status_code == 409
+    assert caught.value.code == "recolor_target_forbidden"
+    assert service.events().updated == []
+    assert conn.writes() == []
+    assert "event_types.recolor" not in conn.audits()
 
 
-def test_частичный_сбой_виден_числами(monkeypatch) -> None:
+def test_частичный_сбой_виден_числами(calendars) -> None:
     """AC-20: один отказ Google — `recolored < total`, причина в `failed`."""
-    monkeypatch.setattr(google_targets, "resolve", lambda key: "draft-cal")
     service = FakeService(FakeEvents(fail_on="ev-1"))
     result = event_types.recolor(FakeConn(), ["show", "rehearsal"], apply_mode="all",
                                  actor_id=1, write_service=service)
@@ -141,9 +174,8 @@ def test_частичный_сбой_виден_числами(monkeypatch) -> N
     assert result["failed"] and result["failed"][0]["gcal_event_id"] == "ev-1"
 
 
-def test_повторный_прогон_не_создаёт_дублей(monkeypatch) -> None:
+def test_повторный_прогон_не_создаёт_дублей(calendars) -> None:
     """Повтор той же настройки: тот же набор событий и тот же цвет, ничего лишнего."""
-    monkeypatch.setattr(google_targets, "resolve", lambda key: "draft-cal")
     service = FakeService(FakeEvents())
     first = event_types.recolor(FakeConn(), ["show"], apply_mode="all",
                                actor_id=1, write_service=service)
@@ -153,9 +185,17 @@ def test_повторный_прогон_не_создаёт_дублей(monkey
     assert _ids(service) == ["ev-1", "ev-1"]
 
 
-def test_пустой_список_изменённых_не_ходит_в_google() -> None:
+def test_пустой_список_изменённых_не_ходит_в_google(calendars) -> None:
     """Если цвет не меняли, перекраски нет даже при `apply: "all"`."""
     service = FakeService(FakeEvents())
     result = event_types.recolor(FakeConn(), [], apply_mode="all",
                                  actor_id=1, write_service=service)
     assert result["total"] == 0 and service.events().updated == []
+
+
+def test_боевой_календарь_не_адресуется_ключом_записи(calendars) -> None:
+    """`calendar.read` — источник чтения: `resolve` отказывает 403 (реестр цел)."""
+    with pytest.raises(ApiError) as caught:
+        google_targets.resolve("calendar.read")
+    assert caught.value.status_code == 403
+    assert caught.value.code == "write_target_refused"

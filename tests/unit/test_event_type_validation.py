@@ -9,6 +9,8 @@ from __future__ import annotations
 
 import pytest
 from app import event_types
+from app.api import webapp_events
+from app.errors import ApiError
 
 SEED = (
     {"code": "rental", "letter": "А", "title": "Аренда", "color_id": 10,
@@ -103,3 +105,60 @@ def test_ошибка_ничего_не_сохраняет() -> None:
     problems = event_types.validate(conn, bad, apply_mode="all")
     assert problems and problems[0]["code"] == "letter_immutable"
     assert conn.writes() == [], "проверка успела записать в базу"
+
+
+class FakePool:
+    """Пул без БД: `with pool.connection() as conn` отдаёт тот же FakeConn."""
+
+    def __init__(self, conn) -> None:
+        self.conn = conn
+
+    def connection(self):
+        conn = self.conn
+
+        class _Ctx:
+            def __enter__(self_inner):
+                return conn
+
+            def __exit__(self_inner, *_exc):
+                return False
+
+        return _Ctx()
+
+
+def _endpoint(monkeypatch, conn) -> None:
+    """Обработчик напрямую: право и режим подменены, соединение — FakeConn."""
+    monkeypatch.setattr(webapp_events.core, "pool", FakePool(conn))
+    monkeypatch.setattr(webapp_events.core, "_webapp_require",
+                        lambda *_a, **_k: {"id": 7})
+    monkeypatch.setattr(webapp_events.google_targets, "google_mode",
+                        lambda _conn=None: "target")
+
+
+def test_в_целевом_режиме_перекраска_отказывает_до_записи(monkeypatch) -> None:
+    """AC-15 / I-7: `apply: "all"` в `target` — 409 раньше сохранения.
+
+    Проверяется то, что обещано: строки настройки не изменились (ни одного
+    `update`/`insert`), а не просто код ответа.
+    """
+    conn = FakeConn()
+    _endpoint(monkeypatch, conn)
+    body = webapp_events.TypesIn.model_validate(
+        {"apply": "all", "types": [dict(SEED[0])]})
+    with pytest.raises(ApiError) as caught:
+        webapp_events.webapp_event_types_save(body, who={})
+    assert caught.value.status_code == 409
+    assert caught.value.code == "recolor_target_forbidden"
+    assert conn.writes() == [], "отказ в целевом режиме успел сохранить настройку"
+
+
+def test_в_целевом_режиме_только_новые_проходят(monkeypatch) -> None:
+    """AC-21: `apply: "new"` в `target` разрешён — настройка сохраняется."""
+    conn = FakeConn()
+    _endpoint(monkeypatch, conn)
+    body = webapp_events.TypesIn.model_validate(
+        {"apply": "new", "types": [dict(SEED[0])]})
+    result = webapp_events.webapp_event_types_save(body, who={})
+    assert result["saved"] is True
+    assert conn.writes(), "настройка не записалась"
+

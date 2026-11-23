@@ -10,9 +10,12 @@
 2. **Обход AST по `services/`** — в коде нет пишущего вызова (`insert/update/delete/
    patch/move/append/batchUpdate/clear`) с идентификатором боевого календаря или живого
    листа: `calendarId`/`spreadsheetId` обязан быть выражением из
-   `google_targets.resolve(...)` (или сессией, открытой им). Самопроверка: синтетический
-   модуль с `calendarId=CALENDAR_ID_READ` обязан ронять проверку — иначе проверка
-   проверяет саму себя, а не код.
+   `google_targets.resolve(...)` с ключом `WRITE_TARGETS`. Имя переменной проверяется
+   по происхождению: адрес, присвоенный из `read_id(...)` (или из `resolve(...)` с
+   ключом чтения), запрещён, даже если в соседней ветке той же функции то же имя
+   присвоено законно. Самопроверка: синтетический модуль с `calendarId=CALENDAR_ID_READ`
+   или `calendarId=calendar_id`, где `calendar_id = read_id("calendar.read")`, обязан
+   ронять проверку — иначе проверка проверяет саму себя, а не код.
 """
 
 from __future__ import annotations
@@ -53,22 +56,46 @@ def _write_calls(tree: ast.AST):
         yield node
 
 
-def _resolved_names(function: ast.AST) -> set[str]:
-    """Имена внутри функции, которым присвоен результат `resolve(...)`/`_object_id(...)`.
+def _call_key(call: ast.Call) -> str | None:
+    """Литеральный ключ реестра в первом аргументе `resolve(...)`, если он есть."""
+    if call.args and isinstance(call.args[0], ast.Constant) \
+            and isinstance(call.args[0].value, str):
+        return call.args[0].value
+    return None
+
+
+def _registry_key_ok(call: ast.Call) -> bool:
+    """Ключ записи законен: литерал из `WRITE_TARGETS` или переменная (её сверяет реестр).
+
+    Литерал вне `WRITE_TARGETS` (`resolve("calendar.read")`) — уже обход: ключа
+    чтения в наборе записи нет, и `resolve` на нём откажет в рантайме.
+    """
+    key = _call_key(call)
+    return key is None or key in google_targets.WRITE_TARGETS
+
+
+def _name_origins(function: ast.AST) -> tuple[set[str], set[str]]:
+    """Имена в функции: (адреса из реестра записи, запрещённые адреса чтения).
 
     Именно так адрес объекта записи попадает в вызов: `calendar_id =
     google_targets.resolve("calendar.draft")`, затем `insert(calendarId=calendar_id)`.
+    Имя, присвоенное из `read_id(...)` или из `resolve(...)` с ключом чтения,
+    попадает во второй набор — раньше такое имя проходило проверку «случайно»,
+    потому что соседняя ветка той же функции присваивала его из `resolve`.
     """
-    names: set[str] = set()
+    allowed: set[str] = set()
+    forbidden: set[str] = set()
     for node in ast.walk(function):
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Call):
-            func = node.value.func
-            called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-            if called in {"resolve", "_object_id", "_target_id"}:
-                for target in node.targets:
-                    if isinstance(target, ast.Name):
-                        names.add(target.id)
-    return names
+        if not (isinstance(node, ast.Assign) and isinstance(node.value, ast.Call)):
+            continue
+        func = node.value.func
+        called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        names = {target.id for target in node.targets if isinstance(target, ast.Name)}
+        if called == "resolve" and _registry_key_ok(node.value):
+            allowed.update(names)
+        elif called in {"resolve", "read_id", "_object_id", "_target_id"}:
+            forbidden.update(names)
+    return allowed - forbidden, forbidden
 
 
 def _is_allowed(node: ast.AST, function: ast.AST) -> bool:
@@ -76,9 +103,10 @@ def _is_allowed(node: ast.AST, function: ast.AST) -> bool:
     if isinstance(node, ast.Call):
         func = node.func
         called = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
-        return called in {"resolve", "_object_id"}
+        return called in {"resolve", "_object_id"} and _registry_key_ok(node)
     if isinstance(node, ast.Name):
-        return node.id in _resolved_names(function)
+        allowed, forbidden = _name_origins(function)
+        return node.id in allowed and node.id not in forbidden
     if isinstance(node, ast.Attribute):
         # `session.spreadsheet_id` — сессия открыта протоколом привязки, адрес уже сверен
         return True
@@ -148,6 +176,37 @@ def test_самопроверка_пропускает_адрес_из_реес�
               '    calendar_id = google_targets.resolve("calendar.draft")\n'
               '    core._calendar_write().events().delete(calendarId=calendar_id, eventId="x")\n')
     assert find_violations(source, "synthetic.py") == []
+
+
+def test_самопроверка_ловит_адрес_чтения_в_соседней_ветке():
+    """Тот самый обход: имя присвоено из `read_id`, а в другой ветке — из `resolve`.
+
+    Проверка обязана смотреть на происхождение имени, а не на факт «где-то в этой
+    функции есть `resolve`» — иначе исключение из V-072 живёт в коде и невидимо
+    сторожу, который ровно его и должен показывать.
+    """
+    source = (
+        "def bad(target):\n"
+        "    if target:\n"
+        "        calendar_id = google_targets.read_id('calendar.read')\n"
+        "    else:\n"
+        "        calendar_id = google_targets.resolve('calendar.draft')\n"
+        "    core._calendar_write().events().update(\n"
+        "        calendarId=calendar_id, eventId='x', body={})\n"
+    )
+    problems = find_violations(source, "synthetic.py")
+    assert problems, "запись в боевой календарь прошла мимо сторожа"
+    assert "calendar_id" in problems[0]
+
+
+def test_самопроверка_ловит_ключ_чтения_в_resolve():
+    """`resolve("calendar.read")` — обход реестра, даже если имя больше нигде не всплыло."""
+    source = (
+        "def bad():\n"
+        "    core._calendar_write().events().update(\n"
+        "        calendarId=google_targets.resolve('calendar.read'), eventId='x', body={})\n"
+    )
+    assert find_violations(source, "synthetic.py")
 
 
 class FakeConn:
