@@ -1,10 +1,10 @@
 """Перекраска событий при сохранении типов (docs/development/190 §6.4–§6.5).
 
 Обоснование: FR-D3, `docs/development/190` §6.5, AC-19, AC-20, AC-21 (в редакции
-возврата ревью: I-7 и п. 15 тела карты — в целевом режиме `apply: "all"` отказывает
-409 `recolor_target_forbidden` до сохранения). Боевой календарь есть только в
-`READ_SOURCES` реестра `google_targets`; ключа записи для него не существует, и
-перекраска обязана идти ключом `calendar.draft`, а не id из `read_id`.
+решения V-120 б: в целевом режиме «Перекрасить все» правит боевой календарь ключом
+`calendar.live`, в переходном — черновой ключом `calendar.draft`). Ключ записи боевого
+календаря объявлен в реестре `google_targets` и работает только при `google.mode ==
+target`; `read_id` в пишущем вызове не участвует вовсе.
 
 Проверяется поведение, а не текст: какие события попали в правку, в какой
 календарь ушёл вызов, что осталось при частичном сбое и что аудит записан в то же
@@ -150,18 +150,43 @@ def test_боевой_id_не_используется_даже_через_read_
     assert [calendar for calendar, _e, _b in service.events().updated] == ["draft-cal"]
 
 
-def test_в_целевом_режиме_перекраска_отказывает_до_записи(calendars) -> None:
-    """AC-21 / I-7: в `target` `apply: "all"` — 409, ноль пишущих вызовов Google."""
+def test_в_целевом_режиме_перекраска_пишет_в_боевой_календарь(calendars) -> None:
+    """V-120 б / I-7: в `target` перекраска идёт на боевой id через `calendar.live`."""
     service = FakeService(FakeEvents())
     conn = FakeConn(mode="target")
-    with pytest.raises(ApiError) as caught:
-        event_types.recolor(conn, ["show", "rehearsal"], apply_mode="all",
-                            actor_id=1, write_service=service)
-    assert caught.value.status_code == 409
-    assert caught.value.code == "recolor_target_forbidden"
-    assert service.events().updated == []
-    assert conn.writes() == []
-    assert "event_types.recolor" not in conn.audits()
+    result = event_types.recolor(conn, ["show", "rehearsal"], apply_mode="all",
+                                actor_id=1, write_service=service)
+    assert result["recolored"] == 2 and result["total"] == 2
+    assert [calendar for calendar, _e, _b in service.events().updated] == ["live-cal", "live-cal"]
+    audit = next(params for sql, params in conn.calls
+                 if sql.startswith("insert into audit_event")
+                 and len(params) > 3 and params[3] == "event_types.recolor")
+    assert '"calendar": "live"' in str(audit[7]), audit[7]
+
+
+def test_в_переходном_режиме_боевой_id_не_встречается(calendars) -> None:
+    """Переходный режим: ноль обращений к боевому id, весь журнал — черновой."""
+    service = FakeService(FakeEvents())
+    conn = FakeConn(mode="transitional")
+    event_types.recolor(conn, ["show", "rehearsal"], apply_mode="all",
+                        actor_id=1, write_service=service)
+    calendars_used = [calendar for calendar, _e, _b in service.events().updated]
+    assert calendars_used == ["draft-cal", "draft-cal"]
+    assert "live-cal" not in calendars_used
+
+
+def test_в_целевом_режиме_перекраска_не_берёт_id_из_источника_чтения(calendars,
+                                                                   monkeypatch) -> None:
+    """Боевой id приходит ключом реестра `calendar.live`, а не `read_id`."""
+    def forbidden(*_args, **_kwargs):
+        raise AssertionError("перекраска обратилась к источнику чтения за адресом записи")
+
+    monkeypatch.setattr(google_targets, "read_id", forbidden)
+    service = FakeService(FakeEvents())
+    result = event_types.recolor(FakeConn(mode="target"), ["show"], apply_mode="all",
+                                 actor_id=1, write_service=service)
+    assert result["recolored"] == 1
+    assert [calendar for calendar, _e, _b in service.events().updated] == ["live-cal"]
 
 
 def test_частичный_сбой_виден_числами(calendars) -> None:

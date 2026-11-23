@@ -19,10 +19,11 @@
    показе — из самого события; пустой `colorId` не ошибка (I-5).
 4. Валидация списка типов ничего не сохраняет, пока не проверен весь список:
    любая ошибка — ответ с `field`/`code` элемента, база не тронута (§6.3).
-5. Перекраска пишет только в черновой календарь (`calendar.draft`). В целевом
-   режиме `apply: "all"` отказывает 409 `recolor_target_forbidden`: боевой
-   календарь — объект чтения реестра `google_targets`, ключа записи у него нет.
-   Решение владельца V-120 б требует правки реестра отдельной картой (I-7).
+5. Перекраска (`apply: "all"`) пишет в боевой календарь только в целевом режиме:
+   в `target` — ключ `calendar.live` (исключение из V-072, V-120 б), в переходном —
+   `calendar.draft`. Ключ записи боевого календаря работает только в `target`
+   (`write_target_mode_refused` иначе), поэтому обходить реестр через `read_id` не нужно
+   и запрещено (I-7).
 
 Тесты: `tests/unit/test_event_types.py`, `test_event_type_validation.py`,
 `test_event_type_recolor.py`, `test_event_types_no_palette_in_services.py`.
@@ -304,26 +305,22 @@ def recolor(conn, changed: list[str], *, apply_mode: str, actor_id: int | None,
     """Перекрасить события изменённых типов (§6.5).
 
     `apply: "new"` не делает ни одного пишущего вызова. `apply: "all"` правит
-    `colorId` только у событий изменённых типов и только в черновом календаре
-    (`calendar.draft`). В целевом режиме перекраска **отказывает** 409
-    `recolor_target_forbidden`: боевой календарь есть только в `READ_SOURCES`
-    реестра (`google_targets`), и ключа записи для него не существует. Решение
-    владельца V-120 б («перекрасить все» и в боевом) требует правки самого реестра
-    записи — это отдельная карта, а не обход реестра через `read_id`. Людские
-    события без маркера сюда не попадают: список строится по `event_plan`.
+    `colorId` только у событий изменённых типов: в переходном режиме — в черновом
+    календаре (`calendar.draft`), в целевом — в боевом (`calendar.live`, решение
+    владельца V-120 б). Оба адреса берутся из реестра `google_targets`, `read_id` в
+    пишущем вызове не участвует, а ключ `calendar.live` в переходном режиме сам
+    отказывает `write_target_mode_refused`. Людские события без маркера сюда не
+    попадают: список строится по `event_plan`.
     """
     if apply_mode != "all" or not changed:
         return {"recolored": 0, "total": 0, "failed": [], "failed_more": 0}
 
     mode = google_targets.google_mode(conn)
-    if mode == google_targets.MODE_TARGET:
-        raise ApiError(
-            409,
-            "recolor_target_forbidden: перекраска в боевом календаре не включена; "
-            "сохраните настройку с «Только новые»",
-            code="recolor_target_forbidden")
+    key = (google_targets.LIVE_CALENDAR if mode == google_targets.MODE_TARGET
+           else "calendar.draft")
+    calendar_name = "live" if key == google_targets.LIVE_CALENDAR else "draft"
     try:
-        calendar_id = google_targets.resolve("calendar.draft")
+        calendar_id = google_targets.resolve(key, conn=conn)
     except ApiError as exc:
         return {"recolored": 0, "total": 0, "failed": [],
                 "failed_more": 0, "error": exc.code}
@@ -353,6 +350,6 @@ def recolor(conn, changed: list[str], *, apply_mode: str, actor_id: int | None,
     core.audit(conn, "human", actor_id, "event_types.recolor", "calendar_event_type",
                "types", before={"changed": sorted(changed)},
                after={"recolored": recolored, "total": len(rows),
-                      "calendar": "draft", "apply": apply_mode})
+                      "calendar": calendar_name, "apply": apply_mode})
     return {"recolored": recolored, "total": len(rows), "failed": failed,
             "failed_more": failed_more}

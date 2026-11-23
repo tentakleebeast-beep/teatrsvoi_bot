@@ -414,15 +414,9 @@ def webapp_event_types_save(body: TypesIn,
             first = problems[0]
             raise ApiError(first["status"], f"{first['code']}: {first['detail']}",
                            code=first["code"])
-        # Проверка режима — до записи (AC-15, I-7): в целевом режиме боевой календарь
-        # писать нельзя, поэтому отказ обязан оставить настройку нетронутой.
-        if (body.apply == "all"
-                and google_targets.google_mode(conn) == google_targets.MODE_TARGET):
-            raise ApiError(
-                409,
-                "recolor_target_forbidden: перекраска в боевом календаре не включена; "
-                "сохраните настройку с «Только новые»",
-                code="recolor_target_forbidden")
+        # Перекраска разрешена в обоих режимах (V-120 б): календарь выбирает сам
+        # `event_types.recolor` по режиму — боевой (`calendar.live`) в `target`,
+        # черновой (`calendar.draft`) в переходном.
         saved = event_types.save(conn, payload, actor_id=viewer.get("id"),
                                  apply_mode=str(body.apply))
 
