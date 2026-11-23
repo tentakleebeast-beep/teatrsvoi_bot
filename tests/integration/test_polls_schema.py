@@ -25,10 +25,11 @@ TABLES = ("poll", "poll_question", "poll_option", "poll_audience", "poll_person"
 
 
 def test_alembic_дошёл_до_071(test_db: str) -> None:
-    """Голова учёта — текущая миграция: E1-4 добавила 072, E4 — 073 (два расположения файла)."""
+    """Голова учёта — текущая миграция: E1-4 добавила 072, E4 — 073 (два расположения файла),
+    E5 — 074 (типы событий), E6-2 — 075 (проекты), V-132 — 076 (чтение расписания актёру)."""
     with psycopg.connect(test_db, row_factory=dict_row) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()
-    assert head["version_num"] == "075_projects_money"
+    assert head["version_num"] == "076_troupe_schedule_read"
 
 
 def test_восемь_таблиц_на_месте(test_db: str) -> None:

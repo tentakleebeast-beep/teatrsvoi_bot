@@ -80,6 +80,12 @@ def test_назначение_из_формы(client, monkeypatch):
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
         pid = _person(conn, 787003, "Форма Третий")
+        # Создание события — сценарий записи, право `schedule.write` (V-132: актёру
+        # оно не выдаётся). Форма живёт на экране «Окна», который открыт педагогу
+        # и организатору; проверяем сам путь записи, а не роль актёра.
+        conn.execute("insert into participant_role (participant_id, role)"
+                     " values (%s, 'master')", (pid,))
+        conn.commit()
     headers = _token(client, 787003)
 
     preview = client.post("/webapp/preview", headers=headers, json={

@@ -65,6 +65,7 @@ def test_events_без_доступа_к_google(client, auth, monkeypatch):
 
 
 def test_events_без_права_schedule_read_all(client, auth, monkeypatch):
+    """V-132: `schedule.read.all` есть у труппы; снятое лично право снова закрывает календарь."""
     _use_calendar_ids(monkeypatch, "test-calendar-id")
     with psycopg.connect(_test_dsn(), autocommit=True) as conn:
         conn.execute(
@@ -73,6 +74,11 @@ def test_events_без_права_schedule_read_all(client, auth, monkeypatch):
         conn.execute(
             """insert into participant_role (participant_id, role)
                select id, 'troupe' from participant where tg_chat_id = 777002""")
+        conn.execute(
+            """insert into participant_capability_override
+                 (participant_id, capability, allowed, reason)
+               select id, 'schedule.read.all', false, 'проверка отказа'
+                 from participant where tg_chat_id = 777002""")
 
     headers = {"Authorization": "Bearer test-token", "X-Actor-Chat-Id": "777002"}
     r = client.get("/tools/calendar/events?days=7", headers=headers)

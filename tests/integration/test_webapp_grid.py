@@ -128,12 +128,21 @@ def test_fr_h9_сводку_видит_организатор_а_участни�
     что отдавалась раньше (тело ответа не изменилось). Свою отметку участник
     по-прежнему ставит — каноном записи (`/webapp/availability/week`), а не сеткой.
     Разрыв закрыт по строке З7 реестра `docs/architecture/25` §9.4, карта t_52bf3106.
+
+    С V-132 право `schedule.read.all` есть у роли `troupe`, поэтому «участник без
+    права» здесь — тот, кому право снято лично (`participant_capability_override`):
+    проверяется сторож, а не состав роли.
     """
     _api()
     with psycopg.connect(_test_dsn()) as conn:
         org = _person(conn, 781011, "Сводка Орг", role="org")
         _person(conn, 781012, "Сводка Студиец")
         member_id = _person(conn, 781013, "Сводка Участник")
+        conn.execute(
+            "insert into participant_capability_override"
+            " (participant_id, capability, allowed, reason)"
+            " values (%s, 'schedule.read.all', false, 'проверка FR-H9')", (member_id,))
+        conn.commit()
 
     member = _token(client, 781013)
     denied = client.get("/webapp/grid?month=2026-11", headers=member)
@@ -162,12 +171,18 @@ def test_fr_h9_навигация_знает_о_праве_на_сводку(cli
     Строку «Сводка занятости» на `/webapp/week` показывает не страница (она —
     публичная константа), а оболочка по признаку с сервера: участнику без
     `schedule.read.all` — нет, организатору — да. Карта t_70a6d8e5,
-    docs/architecture/25 §9.2.
+    docs/architecture/25 §9.2, V-132 (право есть у труппы, отказ проверяется
+    на снятом лично праве).
     """
     _api()
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 781020, "Навигация Орг", role="org")
-        _person(conn, 781021, "Навигация Участник")
+        member_id = _person(conn, 781021, "Навигация Участник")
+        conn.execute(
+            "insert into participant_capability_override"
+            " (participant_id, capability, allowed, reason)"
+            " values (%s, 'schedule.read.all', false, 'проверка FR-H9')", (member_id,))
+        conn.commit()
 
     org = client.get("/webapp/nav", headers=_token(client, 781020))
     assert org.status_code == 200, org.text

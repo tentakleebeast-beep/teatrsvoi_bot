@@ -100,10 +100,18 @@ def test_организатор_видит_месяц_из_таблицы_и_р�
 
 
 def test_участник_без_права_месяц_не_видит(client, monkeypatch):
-    """Сетка читает всю труппу — значит право `schedule.read.all`, отказ 403."""
+    """Сетка читает всю труппу — значит право `schedule.read.all`, отказ 403.
+
+    С V-132 право есть у роли `troupe`: отказ проверяется на праве, снятом лично.
+    """
     _api()
     with psycopg.connect(_test_dsn()) as conn:
-        _person(conn, 781203, "Месяц Участник", role="troupe")
+        pid = _person(conn, 781203, "Месяц Участник", role="troupe")
+        conn.execute(
+            "insert into participant_capability_override"
+            " (participant_id, capability, allowed, reason)"
+            " values (%s, 'schedule.read.all', false, 'проверка V-132')", (pid,))
+        conn.commit()
     _fake_sheet(monkeypatch, {})
 
     answer = client.get(f"/webapp/month-grid?month={MONTH}", headers=_token(client, 781203))

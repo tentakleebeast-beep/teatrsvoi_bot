@@ -871,12 +871,22 @@ def events_move(body: EventMoveIn,
 
 @router.get("/tools/events/{event_id}")
 def events_card(event_id: int,
-                who: dict = Depends(core.require("schedule.write"))) -> dict:
+                who: dict = Depends(core.require_any("schedule.write", "schedule.read.all"))) -> dict:
     """Карточка события из расписания: то, что человек отменяет или переносит.
 
     Нужна чату (С2, С3): кнопки в карточке несут только id, а показать до записи
     надо текущие название, день и часы. Источник — `event_plan`, а не календарь:
     событие бота живёт в базе, даже когда в календарь его записать не удалось.
+
+    Права два, а не одно (V-132): запись (`schedule.write`) — как раньше, и чтение
+    расписания студии (`schedule.read.all`) — чтобы актёр видел своё участие.
+    Запись карточка не делает; отмена и перенос остаются за `schedule.write`.
+
+    Личных полей в ответе нет и быть не должно: участник — только id и имя.
+    Телефон, взносы, дорога и день рождения живут в карточке человека и в бюджетных
+    ответах, а не в расписании; отдавать их пришлось бы только тому, у кого есть
+    `participants.contact` (`app/privacy.py`). Структуру ответа сторожит
+    `tests/integration/test_troupe_schedule.py`: она сверяет набор ключей, а не их значения.
     """
     with core.pool.connection() as conn:
         plan = conn.execute("""
@@ -997,6 +1007,10 @@ def calendar_events(days: int = Query(default=7, ge=1, le=90), draft: bool = Fal
 @router.post("/webapp/preview")
 def webapp_preview(body: AssignIn, who: dict = Depends(core.webapp_actor)) -> dict:
     """Предпросмотр назначения из Mini App."""
+    # `events_preview` объявлен с `Depends(require("schedule.write"))`, но здесь он
+    # зовётся напрямую: зависимость FastAPI при таком вызове не срабатывает, и без
+    # этой строки предпросмотр открывался бы без права (V-132).
+    core._webapp_require(who, "schedule.write")
     return events_preview(body, who)
 
 
@@ -1004,5 +1018,8 @@ def webapp_preview(body: AssignIn, who: dict = Depends(core.webapp_actor)) -> di
 @router.post("/webapp/assign")
 def webapp_assign(payload: dict, who: dict = Depends(core.webapp_actor)) -> dict:
     """Назначение события из Mini App."""
+    # то же, что у предпросмотра: создание события требует `schedule.write`,
+    # актёру доступно только чтение расписания (решение V-132).
+    core._webapp_require(who, "schedule.write")
     return events_assign(payload, who)
 
