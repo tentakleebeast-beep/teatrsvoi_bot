@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
 
-from .. import core, event_types, google_targets, project_money
+from .. import core, event_notify, event_types, google_targets, project_money
 from ..assign import parse_assignment
 from ..calendar_blocks import (
     PROP_EVENT_ID,
@@ -866,29 +866,9 @@ def events_cancel(body: EventCancelIn,
         # требует, чтобы у отменённого события не было `confirmed` операции.
         project_money.cancel(conn, plan["id"], who)
 
-        recipients = set(plan["participant_ids"] or [])
-        if plan["created_by"]:
-            recipients.add(plan["created_by"])
         title_ru = event_types.titles(conn).get(plan["kind"], "Событие")
-        moment = plan["starts_at"].astimezone(core.TZ)
-        body_text = (f"{title_ru} «{plan['title']}» {moment.strftime('%d.%m.%Y %H:%M')} "
-                     "отменяется.")
-        if body.reason:
-            body_text += f" Причина: {body.reason}"
-        notified = 0
-        for pid in sorted(recipients):
-            inserted = conn.execute("""
-                insert into notification (recipient_id, kind, payload, dedupe_key, scheduled_at)
-                values (%s, 'event_cancelled', %s, %s, now())
-                on conflict (dedupe_key, recipient_id) do nothing
-                returning id""",
-                (pid, json.dumps({"event_id": plan["id"], "title": "Событие отменено",
-                                  "body": body_text, "kind": plan["kind"],
-                                  "date": moment.date().isoformat(),
-                                  "from_hour": moment.hour, "reason": body.reason},
-                                 ensure_ascii=False),
-                 f"event:{plan['id']}:cancelled")).fetchone()
-            notified += 1 if inserted else 0
+        notified = event_notify.notify_cancelled(conn, plan, plan["starts_at"],
+                                                 body.reason, title_ru)
 
         core.audit(conn, "human", who["id"], "event.cancel", "event_plan", str(plan["id"]),
               before=before,
@@ -1068,30 +1048,8 @@ def events_move(body: EventMoveIn,
                              "text": "Новый интервал не покрывает личное время: "
                                      + ", ".join(names) + ". Окна не сдвинуты."})
 
-        recipients = set(plan["participant_ids"] or [])
-        if plan["created_by"]:
-            recipients.add(plan["created_by"])
-        was = old_start.strftime("%d.%m.%Y %H:%M")
-        now_text = start.strftime("%d.%m.%Y %H:%M")
-        body_text = (f"{title_ru} «{plan['title']}» переносится: было {was}, "
-                     f"стало {now_text}.")
-        if body.reason:
-            body_text += f" Причина: {body.reason}"
-        notified = 0
-        for pid in sorted(recipients):
-            inserted = conn.execute("""
-                insert into notification (recipient_id, kind, payload, dedupe_key, scheduled_at)
-                values (%s, 'event_moved', %s, %s, now())
-                on conflict (dedupe_key, recipient_id) do nothing
-                returning id""",
-                (pid, json.dumps({"event_id": plan["id"], "title": "Событие перенесено",
-                                  "body": body_text, "kind": plan["kind"],
-                                  "date": start.date().isoformat(), "from_hour": start.hour,
-                                  "to_hour": to_hour, "was": old_start.isoformat(),
-                                  "now": start.isoformat(), "reason": body.reason},
-                                 ensure_ascii=False),
-                 f"event:{plan['id']}:moved:{start.isoformat()}")).fetchone()
-            notified += 1 if inserted else 0
+        notified = event_notify.notify_moved(conn, plan, old_start, start, to_hour,
+                                             body.reason, title_ru)
 
         core.audit(conn, "human", who["id"], "event.move", "event_plan", str(plan["id"]),
               before={"starts_at": old_start.isoformat(), "ends_at": old_end.isoformat(),

@@ -9,6 +9,7 @@
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime
 
 from app import calendar_sync, core
@@ -19,7 +20,7 @@ END = datetime(2026, 12, 19, 21, 0, tzinfo=UTC)
 
 
 class FakeConn:
-    """Соединение без БД: планы событий, настройки и журнал запросов."""
+    """Соединение без БД: планы событий, настройки, очередь уведомлений и журнал запросов."""
 
     #: Словарь типов из засева 074: сверка берёт из него ожидаемые букву и цвет
     #: (docs/development/190 §7.2), литеральных словарей в коде больше нет.
@@ -45,6 +46,8 @@ class FakeConn:
         self.plans = plans or []
         self.settings = settings or {}
         self.calls: list[tuple[str, tuple]] = []
+        self.notifications: list[dict] = []
+        self._dedupe: set[tuple[str, int]] = set()
         self._sql = ""
 
     def execute(self, sql, params=None):
@@ -60,6 +63,15 @@ class FakeConn:
 
     def fetchone(self):
         low = self._sql.lower()
+        if low.startswith("insert into notification"):
+            recipient, kind, payload, dedupe = self.calls[-1][1]
+            if (dedupe, recipient) in self._dedupe:
+                return None                 # `on conflict (dedupe_key, recipient_id) do nothing`
+            self._dedupe.add((dedupe, recipient))
+            self.notifications.append({"recipient_id": recipient, "kind": kind,
+                                       "payload": json.loads(payload),
+                                       "dedupe_key": dedupe})
+            return {"id": len(self.notifications)}
         if "from app_setting" in low:
             params = self.calls[-1][1]
             key = params[0] if params else None
@@ -117,10 +129,13 @@ class FakeService:
 
 def _plan(plan_id: int, *, kind: str = "show", title: str = "Спектакль",
           start: datetime = START, calendar: str = "draft-cal",
-          gcal: str | None = "draft-1", location: str | None = None) -> dict:
-    return {"id": plan_id, "status": "planned", "gcal_event_id": gcal,
+          gcal: str | None = "draft-1", location: str | None = None,
+          status: str = "planned", participants: list[int] | None = None,
+          created_by: int | None = None, end: datetime = END) -> dict:
+    return {"id": plan_id, "status": status, "gcal_event_id": gcal,
             "gcal_calendar_id": calendar, "title": title, "kind": kind,
-            "starts_at": start, "ends_at": END, "location": location}
+            "starts_at": start, "ends_at": end, "location": location,
+            "participant_ids": participants or [], "created_by": created_by}
 
 
 def _event(plan_id: int | None, *, summary: str, color: str | None = "11",
@@ -237,6 +252,76 @@ def test_изменения_в_google_считаются_по_полям(monkeyp
         "совпавшее событие не должно попадать в «изменено в Google»"
 
 
+def test_отмена_в_google_уведомляет_участников_ровно_один_раз(monkeypatch):
+    """V-133: отменили в Google — участники и создатель узнают, повторная сверка молчит.
+
+    Ключ дедупа — тот же `event:<id>:cancelled`, что пишет `events_cancel`, поэтому отмена
+    через бота и отмена руками в календаре не дают двух уведомлений об одном событии.
+    """
+    conn = FakeConn([_plan(5, participants=[7, 8], created_by=9)])
+    items = [_event(5, summary="[С] Спектакль", status="cancelled")]
+    report = _scan(monkeypatch, conn, items, FakeEvents([]))
+
+    assert report["notified"]["cancelled"] == 3
+    assert [note["recipient_id"] for note in conn.notifications] == [7, 8, 9]
+    assert {note["kind"] for note in conn.notifications} == {"event_cancelled"}
+    assert {note["dedupe_key"] for note in conn.notifications} == {"event:5:cancelled"}
+    assert "отменяется" in conn.notifications[0]["payload"]["body"]
+
+    _scan(monkeypatch, conn, items, FakeEvents([]))
+    assert len(conn.notifications) == 3, "повторная сверка не рассылает отмену заново"
+
+
+def test_событие_уже_отменено_в_базе_не_рассылается(monkeypatch):
+    """V-133 п.5: строка уже `cancelled` — ноль уведомлений и ноль записей."""
+    conn = FakeConn([_plan(6, status="cancelled", participants=[7], created_by=7)])
+    _scan(monkeypatch, conn, [_event(6, summary="[С] Спектакль", status="cancelled")],
+          FakeEvents([]))
+
+    assert conn.notifications == []
+    assert not [sql for sql in conn.writes() if sql.startswith("update event_plan")]
+
+
+def test_перенос_в_google_уведомляет_с_прежним_и_новым_временем(monkeypatch):
+    """V-133: перенос руками — kind `event_moved`, дедуп по новому `start`."""
+    old_start = datetime(2026, 12, 19, 20, 0, tzinfo=UTC)
+    new_start = datetime(2026, 12, 19, 18, 0, tzinfo=UTC)
+    conn = FakeConn([_plan(7, participants=[7], created_by=9, start=old_start)])
+    report = _scan(monkeypatch, conn, [_event(7, summary="[С] Спектакль", start=new_start)],
+                   FakeEvents([]))
+
+    assert report["notified"]["moved"] == 2, "участник и создатель"
+    note = conn.notifications[0]
+    assert {item["kind"] for item in conn.notifications} == {"event_moved"}
+    assert {item["dedupe_key"] for item in conn.notifications} == \
+        {"event:7:moved:2026-12-19T18:00:00+00:00"}
+    assert datetime.fromisoformat(note["payload"]["was"]) == old_start
+    assert datetime.fromisoformat(note["payload"]["now"]) == new_start
+    assert "переносится" in note["payload"]["body"]
+
+
+def test_правка_названия_не_уведомляет(monkeypatch):
+    """V-133 п.4: название и место — строка отчёта «Изменено в Google», без рассылки."""
+    conn = FakeConn([_plan(8, title="Спектакль", participants=[7], created_by=7)])
+    report = _scan(monkeypatch, conn,
+                   [_event(8, summary="[С] Другое название")], FakeEvents([]))
+
+    assert conn.notifications == []
+    entry = next(item for item in report["changed_in_google"] if item["plan_id"] == 8)
+    assert entry["title_google"] == "Другое название"
+    assert report["notified"] == {"cancelled": 0, "moved": 0}
+
+
+def test_людское_событие_без_маркера_никого_не_уведомляет(monkeypatch):
+    """V-133 границы: без `svoi_event_id` нет строки в базе, значит нет получателей."""
+    conn = FakeConn()
+    _scan(monkeypatch, conn,
+          [_event(None, summary="Встреча с бухгалтером", status="cancelled")],
+          FakeEvents([]))
+
+    assert conn.notifications == []
+
+
 def test_dry_run_не_делает_ни_одной_записи(monkeypatch):
     """AC-11: «Сверить» с `dry_run` не пишет ни в базу, ни в календарь, ни в аудит."""
     conn = FakeConn([_plan(1)])
@@ -245,6 +330,8 @@ def test_dry_run_не_делает_ни_одной_записи(monkeypatch):
                    dry_run=True)
     assert report["moved_to_live"] and report["dry_run"] is True
     assert draft.deleted == []
+    assert conn.notifications == [], "dry_run не ставит уведомления"
+    assert report["notified"] == {"cancelled": 0, "moved": 0}
     assert conn.writes() == [], f"dry_run писал в базу: {conn.writes()}"
 
 
