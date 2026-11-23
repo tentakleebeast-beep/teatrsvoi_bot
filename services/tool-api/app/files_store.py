@@ -20,7 +20,7 @@ import re
 import tempfile
 import uuid
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, NoReturn
 from urllib.parse import quote
 
 from . import audio, extract
@@ -1202,6 +1202,75 @@ def parse_drive_url(raw: str) -> dict:
     return {"file_id": file_id, "drive_url": canonical, "is_folder": is_folder}
 
 
+_DRIVE_KNOWN_SELECT = (
+    "select f.id, f.name, f.participant_id, f.deleted_at,"
+    "       exists (select 1 from file_folder ff join folder fo on fo.id = ff.folder_id"
+    "                where ff.file_id = f.id and fo.deleted_at is null"
+    "                  and fo.scope = 'shared') as in_shared"
+    "  from file_object f where f.drive_file_id = %s limit 1"
+)
+
+
+def _drive_row(file_id: int, payload: dict, *, revived: bool) -> dict:
+    """Ответ ручки по строке ссылки; `revived` — служебный флаг для аудита, не для клиента."""
+    folder = payload["folder"]
+    return {"id": file_id, "name": payload["title"], "kind": payload["kind"],
+            "kind_word": kind_word(payload["kind"], payload["title"]),
+            "storage": "drive", "description": payload["note"],
+            "folder": folder["path"] if folder is not None else None,
+            "folder_id": int(folder["id"]) if folder is not None else None,
+            "drive_url": payload["drive_url"], "drive_path": payload["path"],
+            "size_bytes": None, "revived": revived}
+
+
+def _drive_revive(conn, known, payload: dict) -> dict:
+    """Поднять мягко удалённую свою ссылку: `id` тот же, поля — из запроса.
+
+    `deleted_at` в схеме не мешает уникальности `drive_file_id` (`db/init/001`), поэтому
+    повторная регистрация того же адреса упиралась в `UniqueViolation` и 500. Экрана
+    восстановления удалённых файлов нет — отвечать «эта ссылка уже есть» на невидимую
+    строку значит ставить человека в тупик, поэтому строка возвращается в жизнь.
+    """
+    row_id = int(known["id"])
+    conn.execute(
+        "update file_object set deleted_at = null, name = %s, description = %s, kind = %s,"
+        " scope = %s, drive_url = %s, drive_path = %s where id = %s",
+        (payload["title"], payload["note"], payload["kind"], payload["scope"],
+         payload["drive_url"], payload["path"], row_id))
+    folder = payload["folder"]
+    if folder is not None:
+        conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
+                     " on conflict do nothing", (row_id, int(folder["id"])))
+    return _drive_row(row_id, payload, revived=True)
+
+
+def _drive_known(conn, file_id: str):
+    """Строка с этим `drive_file_id` — живая или мягко удалённая (`deleted_at` в выборке)."""
+    return conn.execute(_DRIVE_KNOWN_SELECT, (file_id,)).fetchone()
+
+
+def _reject_live_drive(known, owner: int) -> NoReturn:
+    """Живая строка занята: своя или из общей папки — 409 с именем, чужая закрытая — без."""
+    if int(known["participant_id"] or 0) == owner or known["in_shared"]:
+        raise FileRejected("link_exists", f"Эта ссылка уже есть: «{known['name']}».", 409)
+    raise FileRejected("link_exists_other", "Эта ссылка уже добавлена в студию.", 409)
+
+
+def _drive_conflict(conn, known, owner: int, payload: dict) -> dict:
+    """Разобрать занятый `drive_file_id`: живая — отказ, удалённая своя — воскрешение.
+
+    Удалённая чужая — 409 `link_exists_other` **без имени**: иначе `FR-K8` нарушается
+    перебором адресов (человек узнаёт, что чужая закрытая ссылка существует и как зовётся).
+    """
+    if known is not None and known["deleted_at"] is not None:
+        if int(known["participant_id"] or 0) == owner:
+            return _drive_revive(conn, known, payload)
+        raise FileRejected("link_exists_other", "Эта ссылка уже добавлена в студию.", 409)
+    if known is None:
+        raise FileRejected("link_exists", "Эту ссылку добавили только что — откройте список.", 409)
+    return _reject_live_drive(known, owner)               # всегда поднимает отказ
+
+
 def link_drive(conn, who: dict, url: str, *, name: str | None = None,
                description: str | None = None, folder_id: int | None = None,
                drive_path: str | None = None) -> dict:
@@ -1210,26 +1279,23 @@ def link_drive(conn, who: dict, url: str, *, name: str | None = None,
     Байтов у нас нет: строку пишем прямой вставкой, `save_committed` не участвует —
     квота, дедупликация по `sha256` и разбор аудио/текста не вызываются.
 
-    Дубль: своя строка или строка из общей папки — 409 `link_exists` с именем; чужая
-    закрытая — 409 `link_exists_other` **без имени**: иначе `FR-K8` нарушается перебором
-    адресов (человек узнаёт, что чужая закрытая ссылка существует, и как она называется).
+    Дубль: своя живая строка или живая из общей папки — 409 `link_exists` с именем; чужая
+    закрытая (живая или удалённая) — 409 `link_exists_other` без имени. Своя **удалённая**
+    строка не отказ, а воскрешение (`deleted_at = null`, `id` прежний, поля из запроса):
+    иначе человек, удаливший ссылку, навсегда получал 500 на тот же адрес.
+
+    Гонка двух регистраций того же адреса закрыта вставкой `on conflict (drive_file_id)
+    do nothing` с перечитыванием строки: проверка и вставка не атомарны, а уникальный
+    индекс переживает мягкое удаление, и без этой формы второй запрос падал бы 500.
     """
     parsed = parse_drive_url(url)
     file_id = parsed["file_id"]
     is_folder = parsed["is_folder"]
-
     owner = int(who.get("id") or 0)
-    known = conn.execute(
-        "select f.id, f.name, f.participant_id,"
-        "       exists (select 1 from file_folder ff join folder fo on fo.id = ff.folder_id"
-        "                where ff.file_id = f.id and fo.deleted_at is null"
-        "                  and fo.scope = 'shared') as in_shared"
-        "  from file_object f where f.drive_file_id = %s and f.deleted_at is null"
-        " limit 1", (file_id,)).fetchone()
-    if known is not None:
-        if int(known["participant_id"] or 0) == owner or known["in_shared"]:
-            raise FileRejected("link_exists", f"Эта ссылка уже есть: «{known['name']}».", 409)
-        raise FileRejected("link_exists_other", "Эта ссылка уже добавлена в студию.", 409)
+
+    known = _drive_known(conn, file_id)
+    if known is not None and known["deleted_at"] is None:
+        _reject_live_drive(known, owner)                 # живая строка — всегда отказ
 
     title = " ".join((name or "").split())[:200]
     if not title:
@@ -1247,21 +1313,27 @@ def link_drive(conn, who: dict, url: str, *, name: str | None = None,
             raise FileRejected("folder_not_found", "Папка не найдена.", 404)
     scope = folder["scope"] if folder is not None else "personal"
 
+    payload = {"title": title, "kind": kind, "note": note, "path": path,
+               "drive_url": parsed["drive_url"], "scope": scope, "folder": folder}
+    if known is not None:
+        return _drive_conflict(conn, known, owner, payload)
+
     row = conn.execute(
         "insert into file_object (participant_id, name, mime, size_bytes, scope, uploaded_via,"
         " drive_file_id, drive_url, drive_path, drive_mime, description, kind, storage)"
         " values (%s,%s,null,null,%s,'human_drive',%s,%s,%s,null,%s,%s,'drive')"
+        " on conflict (drive_file_id) do nothing"
         " returning id", (owner, title, scope, file_id, parsed["drive_url"], path, note, kind)
     ).fetchone()
+    if row is None:
+        # Строку вставил параллельный запрос: читаем её и разбираем как дубль, а не 500.
+        known = _drive_known(conn, file_id)
+        return _drive_conflict(conn, known, owner, payload)
     new_id = int(row["id"])
     if folder is not None:
         conn.execute("insert into file_folder (file_id, folder_id) values (%s,%s)"
                      " on conflict do nothing", (new_id, int(folder["id"])))
-    return {"id": new_id, "name": title, "kind": kind, "kind_word": kind_word(kind, title),
-            "storage": "drive", "description": note,
-            "folder": folder["path"] if folder is not None else None,
-            "folder_id": int(folder["id"]) if folder is not None else None,
-            "drive_url": parsed["drive_url"], "drive_path": path, "size_bytes": None}
+    return _drive_row(new_id, payload, revived=False)
 
 
 def update_meta(conn, who: dict, file_id: int, *, name: str | None = None,
