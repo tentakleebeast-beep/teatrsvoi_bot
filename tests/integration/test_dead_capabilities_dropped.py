@@ -88,4 +88,4 @@ def test_голова_alembic_после_071(test_db: str) -> None:
     """Учёт версий дошёл до 071, а не остановился на предыдущей ревизии."""
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "072_google_event_calendar"
+    assert head == "074_calendar_event_types"

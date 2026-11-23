@@ -837,3 +837,23 @@ html[data-svoi-rights="pending"] [data-svoi-cap] > * { visibility: hidden; }
   stroke-linecap: round; stroke-linejoin: round;
 }
 .ui-sprite { position: absolute; width: 0; height: 0; overflow: hidden; }
+
+/* ---------- цвет типа события (E5, docs/development/190 §6.2, §11) ----------
+   Одиннадцать цветов Google — оформление, а не данные: в коде нет ни названий,
+   ни цветов типов, они приходят из настройки. Плашка `.ev-plashka` показывает
+   тип цветом события; `colorId` без значения остаётся нейтральным. */
+.ev-plashka {
+  border-left: 4px solid var(--ui-line);
+  padding-left: var(--ui-s2);
+}
+.ev-color-1 { border-left-color: #a4bdfc; }   /* Лаванда */
+.ev-color-2 { border-left-color: #7ae7bf; }   /* Шалфей */
+.ev-color-3 { border-left-color: #dbadff; }   /* Виноград */
+.ev-color-4 { border-left-color: #ff887c; }   /* Фламинго */
+.ev-color-5 { border-left-color: #fbd75b; }   /* Банан */
+.ev-color-6 { border-left-color: #ffb878; }   /* Мандарин */
+.ev-color-7 { border-left-color: #46d6db; }   /* Павлин */
+.ev-color-8 { border-left-color: #e1e1e1; }   /* Графит */
+.ev-color-9 { border-left-color: #5484ed; }   /* Голубика */
+.ev-color-10 { border-left-color: #b9e4d0; }  /* Базилик */
+.ev-color-11 { border-left-color: #e67c73; }  /* Помидор */

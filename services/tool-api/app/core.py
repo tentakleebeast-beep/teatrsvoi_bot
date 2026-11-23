@@ -512,9 +512,6 @@ def webapp_actor_optional(authorization: str | None = Header(default=None)) -> d
 
 
 
-KIND_TITLES_RU = {"rehearsal": "Репетиция", "show": "Показ", "training": "Тренинг",
-                  "rental": "Аренда", "meeting": "Встреча"}
-
 WEEKDAY_TITLES = ["понедельник", "вторник", "среда", "четверг", "пятница",
                   "суббота", "воскресенье"]
 
@@ -795,12 +792,6 @@ _prompt_cache: dict[tuple[str, str | None], str] = {}
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip() if path.exists() else ""
-
-
-
-# палитра из config/calendar-palette.yaml: цвет задаётся на событии
-EVENT_COLORS = {"rental": 10, "show": 11, "rehearsal": 9,
-                "training": 5, "meeting": 8, "other": 8}
 
 
 

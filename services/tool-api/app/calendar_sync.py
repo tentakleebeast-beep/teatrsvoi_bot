@@ -28,7 +28,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, date, datetime, timedelta
 
-from app import core, google_targets, sheet_binding
+from app import core, event_types, google_targets, sheet_binding
 from app.calendar_blocks import PROP_EVENT_ID, PROP_KIND
 from app.errors import ApiError
 from app.external import GOOGLE_API_ERRORS
@@ -59,11 +59,9 @@ ITEMS_LIMIT = 50
 CATEGORIES = ("changed_in_google", "moved_to_live", "color_mismatch",
               "label_mismatch", "orphan_marker")
 
-#: Буква типа события в заголовке `[С] Название` → код типа. До таблицы
-#: `calendar_event_type` (её создаёт карта E5) это единственный источник букв.
-#: shortcut: литеральные буквы типов, апгрейд — таблица типов из 190 §7 при переходе E5.
-TYPE_LETTERS = {"rental": "А", "show": "С", "rehearsal": "Р", "training": "Т",
-                "project": "П"}
+#: Буква типа в заголовке `[С] Название` → код типа живёт в таблице
+#: `calendar_event_type` (карта E5, docs/development/190 §7). Здесь остаётся только
+#: разбор метки; литеральных словарей типов в модуле нет (I-1).
 
 #: Разбор метки: `[С] ` в начале заголовка. Метка снимается одна (190 §3.2).
 LABEL_RE = re.compile(r"^\s*\[([А-ЯЁ])\]\s*")
@@ -139,22 +137,18 @@ def event_label(summary: str | None) -> str | None:
     return found.group(1) if found else None
 
 
-def plain_title(summary: str | None) -> str:
-    """Заголовок без метки типа и без старого префикса «Тип - » (190 §3.2)."""
+def plain_title(summary: str | None, titles: dict[str, str] | None = None) -> str:
+    """Заголовок без метки типа и без старого префикса «Тип - » (190 §3.2).
+
+    `titles` — названия типов из настройки: старый формат писал в заголовок слово
+    типа, и его тоже надо снять. Без словаря снимается только метка.
+    """
     text = LABEL_RE.sub("", str(summary or "").strip()).strip()
-    for title in sorted(set(core.KIND_TITLES_RU.values()), key=len, reverse=True):
+    for title in sorted(set((titles or {}).values()), key=len, reverse=True):
         for sep in LEGACY_SEPS:
             if text.startswith(f"{title}{sep}"):
                 return text[len(title) + len(sep):].strip()
     return text
-
-
-def kind_by_letter(letter: str | None) -> str | None:
-    """Код типа по букве метки: обратный словарь `TYPE_LETTERS`."""
-    for code, mark in TYPE_LETTERS.items():
-        if mark == letter:
-            return code
-    return None
 
 
 def _moment(event: dict, edge: str) -> tuple[datetime | None, bool]:
@@ -248,11 +242,11 @@ def _add(report: dict, key: str, item: dict) -> None:
         report[f"{key}_more"] += 1
 
 
-def _changes(event: dict, plan: dict) -> dict:
+def _changes(event: dict, plan: dict, titles: dict[str, str] | None = None) -> dict:
     """Расхождения Google ↔ база по одному событию (строка «Изменено в Google»)."""
     item: dict = {"plan_id": plan.get("id"), "gcal_event_id": event.get("id"),
                   "svoi_event_id": str(plan.get("id"))}
-    title_google = plain_title(event.get("summary"))
+    title_google = plain_title(event.get("summary"), titles)
     title_db = str(plan.get("title") or "").strip()
     if title_google != title_db:
         item["title_google"], item["title_db"] = title_google, title_db
@@ -316,6 +310,11 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
     report["stale"] = False
 
     plans = _live_plans(conn)
+    # Типы и цвета — из настройки (190 §7.4): литеральных словарей в модуле нет.
+    type_by_code = event_types.by_code(conn)
+    type_titles = {code: item["title"] for code, item in type_by_code.items()}
+    letter_to_code = {item["letter"]: code for code, item in type_by_code.items()
+                      if item["letter"]}
     last_edit: datetime | None = None
 
     for event in live:
@@ -355,18 +354,19 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
                            after={"status": "cancelled", "gcal_event_id": event.get("id")})
             continue
 
-        event_kind = kind or kind_by_letter(letter) or str(plan.get("kind") or "")
+        event_kind = kind or letter_to_code.get(letter or "") or str(plan.get("kind") or "")
         if not event_kind and not letter:
             report["untyped"]["total"] += 1
 
-        expected_letter = TYPE_LETTERS.get(event_kind)
+        configured = type_by_code.get(event_kind) or {}
+        expected_letter = configured.get("letter")
         if event_kind and expected_letter and letter != expected_letter:
             _add(report, "label_mismatch", {
                 "plan_id": plan_id, "gcal_event_id": event.get("id"),
                 "svoi_event_id": str(plan_id), "title_google": summary,
                 "letter": letter, "expected_letter": expected_letter, "kind": event_kind})
 
-        expected_color = core.EVENT_COLORS.get(event_kind)
+        expected_color = configured.get("color_id")
         color_id = event.get("colorId")
         if event_kind and expected_color is not None and str(color_id or "") != str(expected_color):
             _add(report, "color_mismatch", {
@@ -374,7 +374,7 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
                 "svoi_event_id": str(plan_id), "kind": event_kind,
                 "color_id": color_id, "expected_color_id": expected_color})
 
-        changes = _changes(event, plan)
+        changes = _changes(event, plan, type_titles)
         if changes:
             _add(report, "changed_in_google", changes)
 

@@ -322,6 +322,28 @@ entries:
     title: Приглашения
     not_for_agent: "выпуск инвайт-кодов: агент не выдаёт доступ"
 
+  # E5: экраны календаря (docs/development/190 §3, §5, §6).
+  - id: screen.event_card
+    kind: screen
+    surface: webapp
+    source: /webapp/event
+    title: Карточка события
+    not_for_agent: "карточка читает календарь и создателя события; перенос при подтверждении — кнопка человека"
+
+  - id: screen.events_reconcile
+    kind: screen
+    surface: webapp
+    source: /webapp/events/reconcile
+    title: Сверка календаря
+    not_for_agent: "сверка только читает календарь; расхождения разбирает организатор"
+
+  - id: screen.event_types
+    kind: screen
+    surface: webapp
+    source: /webapp/admin/t/event-types
+    title: Типы и цвета событий
+    not_for_agent: "настройка типов, цветов и перекраска событий — решение организатора, у агента нет пишущего инструмента"
+
   - id: screen.admin_feedback
     kind: screen
     surface: webapp

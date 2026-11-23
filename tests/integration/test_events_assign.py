@@ -241,8 +241,8 @@ def test_назначение_пишет_машинные_свойства(clien
                          {"id": luda, "name": "Показ Людмила"}]}}).json()
 
     assert body["ok"] is True
-    assert fake.sent["summary"] == "Показ - Жизнь насекомых"
-    assert fake.sent["colorId"] == "11", "показ — красный по палитре"
+    assert fake.sent["summary"] == "[С] Жизнь насекомых", "метка типа вместо слова в заголовке"
+    assert fake.sent["colorId"] == "11", "спектакль — красный по настройке"
     private = fake.sent["extendedProperties"]["private"]
     assert private["svoi_kind"] == "show"
     assert private["svoi_participant_ids"] == f"{vitya},{luda}"

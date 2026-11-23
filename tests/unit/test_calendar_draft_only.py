@@ -28,6 +28,10 @@ class FakeConn:
         return self
 
     def fetchall(self):
+        # Словарь типов (E5, 190 §7) стенду не нужен: у событий здесь нет проверки
+        # буквы и цвета, поэтому запрос к `calendar_event_type` отвечает пусто.
+        if any("from calendar_event_type" in sql for sql, _ in self.calls[-1:]):
+            return []
         return self.plans
 
     def fetchone(self):

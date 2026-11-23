@@ -27,7 +27,7 @@ TABLES = ("poll", "poll_question", "poll_option", "poll_audience", "poll_person"
 def test_alembic_дошёл_до_071(test_db: str) -> None:
     with psycopg.connect(test_db, row_factory=dict_row) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()
-    assert head["version_num"] == "072_google_event_calendar"
+    assert head["version_num"] == "074_calendar_event_types"
 
 
 def test_восемь_таблиц_на_месте(test_db: str) -> None:
