@@ -212,6 +212,39 @@ def test_v132_mini_app_не_создаёт_событие_актёру(client) -
     assert assigned.status_code == 403, assigned.text
 
 
+def test_v132_чужая_неделя_без_заметок(client) -> None:
+    """Чужая неделя — расписание, но свободный комментарий к дню — личное (V-132).
+
+    Часы, статус и текст карточки видны всем действующим ролям; комментарий
+    («не будет в Самаре») — только тому, у кого есть `participants.contact`,
+    как и полный телефон.
+    """
+    monday = dt.date.today() - dt.timedelta(days=dt.date.today().weekday())
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 778407, "Актёр Своя Неделя")
+        other = _person(conn, 778408, "Актёр Своя Заметка")
+        _person(conn, 778409, "Орг Неделя", role="org")
+
+    filled = client.post("/tools/availability/week", headers=_headers(778408), json={
+        "start": monday.isoformat(),
+        "days": [{"day": (monday + dt.timedelta(days=4)).isoformat(),
+                  "status": "busy", "note": "не будет в Самаре"}]})
+    assert filled.status_code == 200, filled.text
+
+    actor = client.get(f"/tools/availability/week?participant_id={other}"
+                       f"&start={monday.isoformat()}", headers=_headers(778407))
+    assert actor.status_code == 200, actor.text
+    days = {day["day"]: day for day in actor.json()["days"]}
+    friday = days[(monday + dt.timedelta(days=4)).isoformat()]
+    assert friday["status"] == "busy", "расписание чужой недели пропало"
+    assert friday["note"] == "", "актёру отдали чужую заметку к дню"
+
+    org = client.get(f"/tools/availability/week?participant_id={other}"
+                     f"&start={monday.isoformat()}", headers=_headers(778409))
+    org_days = {day["day"]: day for day in org.json()["days"]}
+    assert org_days[(monday + dt.timedelta(days=4)).isoformat()]["note"] == "не будет в Самаре"
+
+
 def test_v132_без_права_чтения_расписание_закрыто(client) -> None:
     """Право чтения отключается лично: отказ 403, а не «показали всё равно»."""
     with psycopg.connect(_test_dsn(), autocommit=True) as conn:

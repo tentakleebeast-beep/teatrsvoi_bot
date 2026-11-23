@@ -756,7 +756,18 @@ def availability_week(start: str | None = None, participant_id: int | None = Non
             raise HTTPException(status.HTTP_403_FORBIDDEN,
                                 "capability required: schedule.read.all")
 
-    return _week_payload(target, _week_start(start))
+    payload = _week_payload(target, _week_start(start))
+    if target != who["id"]:
+        # Чужая неделя — расписание, но не чужие заметки (решение V-132: «события,
+        # время, место и тип видны всем; телефоны, взносы, заметки — нет»). Свободный
+        # комментарий к дню («не будет в Самаре») отдаём только тому, у кого есть
+        # `participants.contact`, — тому же, кто видит полный телефон. Сами часы,
+        # статус и текст карточки остаются: это и есть расписание студии.
+        caps = who.get("caps") or []
+        if "*" not in caps and "participants.contact" not in caps:
+            for day in payload.get("days") or []:
+                day["note"] = ""
+    return payload
 
 
 
