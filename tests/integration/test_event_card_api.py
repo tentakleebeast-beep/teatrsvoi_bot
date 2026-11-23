@@ -200,14 +200,24 @@ def test_нет_события_в_календаре(client, monkeypatch) -> Non
 
 
 def test_без_права_отказ_словами(client, monkeypatch) -> None:
-    """§3.1: право `schedule.read.all`; отказ — 403 со словами, а не молчание."""
+    """§3.1: право `schedule.read.all`; отказ — 403 со словами, а не молчание.
+
+    С V-132 право есть у роли `troupe` (актёр видит расписание студии), поэтому
+    отказ проверяется на праве, снятом лично.
+    """
     _patch_google(monkeypatch, item=HUMAN_EVENT)
     _person(777002, "Актёр Тестов", "troupe")
+    with psycopg.connect(_test_dsn(), autocommit=True) as conn:
+        conn.execute(
+            "insert into participant_capability_override"
+            " (participant_id, capability, allowed, reason)"
+            " select id, 'schedule.read.all', false, 'проверка V-132'"
+            "   from participant where tg_chat_id = 777002")
     headers = token(client, 777002)
     answer = client.get("/webapp/events/card?calendar=read&event_id=human-1",
                         headers=headers)
     assert answer.status_code == 403
-    assert "организатор" in answer.json()["detail"]
+    assert "расписание" in answer.json()["detail"]
 
 
 def test_параметры_карточки_проверяются(client, monkeypatch) -> None:

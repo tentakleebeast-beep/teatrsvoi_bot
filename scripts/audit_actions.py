@@ -194,9 +194,14 @@ def _route_contexts(routes: list[Any]):
 
 
 def _closure_capabilities(call: Any) -> tuple[str, ...]:
-    """Возможность, зашитая в замыкание `core.require("budget.write")`."""
+    """Возможности, зашитые в замыкание зависимости.
+
+    `core.require("budget.write")` замыкает одну строку. `core.require_any("a", "b")`
+    замыкает кортеж строк — он тоже раскрывается: иначе отчёт 117 показывал бы
+    защищённый маршрут как «без права», и матрица действий разошлась бы с кодом.
+    """
     cells = getattr(call, "__closure__", None) or ()
-    values = []
+    values: list[str] = []
     for cell in cells:
         try:
             value = cell.cell_contents
@@ -204,6 +209,8 @@ def _closure_capabilities(call: Any) -> tuple[str, ...]:
             continue
         if isinstance(value, str):
             values.append(value)
+        elif isinstance(value, (tuple, list)) and all(isinstance(v, str) for v in value):
+            values.extend(value)
     return tuple(values)
 
 

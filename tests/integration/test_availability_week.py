@@ -112,15 +112,34 @@ def test_fr_c9_кривой_ввод_отвергается(client):
 
 
 def test_fr_c9_чужую_неделю_видит_только_с_правом_чтения(client):
+    """FR-C9, V-132: чужую неделю читает `schedule.read.all` — у труппы оно есть.
+
+    Решение владельца V-132: расписание студии видят все действующие роли. Право
+    снимается лично (`participant_capability_override`) — тогда снова 403.
+    """
     monday = _monday()
-    with psycopg.connect(_test_dsn()) as conn:
+    with psycopg.connect(_test_dsn(), autocommit=True) as conn:
         _person(conn, 792003, "Карточка Своя")
         other = _person(conn, 792004, "Карточка Чужая")
+        viewer = conn.execute("select id from participant where tg_chat_id = 792003").fetchone()[0]
+        conn.execute(
+            "insert into participant_capability_override"
+            " (participant_id, capability, allowed, reason)"
+            " values (%s, 'schedule.read.all', false, 'проверка FR-C9')", (viewer,))
 
     r = client.get(f"/tools/availability/week?participant_id={other}&start={monday.isoformat()}",
                    headers={**HEADERS, "X-Actor-Chat-Id": "792003"})
     assert r.status_code == 403
     assert "schedule.read.all" in r.json()["detail"]
+
+    with psycopg.connect(_test_dsn(), autocommit=True) as conn:
+        conn.execute("delete from participant_capability_override"
+                     " where participant_id = %s", (viewer,))
+    allowed = client.get(
+        f"/tools/availability/week?participant_id={other}&start={monday.isoformat()}",
+        headers={**HEADERS, "X-Actor-Chat-Id": "792003"})
+    assert allowed.status_code == 200, allowed.text
+    assert allowed.json()["participant_id"] == other
 
 
 def test_fr_c9_импорт_из_листа_сохраняет_минуты(client):

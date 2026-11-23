@@ -228,12 +228,18 @@ def test_завтра_список_событий_и_ссылка_на_свод�
 def test_пустой_завтра_и_ссылка_без_права_сводки(client, monkeypatch):
     """V-131: пустой день — пустой список, а не отсутствие блока; без права — /week.
 
-    Студиец без `schedule.read.all` получает свой экран недели: ссылка на сводку
-    вела бы его на 403 (FR-H9, docs/development/92 §7).
+    Человек без `schedule.read.all` получает свой экран недели: ссылка на сводку
+    вела бы его на 403 (FR-H9, docs/development/92 §7). С V-132 право есть у роли
+    `troupe`, поэтому отказ проверяется на праве, снятом лично.
     """
     _api()
     with psycopg.connect(_test_dsn(), row_factory=psycopg.rows.dict_row) as conn:
-        _person(conn, 770501, "Тест Завтра", "troupe")
+        pid = _person(conn, 770501, "Тест Завтра", "troupe")
+        conn.execute(
+            "insert into participant_capability_override"
+            " (participant_id, capability, allowed, reason)"
+            " values (%s, 'schedule.read.all', false, 'проверка V-131')", (pid,))
+        conn.commit()
     _calendar(monkeypatch, [])
 
     body = client.get("/webapp/home/data", headers=_token(client, 770501)).json()
@@ -256,6 +262,8 @@ def test_календарь_не_прочитан_главная_живёт(clie
     body = response.json()
     assert body["tomorrow"] is None, "непрочитанный календарь выдал себя за пустой день"
     assert body["today"] == {}
-    assert body["calendar_url"] == "/webapp/week"
+    # с V-132 у труппы есть `schedule.read.all`, значит ссылка ведёт на сводку,
+    # а не на свой экран недели: право решает сервер, а не адрес в разметке
+    assert body["calendar_url"] == "/webapp/week/summary"
     assert body["week"]["days"] == 7
 
