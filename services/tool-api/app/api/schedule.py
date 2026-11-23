@@ -1224,6 +1224,8 @@ def _sheet_sync(target: int, start: str | None, apply: bool, force: bool,
         cells = [(cell.a1, cell.text) for cell in plan.cells]
         try:
             sheet_binding.write_cells(session, cells)
+            for a1, text in cells:
+                sheet_binding.note_header_cell(session, a1, text)
             header_cell = cell_a1(plan.names_row, plan.service_column)
             if plan.service_column and any(cell.a1 == header_cell for cell in plan.cells):
                 sheet_binding.hide_column(session, plan.service_column)

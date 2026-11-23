@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from datetime import UTC, date, datetime, timedelta
 
-from app import core, google_targets
+from app import core, google_targets, sheet_binding
 from app.calendar_blocks import PROP_EVENT_ID
 from app.errors import ApiError
 from app.external import GOOGLE_API_ERRORS
@@ -203,13 +203,11 @@ def freshness(conn) -> list[dict]:
             entry["stale"] = (as_of is None
                               or now - as_of > timedelta(minutes=STALE_AFTER_MINUTES))
         else:
-            row = conn.execute("select last_read_at, last_edit_time from sheet_binding "
-                               "where key = %s", (key,)).fetchone()
-            if row is None:
+            binding = sheet_binding.load_binding(conn, key)
+            if binding is None:
                 entry["error"] = "binding_missing"
             else:
-                last_read = row["last_read_at"] if isinstance(row, dict) else row[0]
-                last_edit = row["last_edit_time"] if isinstance(row, dict) else row[1]
+                last_read, last_edit = binding.last_read_at, binding.last_edit_time
                 entry["as_of"] = last_read.isoformat() if last_read else None
                 entry["last_edit_time"] = last_edit.isoformat() if last_edit else None
                 entry["stale"] = (last_read is None

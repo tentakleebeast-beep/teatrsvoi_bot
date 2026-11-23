@@ -1,7 +1,11 @@
 """FR-D18: отмена события — организатор своё, администратор любое (решение 27.10).
 
-Проверяется: снятие из календаря, 'event_plan.status', уведомления участникам и
-организатору, аудит, идемпотентность и права.
+Проверяется: снятие из **чернового** календаря, 'event_plan.status', уведомления
+участникам и организатору, аудит, идемпотентность и права.
+
+Боевой календарь вне записи (docs/development/186 §5.2): событие, которого нет в
+черновом, бот не удаляет ни при каком статусе — отмена идёт только в БД, а ответ
+несёт `calendar_error: "not_bot_event"` и `calendar_updated: false`.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -9,24 +13,41 @@ from datetime import datetime, timedelta, timezone
 import psycopg
 from psycopg.rows import dict_row
 
-from tests.conftest import TOKEN, _test_dsn
+from tests.conftest import TOKEN, _test_dsn, google_error
 
 TZ = timezone(timedelta(hours=4))
 
 
 class FakeEvents:
-    def __init__(self, fail: bool = False):
+    """Журнал обращений к календарю: видно и чтение черновика, и запись.
+
+    `missing` — события нет в черновом (404 от Google), `fail` — отказ на записи.
+    Разделение нужно, чтобы «нечего удалять» не путалось с «Google не ответил».
+    """
+
+    def __init__(self, fail: bool = False, missing: bool = False):
         self.fail = fail
-        self.deleted = []
+        self.missing = missing
+        self.calls: list[tuple[str, str, str]] = []
+        self.deleted: list[tuple[str, str]] = []
+        self._pending = ""
+
+    def get(self, calendarId, eventId):
+        self.calls.append(("get", calendarId, eventId))
+        self._pending = "get"
+        return self
 
     def delete(self, calendarId, eventId):
+        self.calls.append(("delete", calendarId, eventId))
         self.deleted.append((calendarId, eventId))
+        self._pending = "delete"
         return self
 
     def execute(self):
-        if self.fail:
-            from tests.conftest import google_error
-
+        action, self._pending = self._pending, ""
+        if action == "get" and self.missing:
+            raise google_error(404)
+        if action != "get" and self.fail:
             raise google_error()
         return {}
 
@@ -100,7 +121,7 @@ def test_организатор_отменяет_своё_событие(client,
     actor = _add_person(882002, "Участник Первый")
     event_id = _add_event(owner, [owner, actor])
     fake = FakeEvents()
-    monkeypatch.setattr(api, "_calendar", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
 
@@ -112,6 +133,8 @@ def test_организатор_отменяет_своё_событие(client,
     assert body["in_calendar"] is True
     assert body["notified"] == 2, "организатор и участник"
     assert fake.deleted == [("draft-calendar", "gcal-1")]
+    assert not [call for call in fake.calls if call[1] == "read-calendar"], \
+        "боевой календарь бот не трогает"
     assert _event_row(event_id)["status"] == "cancelled"
 
     notes = _notifications(event_id)
@@ -133,7 +156,7 @@ def test_админ_отменяет_чужое_событие(client, monkeypat
     owner = _add_person(882101, "Организатор Чужой")
     event_id = _add_event(owner, [owner])
     fake = FakeEvents()
-    monkeypatch.setattr(api, "_calendar", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "")
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
 
@@ -142,8 +165,11 @@ def test_админ_отменяет_чужое_событие(client, monkeypat
                        json={"event_id": event_id}).json()
 
     assert body["ok"] is True
-    assert fake.deleted == [("read-calendar", "gcal-1")], "чернового нет — снимаем из боевого"
-    assert _event_row(event_id)["status"] == "cancelled"
+    assert body["in_calendar"] is False
+    assert body["calendar_updated"] is False
+    assert body["calendar_error"] == "not_bot_event"
+    assert fake.calls == [], "чернового нет — Google не вызывается вообще"
+    assert _event_row(event_id)["status"] == "cancelled", "БД важнее календаря"
 
 
 def test_чужое_событие_отменить_нельзя(client):
@@ -176,7 +202,8 @@ def test_недоступный_календарь_не_отменяет_отм�
 
     owner = _add_person(882401, "Организатор Гугл")
     event_id = _add_event(owner, [owner])
-    monkeypatch.setattr(api, "_calendar", lambda: FakeCalendar(FakeEvents(fail=True)))
+    fake = FakeEvents(fail=True)
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
     monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
 
@@ -194,4 +221,3 @@ def test_несуществующее_событие(client):
     response = client.post("/tools/events/cancel", headers=_auth(882501),
                            json={"event_id": 999999})
     assert response.status_code == 404
-

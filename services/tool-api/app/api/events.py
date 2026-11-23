@@ -10,8 +10,15 @@ from pydantic import Field
 
 from .. import core, google_targets
 from ..assign import parse_assignment
-from ..calendar_blocks import (PROP_EVENT_ID, PROP_KIND, PROP_PEOPLE, PROP_PROJECT,
-                               PROP_SOURCE, PROP_SOURCE_MARK, SOURCE_VALUE)
+from ..calendar_blocks import (
+    PROP_EVENT_ID,
+    PROP_KIND,
+    PROP_PEOPLE,
+    PROP_PROJECT,
+    PROP_SOURCE,
+    PROP_SOURCE_MARK,
+    SOURCE_VALUE,
+)
 from ..errors import ApiError
 from ..external import GOOGLE_API_ERRORS
 from ..person_match import normalize as normalize_name

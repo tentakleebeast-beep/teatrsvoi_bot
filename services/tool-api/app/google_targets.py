@@ -89,22 +89,28 @@ READ_SOURCES: dict[str, Target] = {
     "drive.root": Target("drive.root", DRIVE, required_role=ROLE_READER),
 }
 
-#: Ключ → поле настроек (имя константы ядра). Одно место, где сказано, откуда берётся id.
-_SETTING_ATTRS: dict[str, str] = {
-    "budget.transactions": "BUDGET_SPREADSHEET_ID",
-    "schedule.workload": "SCHEDULE_SPREADSHEET_ID",
-    "schedule.test": "SCHEDULE_TEST_SPREADSHEET_ID",
-    "calendar.draft": "CALENDAR_ID_DRAFT",
-    "schedule.human": "SCHEDULE_HUMAN_SPREADSHEET_ID",
-    "budget.live": "FINANCE_SOURCE_ID",
-    "calendar.read": "CALENDAR_ID_READ",
-    "drive.root": "DRIVE_ROOT_ID",
-}
-
-
+#: Ключ → идентификатор объекта. Атрибуты читаются напрямую, а не через `getattr` по
+#: имени: иначе проверка мёртвого кода не видит, что константы ядра используются.
 def _target_id(key: str) -> str:
-    attr = _SETTING_ATTRS.get(key)
-    return str(getattr(core, attr, "") or "").strip() if attr else ""
+    if key == "budget.transactions":
+        value = core.BUDGET_SPREADSHEET_ID
+    elif key == "schedule.workload":
+        value = core.SCHEDULE_SPREADSHEET_ID
+    elif key == "schedule.test":
+        value = core.SCHEDULE_TEST_SPREADSHEET_ID
+    elif key == "calendar.draft":
+        value = core.CALENDAR_ID_DRAFT
+    elif key == "schedule.human":
+        value = core.SCHEDULE_HUMAN_SPREADSHEET_ID
+    elif key == "budget.live":
+        value = core.FINANCE_SOURCE_ID
+    elif key == "calendar.read":
+        value = core.CALENDAR_ID_READ
+    elif key == "drive.root":
+        value = core.DRIVE_ROOT_ID
+    else:
+        value = ""
+    return str(value or "").strip()
 
 
 def resolve(key: str) -> str:
@@ -139,21 +145,15 @@ def target(key: str) -> Target:
     return found
 
 
-def write_targets() -> list[str]:
-    return sorted(WRITE_TARGETS)
-
-
-def read_sources() -> list[str]:
-    return sorted(READ_SOURCES)
-
-
-def allowed_for_write(key: str) -> bool:
+def allowed_for_write(key: str, conn=None) -> bool:
     """Разрешён ли ключ к записи в текущем режиме.
 
     Набор объектов записи в обоих режимах одинаков (дизайн D7) — режим здесь только
     для того, чтобы вопрос «а в target?» имел ответ в коде, а не в голове читателя.
+    `conn` передаётся, когда чтение режима идёт в уже открытом соединении: иначе
+    вызов открывал бы своё и в unit-тестах упирался в пул.
     """
-    mode = google_mode()
+    mode = google_mode(conn)
     return key in WRITE_TARGETS and mode in MODES
 
 

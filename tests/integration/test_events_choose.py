@@ -50,6 +50,7 @@ def test_выбор_тёзки_обновляет_карточку(client, monke
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
 
@@ -75,6 +76,7 @@ def test_чужой_человек_не_проходит(client, monkeypatch):
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
         _person(conn, 785003, "Третий Саша", "Саша")

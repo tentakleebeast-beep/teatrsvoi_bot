@@ -80,7 +80,6 @@ class Binding:
     sheet_title: str
     layout: str
     header_row: int = 1
-    first_data_row: int | None = None
     first_col: int = 1
     last_col: int | None = None
     header_checksum: str | None = None
@@ -106,25 +105,24 @@ def _row_get(row, name: str, index: int, default=None):
 def load_binding(conn, key: str) -> Binding | None:
     """Привязка по ключу реестра. Нет строки — None (решение принимает вызывающий)."""
     row = conn.execute("""
-        select key, spreadsheet_id, sheet_title, layout, header_row, first_data_row,
+        select key, spreadsheet_id, sheet_title, layout, header_row,
                first_col, last_col, header_checksum, meta, last_read_at, last_edit_time
         from sheet_binding where key = %s""", (key,)).fetchone()
     if row is None:
         return None
-    meta = _row_get(row, "meta", 9, {}) or {}
+    meta = _row_get(row, "meta", 8, {}) or {}
     return Binding(
         key=str(_row_get(row, "key", 0, key)),
         spreadsheet_id=str(_row_get(row, "spreadsheet_id", 1, "") or ""),
         sheet_title=str(_row_get(row, "sheet_title", 2, "") or ""),
         layout=str(_row_get(row, "layout", 3, "") or ""),
         header_row=int(_row_get(row, "header_row", 4, 1) or 1),
-        first_data_row=_row_get(row, "first_data_row", 5),
-        first_col=int(_row_get(row, "first_col", 6, 1) or 1),
-        last_col=_row_get(row, "last_col", 7),
-        header_checksum=_row_get(row, "header_checksum", 8),
+        first_col=int(_row_get(row, "first_col", 5, 1) or 1),
+        last_col=_row_get(row, "last_col", 6),
+        header_checksum=_row_get(row, "header_checksum", 7),
         meta=dict(meta) if isinstance(meta, dict) else {},
-        last_read_at=_row_get(row, "last_read_at", 10),
-        last_edit_time=_row_get(row, "last_edit_time", 11),
+        last_read_at=_row_get(row, "last_read_at", 9),
+        last_edit_time=_row_get(row, "last_edit_time", 10),
     )
 
 
@@ -224,7 +222,7 @@ def open_sheet(key: str, *, conn, write: bool = True, service: Any = None) -> Sh
     if not spreadsheet_id:
         raise ApiError(503, "write_target_unset: объект записи не настроен",
                        code="write_target_unset")
-    if write and not google_targets.allowed_for_write(key):
+    if write and not google_targets.allowed_for_write(key, conn):
         raise ApiError(403, "write_target_refused: объект не разрешён для записи",
                        code="write_target_refused")
 
@@ -256,6 +254,32 @@ def open_sheet(key: str, *, conn, write: bool = True, service: Any = None) -> Sh
     return SheetSession(key=key, spreadsheet_id=spreadsheet_id, binding=binding,
                         service=service, sheet_id=sheet_id, sheet_title=sheet_title,
                         modified_time=modified, header=header)
+
+
+def note_header_cell(session: SheetSession, a1: str, text: str) -> None:
+    """Учесть записанную клетку шапки в памяти сессии.
+
+    Бот сам дописывает служебную колонку `svoi` в шапку листа занятости. Если её не
+    учесть, `remember_header` запомнит сумму шапки **до** записи, следующее открытие
+    увидит новую шапку и честно откажет `header_mismatch` — запись встала бы навсегда
+    после первой же недели. Поэтому сумму считаем по состоянию после записи.
+    """
+    box = str(a1 or "").split("!")[-1]
+    row = int("".join(ch for ch in box if ch.isdigit()) or 0)
+    if row != session.binding.header_row:
+        return
+    letters = "".join(ch for ch in box if ch.isalpha())
+    index = 0
+    for char in letters.upper():
+        index = index * 26 + (ord(char) - 64)
+    if index <= 0:
+        return
+    if not session.header:
+        session.header.append([])
+    line = session.header[0]
+    while len(line) < index:
+        line.append("")
+    line[index - 1] = text
 
 
 def remember_header(conn, session: SheetSession) -> None:

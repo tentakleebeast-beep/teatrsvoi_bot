@@ -63,6 +63,7 @@ def _fake_sheet(monkeypatch, days: dict[dt.date, str]) -> FakeSheets:
 
     fake = FakeSheets(_sheet(days))
     monkeypatch.setattr(core, "_sheets", lambda: fake)
+    monkeypatch.setattr(core, "_sheets_read", lambda: fake)
     monkeypatch.setattr(core, "SCHEDULE_SPREADSHEET_ID", "fake")
     monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", TITLE)
     return fake
@@ -118,6 +119,7 @@ def test_лист_недоступен_показываем_базу(client, mon
         raise OSError("нет связи с Google")
 
     monkeypatch.setattr(core, "_sheets", broken)
+    monkeypatch.setattr(core, "_sheets_read", broken)
     monkeypatch.setattr(core, "SCHEDULE_SPREADSHEET_ID", "fake")
     _api()
     with psycopg.connect(_test_dsn()) as conn:
