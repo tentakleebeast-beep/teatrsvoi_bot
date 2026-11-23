@@ -2126,6 +2126,123 @@ def health() -> dict:
     return {"ok": True, "pages": sorted(PAGE_ROUTES)}
 
 
+# --- E6-2: проекты ------------------------------------------------------------
+# Стенд отвечает теми же ключами, что `api/projects.py` (docs/development/196 §4):
+# страница списка читает `plan`/`fact`/`nearest`, карточка — блоки `money`, `events`,
+# `people` и `rights`. Читают список и карточку admin и org (`budget.read`, V-127),
+# остальным стенд отвечает 403 той же фразой, что `core._webapp_require`, — иначе
+# экран `master` в тесте выглядел бы рабочим там, где на проде он закрыт.
+
+PROJECTS_DENIED_TEXT = "Проекты видят администратор и организатор"
+
+#: Список: активные и архивный проект, у второго плана и факта нет (`null`, не ноль).
+PROJECTS = [
+    {"id": 1, "name": "Спектакль «Чайка»", "kind": "show", "kind_title": "Спектакль",
+     "status": "active", "status_title": "активен",
+     "starts_on": "2026-11-14", "ends_on": None, "plan": 120000.0, "fact": 86400.0,
+     "nearest": {"date": "2026-11-14", "weekday": "сб", "time_from": "19:00",
+                 "time_to": "21:30", "kind": "rehearsal", "kind_title": "Репетиция"}},
+    {"id": 2, "name": "Аренда зала «Практика»", "kind": "rental", "kind_title": "Арендатор",
+     "status": "active", "status_title": "активен",
+     "starts_on": None, "ends_on": None, "plan": None, "fact": None, "nearest": None},
+    {"id": 3, "name": "Мёртвые души", "kind": "show", "kind_title": "Спектакль",
+     "status": "archive", "status_title": "в архиве",
+     "starts_on": "2026-03-01", "ends_on": "2026-04-01", "plan": 90000.0, "fact": 90000.0,
+     "nearest": None},
+]
+
+#: Карточка 1 — все блоки заполнены; карточка 2 — пустой проект (все четыре фразы
+#: «пусто»: «Событий пока нет», «План не задан», «Операций нет», «Состав не заполнен»).
+PROJECT_CARDS = {
+    1: {
+        "project": {"id": 1, "name": "Спектакль «Чайка»", "kind": "show",
+                    "kind_title": "Спектакль", "status": "active", "status_title": "активен",
+                    "starts_on": "2026-11-14", "ends_on": None, "description": None,
+                    "counterparty": None, "lead": {"id": 5, "name": "Саша Орлова"}},
+        "money": {"plan": 120000.0, "fact": 86400.0, "rest": 33600.0,
+                  "expenses": 86400.0, "income": 0.0,
+                  "has_plan": True, "has_ops": True, "unlinked_income": None},
+        "events": {"total": 2, "items": [
+            {"id": 101, "date": "2026-11-14", "weekday": "сб", "time_from": "19:00",
+             "time_to": "21:30", "kind": "show", "kind_title": "Спектакль",
+             "location": "Зал на Обороны", "revenue_amount": 32000.0},
+            {"id": 102, "date": "2026-11-21", "weekday": "сб", "time_from": "19:00",
+             "time_to": "21:30", "kind": "show", "kind_title": "Спектакль",
+             "location": "Зал на Обороны", "revenue_amount": None},
+        ]},
+        "people": {"roles": [
+            {"alias": "Наташа", "participant_id": 7, "name": "Саша Орлова"},
+            {"alias": "Сэм", "participant_id": 8, "name": "Витя Новиков"},
+        ], "roles_count": 2, "participants_count": 6},
+    },
+    2: {
+        "project": {"id": 2, "name": "Аренда зала «Практика»", "kind": "rental",
+                    "kind_title": "Арендатор", "status": "active", "status_title": "активен",
+                    "starts_on": None, "ends_on": None, "description": None,
+                    "counterparty": "Практика", "lead": None},
+        "money": {"plan": None, "fact": None, "rest": None, "expenses": 0.0, "income": 0.0,
+                  "has_plan": False, "has_ops": False, "unlinked_income": None},
+        "events": {"total": 0, "items": []},
+        "people": {"roles": [], "roles_count": 0, "participants_count": 0},
+    },
+}
+
+
+def _projects_guard(request: Request):
+    """401 без токена, 403 без `budget.read` — как `api/projects.py:_reader`."""
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    caps = _caps_of(request)
+    if "*" not in caps and "budget.read" not in caps:
+        return JSONResponse({"detail": PROJECTS_DENIED_TEXT, "code": "no_access"},
+                            status_code=403)
+    return None
+
+
+@app.get("/webapp/projects/data")
+def projects_data(request: Request, kind: str = "all", status: str = "active",
+                  q: str | None = None) -> JSONResponse:
+    denied = _projects_guard(request)
+    if denied is not None:
+        return denied
+    text = (q or "").strip().lower()
+    items = []
+    for item in PROJECTS:
+        if kind != "all" and item["kind"] != kind:
+            continue
+        if status == "active" and item["status"] not in ("planned", "active"):
+            continue
+        if status == "archive" and item["status"] != "archive":
+            continue
+        if text and text not in item["name"].lower():
+            continue
+        items.append(item)
+    return JSONResponse({"ok": True, "count": len(items), "items": items})
+
+
+@app.get("/webapp/project/data")
+def project_card_data(request: Request, id: int | None = None) -> JSONResponse:
+    denied = _projects_guard(request)
+    if denied is not None:
+        return denied
+    if id is None:
+        return JSONResponse({"detail": "id_required", "code": "id_required"}, status_code=400)
+    card = PROJECT_CARDS.get(id)
+    if card is None:
+        return JSONResponse({"detail": "Проект не найден — возможно, удалён",
+                             "code": "project_not_found"}, status_code=404)
+    caps = set(_caps_of(request))
+    can_write = "budget.write" in caps or "*" in caps
+    payload: dict = dict(card)
+    payload["ok"] = True
+    payload["rights"] = {"can_edit": can_write, "can_plan": can_write,
+                         "can_create_event": "schedule.write" in caps or "*" in caps,
+                         "can_create_rental_event": "*" in caps
+                         or {"schedule.write", "calendar.write"} <= caps}
+    return JSONResponse(payload)
+
+
 # --- E8: опросы ---------------------------------------------------------------
 # Стенд отвечает теми же формами, что `api/polls.py` (docs/development/162 §14.2).
 # Право `poll.manage` на стенде есть у администратора и организатора (V-088, 066):
