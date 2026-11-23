@@ -30,6 +30,10 @@ _BODY_EVENT_CARD = """
       <span class="ui-row__main"><span class="ui-row__title">Время</span></span>
       <span class="ui-row__value" id="time"></span>
     </div>
+    <div class="ui-row" id="row-mine" hidden>
+      <span class="ui-row__main"><span class="ui-row__title">Ты задействован</span></span>
+      <span class="ui-row__value" id="mine"></span>
+    </div>
     <div class="ui-row" id="row-place" hidden>
       <span class="ui-row__main"><span class="ui-row__title">Место</span></span>
       <span class="ui-row__value" id="place"></span>
@@ -107,6 +111,10 @@ _SCRIPT_EVENT_CARD = r"""<script>
       clock = data.time_from + (data.time_to ? "–" + data.time_to : "");
     }
     setRow("row-time", clock, $("time"));
+    // Личное время участия (V-134): пустое окно уже расширено интервалом
+    // события на сервере, поэтому строка есть ровно у участника события.
+    var mine = data.my_time;
+    setRow("row-mine", mine ? mine.time_from + "–" + mine.time_to : "", $("mine"));
     setRow("row-place", data.location, $("place"));
     setRow("row-creator", data.creator ? data.creator.name : "",
            $("creator"));

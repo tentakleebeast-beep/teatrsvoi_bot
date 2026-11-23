@@ -27,6 +27,20 @@ from ..rules import WORK_DAY_END, WORK_DAY_START
 
 router = APIRouter()
 
+
+class ParticipationIn(core.ApiIn):
+    """Личное окно участия одного человека (V-134).
+
+    Пустые поля значат «весь интервал события»: время участия необязательно,
+    и организатор не должен упираться в форму. Часы считаются в тот же день,
+    что и событие, — других суток у репетиции нет.
+    """
+
+    participant_id: int
+    from_hour: int | None = Field(default=None, ge=0, le=24)
+    to_hour: int | None = Field(default=None, ge=0, le=24)
+
+
 class AssignIn(core.ApiIn):
     text: str | None = None                    # «назначь репетицию с Витей в четверг в 20:00»
     kind: str | None = None
@@ -41,6 +55,7 @@ class AssignIn(core.ApiIn):
     project_id: int | None = None
     venue: str | None = None
     description: str | None = Field(default=None, max_length=2000)   # поле Google, не база
+    windows: list[ParticipationIn] | None = None   # «с / до» на каждого (V-134), пусто — всё событие
     persist: bool = False                      # сохранить заявку для подтверждения
 
 
@@ -210,6 +225,118 @@ def _discipline_denied(conn, who: dict, kind: str | None,
     return f"Вы не ведёте эту дисциплину: доступны {names or 'ни одной'}."
 
 
+def _windows_map(items) -> dict[int, tuple[int | None, int | None]]:
+    """Личные окна из запроса: человек → (час «с», час «до») (V-134).
+
+    Пустая пара значит «весь интервал события»: поле необязательное, и
+    организатор не должен упираться в форму. Обратная пара отвергается 422
+    здесь же: база проверит то же ограничением `event_participant_window_check`,
+    но человеку нужен ответ словами, а не ошибка драйвера.
+    """
+    result: dict[int, tuple[int | None, int | None]] = {}
+    for item in items or []:
+        if isinstance(item, dict):
+            pid = item.get("participant_id", item.get("id"))
+            from_hour, to_hour = item.get("from_hour"), item.get("to_hour")
+        else:
+            pid, from_hour, to_hour = item.participant_id, item.from_hour, item.to_hour
+        if pid is None:
+            raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                           "Не понял, чьё это время участия: нужен человек.",
+                           code="participation_person_required")
+        if from_hour is not None and to_hour is not None and to_hour <= from_hour:
+            raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                           "Время участия должно идти вперёд: «с» раньше «до».",
+                           code="participation_bad_window")
+        result[int(pid)] = (from_hour, to_hour)
+    return result
+
+
+def _windows_outside(windows: dict[int, tuple[int | None, int | None]],
+                     event_from: int, event_to: int) -> list[int]:
+    """Люди, чьё личное окно не помещается в интервал события.
+
+    Пустое поле берётся из интервала события, поэтому «с 19:00 до пустого»
+    при событии 19:00–21:00 — норма, а «до 22:00» — уже ошибка.
+    """
+    outside = []
+    for pid, (from_hour, to_hour) in windows.items():
+        start_hour = event_from if from_hour is None else from_hour
+        end_hour = event_to if to_hour is None else to_hour
+        if start_hour < event_from or end_hour > event_to or end_hour <= start_hour:
+            outside.append(pid)
+    return outside
+
+
+def _upsert_windows(conn, event_id: int, day: date,
+                    windows: dict[int, tuple[int | None, int | None]]) -> None:
+    """Записать личные окна перечисленных людей (V-134).
+
+    Пишется строка на каждого, даже с пустым окном: состав события тогда живёт
+    в одном месте, а «пусто = весь интервал» решает чтение.
+    """
+    base = datetime.combine(day, datetime.min.time(), core.TZ)
+    for pid, (from_hour, to_hour) in windows.items():
+        from_at = base + timedelta(hours=from_hour) if from_hour is not None else None
+        to_at = base + timedelta(hours=to_hour) if to_hour is not None else None
+        conn.execute("""
+            insert into event_participant (event_id, participant_id, from_at, to_at)
+            values (%s, %s, %s, %s)
+            on conflict (event_id, participant_id)
+            do update set from_at = excluded.from_at, to_at = excluded.to_at""",
+            (event_id, pid, from_at, to_at))
+
+
+def _write_participation(conn, event_id: int, day: date, people: list[int],
+                         windows: dict[int, tuple[int | None, int | None]]) -> None:
+    """Записать состав события целиком: у кого окна нет — «весь интервал»."""
+    _upsert_windows(conn, event_id, day,
+                    {pid: windows.get(pid, (None, None)) for pid in people})
+
+
+def _participation(conn, event_id: int, starts_at: datetime,
+                   ends_at: datetime) -> list[dict]:
+    """Состав события с личным временем участия (V-134).
+
+    Строки `event_participant` может не быть — тогда человек задействован весь
+    интервал события: карточка показывает интервал, а не пустоту, иначе нельзя
+    понять, занят он или нет.
+    """
+    rows = conn.execute("""
+        select pid as participant_id, p.display_name as name, ep.from_at, ep.to_at
+        from event_plan pl
+        cross join lateral unnest(pl.participant_ids) as pid
+        join participant p on p.id = pid
+        left join event_participant ep
+               on ep.event_id = pl.id and ep.participant_id = pid
+        where pl.id = %s
+        order by p.display_name""", (event_id,)).fetchall()
+    out = []
+    for row in rows:
+        from_at = (row["from_at"] or starts_at).astimezone(core.TZ)
+        to_at = (row["to_at"] or ends_at).astimezone(core.TZ)
+        out.append({"participant_id": row["participant_id"], "name": row["name"],
+                    "from_at": from_at.isoformat(), "to_at": to_at.isoformat(),
+                    "time_from": from_at.strftime("%H:%M"),
+                    "time_to": to_at.strftime("%H:%M")})
+    return out
+
+
+def _split_participation(rows: list[dict], caps: list[str] | None,
+                         viewer_id: int | None) -> tuple[list[dict], dict | None]:
+    """Своё время — всем, чужое — только тому, у кого есть запись (V-134).
+
+    Карточка отдаёт строку текущего человека даже роли без `schedule.write`
+    (V-132: актёр читает расписание студии). Чужое личное время — не расписание,
+    а данные другого человека, поэтому без права записи их нет.
+    """
+    mine = next((row for row in rows if row["participant_id"] == viewer_id), None)
+    caps = caps or []
+    if "*" in caps or "schedule.write" in caps:
+        return rows, mine
+    return ([mine] if mine else []), mine
+
+
 def _prepare_assignment(body: AssignIn, who: dict | None = None
                         ) -> tuple[dict | None, list[dict], list[dict]]:
     """
@@ -277,6 +404,15 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
 
         busy = _busy_people(conn, [person["id"] for person in people], day, from_hour, to_hour)
 
+        # Личные окна участия (V-134): необязательные «с / до» на человека.
+        # Пустое поле — весь интервал события, поэтому карточка строится и без них.
+        windows = _windows_map(body.windows)
+        known = {person["id"] for person in people}
+        unknown_windows = [pid for pid in windows if pid not in known]
+        outside_windows = _windows_outside(
+            {pid: window for pid, window in windows.items() if pid in known},
+            from_hour, to_hour)
+
         # Мастер — только по своей дисциплине (140 §1). Проверка после разбора
         # `discipline` и до записи: иначе карточка строилась бы, а отказ приходил
         # на подтверждении, когда событие уже в календаре.
@@ -314,7 +450,10 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
             "from_hour": from_hour, "to_hour": to_hour,
             "duration_hours": to_hour - from_hour,
             "venue": venue, "venue_name": venue_name,
-            "participants": [{"id": person["id"], "name": person["name"]} for person in people],
+            "participants": [{"id": person["id"], "name": person["name"],
+                              "from_hour": windows.get(person["id"], (None, None))[0],
+                              "to_hour": windows.get(person["id"], (None, None))[1]}
+                             for person in people],
             "project_id": body.project_id,
             "missed_names": missed, "busy_people": busy,
             "ambiguity": ambiguous,
@@ -337,6 +476,14 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
         errors.append({"code": "no_people", "text": "Не понял, кто участвует."})
     if denied:
         errors.append({"code": "discipline_not_taught", "text": denied})
+    if unknown_windows:
+        errors.append({"code": "participation_unknown_person",
+                       "text": "Время участия указано для человека вне состава события."})
+    if outside_windows:
+        names = [person["name"] for person in people if person["id"] in outside_windows]
+        errors.append({"code": "participation_outside_event",
+                       "text": "Личное время выходит за интервал события: "
+                               + ", ".join(names) + "."})
     return card, errors, warnings
 
 
@@ -494,6 +641,18 @@ def events_assign(payload: dict,
             # Зеркало «лучшее усилие»: правда в базе (196 §3.2, R-11).
             private["svoi_revenue_amount"] = str(revenue_amount)
         people = [person["id"] for person in card.get("participants") or []]
+        # Личные окна участия (V-134): из карточки (Mini App, предпросмотр) и из
+        # самого запроса (бот присылает их на подтверждении). Пустое поле — весь
+        # интервал события, поэтому отсутствие окон ничего не ломает.
+        windows = _windows_map(card.get("participants"))
+        if payload.get("windows"):
+            windows.update(_windows_map(payload["windows"]))
+        windows = {pid: window for pid, window in windows.items() if pid in people}
+        outside = _windows_outside(windows, from_hour, to_hour)
+        if outside:
+            raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                           "Личное время участия выходит за интервал события.",
+                           code="participation_outside_event")
         if people:
             # порядок id в свойстве не значим, но должен быть стабильным: список
             # приходит из расчёта со множествами, и без сортировки одно и то же
@@ -513,6 +672,11 @@ def events_assign(payload: dict,
             (card["title"], card["kind"], project_id, start, end,
              card.get("venue") or card.get("venue_name"), people,
              who["id"], card.get("discipline"), revenue_amount)).fetchone()
+
+        # Состав события и личные окна — в той же транзакции, что и строка
+        # события: иначе событие жило бы без состава, а карточка показывала
+        # «задействован весь интервал» вместо заданного окна (V-134).
+        _write_participation(conn, plan["id"], day, people, windows)
 
         gcal_id, gcal_calendar_id = _create_draft_event(
             plan["id"], private, start, end, card,
@@ -746,6 +910,7 @@ class EventMoveIn(core.ApiIn):
     to_hour: int | None = Field(default=None, ge=1, le=24)
     reason: str | None = Field(default=None, max_length=500)
     allow_outside_hours: bool = False
+    windows: list[ParticipationIn] | None = None   # правка личных окон вместе с переносом (V-134)
 
 
 
@@ -835,7 +1000,30 @@ def events_move(body: EventMoveIn,
         busy_people = _busy_people(conn, list(plan["participant_ids"] or []),
                                    day, from_hour, to_hour)
 
-    if start == old_start and end == old_end:
+        # Личные окна участия (V-134): перенос их **не сдвигает**. Новые окна
+        # принимаются только явно присланные; иначе считаем, кого новый интервал
+        # перестал покрывать, и говорим об этом словами, а не правим молча.
+        roster = set(plan["participant_ids"] or [])
+        new_windows = _windows_map(body.windows) if body.windows else {}
+        if any(pid not in roster for pid in new_windows):
+            raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                           "Время участия указано для человека вне состава события.",
+                           code="participation_unknown_person")
+        if _windows_outside(new_windows, from_hour, to_hour):
+            raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                           "Личное время участия выходит за интервал события.",
+                           code="participation_outside_event")
+        saved = conn.execute("select participant_id, from_at, to_at from event_participant "
+                             "where event_id = %s", (plan["id"],)).fetchall()
+        uncovered = [row["participant_id"] for row in saved
+                     if row["participant_id"] not in new_windows
+                     and ((row["from_at"] or old_start) < start
+                          or (row["to_at"] or old_end) > end)]
+        names_by_id = {r["id"]: r["display_name"] for r in conn.execute(
+            "select id, display_name from participant where id = any(%s)",
+            (sorted(set(uncovered) | roster),)).fetchall()}
+
+    if start == old_start and end == old_end and not new_windows:
         return {"ok": True, "event_id": plan["id"], "changed": False,
                 "starts_at": start.isoformat(), "ends_at": end.isoformat(),
                 "in_calendar": bool(plan["gcal_event_id"]), "calendar_error": None,
@@ -866,8 +1054,19 @@ def events_move(body: EventMoveIn,
     with core.pool.connection() as conn:
         conn.execute("update event_plan set starts_at = %s, ends_at = %s where id = %s",
                      (start, end, plan["id"]))
+        # Личные окна при переносе не сдвигаются: правится только то, что
+        # организатор прислал явно (V-134).
+        if new_windows:
+            _upsert_windows(conn, plan["id"], day, new_windows)
         # Дата и период производной операции следуют за событием (196 §7.1).
         project_money.move_date(conn, plan["id"], start, who)
+
+        warnings = []
+        if uncovered:
+            names = [names_by_id.get(pid, str(pid)) for pid in uncovered]
+            warnings.append({"code": "personal_windows_outside",
+                             "text": "Новый интервал не покрывает личное время: "
+                                     + ", ".join(names) + ". Окна не сдвинуты."})
 
         recipients = set(plan["participant_ids"] or [])
         if plan["created_by"]:
@@ -907,6 +1106,7 @@ def events_move(body: EventMoveIn,
             "in_calendar": calendar_updated, "calendar_updated": calendar_updated,
             "calendar_error": calendar_error,
             "notified": notified, "busy_people": busy_people,
+            "warnings": warnings,
             "venue": venue}
 
 
@@ -943,7 +1143,9 @@ def events_card(event_id: int,
         rows = conn.execute("select id, display_name from participant where id = any(%s) "
                             "order by display_name", (ids,)).fetchall() if ids else []
         kind_title = event_types.titles(conn).get(plan["kind"], "Событие")
+        participation = _participation(conn, plan["id"], plan["starts_at"], plan["ends_at"])
 
+    shared, mine = _split_participation(participation, who.get("caps"), who.get("id"))
     start = plan["starts_at"].astimezone(core.TZ)
     end = plan["ends_at"].astimezone(core.TZ)
     return {"ok": True, "event": {
@@ -956,6 +1158,8 @@ def events_card(event_id: int,
         "starts_at": start.isoformat(), "ends_at": end.isoformat(),
         "venue": plan["location"], "venue_name": venue["name"] if venue else plan["location"],
         "participants": [{"id": r["id"], "name": r["display_name"]} for r in rows],
+        "participation": shared,
+        "my_time": mine,
         "in_calendar": bool(plan["gcal_event_id"])}}
 
 

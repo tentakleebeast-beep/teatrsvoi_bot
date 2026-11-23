@@ -25,10 +25,10 @@ def conn(test_db):
 
 
 def test_голова_учёта_это_075(test_db):
-    """AC-01: цепочка alembic доходит до головы (075 — проекты, 076 — V-132)."""
+    """AC-01: цепочка alembic доходит до головы (075 — проекты, 076 — V-132, 077 — V-134)."""
     with psycopg.connect(test_db, row_factory=dict_row) as connection:
         head = connection.execute("select version_num from alembic_version").fetchone()
-    assert head["version_num"] == "076_troupe_schedule_read"
+    assert head["version_num"] == "077_event_participant"
 
 
 def test_типы_проекта_список_а_не_подстрока(conn):

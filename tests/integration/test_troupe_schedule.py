@@ -47,7 +47,9 @@ PERSONAL = {"phone", "dues", "dues_total", "travel_minutes", "birth_date",
 CALENDAR_ITEM = {"id", "title", "start", "end", "location", "status", "kind", "link"}
 CARD_EVENT = {"event_id", "title", "kind", "kind_title", "status", "date", "weekday",
               "from_hour", "to_hour", "starts_at", "ends_at", "venue", "venue_name",
-              "participants", "in_calendar"}
+              "participants", "in_calendar",
+              # V-134: своё время участия и (для `schedule.write`) чужие строки
+              "participation", "my_time"}
 
 
 def _person(conn, chat_id: int, name: str, role: str = "troupe") -> int:

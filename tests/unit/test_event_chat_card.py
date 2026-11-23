@@ -261,3 +261,27 @@ def test_карточка_не_сбрасывает_чужую_форму(chat, 
 
     assert asyncio.run(state.get_state()) == "BudgetForm:amount"
     assert asyncio.run(state.get_data()) == {"amount": "3000"}
+
+
+def test_карточка_показывает_своё_время_участия():
+    """V-134: «ты задействован 19:30–21:00» и личные окна в карточке назначения.
+
+    Обоснование: docs/reports/194 §2 п.3. Строка берётся из `my_time`, который
+    сервер считает по составу события: пустое окно он уже расширил интервалом,
+    поэтому карточка не решает, что показать при пустом поле.
+    """
+    from routers import assign, events  # noqa: PLC0415 — путь gateway подставлен выше
+
+    event = {"kind_title": "Репетиция", "title": "Сцена", "date": "2026-12-21",
+             "from_hour": 18, "to_hour": 22, "venue_name": "Сцена",
+             "participants": [{"id": 1, "name": "Витя"}],
+             "my_time": {"time_from": "19:30", "time_to": "21:00"}}
+    assert "Ты задействован: 19:30–21:00" in events.card_text(event)
+
+    card = {"kind_title": "Репетиция", "title": "Сцена", "weekday": "понедельник",
+            "date": "2026-12-21", "from_hour": 18, "to_hour": 22, "venue_name": "Сцена",
+            "participants": [{"id": 1, "name": "Витя", "from_hour": 19, "to_hour": 21},
+                             {"id": 2, "name": "Люда", "from_hour": None, "to_hour": None}]}
+    text = assign.card_text(card)
+    assert "Витя (19:00–21:00)" in text, "окно участника видно организатору"
+    assert "Люда (" not in text, "пустое окно не рисуется как своё"

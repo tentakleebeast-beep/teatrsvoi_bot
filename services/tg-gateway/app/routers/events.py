@@ -55,6 +55,11 @@ def card_text(event: dict) -> str:
     names = [name for name in names if name]
     if names:
         lines.append("Участники: " + ", ".join(names))
+    # Личное время участия (V-134): пустое окно сервер уже расширил интервалом
+    # события, поэтому строка есть ровно у участника события.
+    mine = event.get("my_time")
+    if mine:
+        lines.append(f"Ты задействован: {mine['time_from']}–{mine['time_to']}")
     if event.get("status") == "cancelled":
         lines.append("Событие отменено.")
     return "\n".join(lines)

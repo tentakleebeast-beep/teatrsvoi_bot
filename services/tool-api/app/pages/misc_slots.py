@@ -12,6 +12,7 @@ from app.pages.misc_slots_denied import DENIED_BODY as _DENIED_BODY
 from app.pages.misc_slots_denied import DENIED_SCRIPT as _DENIED_SCRIPT
 from app.pages.misc_slots_discipline import DISCIPLINE_BODY as _DISCIPLINE_BODY
 from app.pages.misc_slots_discipline import DISCIPLINE_SCRIPT as _DISCIPLINE_SCRIPT
+from app.pages.misc_slots_time import TIME_FIELDS_SCRIPT as _TIME_FIELDS_SCRIPT
 
 _BODY_SLOTS = _DENIED_BODY + """
 <div id="search-form">
@@ -73,7 +74,7 @@ _BODY_SLOTS = _DENIED_BODY + """
 </div>
 """
 
-_SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/week\";\n" + _JS_COMMON + _DENIED_SCRIPT + _DISCIPLINE_SCRIPT + r"""
+_SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/week\";\n" + _JS_COMMON + _DENIED_SCRIPT + _DISCIPLINE_SCRIPT + _TIME_FIELDS_SCRIPT + r"""
   var $ = function (id) { return document.getElementById(id); };
   var state = {};
   var people = [];
@@ -218,26 +219,39 @@ _SCRIPT_SLOTS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK
     var from = Number(item.from_hour != null ? item.from_hour : item.from || 0);
     var to = Number(item.to_hour != null ? item.to_hour : item.to || 0);
     var label = shortDate(day) + ", " + pad2(from) + ":00–" + pad2(to) + ":00";
+    /* Личное время участия (V-134) — по желанию, пусто значит всё событие. */
+    var ids = chosen("must").concat(chosen("optional"));
+    var picked = people.filter(function (person) { return ids.indexOf(person.id) >= 0; });
+    var body = make("div");
+    body.appendChild(make("p", "ui-text", "Появится событие в календаре, участники "
+      + "получат уведомление. Занятость и зал проверятся ещё раз."));
+    var fields = windowFields(picked);
+    body.appendChild(fields);
     SVOI.sheet({
       title: "Назначить на " + label + "?",
-      body: '<p class="ui-text">Появится репетиция в календаре, участники получат '
-        + 'уведомление. Занятость и зал проверятся ещё раз.</p>',
+      body: body,
       actions: [
         { label: "Отмена" },
         { label: "Назначить", primary: true,
-          onTap: function () { assign(item, index, label); } },
+          onTap: function () { assign(item, index, label, fields, picked); } },
       ],
     });
   }
 
-  async function assign(item, index, label) {
+  async function assign(item, index, label, fields, picked) {
     var day = item.day || item.date;
     var participants = chosen("must").concat(chosen("optional"));
+    var windows = collectWindows(fields, picked);
+    if (windows.error) {
+      SVOI.toast(windows.error);
+      return;
+    }
     var preview = await api("/webapp/preview", {
       kind: kind, date: day,
       from_hour: Number(item.from_hour != null ? item.from_hour : item.from || 0),
       to_hour: Number(item.to_hour != null ? item.to_hour : item.to || 0),
       participants: participants,
+      windows: windows.windows,
       // Тренинг несёт дисциплину мастера: без неё сервер добавлял бы всех педагогов
       // и не мог проверить «вы ведёте этот предмет» (140 §4.3).
       discipline: kind === "training" && discipline ? discipline : null,

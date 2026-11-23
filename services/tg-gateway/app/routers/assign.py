@@ -88,6 +88,17 @@ async def _ask(message: Message, state: FSMContext | None, code: str, text: str)
                          reply_markup=draft_cancel_kb())
 
 
+def _person_text(person: dict) -> str:
+    """Имя и личное время участия, если оно задано (V-134)."""
+    name = person.get("name") or ""
+    from_hour, to_hour = person.get("from_hour"), person.get("to_hour")
+    if from_hour is None and to_hour is None:
+        return name
+    start = "—" if from_hour is None else f"{from_hour:02d}:00"
+    end = "—" if to_hour is None else f"{to_hour:02d}:00"
+    return f"{name} ({start}–{end})"
+
+
 def card_text(card: dict) -> str:
     """Карточка события: детали, без которых подтверждать нечего."""
     lines = [f"{card['kind_title']} — {card['title']}", "",
@@ -95,7 +106,7 @@ def card_text(card: dict) -> str:
              f"{card['from_hour']:02d}:00–{card['to_hour']:02d}:00",
              f"Помещение: {card['venue_name']}"]
     if card["participants"]:
-        lines.append("Участники: " + ", ".join(p["name"] for p in card["participants"]))
+        lines.append("Участники: " + ", ".join(_person_text(p) for p in card["participants"]))
     for director in card.get("directors") or []:
         presence = "присутствует" if director.get("will_attend") else "не присутствует"
         lines.append(f"Режиссёр: {director['name']} — {presence} (по возможности)")

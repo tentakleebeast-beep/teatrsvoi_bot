@@ -89,8 +89,8 @@ def test_голова_alembic_после_071(test_db: str) -> None:
 
     Голова сдвигается каждой новой миграцией: E1-4 добавила 072 (календарь события),
     E4 — 073 (два расположения файла), E5 — 074 (типы событий), E6-2 — 075 (проекты),
-    V-132 — 076 (чтение расписания актёру).
+    V-132 — 076 (чтение расписания актёру), V-134 — 077 (личное время участия).
     """
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "076_troupe_schedule_read"
+    assert head == "077_event_participant"

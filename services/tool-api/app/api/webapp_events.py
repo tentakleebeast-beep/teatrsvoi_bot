@@ -207,6 +207,11 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
                     creator = {"id": row["id"], "name": row["display_name"]}
         plan_status = plan["status"] if plan is not None else None
         plan_created_by = plan["created_by"] if plan is not None else None
+        # Личное время участия (V-134): у людского события строки в базе нет,
+        # поэтому и состава нет — карточка просто не покажет строку.
+        participation = (events_api._participation(conn, plan["id"], plan["starts_at"],
+                                                   plan["ends_at"])
+                         if plan is not None else [])
 
     start, all_day = _to_dt((event.get("start") or {}).get("dateTime")
                             or (event.get("start") or {}).get("date"))
@@ -219,6 +224,9 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
     has_marker = str(private.get(PROP_EVENT_ID) or "").strip().isdigit()
     editable, reason = _editable(has_marker, plan_status, plan_created_by, calendar,
                                  cancelled, viewer)
+    # Своё время видит и актёр без записи; чужое — только с `schedule.write` (V-134).
+    shared, mine = events_api._split_participation(participation, viewer.get("caps"),
+                                                   viewer.get("id"))
 
     return {"ok": True, "event": {
         "calendar": calendar,
@@ -242,6 +250,8 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
         "state": "cancelled" if cancelled else ("draft" if calendar == "draft" else "live"),
         "editable": editable,
         "not_editable_reason": reason,
+        "participation": shared,
+        "my_time": mine,
     }}
 
 
