@@ -43,6 +43,19 @@ TROUPE = {
     "week": {"title": "26 октября — 1 ноября", "marked": 0, "days": 7},
 }
 
+# V-131: у студийца есть «Завтра» с событиями и вход в свой экран недели.
+TOMORROW = {"label": "завтра, 24 ноября, воскресенье",
+            "events": [{"time": "12:00", "title": "Прогон", "place": "Зал"},
+                       {"time": "19:00", "title": "Репетиция", "place": "Сцена"}]}
+TROUPE_TOMORROW = dict(TROUPE, tomorrow=TOMORROW, calendar_url="/webapp/week")
+TROUPE_EMPTY_DAY = dict(TROUPE, tomorrow={"label": "завтра, 24 ноября, воскресенье",
+                                          "events": []}, calendar_url="/webapp/week")
+TROUPE_SUMMARY = dict(TROUPE_TOMORROW, calendar_url="/webapp/week/summary")
+# «Завтра» стоит сразу под «Сегодня»: порядок блоков проверяется на данных с обоими.
+TROUPE_TODAY = dict(TROUPE_TOMORROW, today={"label": "сегодня, 23 ноября",
+                                           "event": {"time": "19:00",
+                                                     "title": "Репетиция", "place": "Зал"}})
+
 # Задержка ответа данных — в браузере, а не в обработчике маршрута: синхронный
 # `time.sleep` заблокировал бы сам тест и первый кадр было бы нечем измерить.
 SLOW_FETCH = """
@@ -254,6 +267,52 @@ A11Y_AFTER_JS = """
     focus: document.activeElement ? document.activeElement.className : "",
   };
 }
+"""
+
+# V-131: блок «Завтра» и ссылка «Весь календарь» — что реально нарисовано.
+TOMORROW_JS = """
+() => {
+  const q = (s) => document.querySelector(s);
+  const section = q("#tomorrow");
+  const card = q("#tomorrow-card");
+  const link = q("#calendar-link");
+  const rows = Array.from(document.querySelectorAll("#tomorrow-list .ui-row"));
+  return {
+    section: !!section,
+    title: ((q("#tomorrow .ui-section__title") || {}).textContent || "").trim(),
+    meta: ((q("#tomorrow .ui-section__meta") || {}).textContent || "").trim(),
+    card: !!card,
+    rows: rows.map(function (row) {
+      return {
+        title: ((row.querySelector(".ui-row__title") || {}).textContent || "").trim(),
+        meta: ((row.querySelector(".ui-row__meta") || {}).textContent || "").trim(),
+      };
+    }),
+    text: card ? card.innerText.trim() : null,
+    link: link ? link.getAttribute("href") : null,
+    linkTitle: link
+      ? ((link.querySelector(".ui-row__title") || {}).textContent || "").trim() : null,
+    chevron: link ? !!link.querySelector(".ui-row__chevron") : false,
+    afterToday: (function () {
+      const today = q("#today");
+      if (!today || !section) { return null; }
+      return !!(today.compareDocumentPosition(section) & Node.DOCUMENT_POSITION_FOLLOWING);
+    })(),
+  };
+}
+"""
+
+# V-131: один запрос данных на экран — блок не просит второй.
+COUNT_HOME = """
+(function () {
+  window.__homeCalls = 0;
+  var original = window.fetch;
+  window.fetch = function (input, init) {
+    var url = typeof input === "string" ? input : (input && input.url) || "";
+    if (url.indexOf("/webapp/home/data") !== -1) { window.__homeCalls += 1; }
+    return original.call(window, input, init);
+  };
+})();
 """
 
 
@@ -716,3 +775,79 @@ def test_справочник_обновлён(app_page):
     text = page.locator(".ui-logo .ui-logo__text")
     assert text.count() == 1 and text.text_content().strip() == "СВОИ"
     assert page.inner_text(".ui-logo").strip() == "", "видимый текст знака остался"
+
+
+def test_завтра_рисует_события_и_ссылку(app_page):
+    """V-131: блок «Завтра» — заголовок, дата словами, события и вход в календарь.
+
+    Проверяется то, что видел владелец в обращении №46: список следующего дня
+    (время, название, место) под «Сегодня» и строка «Весь календарь» с шевроном.
+    Адрес ссылки приходит данными — сервер уже выбрал его по правам.
+    """
+    page = app_page("/webapp/home")
+    page.add_init_script(COUNT_HOME)
+    page.route(DATA_URL, _json(TROUPE_SUMMARY))
+    _reload(page)
+    _wait_ready(page)
+
+    state = page.evaluate(TOMORROW_JS)
+    assert state["section"] and state["card"], state
+    assert state["title"] == "Завтра", state["title"]
+    assert state["meta"] == TOMORROW["label"], state["meta"]
+    assert state["rows"] == [
+        {"title": "12:00 — Прогон", "meta": "Зал"},
+        {"title": "19:00 — Репетиция", "meta": "Сцена"},
+    ], state["rows"]
+    assert state["link"] == "/webapp/week/summary", state["link"]
+    assert state["linkTitle"] == "Весь календарь", state["linkTitle"]
+    assert state["chevron"], "у ссылки нет шеврона"
+    assert page.evaluate("() => window.__homeCalls") == 1, "блок сделал второй запрос"
+
+
+def test_завтра_идёт_сразу_под_сегодня(app_page):
+    """V-131: порядок блоков — «Сегодня», под ним «Завтра», ниже карточка недели."""
+    page = app_page("/webapp/home")
+    page.route(DATA_URL, _json(TROUPE_TODAY))
+    _reload(page)
+    _wait_ready(page)
+
+    state = page.evaluate(TOMORROW_JS)
+    assert state["afterToday"] is True, "«Завтра» не сразу под «Сегодня»"
+    order = page.evaluate("""() => Array.from(
+      document.querySelectorAll("main .ui-home > *")).map(function (node) {
+        return node.id || node.className; })""")
+    assert order.index("today") < order.index("tomorrow") < order.index("week"), order
+
+
+def test_пустой_завтра_не_исчезает(app_page):
+    """V-131: свободный день — блок на месте и говорит словами, ссылка работает.
+
+    Молча пропавший блок человек прочитал бы как «завтра свободно»; текст «Завтра
+    событий нет.» — честный ответ. Без права на сводку ссылка ведёт на /webapp/week.
+    """
+    page = app_page("/webapp/home")
+    page.route(DATA_URL, _json(TROUPE_EMPTY_DAY))
+    _reload(page)
+    _wait_ready(page)
+
+    state = page.evaluate(TOMORROW_JS)
+    assert state["section"] and state["card"], "пустой день спрятал блок"
+    assert state["rows"] == [], state["rows"]
+    assert "Завтра событий нет." in state["text"], state["text"]
+    assert state["meta"] == "завтра, 24 ноября, воскресенье", state["meta"]
+    assert state["link"] == "/webapp/week", state["link"]
+
+
+def test_без_календаря_честный_текст(app_page):
+    """V-131: `tomorrow = null` — блок говорит, что расписания нет, а не пустое место."""
+    page = app_page("/webapp/home")
+    page.route(DATA_URL, _json(dict(TROUPE, tomorrow=None, calendar_url="/webapp/week")))
+    _reload(page)
+    _wait_ready(page)
+
+    state = page.evaluate(TOMORROW_JS)
+    assert state["section"] and state["card"], "без календаря блок пропал"
+    assert state["rows"] == [], state["rows"]
+    assert "Расписание на завтра не получено." in state["text"], state["text"]
+    assert state["meta"] == "", "выдуманная дата без данных календаря"
+    assert state["link"] == "/webapp/week", state["link"]
