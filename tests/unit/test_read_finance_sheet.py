@@ -115,10 +115,11 @@ def test_несколько_сумм_с_одним_id_не_сверяются_м
 
 # ---------------------------------------------------------------- сверка
 def db(tx_id, amount=40000, tx_date=date(2026, 10, 6), block="expense",
-       purpose="Аренда Прачки", written=True) -> dict:
+       purpose="Аренда Прачки", written=True, event_id=None) -> dict:
     return {"id": tx_id, "amount": Decimal(str(amount)), "tx_date": tx_date,
             "block": block, "purpose": purpose, "status": "confirmed",
-            "sheet_written_at": "2026-10-06T10:00:00" if written else None}
+            "sheet_written_at": "2026-10-06T10:00:00" if written else None,
+            "event_id": event_id}
 
 
 def test_правка_суммы_и_даты_по_id_становится_обновлением(mod):
@@ -129,6 +130,20 @@ def test_правка_суммы_и_даты_по_id_становится_обн
     change = report["обновления"][0]["change"]
     assert change["amount"] == {"было": 40000.0, "стало": 50000.0}
     assert change["tx_date"] == {"было": "2026-10-06", "стало": "2026-10-07"}
+
+
+def test_производная_от_события_не_переносится_из_листа(mod):
+    """AC-25: строка `origin='event'` не правится листом, расхождение — в отчёт.
+
+    Иначе правка листа уничтожила бы связь с событием и нарушила I11/I12 молча
+    (docs/development/196 §7.4 п.2).
+    """
+    sheet_ops = mod.sheet_operations(
+        sheet([row(expense=("Аренда Прачки", "7", 14000), tx_id="bot:12")]), "2026-10")
+    report = mod.build_report(sheet_ops, [db(12, amount=15000, event_id=99)], "2026-10")
+    assert report["к_обновлению"] == 0
+    assert report["ids_удалены_в_листе"] == []
+    assert any("производная от события" in item["what"] for item in report["расхождения"])
 
 
 def test_совпадающая_строка_не_попадает_в_обновления(mod):

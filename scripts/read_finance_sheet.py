@@ -213,6 +213,12 @@ def build_report(sheet: list[dict], db_rows: list[dict], period: str) -> dict:
                                 "what": "несколько сумм в строке с одним ID — уточнить вручную"})
             continue
         matched.add(tx_id)
+        # Производная от события строка листом не правится (196 §7.4 п.2): её сумма
+        # и дата следуют за событием, расхождение сверяет I11, а не перенос из листа.
+        if db.get("event_id") is not None:
+            differences.append({"id": tx_id, "row": segment["row"],
+                                "what": "производная от события — правится через событие"})
+            continue
         change = {}
         if segment["amount"] is not None and abs(float(db["amount"]) - segment["amount"]) > 0.01:
             change["amount"] = {"было": float(db["amount"]), "стало": segment["amount"]}
@@ -244,7 +250,7 @@ def build_report(sheet: list[dict], db_rows: list[dict], period: str) -> dict:
 def db_operations(period: str) -> list[dict]:
     with psycopg.connect(os.environ["DATABASE_URL"], row_factory=dict_row) as conn:
         return [dict(row) for row in conn.execute("""
-            select id, tx_date, amount, block, purpose, status, sheet_written_at
+            select id, tx_date, amount, block, purpose, status, sheet_written_at, event_id
             from budget_tx where period = %s order by id""", (period,)).fetchall()]
 
 
@@ -263,8 +269,12 @@ def apply_updates(updates: list[dict], conn) -> int:
             sets.append("period = %s")
             params.extend([new_date, new_date.strftime("%Y-%m")])
         params.append(item["id"])
-        conn.execute(f"update budget_tx set {', '.join(sets)} where id = %s", params)
-        changed += 1
+        # условие `event_id is null` — вторая защита: производную строку лист не двигает
+        cursor = conn.execute(
+            f"update budget_tx set {', '.join(sets)} where id = %s and event_id is null",
+            params)
+        # подменённый в тестах conn может не отдать курсор — считаем как раньше
+        changed += 1 if cursor is None else cursor.rowcount
     return changed
 
 

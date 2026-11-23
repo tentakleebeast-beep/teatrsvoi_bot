@@ -185,6 +185,23 @@ entries:
     title: Сверка листов
     not_for_agent: "админ-операция применяет изменения в данных; агент только читает"
 
+  # E6-2: проекты — список и карточка (docs/development/196 §6). Карточка соединяет
+  # события, деньги и арендатора; агент данные проектов не правит.
+  - id: screen.projects
+    kind: screen
+    surface: webapp
+    source: /webapp/projects
+    title: Проекты
+    tool: read_budget
+    note: "список проектов: тип, статус, ближайшее событие, план и факт"
+
+  - id: screen.project
+    kind: screen
+    surface: webapp
+    source: /webapp/project
+    title: Карточка проекта
+    not_for_agent: "деньги и арендатор проекта меняются человеком; агент только читает"
+
   - id: screen.broadcast
     kind: screen
     surface: webapp

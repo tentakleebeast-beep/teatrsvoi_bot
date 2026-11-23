@@ -23,7 +23,10 @@ from __future__ import annotations
 
 from datetime import datetime
 
+import psycopg
 from fastapi import status
+from psycopg.conninfo import make_conninfo
+from psycopg.rows import dict_row
 
 from . import core
 from .category_alias import LEASE_INCOME, canonical
@@ -42,6 +45,31 @@ def _period_status(conn, period: str) -> str | None:
     return row["status"] if row else None
 
 
+def _audit_refusal(conn, period: str, who: dict | None, action: str) -> None:
+    """Записать отказ так, чтобы он пережил откат транзакции запроса.
+
+    Отказ поднимает исключение, а соединение запроса на исключении откатывается —
+    аудит, записанный в нём, исчез бы. Поэтому отказ пишется отдельным коротким
+    соединением к той же базе: запись решения остаётся, даже когда сама правка
+    не состоялась (§7.5).
+    """
+    payload = {"action": action, "period": period}
+    try:
+        # `conn.info.dsn` пароль не отдаёт, поэтому адрес собирается из полей.
+        dsn = make_conninfo(host=conn.info.host, port=conn.info.port,
+                            dbname=conn.info.dbname, user=conn.info.user,
+                            password=conn.info.password)
+        with psycopg.connect(dsn, row_factory=dict_row) as audit_conn:
+            core.audit(audit_conn, "human", (who or {}).get("id"), "budget.period.refuse",
+                       "budget_period", period, after=payload)
+        return
+    except (psycopg.Error, OSError, AttributeError, KeyError) as exc:
+        # аудит вспомогательный: отказ не должен превращаться в другую ошибку
+        core.log.warning("аудит отказа периода не записан отдельным соединением: %s", exc)
+    core.audit(conn, "human", (who or {}).get("id"), "budget.period.refuse",
+               "budget_period", period, after=payload)
+
+
 def ensure_period_open(conn, period: str, who: dict | None, action: str) -> None:
     """Отказ на запись в закрытый период: `409 period_closed` и запись в аудит.
 
@@ -49,8 +77,7 @@ def ensure_period_open(conn, period: str, who: dict | None, action: str) -> None
     """
     if _period_status(conn, period) != "closed":
         return
-    core.audit(conn, "human", (who or {}).get("id"), "budget.period.refuse",
-               "budget_period", period, after={"action": action, "period": period})
+    _audit_refusal(conn, period, who, action)
     raise ApiError(status.HTTP_409_CONFLICT, PERIOD_CLOSED_TEXT, code="period_closed")
 
 

@@ -47,6 +47,7 @@ from app.pages import (
     polls_edit,
     polls_mine,
     polls_results,
+    projects,
     services,
     week,
 )
@@ -183,6 +184,15 @@ def build_router(*, actor: Callable[..., dict], caps_for: Callable[[dict], list[
         `GET /webapp/files/{id}/view`, а оболочка не пускает на экран по `SCREEN_CAPS`.
         """
         return files.FILE_PAGE
+
+    @router.get("/webapp/project", response_class=HTMLResponse)
+    def webapp_project_page() -> str:
+        """Карточка проекта: `?id=N`, как у `/webapp/file` (E6-2, docs/development/196 §6.2).
+
+        Список `/webapp/projects` приходит из реестра `SECTIONS` (запись `projects`),
+        карточка — вложенный экран: отдельной строки в «Управлении» нет.
+        """
+        return projects.PROJECT_CARD_PAGE
 
     @router.get("/webapp/person", response_class=HTMLResponse)
     def webapp_person_page() -> str:

@@ -79,6 +79,9 @@ SCREEN_LABELS: dict[str, tuple[int, str, str]] = {
     "/webapp/week": (2, "week", "Время"),
     "/webapp/money": (3, "money", "Деньги"),
     "/webapp/more": (4, "more", "Ещё / Управление"),
+    # E6-2: проекты — список и карточка (docs/development/196 §6).
+    "/webapp/projects": (37, "projects", "Проекты"),
+    "/webapp/project": (38, "project", "Карточка проекта"),
     "/webapp/week/summary": (5, "week-summary", "Сводка занятости"),
     "/webapp/week/month": (6, "week-month", "Сетка месяца"),
     "/webapp/slots": (7, "slots", "Поиск окон"),

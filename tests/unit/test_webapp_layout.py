@@ -72,8 +72,10 @@ def test_четвёртая_вкладка_по_правам():
     assert layout.tab_label("more", ["registration.approve"]) == "Ещё"
     # Админ: «*» покрывает всё.
     assert layout.tab_label("more", ["*"]) == "Управление"
-    # Бюджетные права в управление не входят — они на вкладке «Деньги».
-    assert layout.tab_label("more", ["budget.write", "budget.read"]) == "Ещё"
+    # Бюджетные права сами по себе вкладку не открывают. Исключение — `budget.read`:
+    # с E6-2 он даёт раздел «Проекты» в «Управлении» (docs/development/196 §5).
+    assert layout.tab_label("more", ["budget.write"]) == "Ещё"
+    assert layout.tab_label("more", ["budget.write", "budget.read"]) == "Управление"
 
 
 def test_активная_вкладка_помечена():
