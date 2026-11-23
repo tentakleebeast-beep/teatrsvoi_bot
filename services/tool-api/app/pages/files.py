@@ -1,30 +1,51 @@
-"""Файлы и папки — на дизайн-системе v2 (docs/development/92 §9).
+"""Экран «Файлы»: место, загрузка, поиск и сетка файлов (Ш-08, E4).
 
 Что здесь важнее всего:
 
 * **Кому открыто.** Решение V-039 (в): «Файлы студии» видят admin, org и master (право
   `files.access`, проверка на сервере); без права экран говорит словами (Б3). Кого
   пускает действие, решает домен: `folders` — admin и org, `tags`/`file_access` — admin.
-* **Действия — на экране, а не только в чате.** Папки, доступ к личному файлу и
-  утверждение тега живут в `files_actions.py`: экран и чат зовут один обработчик.
-  Загрузка одна на оба входа — `presign → PUT → commit` (Ш-08).
-* **Никакой горизонтальной прокрутки.** Названия переносятся, кнопки порядка —
-  44×44, «Скачать архивом» — своей строкой под списком, а не в ряд с плеером.
-* **Своё — только то, чего нет в системе:** полоса места и порядок треков на
-  `.ui-meter` и `.ui-btn--icon`; всё прочее — классы `.ui-*`.
-* **Файлы — плиткой, папки — деревом (155).** Сетка в две колонки с иконкой вида и
-  широкой плиткой для длинного имени; иерархия папок собирается на клиенте из плоского
-  ответа `folders.tree`. Плитка — `files_grid.py`, дерево — `files_tree.py`.
+* **Два расположения и поиск (E4).** Файл можно положить в Garage или добавить ссылкой на
+  Drive; у файла есть описание и папка. Поиск идёт по имени, папке и типу — чипы над
+  сеткой переключают набор, подпись «Найдено: N» говорит, что сетка не «Мои файлы».
+* **Никакой горизонтальной прокрутки.** Названия переносятся, кнопки порядка — 44×44.
+* **Файлы — плиткой, папки — деревом (155).** Плитка — `files_grid.py`, дерево —
+  `files_tree.py`, загрузка и ссылка — `files_upload.py` и `files_link.py`: порог
+  `test_webapp_pages_split.py` — 400 строк на модуль страниц.
 
 Загрузка идёт мимо сервера: `presign → PUT в хранилище → commit`. Поэтому тут нет
 `<form>` и `multipart`: телефон отдаёт файл прямо в объектное хранилище, а сервер
 выдаёт ссылку и записывает запись в базу.
+
+Обоснование: docs/development/192 §8, docs/development/155 §2.2, docs/development/92 §9.
 """
 
 from __future__ import annotations
 
-from app.pages import files_actions, files_file, files_folder, files_grid, files_tree, layout
+import json
+
+from app.file_kind import CHIP_LABELS, KIND_WORDS
+from app.pages import (
+    files_actions,
+    files_file,
+    files_folder,
+    files_grid,
+    files_link,
+    files_tree,
+    files_upload,
+    layout,
+)
 from app.pages.admin_core import CORE
+
+
+def files_kind_words() -> str:
+    """Слова чипов из одного списка: `file_kind.KIND_WORDS` уезжает в JS как данные."""
+    return json.dumps(list(KIND_WORDS), ensure_ascii=False)
+
+
+def files_chip_labels() -> str:
+    """Надписи чипов из одной таблицы: «Документы», «Текст», «Картинки», «Аудио»."""
+    return json.dumps(dict(CHIP_LABELS), ensure_ascii=False)
 
 _BODY_FILES = """
 <section class="ui-section">
@@ -36,23 +57,19 @@ _BODY_FILES = """
   <p class="ui-small ui-muted files-hint">Крупные файлы идут мимо Telegram: у бота лимит 20 МБ.</p>
 </section>
 
-<section class="ui-section">
-  <div class="ui-section__head"><h2 class="ui-section__title">Загрузить</h2></div>
-  <p class="ui-small ui-muted" id="picked">Файлы не выбраны</p>
-  <div class="ui-meter" id="bar" hidden><span class="ui-meter__fill" id="bar-fill"></span></div>
-  <div class="ui-actions files-actions">
-    <button class="ui-btn ui-btn--block" type="button" id="pick">Выбрать файлы</button>
-    <button class="ui-btn ui-btn--primary ui-btn--block" type="button" id="upload" disabled>Загрузить</button>
-  </div>
-  <p class="ui-small ui-muted" id="status"></p>
-  <input id="file" type="file" multiple hidden>
-</section>
+""" + files_upload.BODY + files_link.BODY + """
 
 <section class="ui-section">
   <div class="ui-section__head">
-    <h2 class="ui-section__title">Мои файлы</h2>
+    <h2 class="ui-section__title" id="list-title">Мои файлы</h2>
     <span class="ui-section__meta" id="count"></span>
   </div>
+  <div class="ui-field">
+    <label class="ui-field__label" for="q">Поиск</label>
+    <input class="ui-input" id="q" type="search" maxlength="200"
+           placeholder="Имя, папка или тип" autocomplete="off">
+  </div>
+  <div class="ui-actions files-chips" id="chips"></div>
   <p class="ui-small ui-muted files-hint" id="list-note" hidden></p>
   <div class="ui-grid" id="list"></div>
 </section>
@@ -66,6 +83,12 @@ _SCRIPT_FILES = r"""
   // а строка только переключает его и зовёт `renderList`.
   var allFiles = [];
   var noFolderOnly = false;
+  // Поиск (docs/development/192 §8.3): любой активный фильтр переводит сетку на
+  // `/webapp/files/search`, пустой набор возвращает `/webapp/files/list`.
+  var searchQ = "";
+  var searchKind = "";
+  var searchStorage = "";
+  var searchTimer = null;
 
   function humanSize(bytes) {
     var value = Number(bytes) || 0;
@@ -95,6 +118,10 @@ _SCRIPT_FILES = r"""
       : percent >= 75 ? " ui-meter__fill--warn" : "");
   }
 
+  function searchActive() {
+    return Boolean(searchQ || searchKind || searchStorage);
+  }
+
   function visibleFiles() {
     return allFiles.filter(function (file) {
       return !noFolderOnly || fileWithoutFolder(file);
@@ -104,25 +131,30 @@ _SCRIPT_FILES = r"""
   // Пояснение под заголовком: без него сузившаяся сетка выглядит как пропавшие файлы.
   function syncNoFolderNote() {
     var note = $("list-note");
-    note.hidden = !noFolderOnly;
-    note.textContent = noFolderOnly
-      ? "Показаны файлы без папки (" + visibleFiles().length + "). "
-        + "Нажмите строку «Без папки» ещё раз, чтобы увидеть все."
-      : "";
+    note.hidden = !noFolderOnly || searchActive();
+    note.textContent = note.hidden ? ""
+      : "Показаны файлы без папки (" + visibleFiles().length + "). "
+        + "Нажмите строку «Без папки» ещё раз, чтобы увидеть все.";
   }
 
   function renderList() {
-    var rows = visibleFiles();
+    var rows = searchActive() ? allFiles : visibleFiles();
     var list = $("list");
     clear(list);
+    $("list-title").textContent = searchActive() ? "Найдено: " + rows.length : "Мои файлы";
     $("count").textContent = rows.length
       ? rows.length + " " + plural(rows.length, "файл", "файла", "файлов") : "";
     if (!rows.length) {
-      list.appendChild(noFolderOnly
-        ? empty("Файлов без папки нет",
-                "Все файлы разложены по папкам. Нажмите «Без папки» ещё раз, чтобы увидеть все.")
-        : empty("Файлов пока нет",
-                "Загрузите первый — он появится здесь и в папке, если вы её указали."));
+      if (searchActive()) {
+        list.appendChild(empty("Ничего не нашлось",
+          "Ищите по имени, папке и типу. Описание и содержимое файла в поиск не входят."));
+      } else if (noFolderOnly) {
+        list.appendChild(empty("Файлов без папки нет",
+          "Все файлы разложены по папкам. Нажмите «Без папки» ещё раз, чтобы увидеть все."));
+      } else {
+        list.appendChild(empty("Файлов пока нет",
+          "Загрузите первый — он появится здесь и в папке, если вы её указали."));
+      }
       syncNoFolderNote();
       return;
     }
@@ -142,12 +174,21 @@ _SCRIPT_FILES = r"""
     syncNoFolderRow();
   }
 
+  // Один вход на список и поиск: активные фильтры идут в `/search`, пустые — в `/list`.
   function refresh() {
-    return api("/webapp/files/list").then(function (res) {
+    var url = "/webapp/files/list";
+    if (searchActive()) {
+      var parts = [];
+      if (searchQ) parts.push("q=" + encodeURIComponent(searchQ));
+      if (searchKind) parts.push("kind=" + encodeURIComponent(searchKind));
+      if (searchStorage) parts.push("storage=" + encodeURIComponent(searchStorage));
+      url = "/webapp/files/search?" + parts.join("&");
+    }
+    return api(url).then(function (res) {
       if (res.status === 403) {
         denied = true;
-        $("upload").disabled = true;
-        $("pick").disabled = true;
+        if ($("upload")) $("upload").disabled = true;
+        if ($("pick")) $("pick").disabled = true;
         status("Раздел доступен администратору, организатору и мастеру.", true);
         clear($("list"));
         $("list").appendChild(empty("Раздел не для вас",
@@ -166,95 +207,80 @@ _SCRIPT_FILES = r"""
             : problem(res)));
         return null;
       }
+      if (searchActive()) {
+        // Поиск не отдаёт полосу места: она не меняется от запроса, а сервер её не считает.
+        renderListFromSearch(res.body);
+        return res.body;
+      }
       renderFiles(res.body);
       return res.body;
     });
   }
 
-  function sha256Hex(file) {
-    if (!crypto.subtle) return Promise.resolve(null);
-    return file.arrayBuffer().then(function (buffer) {
-      return crypto.subtle.digest("SHA-256", buffer);
-    }).then(function (digest) {
-      return Array.from(new Uint8Array(digest))
-        .map(function (byte) { return byte.toString(16).padStart(2, "0"); }).join("");
-    }, function () { return null; });
-  }
-
-  function uploadOne(file) {
-    var mime = file.type || "application/octet-stream";
-    return api("/webapp/files/presign", { name: file.name, mime: mime, size: file.size })
-      .then(function (res) {
-        if (res.status !== 200) throw new Error(problem(res));
-        var slot = res.body;
-        // В хранилище файл уходит напрямую: Telegram-инициализация тут не нужна.
-        return fetch(slot.upload_url, { method: "PUT", headers: { "Content-Type": mime }, body: file })
-          .then(function (put) {
-            if (!put.ok) throw new Error("Хранилище не приняло файл: код " + put.status + ".");
-            $("bar-fill").style.width = "100%";
-            return sha256Hex(file).then(function (hash) {
-              return api("/webapp/files/commit", {
-                object_key: slot.object_key, name: file.name, mime: mime, sha256: hash
-              });
-            });
-          })
-          .then(function (commit) {
-            if (commit.status !== 200) throw new Error(problem(commit));
-            return commit.body;
-          });
-      });
-  }
-
-  $("pick").addEventListener("click", function () { $("file").click(); });
-
-  $("file").addEventListener("change", function () {
-    chosen = Array.from($("file").files || []);
-    $("picked").textContent = chosen.length
-      ? chosen.map(function (file) { return file.name; }).join(", ")
-      : "Файлы не выбраны";
-    $("upload").disabled = !chosen.length || denied;
-  });
-
-  $("upload").addEventListener("click", function () {
-    if (!chosen.length) { status("Сначала выберите файлы.", true); return; }
-    var button = $("upload");
-    button.disabled = true;
-    $("bar").hidden = false;
-    var queue = chosen.slice();
-    var done = 0;
-
-    function next() {
-      var file = queue.shift();
-      if (!file) {
-        $("bar").hidden = true;
-        $("bar-fill").style.width = "0";
-        chosen = [];
-        $("file").value = "";
-        $("picked").textContent = "Файлы не выбраны";
-        button.disabled = true;
-        status(done ? "Загружено: " + done + "." : "", false);
-        if (done) refresh();
-        return;
-      }
-      status("Загружаю: " + file.name, false);
-      uploadOne(file).then(function (result) {
-        done += 1;
-        var name = result.file ? result.file.name : file.name;
-        var twice = result.file && result.file.duplicate ? " — такой файл уже был" : "";
-        status("Готово: " + name + twice, false);
-      }, function (error) {
-        status(error && error.message ? error.message : "Не получилось загрузить.", true);
-      }).then(next, next);
+  function renderListFromSearch(body) {
+    allFiles = (body && body.data) || [];
+    clear($("list"));
+    $("list-title").textContent = "Найдено: " + allFiles.length;
+    $("count").textContent = "";
+    if (!allFiles.length) {
+      $("list").appendChild(empty("Ничего не нашлось",
+        "Ищите по имени, папке и типу. Описание и содержимое файла в поиск не входят."));
+      return;
     }
+    allFiles.forEach(function (file) { $("list").appendChild(fileTile(file)); });
+    fitTiles($("list"));
+  }
 
-    next();
-  });
+  // --- чипы: Все · Документы · Текст · Картинки · Аудио · Ссылки -----------------
+  // Подписи чипов — отдельная таблица, а не слово + «ы» (§8.3): она приходит
+  // с сервера из `file_kind.CHIP_LABELS`, одна на экран «Файлы» и «Папка».
+  function chips() {
+    var holder = $("chips");
+    clear(holder);
+    var items = [{ label: "Все", kind: "", storage: "" }];
+    fileKindWords.forEach(function (word) {
+      items.push({ label: fileChipLabels[word] || word, kind: word, storage: "" });
+    });
+    items.push({ label: "Ссылки", kind: "", storage: "drive" });
+    items.forEach(function (item) {
+      var chip = el("button", "ui-btn ui-btn--sm", item.label);
+      chip.type = "button";
+      chip.dataset.kind = item.kind;
+      chip.dataset.storage = item.storage;
+      if (item.kind === searchKind && item.storage === searchStorage) {
+        chip.classList.add("ui-btn--primary");
+      }
+      chip.addEventListener("click", function () {
+        // «Ссылки» и чип типа взаимоисключающи: «документ» + «drive» — это пересечение,
+        // которого в ряду нет; выбранный чип задаёт набор целиком.
+        searchKind = item.kind;
+        searchStorage = item.storage;
+        chips();
+        refresh();
+      });
+      holder.appendChild(chip);
+    });
+  }
+
+  function onQuery() {
+    var value = ($("q").value || "").trim();
+    if (value === searchQ) return;
+    searchQ = value;
+    if (searchTimer) clearTimeout(searchTimer);
+    // Пауза, пока человек печатает: запрос на букву — это шум и лишние 403 в логах.
+    searchTimer = setTimeout(function () { refresh(); }, 250);
+  }
+
+  $("q").addEventListener("input", onQuery);
+  $("q").addEventListener("change", onQuery);
 
   auth().then(function (denied) {
     if (denied) { status(denied, true); return; }
+    chips();
     refresh().then(function (data) {
-      if (!data) return;
+      if (!data && !searchActive()) return;
       loadFolders();
+      loadFolderOptions();
       loadTags();
     });
   });
@@ -262,12 +288,14 @@ _SCRIPT_FILES = r"""
 
 FILES_PAGE = layout.page(
     "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=files_actions.STYLE,
-    scripts="<script>\n" + CORE + files_actions.KIND_WORD + files_grid.ICON_FOR
-            + files_grid.SCRIPT + files_tree.TREE_BUILD + files_tree.SCRIPT
+    scripts="<script>\n" + CORE + "var fileKindWords = " + files_kind_words() + ";\n"
+            + "var fileChipLabels = " + files_chip_labels() + ";\n"
+            + files_upload.SCRIPT + files_link.SCRIPT
+            + files_grid.ICON_FOR + files_grid.SCRIPT
+            + files_tree.TREE_BUILD + files_tree.SCRIPT
             + _SCRIPT_FILES + files_actions.SCRIPT + "\n})();\n</script>")
 
 # Экран папки живёт своим модулем (`files_folder.py`): порог ~400 строк на модуль страниц.
 FOLDER_PAGE = files_folder.FOLDER_PAGE
 # Экран одного файла — тоже свой модуль (`files_file.py`, А3).
 FILE_PAGE = files_file.FILE_PAGE
-

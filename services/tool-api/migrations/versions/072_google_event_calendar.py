@@ -18,7 +18,7 @@ branch_labels = None
 depends_on = None
 
 SQL_FILE = "072_google_event_calendar.sql"
-SQL_SHA256 = "f43039fa653db680ddd05d6a7a81a06a5428e695f3f77fdbe12e7fa2f09bd045"
+SQL_SHA256 = "213b6055fcd351989c1c443a03f1f254546301e64da6edf5647eebbed8c64501"
 
 
 def upgrade() -> None:

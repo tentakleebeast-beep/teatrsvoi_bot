@@ -31,22 +31,8 @@ STYLE = """<style>
 </style>
 """
 
-# Слово вида файла — одно на все три места: два списка («Файлы», «Папка») и экран
-# файла (`files_file.py`). Раньше `kindWord` знал `document`, но сервер такого вида
-# не отдаёт: pdf/docx — это `kind='text'`, и человек читал «текст» там, где лежит
-# документ (D8, docs/development/150 §4). Решает расширение, а вид — запасной путь.
-KIND_WORD = r"""
-  function kindWord(kind, name) {
-    var ext = String(name || "").split(".").pop().toLowerCase();
-    if (["pdf", "docx", "xlsx", "pptx", "odt", "ods", "rtf"].indexOf(ext) >= 0) return "документ";
-    if (["txt", "md", "csv"].indexOf(ext) >= 0) return "текст";
-    if (kind === "image") return "картинка";
-    if (kind === "audio") return "аудио";
-    if (kind === "document") return "документ";
-    if (kind === "text") return "текст";
-    return "файл";
-  }
-"""
+# Слово вида файла приходит с сервера полем `kind_word` в каждой строке (docs 192 §4.4):
+# второго списка расширений на клиенте нет. Здесь — только действия над файлом.
 
 # «Папка» без `?id=`: пусто — не тупик (docs/development/91 §1 п.9, карта t_75149a6c).
 # Вход в папку один — из «Файлов», поэтому пустое состояние называет источник и даёт

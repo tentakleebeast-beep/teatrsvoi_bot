@@ -48,34 +48,38 @@ def _call(expr: str):
 
 
 @pytest.mark.skipif(NODE is None, reason="нет node для проверки иконок")
-@pytest.mark.parametrize("kind,name,expected", [
-    ("audio", "01 Увертюра.mp3", "ui-i-audio"),
-    ("image", "Афиша.png", "ui-i-image"),
-    ("document", "Программа.doc", "ui-i-document"),
-    ("text", "заметки.md", "ui-i-text"),
+@pytest.mark.parametrize("word,expected", [
+    ("аудио", "ui-i-audio"),
+    ("картинка", "ui-i-image"),
+    ("документ", "ui-i-document"),
+    ("текст", "ui-i-text"),
+    ("папка", "ui-i-file"),
+    ("файл", "ui-i-file"),
 ])
-def test_иконка_по_kind(kind, name, expected) -> None:
-    """Вид файла даёт свой символ: узнавание без чтения подписи."""
-    assert _call("iconFor(" + json.dumps(kind) + ", " + json.dumps(name) + ")") == expected
+def test_иконка_по_слову(word, expected) -> None:
+    """Слово вида даёт свой символ: узнавание без чтения подписи.
+
+    Слово приходит с сервера (`kind_word`), поэтому иконка спрашивает слово, а не
+    расширение: второго списка расширений на клиенте нет (docs/development/192 §4.4).
+    """
+    assert _call("iconFor(" + json.dumps(word) + ")") == expected
 
 
 @pytest.mark.skipif(NODE is None, reason="нет node для проверки иконок")
-@pytest.mark.parametrize("kind,name,expected", [
-    ("text", "Гаммы.pdf", "ui-i-document"),
-    ("text", "Смета.docx", "ui-i-document"),
-    ("text", "заметки.md", "ui-i-text"),
-    ("text", "список.csv", "ui-i-text"),
+@pytest.mark.parametrize("word,expected", [
+    ("документ", "ui-i-document"),
+    ("текст", "ui-i-text"),
 ])
-def test_расширение_сильнее_kind(kind, name, expected) -> None:
-    """pdf приходит как `kind='text'`: решает расширение, иначе иконка спорит со словом."""
-    assert _call("iconFor(" + json.dumps(kind) + ", " + json.dumps(name) + ")") == expected
+def test_слово_сильнее_вида(word, expected) -> None:
+    """pdf приходит как `kind='text'`, но человеку это «документ» — иконка идёт за словом."""
+    assert _call("iconFor(" + json.dumps(word) + ")") == expected
 
 
 @pytest.mark.skipif(NODE is None, reason="нет node для проверки иконок")
 def test_неизвестный_вид() -> None:
-    """Ни вида, ни расширения — общий символ файла, а не пустое место."""
-    assert _call("iconFor(null, 'файл.bin')") == "ui-i-file"
-    assert _call("iconFor(undefined, '')") == "ui-i-file"
+    """Ни слова, ни вида — общий символ файла, а не пустое место."""
+    assert _call("iconFor('файл')") == "ui-i-file"
+    assert _call("iconFor('')") == "ui-i-file"
 
 
 def _symbols() -> list[str]:
