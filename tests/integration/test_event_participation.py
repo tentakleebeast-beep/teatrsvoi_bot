@@ -5,11 +5,14 @@
 Проверяется то, что человек увидит, а не форма запроса: пустое окно значит весь
 интервал события; заданное окно приходит своему участнику; чужое окно роли без
 `schedule.write` не приходит; окно вне события — 422; минуты не округляются до
-часа; перенос события личные окна не сдвигает и говорит об этом предупреждением,
-а перенос события без личных окон не предупреждает вовсе.
+часа; перенос события личные окна не сдвигает по часам и говорит об этом
+предупреждением, а перенос события без личных окон не предупреждает вовсе;
+перенос на другой день переносит дату окна, оставляя те же часы и минуты.
 """
 
 from __future__ import annotations
+
+from datetime import datetime
 
 import psycopg
 from app.person_key import make_key
@@ -267,3 +270,56 @@ def test_перенос_без_личных_окон_не_предупрежда
                       headers=_headers(785010)).json()["event"]
     assert (card["my_time"]["time_from"], card["my_time"]["time_to"]) == ("19:00", "21:00"), \
         "окно «весь интервал» должно следовать за событием"
+
+
+def test_перенос_на_другой_день_двигает_дату_окна(client, monkeypatch):
+    """Перенос на другой день: дата личного окна следует за событием (V-134).
+
+    Окно 19:30–21:00 стоит на дне события; после переноса на 13-е, 14-е и назад
+    на 12-е дата меняется, а часы и минуты остаются. `null` у человека без
+    личного времени остаётся `null` — иначе окно стало бы чужим личным временем.
+    """
+    _allow(client)
+    _prepare(monkeypatch)
+    with psycopg.connect(_test_dsn()) as conn:
+        vitya = _person(conn, 785011, "Другой День Виктор")
+        luda = _person(conn, 785012, "Другой День Людмила")
+
+    assigned = _assign(client, "2027-01-12", 18, 22, [vitya, luda],
+                       windows=[{"participant_id": vitya,
+                                 "time_from": "19:30", "time_to": "21:00"}])
+    assert assigned["ok"] is True, assigned
+    event_id = assigned["event_id"]
+
+    from app import core as api
+
+    for day in ("2027-01-13", "2027-01-14", "2027-01-12"):
+        answer = client.post("/tools/events/move", headers=HEADERS, json={
+            "event_id": event_id, "date": day, "from_hour": 18, "to_hour": 22})
+        assert answer.status_code == 200, answer.text
+        moved = answer.json()
+        assert moved["ok"] is True, moved
+
+        card = client.get(f"/tools/events/{event_id}",
+                          headers=_headers(785011)).json()["event"]
+        assert card["date"] == day, card
+        from_at = datetime.fromisoformat(card["my_time"]["from_at"]).astimezone(api.TZ)
+        to_at = datetime.fromisoformat(card["my_time"]["to_at"]).astimezone(api.TZ)
+        assert (from_at.date().isoformat(), from_at.strftime("%H:%M")) == (day, "19:30"), \
+            f"дата «с» не следует за событием: {card['my_time']}"
+        assert (to_at.date().isoformat(), to_at.strftime("%H:%M")) == (day, "21:00"), \
+            f"дата «до» не следует за событием: {card['my_time']}"
+
+        with psycopg.connect(_test_dsn()) as conn:
+            window, empty = conn.execute(
+                "select from_at, to_at from event_participant "
+                "where event_id = %s and participant_id = %s", (event_id, vitya)).fetchone()
+            empty_window = conn.execute(
+                "select from_at, to_at from event_participant "
+                "where event_id = %s and participant_id = %s", (event_id, luda)).fetchone()
+        assert window.astimezone(api.TZ).date().isoformat() == day, \
+            "в базе окно осталось на прежнем дне"
+        assert (window.astimezone(api.TZ).strftime("%H:%M"),
+                empty.astimezone(api.TZ).strftime("%H:%M")) == ("19:30", "21:00")
+        assert empty_window == (None, None), \
+            f"«весь интервал» превратился в личное время: {empty_window}"

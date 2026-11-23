@@ -338,6 +338,29 @@ def _upsert_windows(conn, event_id: int, day: date,
             (event_id, pid, from_at, to_at))
 
 
+def _carry_windows(conn, event_id: int, day: date, rows) -> None:
+    """Перенести сохранённые личные окна на новый день события (V-134).
+
+    Личное окно — это часы того дня, на который стоит событие (`_local_minutes`),
+    поэтому при переносе на другой день меняется только дата: часы и минуты
+    остаются прежними, иначе окно указывало бы на день, которого у события уже
+    нет. `null` остаётся `null` — это значит «край следует за событием», и
+    подставлять сюда края прежнего интервала нельзя.
+
+    Сюда попадают только строки, не присланные явно: явная замена уже записана
+    `_upsert_windows` с новым днём.
+    """
+    for row in rows:
+        from_at, to_at = row["from_at"], row["to_at"]
+        if from_at is not None:
+            from_at = datetime.combine(day, from_at.astimezone(core.TZ).time(), core.TZ)
+        if to_at is not None:
+            to_at = datetime.combine(day, to_at.astimezone(core.TZ).time(), core.TZ)
+        conn.execute("update event_participant set from_at = %s, to_at = %s "
+                     "where event_id = %s and participant_id = %s",
+                     (from_at, to_at, event_id, row["participant_id"]))
+
+
 def _write_participation(conn, event_id: int, day: date, people: list[int],
                          windows: dict[int, tuple[int | None, int | None]]) -> None:
     """Записать состав события целиком: у кого окна нет — «весь интервал»."""
@@ -1092,10 +1115,13 @@ def events_move(body: EventMoveIn,
     with core.pool.connection() as conn:
         conn.execute("update event_plan set starts_at = %s, ends_at = %s where id = %s",
                      (start, end, plan["id"]))
-        # Личные окна при переносе не сдвигаются: правится только то, что
-        # организатор прислал явно (V-134).
+        # Личные окна при переносе не сдвигаются по часам, но их дата следует за
+        # событием: правится только то, что организатор прислал явно (V-134),
+        # остальные окна переезжают на новый день теми же часами.
         if new_windows:
             _upsert_windows(conn, plan["id"], day, new_windows)
+        _carry_windows(conn, plan["id"], day,
+                       [row for row in saved if row["participant_id"] not in new_windows])
         # Дата и период производной операции следуют за событием (196 §7.1).
         project_money.move_date(conn, plan["id"], start, who)
 
