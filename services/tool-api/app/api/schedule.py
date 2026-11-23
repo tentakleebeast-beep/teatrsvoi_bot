@@ -13,6 +13,7 @@ from .. import (
     core,
     google_targets,
     month_grid,
+    schedule_rehearsal,
     schedule_test_sheet,
     sheet_binding,
     sheet_load,
@@ -1328,19 +1329,12 @@ def _sheet_load_values() -> tuple[list[list] | None, str]:
     на плоский журнал «Занятость», и загрузка на нём читала бы пустой первый лист
     (docs/development/149 §2.1). Диапазон тот же `A1:AZ3000`, что у остальных читателей листа:
     он растёт вниз, и фиксированные 400 строк из замера стали бы обрезкой.
+
+    Само чтение живёт в `schedule_rehearsal`: скрипт репетиции цветов (`fill_test_schedule.py`)
+    обязан видеть тот же лист теми же значениями, а вторая копия чтения разошлась бы с маршрутом.
     """
-    if not core.SCHEDULE_HUMAN_SPREADSHEET_ID:
-        return None, "no_spreadsheet"
-    try:
-        service = core._sheets_read()
-        values = service.spreadsheets().values().get(
-            spreadsheetId=google_targets.read_id("schedule.human"),
-            range=f"'{core.SCHEDULE_HUMAN_SHEET_TITLE}'!A1:AZ3000",
-            majorDimension="ROWS").execute().get("values", [])
-    except GOOGLE_API_ERRORS as e:
-        core.log.warning("общий лист «Расписание студийцы» недоступен: %s", e)
-        return None, "sheet_unavailable"
-    return values, ""
+    return schedule_rehearsal.live_sheet_values()
+
 
 
 def _sheet_load_person(target: int) -> tuple[str, list[str]]:
