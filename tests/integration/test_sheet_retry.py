@@ -100,7 +100,7 @@ class _FakeSheets:
 
     def get(self, spreadsheetId=None, range=None, fields=None, majorDimension=None):
         """Два вида `get`: метаданные файла (`fields`) и кусок значений."""
-        if fields and "sheets(" in fields:
+        if fields and "sheets" in fields:
             return _Req(lambda: {"properties": {"modifiedTime": None},
                                  "sheets": [{"properties": {"sheetId": 3, "title": TITLE}}]})
         return _Req(lambda: {"values": []})

@@ -32,8 +32,11 @@ from app.errors import ApiError
 #: и не даёт склеить «a b» из двух разных колонок.
 HEADER_SEP = "\x1f"
 
-#: Поля, которые нужны и для выбора листа, и для проверки свежести.
-SHEET_FIELDS = "properties.modifiedTime,sheets(properties(sheetId,title))"
+#: Поля метаданных листа. `properties.modifiedTime` в Sheets API не существует (это
+#: свойство файла Drive): запрос с ним отвечает 400 «invalid argument», поэтому время
+#: правки берётся у Drive отдельно (`file_modified_time`).
+SHEET_FIELDS = "properties.title,sheets.properties(sheetId,title)"
+DRIVE_FIELDS = "modifiedTime"
 
 
 def norm_cell(value: Any) -> str:
@@ -164,6 +167,22 @@ def stale_reason(modified_time: datetime | None, last_edit_time: datetime | None
     return modified_time > last_edit_time
 
 
+def file_modified_time(spreadsheet_id: str, drive: Any = None) -> datetime | None:
+    """Время правки файла из Drive: Sheets API этого свойства не отдаёт (186 §4.3 шаг 6).
+
+    Содержимое не читается — только `modifiedTime`. Любой сбой (нет прав, нет ключа,
+    старый клиент) даёт `None`: без времени свежесть просто не блокирует запись, а
+    шапка и перечитывание продолжают защищать от записи поверх правки человека.
+    """
+    try:
+        client = drive if drive is not None else core._drive_read()
+        answer = client.files().get(fileId=spreadsheet_id, fields=DRIVE_FIELDS).execute()
+    except (*core.GOOGLE_API_ERRORS, ValueError):
+        # время правки — подсказка, а не данные: без него свежесть просто не блокирует
+        return None
+    return parse_time(answer.get("modifiedTime"))
+
+
 def ensure_fresh(modified_time: datetime | None, binding: Binding) -> None:
     if stale_reason(modified_time, binding.last_edit_time):
         raise ApiError(409, "sheet_changed_since_read: файл изменился — обновите и повторите",
@@ -212,13 +231,21 @@ def _header_values(service, spreadsheet_id: str, title: str, header_row: int) ->
         majorDimension="ROWS").execute().get("values", [])
 
 
-def open_sheet(key: str, *, conn, write: bool = True, service: Any = None) -> SheetSession:
+def open_sheet(key: str, *, conn, write: bool = True, service: Any = None,
+               drive: Any = None) -> SheetSession:
     """Шаги 1–6 протокола: ключ, режим, привязка, лист по имени, шапка, свежесть.
 
     Возвращает открытый лист. Любой шаг может отказать кодом из 186 §9 — и это
     правильный исход: писать наугад бот не умеет.
     """
-    spreadsheet_id = google_targets.resolve(key) if write else google_targets.read_id(key)
+    if write:
+        spreadsheet_id = google_targets.resolve(key)
+    elif key in google_targets.READ_SOURCES:
+        spreadsheet_id = google_targets.read_id(key)
+    else:
+        # ключ записи тоже можно читать: чтение — подмножество, и превью листа бота
+        # не должно требовать отдельного ключа чтения
+        spreadsheet_id = google_targets.resolve(key)
     if not spreadsheet_id:
         raise ApiError(503, "write_target_unset: объект записи не настроен",
                        code="write_target_unset")
@@ -241,6 +268,8 @@ def open_sheet(key: str, *, conn, write: bool = True, service: Any = None) -> Sh
 
     sheet_id, sheet_title = pick_sheet(meta.get("sheets") or [], title)
     modified = parse_time((meta.get("properties") or {}).get("modifiedTime"))
+    if modified is None:
+        modified = file_modified_time(spreadsheet_id, drive)
 
     header = _header_values(service, spreadsheet_id, sheet_title, binding.header_row)
     row = header[0] if header else []

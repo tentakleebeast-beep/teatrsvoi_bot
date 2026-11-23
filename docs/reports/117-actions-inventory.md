@@ -32,7 +32,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | Маршрутов (методов) в `contracts/openapi.json` | 260 |
 | Маршрутов в коде, которые есть в контракте | 260 |
 | Всего маршрутов в коде (с редиректами и ресурсами) | 261 |
-| Из них с тестом (по вызову пути в `tests/`) | 248 |
+| Из них с тестом (по вызову пути в `tests/`) | 249 |
 | Действий без права (ни возможности, ни сессии) | 53 |
 | Действий с правом, проверенным в теле через `core._webapp_require(…)` | 61 |
 | Действий с правом, проверенным в теле через «*» в caps | 3 |
@@ -135,9 +135,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/finance/sources` | `services/tool-api/app/api/finance.py:224` | — | budget.read | нет | никто не зовёт |
 | POST `/tools/finance/sources` | `services/tool-api/app/api/finance.py:241` | — | budget.import | нет | никто не зовёт |
 | DELETE `/tools/finance/sources/{source_id}` | `services/tool-api/app/api/finance.py:260` | — | budget.import | нет | никто не зовёт |
-| GET `/tools/google/freshness` | `services/tool-api/app/api/google.py:72` | — | schedule.read.all | test_google_no_pii.py | никто не зовёт |
-| POST `/tools/google/mode` | `services/tool-api/app/api/google.py:64` | — | * | нет | никто не зовёт |
-| POST `/tools/google/refresh` | `services/tool-api/app/api/google.py:85` | — | schedule.read.all | test_google_no_pii.py | никто не зовёт |
+| GET `/tools/google/freshness` | `services/tool-api/app/api/google.py:73` | — | schedule.read.all | test_google_mode_api.py, test_google_no_pii.py | никто не зовёт |
+| POST `/tools/google/mode` | `services/tool-api/app/api/google.py:65` | — | admin.panel | test_google_mode_api.py | никто не зовёт |
+| POST `/tools/google/refresh` | `services/tool-api/app/api/google.py:86` | — | schedule.read.all | test_google_no_pii.py | никто не зовёт |
 | GET `/tools/howto` | `services/tool-api/app/api/webapp_api.py:186` | чат: run_menu_action | howto.read | test_howto.py | — |
 | GET `/tools/intent/categories` | `services/tool-api/app/api/admin.py:718` | — | любой активный | test_intent_log.py | никто не зовёт |
 | GET `/tools/intent/report` | `services/tool-api/app/api/admin.py:766` | — | audit.view | test_intent_log.py, test_smoke_api_fixes.py | никто не зовёт |
@@ -691,9 +691,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/finance/sources` | `services/tool-api/app/api/finance.py:224` | budget.read | нет |
 | POST `/tools/finance/sources` | `services/tool-api/app/api/finance.py:241` | budget.import | нет |
 | DELETE `/tools/finance/sources/{source_id}` | `services/tool-api/app/api/finance.py:260` | budget.import | нет |
-| GET `/tools/google/freshness` | `services/tool-api/app/api/google.py:72` | schedule.read.all | test_google_no_pii.py |
-| POST `/tools/google/mode` | `services/tool-api/app/api/google.py:64` | * | нет |
-| POST `/tools/google/refresh` | `services/tool-api/app/api/google.py:85` | schedule.read.all | test_google_no_pii.py |
+| GET `/tools/google/freshness` | `services/tool-api/app/api/google.py:73` | schedule.read.all | test_google_mode_api.py, test_google_no_pii.py |
+| POST `/tools/google/mode` | `services/tool-api/app/api/google.py:65` | admin.panel | test_google_mode_api.py |
+| POST `/tools/google/refresh` | `services/tool-api/app/api/google.py:86` | schedule.read.all | test_google_no_pii.py |
 | GET `/tools/intent/categories` | `services/tool-api/app/api/admin.py:718` | любой активный | test_intent_log.py |
 | GET `/tools/intent/report` | `services/tool-api/app/api/admin.py:766` | audit.view | test_intent_log.py, test_smoke_api_fixes.py |
 | POST `/tools/intent/resolve` | `services/tool-api/app/api/admin.py:728` | любой активный | test_intent_log.py |

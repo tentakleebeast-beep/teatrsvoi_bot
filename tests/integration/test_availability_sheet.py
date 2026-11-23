@@ -80,7 +80,7 @@ class FakeSheets:
                                              for r in (ranges or [])]})
 
     def get(self, spreadsheetId=None, range=None, fields=None, majorDimension=None):
-        if fields and "sheets(" in fields:
+        if fields and "sheets" in fields:
             return _Req(lambda: {"sheets": [{"properties": {"sheetId": 7, "title": TITLE}}]})
         return _Req(lambda: {"values": self._slice(range or "A1")})
 

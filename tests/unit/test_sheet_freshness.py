@@ -51,3 +51,47 @@ def test_разбор_времени_google_понимает_z_и_пустое()
     assert sheet_binding.parse_time("2026-11-20T09:00:00.000Z").tzinfo is not None
     assert sheet_binding.parse_time("") is None
     assert sheet_binding.parse_time("не дата") is None
+
+
+class _Request:
+    def __init__(self, answer):
+        self.answer = answer
+
+    def execute(self):
+        if isinstance(self.answer, Exception):
+            raise self.answer
+        return self.answer
+
+
+class _Drive:
+    """Drive-клиент: только `files().get(fields="modifiedTime")`."""
+
+    def __init__(self, answer):
+        self.answer = answer
+        self.calls: list[dict] = []
+
+    def files(self):
+        return self
+
+    def get(self, **params):
+        self.calls.append(params)
+        return _Request(self.answer)
+
+
+def test_маска_полей_листа_не_просит_modified_time():
+    """`properties.modifiedTime` Sheets API не знает: запрос с ним — 400 invalid argument."""
+    assert "modifiedTime" not in sheet_binding.SHEET_FIELDS
+    assert "properties.title" in sheet_binding.SHEET_FIELDS
+
+
+def test_время_правки_файла_берётся_у_drive():
+    """Свежесть сравнивает `modifiedTime` файла — его отдаёт Drive, а не Sheets."""
+    drive = _Drive({"modifiedTime": "2026-11-20T09:00:00.000Z"})
+    moment = sheet_binding.file_modified_time("file-id", drive)
+    assert moment is not None and moment.tzinfo is not None
+    assert drive.calls[0]["fields"] == sheet_binding.DRIVE_FIELDS
+
+
+def test_сбой_времени_правки_не_ломает_запись():
+    """Нет времени — свежесть не блокирует: иначе одна ошибка Drive останавливала бы всё."""
+    assert sheet_binding.file_modified_time("file-id", _Drive(OSError("нет"))) is None

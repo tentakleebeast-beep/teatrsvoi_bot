@@ -16,9 +16,10 @@ class FakeConn:
     """Соединение без БД: привязки листов и отметка чтения календаря."""
 
     def __init__(self, bindings: dict[str, dict] | None = None,
-                 read_at: str | None = None) -> None:
+                 read_at: str | None = None, edit_at: str | None = None) -> None:
         self.bindings = bindings or {}
         self.read_at = read_at
+        self.edit_at = edit_at
         self.calls: list[tuple[str, tuple]] = []
 
     def execute(self, sql, params=None):
@@ -29,7 +30,9 @@ class FakeConn:
     def fetchone(self):
         sql = self.calls[-1][0].lower()
         if sql.startswith("select value from app_setting"):
-            return {"value": self.read_at} if self.read_at else None
+            key = self._params[0] if self._params else None
+            value = self.edit_at if key == calendar_sync.CALENDAR_EDIT_KEY else self.read_at
+            return {"value": value} if value else None
         key = self._params[0] if self._params else None
         return self.bindings.get(key)
 
@@ -78,6 +81,14 @@ def test_календарь_с_отметкой_чтения_свежий():
     items = calendar_sync.freshness(FakeConn(read_at=now))
     entry = _entry(items, "calendar.read")
     assert entry["stale"] is False and entry["as_of"]
+
+
+def test_календарь_отдаёт_время_правки_в_google():
+    """190 §10.4: блок `calendar.read` несёт `last_edit_time`, а не только `as_of`."""
+    now = datetime.now(UTC).isoformat()
+    items = calendar_sync.freshness(FakeConn(read_at=now, edit_at=now))
+    entry = _entry(items, "calendar.read")
+    assert entry["last_edit_time"] == now
 
 
 def test_в_отчёте_нет_поля_со_значениями():
