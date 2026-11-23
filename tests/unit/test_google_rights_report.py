@@ -73,17 +73,35 @@ class FakeAcl:
         return FakeRequest({"items": self.items}, self.exc, self.calls, "acl.list")
 
 
+class FakeCalendarList:
+    """`calendarList.get`: отдаёт `accessRole` — права аккаунта на календарь."""
+
+    def __init__(self, calls: list, access_role: str = "writer",
+                 exc: Exception | None = None):
+        self.calls = calls
+        self.access_role = access_role
+        self.exc = exc
+
+    def get(self, **kwargs):
+        answer = {"accessRole": self.access_role} if self.access_role else {}
+        return FakeRequest(answer, self.exc, self.calls, "calendarList.get")
+
+
 class FakeCalendar:
-    def __init__(self, calls: list, acl=None, events=None):
+    def __init__(self, calls: list, acl=None, events=None, calendar_list=None):
         self.calls = calls
         self._acl = acl or FakeAcl(calls)
         self._events = events or FakeEvents(calls)
+        self._calendar_list = calendar_list or FakeCalendarList(calls)
 
     def acl(self):
         return self._acl
 
     def events(self):
         return self._events
+
+    def calendarList(self):
+        return self._calendar_list
 
 
 def test_читатель_календаря_меряется_events_list(monkeypatch):
@@ -177,6 +195,64 @@ def test_писатель_календаря_виден_по_acl(monkeypatch):
     assert row["ok"] is True
     assert row["role"] == "owner"
     assert "events.insert" not in calls
+
+
+def test_боевой_календарь_не_пробуется_вставкой(monkeypatch):
+    """V-120 б: для `calendar.live` роль берётся из `accessRole`, пробы нет.
+
+    В боевой календарь нельзя вставлять проверочное событие — там работают люди.
+    Поэтому роль подтверждает `calendarList.get`, а `events.insert` не вызывается.
+    """
+    calls: list[str] = []
+    acl = FakeAcl(calls, exc=FakeHttpError(403))
+    calendar = FakeCalendar(calls, acl=acl,
+                            calendar_list=FakeCalendarList(calls, access_role="writer"))
+    monkeypatch.setattr(core, "CALENDAR_ID_READ", "cal-live")
+    monkeypatch.setattr(core, "_calendar", lambda: calendar)
+    monkeypatch.setattr(core, "_calendar_write", lambda: calendar)
+    monkeypatch.setattr(rights, "_service_account_email", lambda: "sa@example.com")
+    monkeypatch.setattr(google_targets, "google_mode",
+                        lambda _conn=None: google_targets.MODE_TARGET)
+
+    row = rights._check("calendar.live")
+
+    assert row["ok"] is True, row
+    assert row["role"] == "writer"
+    assert calls == ["acl.list", "calendarList.get"], calls
+    assert "events.insert" not in calls
+    assert any(rights.ACL_PROBE in warning for warning in row["warnings"])
+
+
+def test_боевой_календарь_читателю_не_хватает_прав(monkeypatch):
+    """`accessRole=reader` у боевого календаря — расхождение, а не «ok»."""
+    calls: list[str] = []
+    calendar = FakeCalendar(calls, acl=FakeAcl(calls, exc=FakeHttpError(403)),
+                            calendar_list=FakeCalendarList(calls, access_role="reader"))
+    monkeypatch.setattr(core, "CALENDAR_ID_READ", "cal-live")
+    monkeypatch.setattr(core, "_calendar", lambda: calendar)
+    monkeypatch.setattr(core, "_calendar_write", lambda: calendar)
+    monkeypatch.setattr(rights, "_service_account_email", lambda: "sa@example.com")
+    monkeypatch.setattr(google_targets, "google_mode",
+                        lambda _conn=None: google_targets.MODE_TARGET)
+
+    row = rights._check("calendar.live")
+
+    assert row["ok"] is False, row
+    assert row["role"] == "reader"
+    assert "events.insert" not in calls
+
+
+def test_боевой_календарь_в_переходном_режиме_пропускается(monkeypatch):
+    """Ключ `calendar.live` действует только в `target`: в переходном — строка отчёта."""
+    calls: list[str] = []
+    monkeypatch.setattr(google_targets, "google_mode",
+                        lambda _conn=None: google_targets.MODE_TRANSITIONAL)
+
+    row = rights._check("calendar.live")
+
+    assert row["ok"] is True, row
+    assert any("только в целевом режиме" in warning for warning in row["warnings"]), row
+    assert calls == [], "в переходном режиме отчёт ходил в Google"
 
 
 class FakeFiles:

@@ -10,7 +10,6 @@ from __future__ import annotations
 import pytest
 from app import event_types
 from app.api import webapp_events
-from app.errors import ApiError
 
 SEED = (
     {"code": "rental", "letter": "А", "title": "Аренда", "color_id": 10,
@@ -135,21 +134,20 @@ def _endpoint(monkeypatch, conn) -> None:
                         lambda _conn=None: "target")
 
 
-def test_в_целевом_режиме_перекраска_отказывает_до_записи(monkeypatch) -> None:
-    """AC-15 / I-7: `apply: "all"` в `target` — 409 раньше сохранения.
+def test_в_целевом_режиме_перекраска_разрешена(monkeypatch) -> None:
+    """V-120 б: `apply: "all"` в `target` больше не отказывает — настройка сохраняется.
 
-    Проверяется то, что обещано: строки настройки не изменились (ни одного
-    `update`/`insert`), а не просто код ответа.
+    Раньше здесь стоял 409 `recolor_target_forbidden` до записи: ключа записи у боевого
+    календаря не было. Теперь перекраска в целевом режиме — штатная функция, поэтому
+    проверяется обратное: ни отказа, ни «тихого» пропуска сохранения.
     """
     conn = FakeConn()
     _endpoint(monkeypatch, conn)
     body = webapp_events.TypesIn.model_validate(
         {"apply": "all", "types": [dict(SEED[0])]})
-    with pytest.raises(ApiError) as caught:
-        webapp_events.webapp_event_types_save(body, who={})
-    assert caught.value.status_code == 409
-    assert caught.value.code == "recolor_target_forbidden"
-    assert conn.writes() == [], "отказ в целевом режиме успел сохранить настройку"
+    result = webapp_events.webapp_event_types_save(body, who={})
+    assert result["ok"] is True and result["saved"] is True
+    assert conn.writes(), "настройка не записалась"
 
 
 def test_в_целевом_режиме_только_новые_проходят(monkeypatch) -> None:

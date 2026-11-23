@@ -1,10 +1,12 @@
 """Реестр объектов Google: что можно писать, что только читать (docs/development/186 §2.2).
 
-Обоснование: docs/development/186 §2.2 (реестр объектов), §9 (коды отказа).
+Обоснование: docs/development/186 §2.2 (реестр объектов), §9 (коды отказа);
+docs/development/190 I-7, решение владельца V-120 б (боевой календарь — единственное
+исключение из V-072).
 Реестр — не список пожеланий, а граница: пишущий вызов возможен только с ключом из
-`WRITE_TARGETS`, а боевой календарь и живые листы в нём отсутствуют физически. Тест
-проверяет обе стороны: ключ вне реестра отказывает, живой объект не получает ключа
-записи даже при желании.
+`WRITE_TARGETS`, а боевой календарь получает ключ записи `calendar.live`, который
+действует только в целевом режиме. Тест проверяет обе стороны: ключ вне реестра
+отказывает, а режимная оговорка — не комментарий, а проверка (`write_target_mode_refused`).
 """
 
 from __future__ import annotations
@@ -18,17 +20,23 @@ def _code(exc: ApiError) -> str:
     return exc.code
 
 
-def test_пишущих_объектов_ровно_четыре():
-    """В реестре записи — только свои файлы: бюджет, занятость, тестовый лист, черновик."""
+def test_пишущих_объектов_ровно_пять():
+    """В реестре записи — свои файлы и один режимный ключ боевого календаря."""
     assert sorted(google_targets.WRITE_TARGETS) == [
-        "budget.transactions", "calendar.draft", "schedule.test", "schedule.workload"]
+        "budget.transactions", "calendar.draft", "calendar.live", "schedule.test",
+        "schedule.workload"]
 
 
 def test_живой_календарь_и_живые_листы_не_пишутся():
-    """Боевой календарь и живой лист есть только среди источников чтения."""
+    """Источники чтения не пишутся; боевой календарь — только через `calendar.live`."""
     for key in ("calendar.read", "schedule.human", "budget.live", "drive.root"):
         assert key not in google_targets.WRITE_TARGETS
         assert key in google_targets.READ_SOURCES
+    # Исключение V-120 б: ключ записи боевого календаря есть, но только один и только
+    # в целевом режиме — он не появляется среди источников чтения и не отменяет
+    # запрет писать по `calendar.read`.
+    assert google_targets.LIVE_CALENDAR in google_targets.WRITE_TARGETS
+    assert google_targets.LIVE_CALENDAR not in google_targets.READ_SOURCES
 
 
 def test_ключ_вне_реестра_отказывает_403(monkeypatch):
@@ -38,6 +46,20 @@ def test_ключ_вне_реестра_отказывает_403(monkeypatch):
         google_targets.resolve("calendar.read")
     assert caught.value.status_code == 403
     assert _code(caught.value) == "write_target_refused"
+
+
+def test_боевой_календарь_пишется_только_в_целевом_режиме(monkeypatch):
+    """`calendar.live`: в `target` — id боевого календаря, в переходном — 403 с кодом."""
+    monkeypatch.setattr(core, "CALENDAR_ID_READ", "live-calendar")
+    monkeypatch.setattr(google_targets, "google_mode", lambda _conn=None: "target")
+    assert google_targets.resolve("calendar.live") == "live-calendar"
+
+    monkeypatch.setattr(google_targets, "google_mode",
+                        lambda _conn=None: "transitional")
+    with pytest.raises(ApiError) as caught:
+        google_targets.resolve("calendar.live")
+    assert caught.value.status_code == 403
+    assert _code(caught.value) == "write_target_mode_refused"
 
 
 def test_пустой_id_отказывает_503(monkeypatch):

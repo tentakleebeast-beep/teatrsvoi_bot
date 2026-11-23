@@ -5,11 +5,10 @@
 тремя равноправными кнопками, «Только новые» не пишет в Google, а «Перекрасить
 все» отчитывается числом «Перекрашено N из M».
 
-Про режим `target`: §13.2 спецификации, п. 15 тела карты и I-7 говорят одно —
-боевой календарь бот не пишет, ключа записи у него в реестре `google_targets` нет,
-поэтому в целевом режиме «Перекрасить все» получает 409 `recolor_target_forbidden`
-до сохранения. Решение владельца V-120 (б) требует правки реестра отдельной картой;
-до неё экран обязан назвать отказ словами, а не показывать «Сохранено».
+Про режим `target`: решение владельца V-120 б — перекраска работает и в боевом
+календаре. Ключ записи `calendar.live` объявлен в реестре `google_targets` и действует
+только в целевом режиме, поэтому в `target` «Перекрасить все» сохраняет настройку и
+правит боевой календарь, а экран показывает «Сохранено. Перекрашено N из M», а не отказ.
 
     SVOI_WEBAPP_TESTS=1 .venv/bin/python -m pytest tests/webapp -q --browser chromium
 """
@@ -136,11 +135,12 @@ def test_перекрасить_все_отчитывается_числом_и_
     assert "not_found" in text, text
 
 
-def test_в_целевом_режиме_перекраска_отказывает_словами(app_page) -> None:
-    """I-7 / AC-15: в `target` — 409 `recolor_target_forbidden`, а не «Сохранено».
+def test_в_целевом_режиме_перекраска_отчитывается_числом(app_page) -> None:
+    """V-120 б: в `target` «Перекрасить все» снова работает и отчитывается числом.
 
-    Кнопка остаётся на месте (диалог — три равноправных варианта, V-087), но сервер
-    отказывает до сохранения, и экран обязан это назвать, а не показать успех.
+    Раньше экран получал 409 `recolor_target_forbidden` и называл выход «Только новые».
+    После ключа записи `calendar.live` отказ снят: кнопка на месте, сохранение проходит,
+    текст — «Сохранено. Перекрашено N из M» с причиной частичного сбоя.
     """
     page = _open(app_page("/webapp/admin/t/event-types", headers=TARGET))
     calls = _saves(page)
@@ -150,10 +150,10 @@ def test_в_целевом_режиме_перекраска_отказывае�
     button = page.locator(".ui-sheet__actions .ui-btn", has_text=RECOLOR_ALL)
     assert button.is_visible(), "в целевом режиме пропала «Перекрасить все»"
     button.click()
-    page.wait_for_selector("#error:not([hidden])", timeout=10_000)
+    page.wait_for_selector("#done:not([hidden])", timeout=10_000)
 
     assert calls[0]["apply"] == "all", calls[0]
-    text = page.locator("#error").inner_text()
-    assert "В боевом календаре перекраска не включена" in text, text
-    assert "Только новые" in text, text
-    assert page.locator("#done").is_hidden(), "отказ показан как сохранение"
+    text = page.locator("#done").inner_text()
+    assert "Перекрашено 3 из 4" in text, text
+    assert "не удалось: 1" in text, text
+    assert page.locator("#error").is_hidden(), "ошибка при успешной перекраске"
