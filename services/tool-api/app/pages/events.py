@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from app.pages import layout
+from app.pages.misc_common import JS_CLOCK as _JS_CLOCK
 
 _BODY_EVENT_CARD = """
 <div class="ui-small ui-muted" id="status" role="status">Открываю событие…</div>
@@ -59,6 +60,7 @@ _SCRIPT_EVENT_CARD = r"""<script>
 (function () {
   "use strict";
   window.SVOI_BACK = "/webapp/home";
+""" + _JS_CLOCK + r"""
   var tg = window.Telegram && window.Telegram.WebApp;
   function boot() { if (tg) { tg.ready(); tg.expand(); } }
   if (document.readyState === "loading") {
@@ -164,12 +166,11 @@ _SCRIPT_EVENT_CARD = r"""<script>
     var form = window.__moveForm;
     if (!form) { return; }
     var date = form.querySelector("#m-date").value.trim();
-    var from = form.querySelector("#m-from").value.trim();
-    var to = form.querySelector("#m-to").value.trim();
+    var from = clock(form.querySelector("#m-from").value);
+    var to = clock(form.querySelector("#m-to").value);
     var fail = form.querySelector("#m-error");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(from)
-        || !/^\d{1,2}:\d{2}$/.test(to)) {
-      fail.textContent = "Дата — ГГГГ-ММ-ДД, время — ЧЧ:ММ.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !from || !to) {
+      fail.textContent = "Дата — ГГГГ-ММ-ДД, время — ЧЧ:ММ или ЧЧ.ММ.";
       fail.hidden = false;
       return;
     }

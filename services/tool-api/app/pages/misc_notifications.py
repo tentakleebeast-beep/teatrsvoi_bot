@@ -67,7 +67,6 @@ _BODY_NOTIFICATIONS = """
 _SCRIPT_NOTIFICATIONS = "<script>\n(function () {\n  \"use strict\";\n  window.SVOI_BACK = \"/webapp/more\";\n" + _JS_COMMON + r"""
   var $ = function (id) { return document.getElementById(id); };
   var KEYS = ["rehearsals", "dues", "schedule_changes"];
-  var CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
   tgBoot();
 
   function row(key) {
@@ -97,10 +96,10 @@ _SCRIPT_NOTIFICATIONS = "<script>\n(function () {\n  \"use strict\";\n  window.S
   });
 
   function checkClock(field) {
-    var value = field.value.trim();
-    if (CLOCK.test(value)) { return true; }
+    var value = clock(field.value);
+    if (value) { field.value = value; return true; }
     var error = $("quiet_error");
-    error.textContent = "Время пишется как 20:00.";
+    error.textContent = "Время пишется как 20:00 или 20.00.";
     error.hidden = false;
     field.focus();
     return false;
