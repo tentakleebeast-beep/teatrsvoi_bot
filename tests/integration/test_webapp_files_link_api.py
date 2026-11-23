@@ -136,6 +136,33 @@ def test_дубль_чужой_закрытой_ссылки_без_имени(c
     assert "Чужая смета" not in body["detail"], "имя чужой закрытой ссылки утекло"
 
 
+def test_описание_длиннее_500_отбивает_схема_входа(client) -> None:
+    """`commit` и `link`: >500 знаков — 422 `validation_failed` до обработчика (§6.2, §6.3).
+
+    Предел этих двух ручек живёт в схеме входа, а не в домене: отказ приходит конвертом
+    валидации со списком полей, человеческого текста у него нет (в §9 это сказано прямо).
+    У `/meta` тот же предел проверяет домен и отвечает 400 `file_description_too_long` —
+    отдельный тест в `test_webapp_files_meta.py`. Тест фиксирует, что расхождение осознано:
+    если кто-то снимет `max_length`, здесь появится 200 вместо 422.
+    """
+    long = "я" * 501
+    head = headers(client)
+
+    link = client.post("/webapp/files/link",
+                       json={"url": "https://drive.google.com/file/d/abcdefghijklmnop/view",
+                             "description": long}, headers=head)
+    assert link.status_code == 422, link.text
+    assert link.json()["code"] == "validation_failed"
+    assert [err["loc"] for err in link.json()["detail"]] == [["body", "description"]]
+
+    commit = client.post("/webapp/files/commit",
+                         json={"object_key": "p1/описание.pdf", "name": "описание.pdf",
+                               "mime": "application/pdf", "description": long}, headers=head)
+    assert commit.status_code == 422, commit.text
+    assert commit.json()["code"] == "validation_failed"
+    assert [err["loc"] for err in commit.json()["detail"]] == [["body", "description"]]
+
+
 def _count() -> int:
     with psycopg.connect(_test_dsn()) as conn:
         return int(conn.execute("select count(*) from file_object").fetchone()[0])
