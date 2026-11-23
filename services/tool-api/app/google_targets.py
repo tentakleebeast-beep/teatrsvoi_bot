@@ -12,15 +12,20 @@
    реестре — `write_target_refused` (403), пустой идентификатор — `write_target_unset`
    (503). Молчаливого пропуска записи нет.
 2. Живые листы и боевой календарь есть только в `READ_SOURCES`: писать в них нельзя
-   даже по ошибке — ключа для этого не существует. Решение владельца V-120 б
-   (перекраска `colorId` в боевом календаре) сознательно не реализовано обходным
-   путём (`read_id` в пишущий вызов): ключ записи добавляется правкой этого реестра
-   отдельной картой, до неё перекраска в `target` отказывает 409
-   `recolor_target_forbidden` (`docs/development/190` I-7).
+   даже по ошибке — ключа для этого не существует. **Одно исключение** — ключ
+   `calendar.live` (боевой календарь, id `core.CALENDAR_ID_READ`): решение владельца
+   V-120 б разрешило перекраску в боевом календаре, поэтому ключ записи у него есть.
+   Исключение ограничено правкой `colorId` событий бота (`event_types.recolor`) и
+   действует только при `google_mode == target`; в переходном режиме `resolve` и
+   `allowed_for_write` на нём отказывают `write_target_mode_refused`. Другие пишущие
+   вызовы (создание, правка, отмена события) этим ключом не адресуются — для них
+   остаётся `calendar.draft` (`docs/development/190` I-7).
 3. Идентификаторы не зашиты в код: значение берётся из настроек (модульные константы
    ядра, собранные из `Settings` при старте), а модуль знает только имя поля.
 4. `google.mode` на набор объектов записи не влияет (дизайн D7): в переходном и целевом
-   режиме пишем в одно и то же.
+   режиме пишем в одно и то же. Исключение одно и названо выше — `calendar.live`: ключ
+   объявлен в обоих режимах, но режим решает, разрешён ли он (в переходном боевой
+   календарь правит ещё человек, бот туда не пишет).
 
 Тесты: `tests/unit/test_google_targets.py`, `tests/unit/test_google_write_boundary.py`.
 """
@@ -49,6 +54,9 @@ DEFAULT_MODE = MODE_TRANSITIONAL
 ROLE_READER = "reader"
 ROLE_WRITER = "writer"
 
+#: Единственный ключ записи, зависящий от режима: боевой календарь (V-120 б).
+LIVE_CALENDAR = "calendar.live"
+
 
 @dataclass(frozen=True, slots=True)
 class Target:
@@ -66,7 +74,9 @@ class Target:
 
 
 #: Объекты записи. Здесь только свои файлы: копия бюджета, копия занятости, тестовый
-#: лист цветов и черновой календарь. Живых листов и боевого календаря тут нет и не будет.
+#: лист цветов и черновой календарь. Живых листов тут нет и не будет. Исключение —
+#: `calendar.live`: боевой календарь, разрешённый только в целевом режиме и только
+#: для правки `colorId` событий бота (V-120 б, `docs/development/190` I-7).
 WRITE_TARGETS: dict[str, Target] = {
     "budget.transactions": Target(
         "budget.transactions", SHEET, "flat_table",
@@ -85,6 +95,8 @@ WRITE_TARGETS: dict[str, Target] = {
               "meta": {"dates_row": 1,
                        "hours": [f"{hour:02d}:00" for hour in range(8, 24)]}}),
     "calendar.draft": Target("calendar.draft", CALENDAR),
+    # Боевой календарь: запись разрешена только в целевом режиме и только на `colorId`.
+    LIVE_CALENDAR: Target(LIVE_CALENDAR, CALENDAR),
 }
 
 #: Объекты чтения. Живые файлы и боевой календарь — читатель, не редактор.
@@ -114,6 +126,10 @@ def _target_id(key: str) -> str:
         value = core.FINANCE_SOURCE_ID
     elif key == "calendar.read":
         value = core.CALENDAR_ID_READ
+    elif key == LIVE_CALENDAR:
+        # То же значение, что у источника чтения: один объект Google, два разных
+        # разрешения (чтение всем, запись — только в целевом режиме).
+        value = core.CALENDAR_ID_READ
     elif key == "drive.root":
         value = core.DRIVE_ROOT_ID
     else:
@@ -121,16 +137,25 @@ def _target_id(key: str) -> str:
     return str(value or "").strip()
 
 
-def resolve(key: str) -> str:
+def resolve(key: str, conn=None) -> str:
     """Идентификатор объекта **записи** по ключу реестра.
 
     Ключ вне `WRITE_TARGETS` — `write_target_refused` (403): ключ не «пустая строка»,
     иначе новая запись в чужой объект прошла бы молча. Пустой id — `write_target_unset`
     (503): объект объявлен, но не настроен, и притворяться, что записали, нельзя.
+    `calendar.live` (боевой календарь) разрешён только при `google.mode == target`:
+    в переходном режиме — `write_target_mode_refused` (403), потому что там в боевом
+    календаре работает ещё человек, а бот пишет только в черновой (V-120 б, I-7).
+    `conn` — уже открытое соединение, чтобы не открывать своё ради строки режима.
     """
     if key not in WRITE_TARGETS:
         raise ApiError(403, "write_target_refused: объект не разрешён для записи",
                        code="write_target_refused")
+    if key == LIVE_CALENDAR and google_mode(conn) != MODE_TARGET:
+        raise ApiError(
+            403,
+            "write_target_mode_refused: боевой календарь пишется только в целевом режиме",
+            code="write_target_mode_refused")
     value = _target_id(key)
     if not value:
         raise ApiError(503, "write_target_unset: объект записи не настроен",
@@ -158,11 +183,17 @@ def allowed_for_write(key: str, conn=None) -> bool:
 
     Набор объектов записи в обоих режимах одинаков (дизайн D7) — режим здесь только
     для того, чтобы вопрос «а в target?» имел ответ в коде, а не в голове читателя.
+    Исключение — `calendar.live`: он разрешён только в `target` (V-120 б), в переходном
+    возвращается `False`, и `sheet_binding.open_sheet` отказывает `write_target_refused`.
     `conn` передаётся, когда чтение режима идёт в уже открытом соединении: иначе
     вызов открывал бы своё и в unit-тестах упирался в пул.
     """
     mode = google_mode(conn)
-    return key in WRITE_TARGETS and mode in MODES
+    if key not in WRITE_TARGETS or mode not in MODES:
+        return False
+    if key == LIVE_CALENDAR and mode != MODE_TARGET:
+        return False
+    return True
 
 
 def _setting_value(row) -> str:

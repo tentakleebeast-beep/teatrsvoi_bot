@@ -75,8 +75,9 @@ def test_голова_alembic_после_071(test_db: str) -> None:
     """Учёт версий совпадает с файлом: накат дошёл до головы 071, а не остановился раньше.
 
     Голова сдвигается каждой новой миграцией: E1-4 добавила 072 (календарь события),
-    E4 — 073 (два расположения файла).
+    E4 — 073 (два расположения файла), E5 — 074 (типы событий), E6-2 — 075 (проекты),
+    V-132 — 076 (чтение расписания актёру), V-134 — 077 (личное время участия).
     """
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "075_projects_money"
+    assert head == "077_event_participant"

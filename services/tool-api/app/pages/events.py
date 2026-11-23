@@ -14,6 +14,7 @@
 from __future__ import annotations
 
 from app.pages import layout
+from app.pages.misc_common import JS_CLOCK as _JS_CLOCK
 
 _BODY_EVENT_CARD = """
 <div class="ui-small ui-muted" id="status" role="status">Открываю событие…</div>
@@ -29,6 +30,10 @@ _BODY_EVENT_CARD = """
     <div class="ui-row" id="row-time" hidden>
       <span class="ui-row__main"><span class="ui-row__title">Время</span></span>
       <span class="ui-row__value" id="time"></span>
+    </div>
+    <div class="ui-row" id="row-mine" hidden>
+      <span class="ui-row__main"><span class="ui-row__title">Ты задействован</span></span>
+      <span class="ui-row__value" id="mine"></span>
     </div>
     <div class="ui-row" id="row-place" hidden>
       <span class="ui-row__main"><span class="ui-row__title">Место</span></span>
@@ -59,6 +64,7 @@ _SCRIPT_EVENT_CARD = r"""<script>
 (function () {
   "use strict";
   window.SVOI_BACK = "/webapp/home";
+""" + _JS_CLOCK + r"""
   var tg = window.Telegram && window.Telegram.WebApp;
   function boot() { if (tg) { tg.ready(); tg.expand(); } }
   if (document.readyState === "loading") {
@@ -107,6 +113,10 @@ _SCRIPT_EVENT_CARD = r"""<script>
       clock = data.time_from + (data.time_to ? "–" + data.time_to : "");
     }
     setRow("row-time", clock, $("time"));
+    // Личное время участия (V-134): пустое окно уже расширено интервалом
+    // события на сервере, поэтому строка есть ровно у участника события.
+    var mine = data.my_time;
+    setRow("row-mine", mine ? mine.time_from + "–" + mine.time_to : "", $("mine"));
     setRow("row-place", data.location, $("place"));
     setRow("row-creator", data.creator ? data.creator.name : "",
            $("creator"));
@@ -164,12 +174,11 @@ _SCRIPT_EVENT_CARD = r"""<script>
     var form = window.__moveForm;
     if (!form) { return; }
     var date = form.querySelector("#m-date").value.trim();
-    var from = form.querySelector("#m-from").value.trim();
-    var to = form.querySelector("#m-to").value.trim();
+    var from = clock(form.querySelector("#m-from").value);
+    var to = clock(form.querySelector("#m-to").value);
     var fail = form.querySelector("#m-error");
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !/^\d{1,2}:\d{2}$/.test(from)
-        || !/^\d{1,2}:\d{2}$/.test(to)) {
-      fail.textContent = "Дата — ГГГГ-ММ-ДД, время — ЧЧ:ММ.";
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !from || !to) {
+      fail.textContent = "Дата — ГГГГ-ММ-ДД, время — ЧЧ:ММ или ЧЧ.ММ.";
       fail.hidden = false;
       return;
     }
@@ -182,11 +191,13 @@ _SCRIPT_EVENT_CARD = r"""<script>
     }).then(function (res) {
       if (res.status === 200 && res.body && res.body.ok) {
         SVOI.closeSheet();
+        var notes = (res.body.warnings || []).map(function (item) {
+          return item.text;
+        }).filter(function (text) { return !!text; });
         if (res.body.calendar_error) {
-          SVOI.toast("Время изменено в расписании; в календарь записать не удалось.");
-        } else {
-          SVOI.toast("Перенесено.");
+          notes.unshift("Время изменено в расписании; в календарь записать не удалось.");
         }
+        SVOI.toast(notes.length ? notes.join(" ") : "Перенесено.");
         load();
         return;
       }

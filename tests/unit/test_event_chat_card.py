@@ -261,3 +261,79 @@ def test_карточка_не_сбрасывает_чужую_форму(chat, 
 
     assert asyncio.run(state.get_state()) == "BudgetForm:amount"
     assert asyncio.run(state.get_data()) == {"amount": "3000"}
+
+
+def test_карточка_показывает_своё_время_участия():
+    """V-134: «ты задействован 19:30–21:00» и личные окна в карточке назначения.
+
+    Обоснование: docs/reports/194 §2 п.3. Строка берётся из `my_time`, который
+    сервер считает по составу события: пустое окно он уже расширил интервалом,
+    поэтому карточка не решает, что показать при пустом поле.
+    """
+    from routers import assign, events  # noqa: PLC0415 — путь gateway подставлен выше
+
+    event = {"kind_title": "Репетиция", "title": "Сцена", "date": "2026-12-21",
+             "from_hour": 18, "to_hour": 22, "venue_name": "Сцена",
+             "participants": [{"id": 1, "name": "Витя"}],
+             "my_time": {"time_from": "19:30", "time_to": "21:00"}}
+    assert "Ты задействован: 19:30–21:00" in events.card_text(event)
+
+    card = {"kind_title": "Репетиция", "title": "Сцена", "weekday": "понедельник",
+            "date": "2026-12-21", "from_hour": 18, "to_hour": 22, "venue_name": "Сцена",
+            "participants": [{"id": 1, "name": "Витя",
+                              "time_from": "19:30", "time_to": "21:00"},
+                             {"id": 2, "name": "Люда",
+                              "time_from": None, "time_to": None}]}
+    text = assign.card_text(card)
+    assert "Витя (19:30–21:00)" in text, "окно участника видно организатору с минутами"
+    assert "Люда (" not in text, "пустое окно не рисуется как своё"
+
+
+def test_предупреждение_переноса_доходит_до_организатора(monkeypatch):
+    """V-134 AC4: «окна не сдвинуты» сказано словами, а не только в JSON.
+
+    Обоснование: docs/reports/194 §2 п.3. Проверяется ответ бота на перенос:
+    `warnings` tool-api человек видит строкой «Внимание: …».
+    """
+    import asyncio
+    import types
+
+    from routers import events  # noqa: PLC0415 — путь gateway подставлен выше
+
+    async def fake_api(path, payload, chat_id):
+        return {"ok": True, "event_id": 5, "starts_at": "2026-12-25T18:00:00+04:00",
+                "ends_at": "2026-12-25T20:00:00+04:00", "notified": 1,
+                "warnings": [{"code": "personal_windows_outside",
+                              "text": "Новый интервал не покрывает личное время: Витя. "
+                                      "Окна не сдвинуты."}]}
+
+    monkeypatch.setattr(events.core, "api", fake_api)
+
+    class State:
+        data = {"ev_id": 5, "ev_new_day": "2026-12-25", "ev_new_from": 18,
+                "ev_new_to": 20, "ev_kind": "Репетиция", "ev_title": "Сцена",
+                "ev_day": "2026-12-25", "ev_from": 18, "ev_to": 22, "ev_people": {}}
+
+        async def get_data(self):
+            return dict(self.data)
+
+        async def clear(self):
+            self.data.clear()
+
+    answers: list[str] = []
+
+    class Message:
+        chat = types.SimpleNamespace(id=1)
+
+        async def answer(self, text, reply_markup=None):
+            answers.append(text)
+
+    class Callback:
+        message = Message()
+
+        async def answer(self, text=None, show_alert=False):
+            pass
+
+    asyncio.run(events._move(Callback(), State()))
+    text = "\n".join(answers)
+    assert "Внимание: Новый интервал не покрывает личное время: Витя" in text, text

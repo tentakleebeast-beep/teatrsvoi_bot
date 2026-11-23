@@ -460,17 +460,18 @@ def _settings_save(participant_id: int, body: NotificationSettingsIn) -> dict:
     иначе экран и чат разойдутся в том, что считается тихими часами
     (`docs/architecture/25` §9.2 п.2 — «вторая оболочка вызывает обработчик»).
     """
-    for value in (body.quiet_from, body.quiet_to):
-        if not core.CLOCK_RE.match(value or ""):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad_time: формат ЧЧ:ММ")
+    quiet_from = core.clock_text(body.quiet_from)
+    quiet_to = core.clock_text(body.quiet_to)
+    if quiet_from is None or quiet_to is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad_time: формат ЧЧ:ММ")
     muted = notification_store.form_to_kinds(body.rehearsals, body.dues,
                                              body.schedule_changes)
     with core.pool.connection() as conn:
         notification_store.save_personal(conn, participant_id, muted,
-                                         body.quiet_from, body.quiet_to)
+                                         quiet_from, quiet_to)
         defaults = notification_store.load_defaults(conn)
-    return _settings_out({"kinds_muted": muted, "quiet_from": body.quiet_from,
-                          "quiet_to": body.quiet_to}, defaults)
+    return _settings_out({"kinds_muted": muted, "quiet_from": quiet_from,
+                          "quiet_to": quiet_to}, defaults)
 
 
 

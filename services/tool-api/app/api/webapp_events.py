@@ -167,9 +167,11 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
 
     Право `schedule.read.all` — то же, что у списка календаря: карточка показывает
     расписание, а не личные данные. `editable` решает `events._can_move`.
+    С V-132 право есть и у роли `troupe`: актёр видит расписание студии, а запись
+    (`editable`) по-прежнему решает `schedule.write`.
     """
     viewer = core._webapp_require(who, "schedule.read.all",
-                                  deny_text="Календарь смотрит организатор и педагог.")
+                                  deny_text="Календарь закрыт: нет права на расписание.")
     calendar = _calendar_name(calendar)
     if not str(event_id or "").strip():
         raise ApiError(400, "event_id_required: нужен id события Google",
@@ -205,6 +207,11 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
                     creator = {"id": row["id"], "name": row["display_name"]}
         plan_status = plan["status"] if plan is not None else None
         plan_created_by = plan["created_by"] if plan is not None else None
+        # Личное время участия (V-134): у людского события строки в базе нет,
+        # поэтому и состава нет — карточка просто не покажет строку.
+        participation = (events_api._participation(conn, plan["id"], plan["starts_at"],
+                                                   plan["ends_at"])
+                         if plan is not None else [])
 
     start, all_day = _to_dt((event.get("start") or {}).get("dateTime")
                             or (event.get("start") or {}).get("date"))
@@ -217,6 +224,9 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
     has_marker = str(private.get(PROP_EVENT_ID) or "").strip().isdigit()
     editable, reason = _editable(has_marker, plan_status, plan_created_by, calendar,
                                  cancelled, viewer)
+    # Своё время видит и актёр без записи; чужое — только с `schedule.write` (V-134).
+    shared, mine = events_api._split_participation(participation, viewer.get("caps"),
+                                                   viewer.get("id"))
 
     return {"ok": True, "event": {
         "calendar": calendar,
@@ -240,6 +250,8 @@ def webapp_event_card(calendar: str | None = None, event_id: str | None = None,
         "state": "cancelled" if cancelled else ("draft" if calendar == "draft" else "live"),
         "editable": editable,
         "not_editable_reason": reason,
+        "participation": shared,
+        "my_time": mine,
     }}
 
 
@@ -412,15 +424,9 @@ def webapp_event_types_save(body: TypesIn,
             first = problems[0]
             raise ApiError(first["status"], f"{first['code']}: {first['detail']}",
                            code=first["code"])
-        # Проверка режима — до записи (AC-15, I-7): в целевом режиме боевой календарь
-        # писать нельзя, поэтому отказ обязан оставить настройку нетронутой.
-        if (body.apply == "all"
-                and google_targets.google_mode(conn) == google_targets.MODE_TARGET):
-            raise ApiError(
-                409,
-                "recolor_target_forbidden: перекраска в боевом календаре не включена; "
-                "сохраните настройку с «Только новые»",
-                code="recolor_target_forbidden")
+        # Перекраска разрешена в обоих режимах (V-120 б): календарь выбирает сам
+        # `event_types.recolor` по режиму — боевой (`calendar.live`) в `target`,
+        # черновой (`calendar.draft`) в переходном.
         saved = event_types.save(conn, payload, actor_id=viewer.get("id"),
                                  apply_mode=str(body.apply))
 

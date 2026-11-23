@@ -85,6 +85,7 @@ WIPE = (
     "budget_period",
     "approval_request",
     "slot_proposal",
+    "event_participant",
     "event_plan",
     "feedback_attachment",
     "feedback_answer",

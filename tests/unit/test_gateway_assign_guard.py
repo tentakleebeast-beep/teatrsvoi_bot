@@ -68,6 +68,9 @@ class FakeState:
     async def set_state(self, state):
         self.state = state
 
+    async def get_data(self):
+        return dict(self.data)
+
     async def update_data(self, **kwargs):
         self.data.update(kwargs)
 

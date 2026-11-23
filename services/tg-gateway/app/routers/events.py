@@ -55,6 +55,11 @@ def card_text(event: dict) -> str:
     names = [name for name in names if name]
     if names:
         lines.append("Участники: " + ", ".join(names))
+    # Личное время участия (V-134): пустое окно сервер уже расширил интервалом
+    # события, поэтому строка есть ровно у участника события.
+    mine = event.get("my_time")
+    if mine:
+        lines.append(f"Ты задействован: {mine['time_from']}–{mine['time_to']}")
     if event.get("status") == "cancelled":
         lines.append("Событие отменено.")
     return "\n".join(lines)
@@ -280,6 +285,10 @@ async def _move(cb: CallbackQuery, state: FSMContext) -> None:
     busy = [name for name in busy if name]
     if busy:
         lines.append("По отметкам заняты: " + ", ".join(busy) + ".")
+    for warning in res.get("warnings") or []:
+        note = warning.get("text")
+        if note:
+            lines.append("Внимание: " + note)
     if res.get("calendar_error"):
         lines.append("Календарь не ответил — время изменено в расписании, "
                      "в календаре проверить вручную.")
@@ -290,19 +299,26 @@ _MONTHS = parsers.MONTHS
 
 
 def parse_when(text: str, today: _date) -> tuple[_date, int] | None:
-    """«07.11 19:00», «7 ноября в 19», «завтра 18:30» → (день, час начала).
+    """«07.11 19:00», «07.11 19.30», «7 ноября в 19», «завтра 18:30» → (день, час начала).
 
     Дата обязательна: перенос «на сегодня же» по умолчанию — это угадывание,
     которого в необратимом действии быть не должно. API принимает целый час
     начала, поэтому «19:30» читается как 20:00 — человек видит это в карточке
     подтверждения и может назвать другое время.
+
+    Время через точку — то же, что через двоеточие: «7 ноября в 19.30» раньше
+    читалось как дата «19-е число 30-го месяца» и перенос отказывал (обращение
+    №45). Поэтому dd.mm признаётся датой только с месяцем
+    1–12, а неподходящая пара остаётся в строке для разбора часов.
     """
     raw = " ".join((text or "").lower().replace("ё", "е").split())
     day: _date | None = None
 
-    match = re.search(r"\b(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\b", raw)
-    if match:
+    pattern = re.compile(r"\b(\d{1,2})[.\-/](\d{1,2})(?:[.\-/](\d{2,4}))?\b")
+    for match in pattern.finditer(raw):
         day_number, month = int(match.group(1)), int(match.group(2))
+        if not match.group(3) and not 1 <= month <= 12:
+            continue                      # «19.30» — часы и минуты, а не месяц
         year = int(match.group(3)) if match.group(3) else today.year
         if year < 100:
             year += 2000
@@ -311,7 +327,8 @@ def parse_when(text: str, today: _date) -> tuple[_date, int] | None:
         except ValueError:
             return None
         raw = raw.replace(match.group(0), " ")
-    else:
+        break
+    if day is None:
         for stem, month in _MONTHS.items():
             found = re.search(rf"\b(\d{{1,2}})\s+{stem}", raw)
             if found:

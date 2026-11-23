@@ -242,6 +242,19 @@
                 "type": "null"
               }
             ]
+          },
+          "windows": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ParticipationIn"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ]
           }
         },
         "type": "object"
@@ -757,6 +770,19 @@
                 "maximum": 24.0,
                 "minimum": 1.0,
                 "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "windows": {
+            "anyOf": [
+              {
+                "items": {
+                  "$ref": "#/components/schemas/ParticipationIn"
+                },
+                "type": "array"
               },
               {
                 "type": "null"
@@ -1385,6 +1411,39 @@
             "type": "boolean"
           }
         },
+        "type": "object"
+      },
+      "ParticipationIn": {
+        "properties": {
+          "participant_id": {
+            "type": "integer"
+          },
+          "time_from": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "time_to": {
+            "anyOf": [
+              {
+                "maxLength": 5,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        },
+        "required": [
+          "participant_id"
+        ],
         "type": "object"
       },
       "PlanIn": {

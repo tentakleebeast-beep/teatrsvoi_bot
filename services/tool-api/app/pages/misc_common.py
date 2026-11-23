@@ -11,6 +11,26 @@
 
 from __future__ import annotations
 
+# Время, набранное человеком: «18:30», «18.30», «18,30», «18» — одно и то же.
+# Разделитель — двоеточие, точка или запятая: в чате и таблицах время пишут «18.30»,
+# и человек не должен угадывать, какой формат примет поле (обращение №45).
+# Возвращает «ЧЧ:ММ», "" для пустого поля и null, если это
+# не время: минуты только двузначные, «10.3» — не время. Касается только часов и минут.
+# Отдельной константой — для экранов без общего ядра (`admin_notifications`) и для
+# карточки события (`pages/events.py`): копий одной проверки быть не должно.
+_CLOCK_JS = r"""
+  function clock(value) {
+    var text = String(value || "").replace(/\s+/g, "").replace(",", ".");
+    if (!text) { return ""; }
+    var match = /^(\d{1,2})(?:[:.]?(\d{2}))?$/.exec(text);
+    if (!match) { return null; }
+    var hour = Number(match[1]);
+    var minute = match[2] ? Number(match[2]) : 0;
+    if (hour > 23 || minute > 59) { return null; }
+    return ("0" + hour).slice(-2) + ":" + ("0" + minute).slice(-2);
+  }
+"""
+
 _JS_COMMON = r"""
   var MONTHS = ["января", "февраля", "марта", "апреля", "мая", "июня",
                 "июля", "августа", "сентября", "октября", "ноября", "декабря"];
@@ -19,6 +39,8 @@ _JS_COMMON = r"""
   var WEEKDAYS = ["Вс", "Пн", "Вт", "Ср", "Чт", "Пт", "Сб"];
 
   function pad2(value) { return (value < 10 ? "0" : "") + value; }
+
+""" + _CLOCK_JS + r"""
 
   function money(value) {
     var number = Math.round(Number(value) || 0);
@@ -83,3 +105,6 @@ _JS_COMMON = r"""
 
 # Имя для страниц-разделов: они подставляют этот блок в свой <script>.
 JS_COMMON = _JS_COMMON
+
+# Только проверка времени — для экранов без общего ядра и для карточки события.
+JS_CLOCK = _CLOCK_JS

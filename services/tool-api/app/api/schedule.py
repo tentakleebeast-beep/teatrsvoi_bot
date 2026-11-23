@@ -756,7 +756,18 @@ def availability_week(start: str | None = None, participant_id: int | None = Non
             raise HTTPException(status.HTTP_403_FORBIDDEN,
                                 "capability required: schedule.read.all")
 
-    return _week_payload(target, _week_start(start))
+    payload = _week_payload(target, _week_start(start))
+    if target != who["id"]:
+        # Чужая неделя — расписание, но не чужие заметки (решение V-132: «события,
+        # время, место и тип видны всем; телефоны, взносы, заметки — нет»). Свободный
+        # комментарий к дню («не будет в Самаре») отдаём только тому, у кого есть
+        # `participants.contact`, — тому же, кто видит полный телефон. Сами часы,
+        # статус и текст карточки остаются: это и есть расписание студии.
+        caps = who.get("caps") or []
+        if "*" not in caps and "participants.contact" not in caps:
+            for day in payload.get("days") or []:
+                day["note"] = ""
+    return payload
 
 
 
@@ -1547,9 +1558,14 @@ def availability_reconcile(body: AvailabilityReconcileIn,
     target = body.participant_id or who["id"]
     if target != who["id"]:
         caps = who.get("caps") or []
-        if "*" not in caps and "schedule.read.all" not in caps:
+        # Сверка пишет карточки в базу (`apply`/`accept`), поэтому чужая неделя —
+        # это запись, а не чтение: право `schedule.write`, как у остальных сценариев
+        # записи. До V-132 здесь стоял `schedule.read.all`; выдача чтения актёру
+        # превратила бы сверку в способ править чужую занятость (граница карты V-132:
+        # «Экран „Сверка“ остаётся за schedule.write»).
+        if "*" not in caps and "schedule.write" not in caps:
             raise HTTPException(status.HTTP_403_FORBIDDEN,
-                                "capability required: schedule.read.all")
+                                "capability required: schedule.write")
     if not core.SCHEDULE_SPREADSHEET_ID:
         return {"ok": False, "error": "no_spreadsheet"}
 
