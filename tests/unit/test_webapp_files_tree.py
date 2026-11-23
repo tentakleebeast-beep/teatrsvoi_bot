@@ -264,7 +264,9 @@ def test_без_папки_не_заводит_запроса() -> None:
     assert "api(" not in block and "fetch(" not in block, "фильтр завёл запрос"
     assert "folder_id" in block, "признак «без папки» потерян"
     # Список файлов по-прежнему один: фильтр применяется к уже загруженному.
-    assert files.FILES_PAGE.count('api("/webapp/files/list")') == 1
+    # Адрес живёт в `refresh()` переменной `url` (E4: у него появился `/search`),
+    # поэтому считаем строковый литерал, а не вызов `api(...)` с ним.
+    assert files.FILES_PAGE.count('"/webapp/files/list"') == 1
 
 
 def test_без_папки_последняя_строка_дерева() -> None:
