@@ -6,11 +6,19 @@
 
 Строки «Личного» на «Ещё» — docs/development/92 §9.1: строка файлов едет в ответе
 данных (`more.personal`), потому что страница — публичная константа.
+
+Блок «Завтра» и ссылка «Весь календарь» (V-131, docs/reports/74-questions.md):
+события следующего дня приходят тем же ответом, что «Сегодня», а адрес ссылки
+выбирает сервер по праву `schedule.read.all`. Google не вызывается — календарь
+подменён фальшивым адаптером, как в tests/integration/test_events_disambiguation.py.
 """
 
 from __future__ import annotations
 
+from datetime import date, datetime, timedelta
+
 import psycopg
+from app.pages.layout import human_date
 from app.person_key import make_key
 
 from tests.conftest import _test_dsn
@@ -120,3 +128,134 @@ def test_у_студийца_личное_без_файлов(client):
     personal = response.json()["more"]["personal"]
     assert [row["url"] for row in personal] == ["/webapp/notes"], personal
     assert all(row["url"] != "/webapp/files" for row in personal), "студийцу файлы не открыты"
+
+
+# ------------------------------------------------------------------ V-131: «Завтра»
+
+
+class _FakeList:
+    """`list(...).execute()` адаптера календаря: отдаёт заранее заданные события."""
+
+    def __init__(self, items: list[dict]) -> None:
+        self._items = items
+
+    def execute(self) -> dict:
+        return {"items": self._items}
+
+
+class _FakeEvents:
+    def __init__(self, items: list[dict]) -> None:
+        self._items = items
+        self.params: dict = {}
+
+    def list(self, **kwargs) -> _FakeList:
+        self.params = kwargs
+        return _FakeList(self._items)
+
+
+class _FakeCalendar:
+    def __init__(self, items: list[dict]) -> None:
+        self._items = items
+
+    def events(self) -> _FakeEvents:
+        return _FakeEvents(self._items)
+
+
+def _calendar(monkeypatch, items: list[dict]) -> None:
+    """Календарь студии отвечает заданными событиями, Google не вызывается."""
+    from app import core as api
+
+    monkeypatch.setattr(api, "CALENDAR_ID_READ", "read-calendar")
+    monkeypatch.setattr(api, "_calendar", lambda: _FakeCalendar(items))
+
+
+def _tomorrow() -> date:
+    from app import core as api
+
+    return datetime.now(api.TZ).date() + timedelta(days=1)
+
+
+def _event(day: date, hour: int, title: str, place: str = "Зал") -> dict:
+    """Событие календаря в том же виде, что отдаёт Google API."""
+    return {"start": {"dateTime": f"{day.isoformat()}T{hour:02d}:00:00+04:00"},
+            "summary": title, "location": place}
+
+
+def _person(conn, chat_id: int, name: str, role: str) -> int:
+    pid = conn.execute(
+        "insert into participant (tg_chat_id, display_name, person_key, role, status) "
+        "values (%s,%s,%s,%s,'active') returning id",
+        (chat_id, name, make_key(name), role)).fetchone()["id"]
+    conn.execute("insert into participant_role (participant_id, role) values (%s,%s)",
+                 (pid, role))
+    conn.commit()
+    return pid
+
+
+def _token(client, chat_id: int) -> dict:
+    _api()
+    auth = client.post("/webapp/auth", json={"init_data": init_data(chat_id)})
+    assert auth.status_code == 200, auth.text
+    return {"Authorization": f"Bearer {auth.json()['token']}"}
+
+
+def test_завтра_список_событий_и_ссылка_на_сводку(client, monkeypatch):
+    """V-131: админ видит завтрашние события и вход в сводку (право есть).
+
+    Список — не одно событие: владелец просил «список событий на следующий день»,
+    поэтому `events` массив, а поля события те же, что у «Сегодня».
+    """
+    _api()
+    with psycopg.connect(_test_dsn(), row_factory=psycopg.rows.dict_row) as conn:
+        _admin(conn)
+    day = _tomorrow()
+    _calendar(monkeypatch, [_event(day, 12, "Прогон", "Зал"),
+                            _event(day, 19, "Репетиция", "Сцена")])
+
+    body = client.get("/webapp/home/data", headers=_token(client, ADMIN_CHAT)).json()
+
+    assert body["ok"] is True
+    tomorrow = body["tomorrow"]
+    assert tomorrow["label"] == "завтра, " + human_date(day)
+    assert [row["time"] for row in tomorrow["events"]] == ["12:00", "19:00"]
+    assert [row["title"] for row in tomorrow["events"]] == ["Прогон", "Репетиция"]
+    assert [row["place"] for row in tomorrow["events"]] == ["Зал", "Сцена"]
+    assert all(set(row) == {"time", "title", "place"} for row in tomorrow["events"]), \
+        "в событие попал служебный день"
+    assert body["calendar_url"] == "/webapp/week/summary", "админ не получил сводку"
+
+
+def test_пустой_завтра_и_ссылка_без_права_сводки(client, monkeypatch):
+    """V-131: пустой день — пустой список, а не отсутствие блока; без права — /week.
+
+    Студиец без `schedule.read.all` получает свой экран недели: ссылка на сводку
+    вела бы его на 403 (FR-H9, docs/development/92 §7).
+    """
+    _api()
+    with psycopg.connect(_test_dsn(), row_factory=psycopg.rows.dict_row) as conn:
+        _person(conn, 770501, "Тест Завтра", "troupe")
+    _calendar(monkeypatch, [])
+
+    body = client.get("/webapp/home/data", headers=_token(client, 770501)).json()
+
+    assert body["ok"] is True
+    assert body["tomorrow"]["events"] == [], "пустой день не пришёл пустым списком"
+    assert body["tomorrow"]["label"].startswith("завтра, ")
+    assert body["calendar_url"] == "/webapp/week", "студийцу открыли сводку"
+
+
+def test_календарь_не_прочитан_главная_живёт(client):
+    """V-131: без календаря `tomorrow` — null, ответ 200 и остальные блоки на месте."""
+    _api()
+    with psycopg.connect(_test_dsn(), row_factory=psycopg.rows.dict_row) as conn:
+        _person(conn, 770502, "Тест Без Календаря", "troupe")
+
+    response = client.get("/webapp/home/data", headers=_token(client, 770502))
+
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["tomorrow"] is None, "непрочитанный календарь выдал себя за пустой день"
+    assert body["today"] == {}
+    assert body["calendar_url"] == "/webapp/week"
+    assert body["week"]["days"] == 7
+
