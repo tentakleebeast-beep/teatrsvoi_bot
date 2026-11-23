@@ -9,7 +9,9 @@
 
 from __future__ import annotations
 
+import json
 import sys
+from contextlib import contextmanager
 
 import google_rights as rights
 from app import core, google_targets
@@ -51,12 +53,14 @@ class FakeEvents:
         self.insert_exc = insert_exc
         self.delete_exc = delete_exc
         self.bodies: list[dict] = []
+        self.inserted_calendars: list[str] = []
 
     def list(self, **kwargs):
         return FakeRequest({"items": []}, self.list_exc, self.calls, "events.list")
 
     def insert(self, **kwargs):
         self.bodies.append(kwargs.get("body") or {})
+        self.inserted_calendars.append(str(kwargs.get("calendarId") or ""))
         return FakeRequest({"id": "probe-1"}, self.insert_exc, self.calls, "events.insert")
 
     def delete(self, **kwargs):
@@ -308,6 +312,122 @@ def test_таблица_читатель_без_права_правки(monkeypa
 
     assert row["ok"] is True
     assert row["role"] == google_targets.ROLE_READER
+
+
+class FakeResult:
+    def __init__(self, row) -> None:
+        self._row = row
+
+    def fetchone(self):
+        return self._row
+
+
+class FakeConn:
+    """Соединение отчёта: знает только строку `app_setting.google.mode`."""
+
+    def __init__(self, mode: str | None) -> None:
+        self.mode = mode
+
+    def execute(self, query, params=None):
+        assert "google.mode" in query, query
+        return FakeResult({"value": self.mode} if self.mode is not None else None)
+
+
+class FakePool:
+    """Пул psycopg: закрыт, пока его не открыли — как настоящий `core.pool`.
+
+    Настоящий пул создаётся `open=False` и на `connection()` поднимает `PoolClosed`;
+    двойник ведёт себя так же, иначе тест не отличает «пул открыт» от «пул забыли открыть».
+    """
+
+    def __init__(self, mode: str | None) -> None:
+        self.mode = mode
+        self.opened = False
+        self.closed = False
+        self.connections = 0
+
+    def open(self) -> None:
+        self.opened = True
+        self.closed = False
+
+    def close(self) -> None:
+        self.opened = False
+        self.closed = True
+
+    @contextmanager
+    def connection(self):
+        if not self.opened:
+            raise RuntimeError("the pool 'pool-1' is not open yet")
+        self.connections += 1
+        yield FakeConn(self.mode)
+
+
+def _install_google(monkeypatch, calls: list, access_role: str = "writer") -> FakeEvents:
+    """Подменить Google-клиенты и идентификаторы так, чтобы отчёт прошёл целиком."""
+    events = FakeEvents(calls)
+    calendar = FakeCalendar(
+        calls, acl=FakeAcl(calls, exc=FakeHttpError(403)), events=events,
+        calendar_list=FakeCalendarList(calls, access_role=access_role))
+    monkeypatch.setattr(core, "_calendar", lambda: calendar)
+    monkeypatch.setattr(core, "_calendar_write", lambda: calendar)
+    monkeypatch.setattr(core, "_drive_read", lambda: FakeDrive(calls, {"canEdit": True}))
+    monkeypatch.setattr(rights, "_service_account_email", lambda: "sa@example.com")
+    for name, value in (
+        ("CALENDAR_ID_READ", "cal-live"), ("CALENDAR_ID_DRAFT", "cal-draft"),
+        ("BUDGET_SPREADSHEET_ID", "budget"), ("SCHEDULE_SPREADSHEET_ID", "sched"),
+        ("SCHEDULE_TEST_SPREADSHEET_ID", "test"), ("SCHEDULE_HUMAN_SPREADSHEET_ID", "human"),
+        ("FINANCE_SOURCE_ID", "fin"), ("DRIVE_ROOT_ID", "drive"),
+    ):
+        monkeypatch.setattr(core, name, value)
+    return events
+
+
+def test_точка_входа_открывает_пул_и_исполняется_целиком(monkeypatch, capsys):
+    """Возврат ревью 23.11.2026: `main` не открывал пул и падал на `calendar.live`.
+
+    Проверка исполняет точку входа (`main(["--json"])`), а не `_check`: прежний тест
+    подменял `google_mode`, поэтому закрытый пул и «the pool is not open yet» в живом
+    запуске не видел ни один прогон. В переходном режиме строка `calendar.live` —
+    пропуск с предупреждением, отчёт зелёный, пишущей пробы нет.
+    """
+    pool = FakePool(google_targets.MODE_TRANSITIONAL)
+    monkeypatch.setattr(core, "pool", pool)
+    monkeypatch.setattr(core, "GOOGLE_SA_JSON", "/tmp/sa.json")
+    calls: list[str] = []
+    events = _install_google(monkeypatch, calls)
+
+    code = rights.main(["--json"])
+    out = capsys.readouterr().out
+
+    assert code == 0, out
+    assert "not open" not in out
+    assert pool.connections == 1, "режим читался не в соединении точки входа"
+    assert pool.closed is True, "пул остался открытым после отчёта"
+    rows = {row["key"]: row for row in json.loads(out)}
+    live = rows[google_targets.LIVE_CALENDAR]
+    assert live["ok"] is True and live["role"] is None, live
+    assert any("только в целевом режиме" in warning for warning in live["warnings"]), live
+    assert "cal-live" not in events.inserted_calendars, "в боевой календарь ходили пробой"
+
+
+def test_точка_входа_в_целевом_режиме_берёт_роль_из_access_role(monkeypatch, capsys):
+    """В `target` строка `calendar.live` получает роль из `accessRole`, без вставки."""
+    pool = FakePool(google_targets.MODE_TARGET)
+    monkeypatch.setattr(core, "pool", pool)
+    monkeypatch.setattr(core, "GOOGLE_SA_JSON", "/tmp/sa.json")
+    calls: list[str] = []
+    events = _install_google(monkeypatch, calls, access_role="writer")
+
+    code = rights.main(["--json"])
+    out = capsys.readouterr().out
+
+    assert code == 0, out
+    assert "not open" not in out
+    rows = {row["key"]: row for row in json.loads(out)}
+    live = rows[google_targets.LIVE_CALENDAR]
+    assert live["ok"] is True and live["role"] == "writer", live
+    assert any(rights.ACL_PROBE in warning for warning in live["warnings"]), live
+    assert "cal-live" not in events.inserted_calendars, "в боевой календарь ходили пробой"
 
 
 def test_скрипты_ставят_корень_проекта_в_sys_path():

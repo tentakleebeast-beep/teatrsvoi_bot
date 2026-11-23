@@ -71,6 +71,24 @@ PROBE_SUMMARY = "[svoi] проверка прав бота"
 PROBE_KIND = "rights_probe"
 
 
+def _pool_open() -> None:
+    """Пул в проекте создаётся закрытым (его открывает FastAPI) — открываем сами.
+
+    Без этого `core.pool.connection()` поднимает `PoolClosed`, и строка, которой нужен
+    режим из БД (`calendar.live`), падала бы «the pool is not open yet» на здоровой
+    системе (образец — `google_seed_bindings._open_pool`).
+    """
+    opener = getattr(core.pool, "open", None)
+    if opener is not None:
+        opener()
+
+
+def _pool_close() -> None:
+    closer = getattr(core.pool, "close", None)
+    if closer is not None:
+        closer()
+
+
 def _http_status(exc: BaseException) -> int | None:
     """HTTP-код отказа Google (`HttpError.resp.status`), если он есть."""
     return getattr(getattr(exc, "resp", None), "status", None)
@@ -217,12 +235,16 @@ def _enough(role: str | None, required: str) -> bool:
     return role in WRITER_ROLES or role == WRITER_PROBE
 
 
-def _live_calendar_skip() -> dict | None:
-    """`calendar.live` в переходном режиме не действует — строка отчёта, не расхождение."""
+def _live_calendar_skip(conn=None) -> dict | None:
+    """`calendar.live` в переходном режиме не действует — строка отчёта, не расхождение.
+
+    Режим читается в уже открытом соединении (`conn` из `main`): иначе отчёт открывал бы
+    своё и упирался в закрытый пул.
+    """
     key = google_targets.LIVE_CALENDAR
     required = google_targets.target(key).required_role
     try:
-        mode = google_targets.google_mode()
+        mode = google_targets.google_mode(conn)
     except Exception as exc:  # noqa: BLE001 — исход отчёта
         return {"key": key, "required": required, "role": None, "ok": False,
                 "warnings": [], "error": f"google.mode: {str(exc)[:100]}"}
@@ -233,16 +255,16 @@ def _live_calendar_skip() -> dict | None:
                          "пропущен"], "error": None}
 
 
-def _check(key: str) -> dict:
+def _check(key: str, conn=None) -> dict:
     target = google_targets.target(key)
     required = target.required_role
     if key == google_targets.LIVE_CALENDAR:
-        skipped = _live_calendar_skip()
+        skipped = _live_calendar_skip(conn)
         if skipped is not None:
             return skipped
     try:
         object_id = google_targets.read_id(key) if key in google_targets.READ_SOURCES \
-            else google_targets.resolve(key)
+            else google_targets.resolve(key, conn=conn)
     except Exception as exc:  # noqa: BLE001 — исход отчёта
         return {"key": key, "required": required, "role": None, "ok": False,
                 "warnings": [], "error": getattr(exc, "code", str(exc))}
@@ -274,7 +296,14 @@ def main(argv: list[str] | None = None) -> int:
         print("нет ключа сервисного аккаунта (GOOGLE_SA_JSON)")
         return 2
     keys = sorted(set(google_targets.READ_SOURCES) | set(google_targets.WRITE_TARGETS))
-    rows = [_check(key) for key in keys]
+    # Пул создаётся закрытым: строка `calendar.live` читает режим из БД, поэтому пул
+    # открывает и закрывает сам скрипт, а режим читается в этом соединении.
+    _pool_open()
+    try:
+        with core.pool.connection() as conn:
+            rows = [_check(key, conn) for key in keys]
+    finally:
+        _pool_close()
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
     else:

@@ -60,6 +60,7 @@ WRITE_TARGETS = {
   "schedule.workload":    sheet  ← schedule_spreadsheet_id,   schedule_sheet_title, layout monthly_blocks
   "schedule.test":        sheet  ← schedule_test_spreadsheet_id, layout hour_matrix, meta hours 08..23
   "calendar.draft":       calendar ← calendar_id_draft
+  "calendar.live":        calendar ← calendar_id_read, только при google.mode = target (V-120 б)
 }
 READ_SOURCES = {
   "schedule.human":   sheet  ← schedule_human_spreadsheet_id / schedule_human_sheet_title (живой лист)
@@ -80,8 +81,13 @@ READ_SOURCES = {
 4. Чтение живых источников идёт **read-only** клиентами (`drive.readonly`,
    `spreadsheets.readonly`, `calendar.readonly`). Пишущие области остаются только у
    клиентов записи.
-5. `calendar_id_venue` в реестр не входит (дизайн D5), `google.mode` на реестр не влияет:
-   в обоих режимах набор объектов записи одинаков (D7).
+5. `calendar_id_venue` в реестр не входит (дизайн D5). `google.mode` на набор объектов записи
+   не влияет: в обоих режимах он одинаков (D7). Единственное исключение — ключ `calendar.live`
+   (боевой календарь, `calendar_id_read`): решение V-120 б разрешило перекраску `colorId`
+   событий бота в боевом календаре, поэтому ключ записи у него есть, но действует он только
+   при `google.mode = target`; в переходном `resolve` и `allowed_for_write` отказывают
+   `write_target_mode_refused` (403). Создание, правка текста и удаление событий этим ключом
+   не адресуются — для них остаётся `calendar.draft` (`docs/development/190` I-7).
 
 Новые поля `Settings`: `schedule_test_spreadsheet_id`, `schedule_test_sheet_pattern`
 (по умолчанию `''` — «страница по шаблону `MM.YYYY · Ник`»), `drive_root_id`,
@@ -230,28 +236,38 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 5. **Хранение календаря события.** `event_plan.gcal_calendar_id` (миграция 071) — календарь,
    в котором бот создал событие. Без этой колонки нельзя отличить «своё черновое» от
    «чужое боевое» иначе как лишним запросом; с ней отказ `not_bot_event` решается по базе.
-6. **Что запрещено.** `calendarId=calendar_id_read` в вызовах `insert/update/delete/patch/
-   move` — запрещён на уровне реестра (§12.1). Перенос всех событий, «миграция» боевого
+6. **Что запрещено.** `calendarId=calendar_id_read` в вызовах `insert/delete/patch/move` и в
+   любом `update`, кроме правки одного `colorId`, — запрещён на уровне реестра (§12.1).
+   Единственный путь записи в боевой календарь — ключ `calendar.live` и только при
+   `google.mode = target` (V-120 б, `docs/development/190` I-7); в переходном режиме
+   `resolve` отказывает `write_target_mode_refused`. Перенос всех событий, «миграция» боевого
    календаря в этой карте не реализуются (V-081 — отдельная разовая операция с выгрузкой).
 
 ## 6. Права сервисного аккаунта
 
 Целевая матрица — дизайн D6. Проверяется не по памяти, а запросом:
 
-- файлы Drive: `permissions.list(fileId=…, fields="permissions(role,type,emailAddress)")`;
-- календари: `acl.list(calendarId=…)` — ищем роль нашего `client_email`;
+- файлы Drive: `permissions.list(fileId=…, fields="permissions(role,type,emailAddress)")`
+  (только предупреждение «anyone/writer»), роль — `capabilities(canEdit,canModifyContent)`
+  из `files.get`;
+- календари: `acl.list(calendarId=…)` пишущим клиентом — ищем роль нашего `client_email`;
+  403 у `acl.list` значит «SA не владелец», а не «нет прав», поэтому роль добирается
+  требуемой операцией: `events.list` для читателя, пробное `insert`+`delete` для чернового
+  календаря; для боевого календаря проба запрещена — роль берётся из `calendarList.get.accessRole`
+  (V-120 б), а в переходном режиме строка пропускается с предупреждением;
 - любой `type="anyone"` с `role in ("writer","owner")` на живых объектах — строка
   «опасно» в отчёте (V-067 решает, закрывать ли сейчас).
 
 Скрипт `scripts/google_rights.py` (новый): читает `Settings`, печатает таблицу
 `объект | id | фактическая роль | требуемая | итог` и отдаёт код 1 при любом расхождении.
-`--json` — машинный отчёт для хендоффа. Требуемые роли:
+`--json` — машинный отчёт для хендоффа. Пул базы скрипт открывает сам (в сервисе его
+открывает FastAPI) и читает `app_setting.google.mode` в том же соединении. Требуемые роли:
 
 | Объект | Требуется SA |
 |---|---|
 | живой лист «Расписание студийцы», «СВОИ 2025», «СВОИ админка», «Записная книжка», «СВОИ зрители 2026», папка «Инфа СВОИ» | читатель (`reader`/`commenter`) |
 | `Бюджет`, `Занятость`, тестовый лист цветов | редактор (`writer`) |
-| боевой календарь | читатель |
+| боевой календарь (ключ `calendar.live`) | читатель; в целевом режиме редактор (`writer`) — только на перекраску `colorId` (V-120 б) |
 | черновой календарь | редактор (владелец) |
 
 Порядок операций при закрытии доступов: **сначала** выдать редактора на объекты записи,
