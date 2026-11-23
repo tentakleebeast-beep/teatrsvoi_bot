@@ -5,6 +5,9 @@
 
 Боевой календарь вне записи (docs/development/186 §5.2): событие, которого нет в
 черновом, бот не правит — `not_bot_event`, БД меняется, Google не вызывается.
+
+Отменённое в черновом событие (`status="cancelled"`) живостью не считается (карта Д-2):
+`events.delete` не убирает его из выдачи `events.get`, и патчить такую запись нельзя.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -20,9 +23,11 @@ TZ = timezone(timedelta(hours=4))
 class FakeEvents:
     """Журнал обращений к календарю: чтение черновика и правка — раздельно."""
 
-    def __init__(self, fail: bool = False, missing: bool = False):
+    def __init__(self, fail: bool = False, missing: bool = False,
+                 status: str | None = None):
         self.fail = fail
         self.missing = missing
+        self.status = status
         self.calls: list[tuple[str, str, str]] = []
         self.updated: list[tuple[str, str, dict]] = []
         self._pending = ""
@@ -44,6 +49,8 @@ class FakeEvents:
             raise google_error(404)
         if action != "get" and self.fail:
             raise google_error()
+        if action == "get" and self.status:
+            return {"status": self.status}
         return {}
 
 
@@ -250,3 +257,23 @@ def test_несуществующее_событие(client):
     response = client.post("/tools/events/move", headers=_auth(883701),
                            json={"event_id": 999999})
     assert response.status_code == 404
+
+
+def test_отменённое_в_google_событие_не_правится(client, monkeypatch):
+    """`status=cancelled` в черновом — `not_bot_event`: патчить отменённое нельзя."""
+    from app import core as api
+
+    owner = _add_person(883801, "Организатор Отменённого Переноса")
+    event_id = _add_event(owner, [owner])
+    fake = FakeEvents(status="cancelled")
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
+
+    body = client.post("/tools/events/move", headers=_auth(883801),
+                       json={"event_id": event_id, "from_hour": 19}).json()
+
+    assert body["ok"] is True, "БД важнее календаря"
+    assert body["calendar_updated"] is False
+    assert body["calendar_error"] == "not_bot_event"
+    assert fake.updated == [], "отменённое событие в Google не патчится"
+    assert _event_row(event_id)["starts_at"].astimezone(TZ).hour == 19

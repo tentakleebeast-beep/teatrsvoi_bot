@@ -4,6 +4,11 @@
 Человек переносит черновик в боевой календарь руками. Бот видит это по маркеру
 `svoi_event_id` и удаляет **только** свой черновик; боевое событие не трогается.
 Отсутствие события отменой не считается: «нет» — это не «отменил».
+
+Проверка «событие живо в черновом» (`api/events._draft_event_exists`) смотрит ещё и
+`status`: `events.delete` не убирает событие из выдачи `events.get`, Google отдаёт его
+по id со `status="cancelled"` (живой прогон 23.11.2026, карта Д-2). Поэтому успешный
+ответ `get` сам по себе не доказательство существования.
 """
 
 from __future__ import annotations
@@ -50,11 +55,19 @@ class FakeRequest:
 
 
 class FakeEvents:
-    def __init__(self, items: list[dict]) -> None:
+    def __init__(self, items: list[dict], *, event: dict | None = None,
+                 get_error: Exception | None = None) -> None:
         self.items = items
+        self.event = event if event is not None else {}
+        self.get_error = get_error
+        self.gets: list[tuple] = []
         self.deleted: list[tuple[str, str]] = []
         self.updated: list[tuple[str, str]] = []
         self.inserts: list[dict] = []
+
+    def get(self, calendarId=None, eventId=None, **_kwargs):
+        self.gets.append((calendarId, eventId))
+        return FakeRequest(self.event, self.get_error)
 
     def list(self, **params):
         return FakeRequest({"items": self.items})
@@ -171,3 +184,82 @@ def test_реестр_не_даёт_писать_в_боевой(monkeypatch):
         assert caught.code == "write_target_refused"
     else:
         raise AssertionError("боевой календарь получил ключ записи")
+
+
+def _draft_api(monkeypatch, draft: FakeEvents) -> None:
+    """Подменённый клиент календаря: всё чтение и запись идут в `draft`."""
+    from app import core
+
+    monkeypatch.setattr(core, "CALENDAR_ID_DRAFT", "draft-calendar")
+    monkeypatch.setattr(core, "_calendar_write", lambda: FakeService(draft))
+
+
+def _events_api():
+    from app.api import events as api
+    return api
+
+
+def test_отменённое_событие_не_живое(monkeypatch):
+    """`status=cancelled` — события нет, хотя `events.get` его и вернул (карта Д-2)."""
+    draft = FakeEvents([], event={"id": "draft-1", "status": "cancelled"})
+    _draft_api(monkeypatch, draft)
+
+    assert _events_api()._draft_event_exists("draft-1") is False
+    assert draft.gets == [("draft-calendar", "draft-1")], "смотрим только черновик"
+
+
+def test_подтверждённое_событие_живое(monkeypatch):
+    """`status=confirmed` — событие есть: его можно править и удалять."""
+    draft = FakeEvents([], event={"id": "draft-1", "status": "confirmed"})
+    _draft_api(monkeypatch, draft)
+
+    assert _events_api()._draft_event_exists("draft-1") is True
+
+
+def test_предварительное_событие_живое(monkeypatch):
+    """`status=tentative` — событие существует, человек лишь не подтвердил участие."""
+    draft = FakeEvents([], event={"id": "draft-1", "status": "tentative"})
+    _draft_api(monkeypatch, draft)
+
+    assert _events_api()._draft_event_exists("draft-1") is True
+
+
+def test_событие_без_статуса_живое(monkeypatch):
+    """Нет поля `status` в ответе — считаем живым, а не наоборот."""
+    draft = FakeEvents([], event={"id": "draft-1"})
+    _draft_api(monkeypatch, draft)
+
+    assert _events_api()._draft_event_exists("draft-1") is True
+
+
+def test_нет_события_по_ид_значит_не_живое(monkeypatch):
+    """404 от Google — события нет."""
+    from tests.conftest import google_error
+
+    draft = FakeEvents([], get_error=google_error(404))
+    _draft_api(monkeypatch, draft)
+
+    assert _events_api()._draft_event_exists("draft-1") is False
+
+
+def test_отменённое_событие_повторно_не_удаляется(monkeypatch):
+    """Отменённое `events.get` уже не живо: удаления в Google нет, ответ `not_bot_event`."""
+    draft = FakeEvents([], event={"id": "draft-1", "status": "cancelled"})
+    _draft_api(monkeypatch, draft)
+
+    deleted, error = _events_api()._delete_calendar_event("draft-1")
+
+    assert (deleted, error) == (False, "not_bot_event")
+    assert draft.deleted == [], "повторного delete в Google быть не должно"
+
+
+def test_живое_событие_удаляется(monkeypatch):
+    """Контроль обратной стороны: подтверждённое событие удаляется как раньше."""
+    draft = FakeEvents([], event={"id": "draft-1", "status": "confirmed"})
+    _draft_api(monkeypatch, draft)
+
+    deleted, error = _events_api()._delete_calendar_event("draft-1")
+
+    assert (deleted, error) == (True, None)
+    assert draft.deleted == [("draft-calendar", "draft-1")]
+

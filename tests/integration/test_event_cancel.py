@@ -6,6 +6,10 @@
 Боевой календарь вне записи (docs/development/186 §5.2): событие, которого нет в
 черновом, бот не удаляет ни при каком статусе — отмена идёт только в БД, а ответ
 несёт `calendar_error: "not_bot_event"` и `calendar_updated: false`.
+
+Событие со `status="cancelled"` в черновом живостью не считается (карта Д-2):
+`events.delete` не убирает его из выдачи `events.get`, поэтому «нашёл по id» и
+«событие есть» — разные факты.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -25,9 +29,11 @@ class FakeEvents:
     Разделение нужно, чтобы «нечего удалять» не путалось с «Google не ответил».
     """
 
-    def __init__(self, fail: bool = False, missing: bool = False):
+    def __init__(self, fail: bool = False, missing: bool = False,
+                 status: str | None = None):
         self.fail = fail
         self.missing = missing
+        self.status = status
         self.calls: list[tuple[str, str, str]] = []
         self.deleted: list[tuple[str, str]] = []
         self._pending = ""
@@ -49,6 +55,8 @@ class FakeEvents:
             raise google_error(404)
         if action != "get" and self.fail:
             raise google_error()
+        if action == "get" and self.status:
+            return {"status": self.status}
         return {}
 
 
@@ -221,3 +229,45 @@ def test_несуществующее_событие(client):
     response = client.post("/tools/events/cancel", headers=_auth(882501),
                            json={"event_id": 999999})
     assert response.status_code == 404
+
+
+def test_повторная_отмена_не_трогает_календарь(client, monkeypatch):
+    """Статус строки БД закрывает дорогу раньше: отменённое второй раз не удаляется.
+
+    Отмена защищена `event_plan.status = 'cancelled'`, поэтому проверка живости
+    события (карта Д-2) на повторный вызов не влияет: Google не вызывается вовсе.
+    """
+    from app import core as api
+
+    owner = _add_person(882601, "Организатор Повтор Гугл")
+    event_id = _add_event(owner, [owner], status="cancelled")
+    fake = FakeEvents(status="cancelled")
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
+
+    body = client.post("/tools/events/cancel", headers=_auth(882601),
+                       json={"event_id": event_id}).json()
+
+    assert body["already_cancelled"] is True
+    assert fake.calls == [], "повторная отмена в Google не ходит"
+
+
+def test_событие_отменённое_в_google_даёт_not_bot_event(client, monkeypatch):
+    """Строка БД ещё `confirmed`, а в черновом уже `cancelled` — удалять нечего."""
+    from app import core as api
+
+    owner = _add_person(882701, "Организатор Отменённого")
+    event_id = _add_event(owner, [owner])
+    fake = FakeEvents(status="cancelled")
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeCalendar(fake))
+    monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft-calendar")
+
+    body = client.post("/tools/events/cancel", headers=_auth(882701),
+                       json={"event_id": event_id}).json()
+
+    assert body["ok"] is True, "БД важнее календаря"
+    assert body["calendar_updated"] is False
+    assert body["calendar_error"] == "not_bot_event"
+    assert fake.deleted == [], "повторного delete в Google быть не должно"
+    assert _event_row(event_id)["status"] == "cancelled"
+
