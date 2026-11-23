@@ -376,7 +376,7 @@ def find_duplicate(conn, participant_id: int, sha256: str) -> dict | None:
     бы в списке, а байты были бы удалены (Э6, §4.3).
     """
     return conn.execute(
-        "select id, name, kind, size_bytes from file_object"
+        "select id, name, kind, size_bytes, description from file_object"
         " where participant_id = %s and sha256 = %s and deleted_at is null"
         "   and scope <> %s"
         " order by id limit 1", (participant_id, sha256, FEEDBACK_SCOPE)).fetchone()
@@ -833,11 +833,13 @@ def save_committed(conn, participant_id: int, name: str, mime: str, size: int,
             known = conn.execute(
                 "select duration_sec from file_audio where file_id = %s",
                 (dup["id"],)).fetchone()
+            # Описание берём у найденной строки: своё у запроса не сохраняется (§6.2),
+            # а ответ `commit` обязан совпадать с БД, иначе он врёт о том, что записано.
             return SavedFile(int(dup["id"]), dup["name"], dup["kind"] or kind,
                              int(dup["size_bytes"]), path, True,
                              QUOTA_BYTES - used_bytes(conn, participant_id),
                              duration_sec=known["duration_sec"] if known else None,
-                             description=note,
+                             description=dup["description"],
                              folder_id=int(folder["id"]) if folder is not None else None)
 
     try:
