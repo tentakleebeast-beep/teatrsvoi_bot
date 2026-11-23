@@ -8,8 +8,8 @@
 * `audio` — единственный вид, который играет: `<audio controls>`;
 * `image` — картинка целиком в тёмной сцене (`object-fit: contain`);
 * документ / текст / неизвестный вид — карточка (имя, размер, слово вида) и
-  «Открыть в браузере»: pdf откроется встроенным просмотрщиком телефона, docx и
-  xlsx — тем приложением, которое на телефоне есть. Внутри Mini App содержимое
+  «Открыть в браузере»: pdf откроется встроенным просмотрщиком телефона, офисный
+  документ — тем приложением, которое на телефоне есть. Внутри Mini App содержимое
   не рендерим (D4) и текст не читаем (кодировку русских `.txt` страница не угадает);
 * «Скачать» — вторая кнопка на всех четырёх состояниях (Б2, V-053 а): берёт ссылку
   `GET /webapp/files/{id}/link` и открывает её в браузере телефона через `openLink`.
@@ -24,7 +24,7 @@
 
 from __future__ import annotations
 
-from app.pages import files_actions, layout
+from app.pages import layout
 from app.pages.admin_core import CORE
 
 _BODY_FILE = """
@@ -34,6 +34,17 @@ _BODY_FILE = """
 </div>
 <div class="ui-file__scene" id="scene">
   <p class="ui-file__note" id="scene-note">Готовлю файл</p>
+</div>
+<div class="ui-file__edit" id="file-edit" hidden>
+  <div class="ui-field">
+    <label class="ui-field__label" for="file-describe">Что это</label>
+    <textarea class="ui-input" id="file-describe" rows="2" maxlength="500"></textarea>
+    <span class="ui-field__hint">Необязательно. Поиск по описанию не идёт — ищет по имени, папке и типу.</span>
+  </div>
+  <div class="ui-actions files-actions">
+    <button class="ui-btn ui-btn--block" type="button" id="file-save">Сохранить описание</button>
+  </div>
+  <p class="ui-small ui-muted" id="file-save-status"></p>
 </div>
 <div class="ui-file__actions" id="file-actions"></div>
 """
@@ -119,9 +130,43 @@ _SCRIPT_FILE = r"""
   }
 
   function metaText(data) {
-    var parts = [humanSize(data.size_bytes), kindWord(data.kind, data.name)];
-    if (data.folder) parts.push(data.folder);
-    return parts.filter(Boolean).join(" \u00b7 ");
+    if (data.type === "external") {
+      var parts = [data.kind === "folder" ? "папка в Drive" : "ссылка"];
+      if (data.folder) parts.push(data.folder);
+      return parts.filter(Boolean).join(" \u00b7 ");
+    }
+    var parts2 = [humanSize(data.size_bytes), data.kind_word || "файл"];
+    if (data.folder) parts2.push(data.folder);
+    return parts2.filter(Boolean).join(" \u00b7 ");
+  }
+
+  // «Открыть в Drive» — единственное действие ссылки: байтов у нас нет, копии нет,
+  // «Скачать» гарантированно ответило бы 409 (docs/development/192 §8.4).
+  function openDriveButton(url) {
+    return action("Открыть в Drive", true, function () {
+      if (!url) { showNote("Адрес ссылки не сохранён."); return; }
+      if (tg && tg.openLink) { tg.openLink(url); return; }
+      window.open(url, "_blank");
+    });
+  }
+
+  function showExternal(data) {
+    clear($("scene"));
+    var card = el("div", "ui-file__card");
+    card.appendChild(el("p", "ui-file__card-name", data.name || "Ссылка на Drive"));
+    card.appendChild(el("p", "ui-file__card-meta",
+      metaText(data) + (data.description ? "" : "")));
+    card.appendChild(el("p", "ui-file__note",
+      "Это ссылка на Drive — файл открывается в Drive, копии у студии нет."));
+    if (data.description) {
+      card.appendChild(el("p", "ui-file__note", "Что это: " + data.description));
+    }
+    if (data.drive_path) {
+      card.appendChild(el("p", "ui-file__note",
+        "в Drive на момент регистрации: " + data.drive_path));
+    }
+    $("scene").appendChild(card);
+    setActions([openDriveButton(data.open_url)]);
   }
 
   // Свежая ссылка на каждое нажатие: подпись живёт 15 минут, и «Открыть в браузере»
@@ -237,7 +282,9 @@ _SCRIPT_FILE = r"""
 
   function show(data) {
     setHead(data.name, metaText(data));
-    var word = kindWord(data.kind, data.name);
+    showEditor(data);
+    if (data.type === "external") { showExternal(data); return; }
+    var word = data.kind_word || "файл";
     if (data.kind === "image") { showImage(data); return; }
     if (data.kind === "audio") { showAudio(data); return; }
     if (word === "документ") {
@@ -251,6 +298,31 @@ _SCRIPT_FILE = r"""
     showCard(data, "файл", "Файл откроется в браузере телефона");
   }
 
+  // Описание правит владелец (V-124): поле показывается только ему — чужой файл
+  // ответил бы 404, и кнопка, которая гарантированно ругается, хуже её отсутствия.
+  function showEditor(data) {
+    var block = $("file-edit");
+    if (!block) return;
+    block.hidden = !data.owner;
+    if (!data.owner) return;
+    $("file-describe").value = data.description || "";
+  }
+
+  function saveDescription() {
+    api("/webapp/files/" + fileId + "/meta",
+        { description: ($("file-describe").value || "").trim() })
+      .then(function (res) {
+        var box = $("file-save-status");
+        if (res.status !== 200) {
+          box.textContent = problem(res);
+          box.className = "ui-alert";
+          return;
+        }
+        box.textContent = "Описание сохранено.";
+        box.className = "ui-small ui-muted";
+      });
+  }
+
   function load() {
     waiting = true;
     api("/webapp/files/" + fileId + "/view").then(function (res) {
@@ -260,8 +332,10 @@ _SCRIPT_FILE = r"""
     });
   }
 
+  // Кнопка описания живёт вне `#file-actions`: она часть блока правки, а не сцены.
+  if ($("file-save")) $("file-save").addEventListener("click", saveDescription);
+
   if (!fileId) {
-    // Без `?id=` экран не тупик: сказано, чего не хватает, и есть путь в «Файлы» (7.3).
     setHead("Файл", "");
     showNote("Файл не выбран");
     var openFiles = el("a", "ui-btn ui-btn--block", "Открыть Файлы");
@@ -285,5 +359,5 @@ _SCRIPT_FILE = r"""
 """
 
 FILE_PAGE = layout.page("Файл", _BODY_FILE, back="/webapp/files", head=_STYLE_FILE,
-                        scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FILE
+                        scripts="<script>\n" + CORE + _SCRIPT_FILE
                         + "\n})();\n</script>", zoom=True)

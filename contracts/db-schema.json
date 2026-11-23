@@ -1,6 +1,6 @@
 {
  "meta": {
-  "alembic": "066_polls_org_manage",
+  "alembic": "073_files_two_locations",
   "note": "Снимок формы схемы. Индексы, права и данные не входят. Описание — docs/architecture/172-db-schema.md."
  },
  "tables": {
@@ -56,8 +56,8 @@
   },
   "agent_action": {
    "check": [
-    "CHECK ((kind = ANY (ARRAY['move'::text, 'rename'::text, 'tag'::text, 'summarize'::text, 'answer'::text])))",
-    "CHECK ((status = ANY (ARRAY['proposed'::text, 'applied'::text, 'rejected'::text, 'expired'::text])))"
+    "CHECK ((status = ANY (ARRAY['proposed'::text, 'applied'::text, 'rejected'::text, 'expired'::text])))",
+    "CHECK ((kind = ANY (ARRAY['move'::text, 'rename'::text, 'tag'::text, 'summarize'::text, 'answer'::text])))"
    ],
    "columns": {
     "file_id": {
@@ -187,8 +187,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
-    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)"
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "id"
@@ -360,9 +360,9 @@
     }
    },
    "foreign_keys": [
+    "FOREIGN KEY (category_id) REFERENCES category(id)",
     "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
-    "FOREIGN KEY (category_id) REFERENCES category(id)"
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
     "id"
@@ -419,8 +419,8 @@
    },
    "foreign_keys": [
     "FOREIGN KEY (category_id) REFERENCES category(id)",
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
-    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)"
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
     "id"
@@ -510,8 +510,8 @@
   },
   "availability_hour": {
    "check": [
-    "CHECK (((hour >= 0) AND (hour <= 23)))",
     "CHECK ((source = ANY (ARRAY['bot'::text, 'sheet_import'::text, 'admin'::text])))",
+    "CHECK (((hour >= 0) AND (hour <= 23)))",
     "CHECK ((kind = ANY (ARRAY['busy'::text, 'free'::text, 'uncertain'::text, 'preferred'::text, 'declared'::text, 'imported'::text])))"
    ],
    "columns": {
@@ -583,10 +583,10 @@
   "availability_template": {
    "check": [
     "CHECK (((from_min >= 0) AND (from_min <= 1440)))",
-    "CHECK (((to_min >= 0) AND (to_min <= 1440)))",
-    "CHECK (((from_min IS NULL) OR (to_min IS NULL) OR (from_min < to_min)))",
     "CHECK ((status = ANY (ARRAY['free'::text, 'busy'::text, 'uncertain'::text])))",
-    "CHECK (((weekday >= 0) AND (weekday <= 6)))"
+    "CHECK (((to_min >= 0) AND (to_min <= 1440)))",
+    "CHECK (((weekday >= 0) AND (weekday <= 6)))",
+    "CHECK (((from_min IS NULL) OR (to_min IS NULL) OR (from_min < to_min)))"
    ],
    "columns": {
     "from_min": {
@@ -686,8 +686,8 @@
   },
   "budget_period": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))",
-    "CHECK ((quality = ANY (ARRAY['draft'::text, 'clean'::text])))"
+    "CHECK ((quality = ANY (ARRAY['draft'::text, 'clean'::text])))",
+    "CHECK ((status = ANY (ARRAY['open'::text, 'closed'::text])))"
    ],
    "columns": {
     "closed_at": {
@@ -799,12 +799,12 @@
   },
   "budget_tx": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['draft'::text, 'expected'::text, 'pending_approval'::text, 'confirmed'::text, 'rejected'::text, 'reversed'::text])))",
-    "CHECK ((origin = ANY (ARRAY['bot'::text, 'manual'::text, 'import'::text])))",
-    "CHECK ((method = ANY (ARRAY['cash'::text, 'card'::text, 'transfer'::text, 'unknown'::text])))",
-    "CHECK ((amount > (0)::numeric))",
     "CHECK ((tx_type = ANY (ARRAY['income'::text, 'expense'::text, 'transfer'::text])))",
-    "CHECK ((block = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))"
+    "CHECK ((origin = ANY (ARRAY['bot'::text, 'manual'::text, 'import'::text])))",
+    "CHECK ((amount > (0)::numeric))",
+    "CHECK ((method = ANY (ARRAY['cash'::text, 'card'::text, 'transfer'::text, 'unknown'::text])))",
+    "CHECK ((block = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))",
+    "CHECK ((status = ANY (ARRAY['draft'::text, 'expected'::text, 'pending_approval'::text, 'confirmed'::text, 'rejected'::text, 'reversed'::text])))"
    ],
    "columns": {
     "amount": {
@@ -990,12 +990,12 @@
    },
    "foreign_keys": [
     "FOREIGN KEY (replaces) REFERENCES budget_tx(id)",
-    "FOREIGN KEY (entered_by) REFERENCES participant(id)",
+    "FOREIGN KEY (base_tx_id) REFERENCES budget_tx(id)",
     "FOREIGN KEY (category_id) REFERENCES category(id)",
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
     "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
-    "FOREIGN KEY (base_tx_id) REFERENCES budget_tx(id)"
+    "FOREIGN KEY (entered_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
     "id"
@@ -1192,8 +1192,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
-    "FOREIGN KEY (payment_tx_id) REFERENCES budget_tx(id)"
+    "FOREIGN KEY (payment_tx_id) REFERENCES budget_tx(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
    ],
    "primary_key": [
     "id"
@@ -1259,9 +1259,9 @@
   },
   "event_plan": {
    "check": [
+    "CHECK ((status = ANY (ARRAY['proposed'::text, 'confirmed'::text, 'cancelled'::text, 'done'::text])))",
     "CHECK ((ends_at > starts_at))",
-    "CHECK ((kind = ANY (ARRAY['rehearsal'::text, 'show'::text, 'training'::text, 'rental'::text, 'meeting'::text, 'other'::text])))",
-    "CHECK ((status = ANY (ARRAY['proposed'::text, 'confirmed'::text, 'cancelled'::text, 'done'::text])))"
+    "CHECK ((kind = ANY (ARRAY['rehearsal'::text, 'show'::text, 'training'::text, 'rental'::text, 'meeting'::text, 'other'::text])))"
    ],
    "columns": {
     "created_at": {
@@ -1283,6 +1283,11 @@
      "default": null,
      "not_null": true,
      "type": "timestamp with time zone"
+    },
+    "gcal_calendar_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
     },
     "gcal_event_id": {
      "default": null,
@@ -1331,8 +1336,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
     "FOREIGN KEY (created_by) REFERENCES participant(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)",
     "FOREIGN KEY (discipline_id) REFERENCES discipline(id)"
    ],
    "primary_key": [
@@ -1342,8 +1347,8 @@
   },
   "feedback": {
    "check": [
-    "CHECK ((kind = ANY (ARRAY['bug'::text, 'wish'::text, 'wish-fl'::text, 'question'::text, 'praise'::text])))",
-    "CHECK ((status = ANY (ARRAY['new'::text, 'seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))"
+    "CHECK ((status = ANY (ARRAY['new'::text, 'seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))",
+    "CHECK ((kind = ANY (ARRAY['bug'::text, 'wish'::text, 'wish-fl'::text, 'question'::text, 'praise'::text])))"
    ],
    "columns": {
     "context": {
@@ -1402,8 +1407,8 @@
   },
   "feedback_answer": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))",
-    "CHECK ((source = ANY (ARRAY['agent'::text, 'human'::text, 'server'::text])))"
+    "CHECK ((source = ANY (ARRAY['agent'::text, 'human'::text, 'server'::text])))",
+    "CHECK ((status = ANY (ARRAY['seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))"
    ],
    "columns": {
     "commit_sha": {
@@ -1568,8 +1573,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (folder_id) REFERENCES folder(id) ON DELETE CASCADE",
-    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE",
+    "FOREIGN KEY (folder_id) REFERENCES folder(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "file_id",
@@ -1579,9 +1584,10 @@
   },
   "file_object": {
    "check": [
-    "CHECK (((kind IS NULL) OR (kind = ANY (ARRAY['text'::text, 'image'::text, 'audio'::text]))))",
+    "CHECK ((uploaded_via = ANY (ARRAY['human_drive'::text, 'human_telegram'::text, 'bot'::text, 'webapp'::text, 'agent'::text])))",
+    "CHECK (((kind IS NULL) OR (kind = ANY (ARRAY['text'::text, 'image'::text, 'audio'::text, 'folder'::text]))))",
     "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text, 'feedback'::text])))",
-    "CHECK ((uploaded_via = ANY (ARRAY['human_drive'::text, 'human_telegram'::text, 'bot'::text, 'webapp'::text, 'agent'::text])))"
+    "CHECK ((storage = ANY (ARRAY['garage'::text, 'drive'::text])))"
    ],
    "columns": {
     "bucket": {
@@ -1604,7 +1610,27 @@
      "not_null": false,
      "type": "timestamp with time zone"
     },
+    "description": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
     "drive_file_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "drive_mime": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "drive_path": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
+    "drive_url": {
      "default": null,
      "not_null": false,
      "type": "text"
@@ -1668,6 +1694,11 @@
      "default": null,
      "not_null": false,
      "type": "bigint"
+    },
+    "storage": {
+     "default": "'garage'::text",
+     "not_null": true,
+     "type": "text"
     },
     "uploaded_via": {
      "default": "'human_drive'::text",
@@ -1820,8 +1851,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE SET NULL",
-    "FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE SET NULL"
+    "FOREIGN KEY (category_id) REFERENCES category(id) ON DELETE SET NULL",
+    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE SET NULL"
    ],
    "primary_key": [
     "id"
@@ -1830,9 +1861,9 @@
   },
   "folder": {
    "check": [
-    "CHECK ((((scope = 'shared'::text) AND (participant_id IS NULL)) OR ((scope = 'personal'::text) AND (participant_id IS NOT NULL))))",
     "CHECK (((depth >= 1) AND (depth <= 5)))",
-    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text])))"
+    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text])))",
+    "CHECK ((((scope = 'shared'::text) AND (participant_id IS NULL)) OR ((scope = 'personal'::text) AND (participant_id IS NOT NULL))))"
    ],
    "columns": {
     "created_at": {
@@ -1892,10 +1923,10 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (parent_id) REFERENCES folder(id) ON DELETE CASCADE",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
     "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE SET NULL",
-    "FOREIGN KEY (created_by) REFERENCES participant(id)",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (parent_id) REFERENCES folder(id) ON DELETE CASCADE",
+    "FOREIGN KEY (created_by) REFERENCES participant(id)"
    ],
    "primary_key": [
     "id"
@@ -1904,8 +1935,8 @@
   },
   "import_batch": {
    "check": [
-    "CHECK ((kind = ANY (ARRAY['budget'::text, 'schedule'::text, 'people'::text, 'projects'::text])))",
-    "CHECK ((status = ANY (ARRAY['running'::text, 'needs_review'::text, 'applied'::text, 'failed'::text])))"
+    "CHECK ((status = ANY (ARRAY['running'::text, 'needs_review'::text, 'applied'::text, 'failed'::text])))",
+    "CHECK ((kind = ANY (ARRAY['budget'::text, 'schedule'::text, 'people'::text, 'projects'::text])))"
    ],
    "columns": {
     "finished_at": {
@@ -2024,8 +2055,8 @@
   },
   "intent_log": {
    "check": [
-    "CHECK ((source = ANY (ARRAY['rules'::text, 'llm'::text, 'buttons'::text, 'human_new'::text, 'failed'::text, 'cache'::text])))",
-    "CHECK (((agent_status IS NULL) OR (agent_status = ANY (ARRAY['answer'::text, 'proposal'::text, 'refusal'::text]))))"
+    "CHECK (((agent_status IS NULL) OR (agent_status = ANY (ARRAY['answer'::text, 'proposal'::text, 'refusal'::text]))))",
+    "CHECK ((source = ANY (ARRAY['rules'::text, 'llm'::text, 'buttons'::text, 'human_new'::text, 'failed'::text, 'cache'::text])))"
    ],
    "columns": {
     "agent_status": {
@@ -2207,6 +2238,11 @@
      "not_null": true,
      "type": "integer"
     },
+    "participant_id": {
+     "default": null,
+     "not_null": false,
+     "type": "bigint"
+    },
     "role": {
      "default": null,
      "not_null": true,
@@ -2223,7 +2259,9 @@
      "type": "integer"
     }
    },
-   "foreign_keys": [],
+   "foreign_keys": [
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE SET NULL"
+   ],
    "primary_key": [
     "id"
    ],
@@ -2652,14 +2690,14 @@
   },
   "participant": {
    "check": [
-    "CHECK (((person_key IS NULL) OR (person_key ~ '^[a-zа-я0-9]+(-[a-zа-я0-9]+)*$'::text)))",
-    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'blocked'::text, 'archived'::text])))",
-    "CHECK (((travel_minutes >= 0) AND (travel_minutes <= 240)))",
-    "CHECK (((dues_tariff IS NULL) OR (dues_tariff >= (0)::numeric)))",
-    "CHECK (((phone IS NULL) OR (phone ~ '^\\+?[0-9]{10,15}$'::text)))",
-    "CHECK (((birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2020-12-31'::date))))",
     "CHECK ((write_gender = ANY (ARRAY['m'::text, 'f'::text])))",
-    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'troupe'::text, 'master'::text])))"
+    "CHECK (((travel_minutes >= 0) AND (travel_minutes <= 240)))",
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'blocked'::text, 'archived'::text])))",
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'troupe'::text, 'master'::text])))",
+    "CHECK (((phone IS NULL) OR (phone ~ '^\\+?[0-9]{10,15}$'::text)))",
+    "CHECK (((dues_tariff IS NULL) OR (dues_tariff >= (0)::numeric)))",
+    "CHECK (((person_key IS NULL) OR (person_key ~ '^[a-zа-я0-9]+(-[a-zа-я0-9]+)*$'::text)))",
+    "CHECK (((birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2020-12-31'::date))))"
    ],
    "columns": {
     "activated_at": {
@@ -2841,9 +2879,9 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (granted_by) REFERENCES participant(id)",
+    "FOREIGN KEY (capability) REFERENCES rbac_capability(code) ON DELETE CASCADE",
     "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
-    "FOREIGN KEY (capability) REFERENCES rbac_capability(code) ON DELETE CASCADE"
+    "FOREIGN KEY (granted_by) REFERENCES participant(id)"
    ],
    "primary_key": [
     "participant_id",
@@ -2873,8 +2911,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (discipline_id) REFERENCES discipline(id) ON DELETE CASCADE",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (discipline_id) REFERENCES discipline(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "participant_id",
@@ -2925,8 +2963,8 @@
    },
    "foreign_keys": [
     "FOREIGN KEY (revoked_by) REFERENCES participant(id)",
-    "FOREIGN KEY (granted_by) REFERENCES participant(id)",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (granted_by) REFERENCES participant(id)"
    ],
    "primary_key": [
     "participant_id",
@@ -2936,8 +2974,8 @@
   },
   "person_alias": {
    "check": [
-    "CHECK ((source = ANY (ARRAY['manual'::text, 'import'::text, 'bot'::text])))",
-    "CHECK ((alias_kind = ANY (ARRAY['name'::text, 'short'::text, 'tg_username'::text, 'payee'::text, 'external'::text, 'role'::text])))"
+    "CHECK ((alias_kind = ANY (ARRAY['name'::text, 'short'::text, 'tg_username'::text, 'payee'::text, 'external'::text, 'role'::text])))",
+    "CHECK ((source = ANY (ARRAY['manual'::text, 'import'::text, 'bot'::text])))"
    ],
    "columns": {
     "alias": {
@@ -2977,8 +3015,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "id"
@@ -3100,8 +3138,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (question_id) REFERENCES poll_question(id) ON DELETE CASCADE",
-    "FOREIGN KEY (run_id) REFERENCES poll_run(id) ON DELETE CASCADE"
+    "FOREIGN KEY (run_id) REFERENCES poll_run(id) ON DELETE CASCADE",
+    "FOREIGN KEY (question_id) REFERENCES poll_question(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "run_id",
@@ -3111,9 +3149,9 @@
   },
   "poll_audience": {
    "check": [
-    "CHECK ((kind = ANY (ARRAY['all_active'::text, 'role'::text, 'project'::text])))",
     "CHECK ((((kind = 'role'::text) AND (role IS NOT NULL) AND (project_id IS NULL)) OR ((kind = 'project'::text) AND (project_id IS NOT NULL) AND (role IS NULL)) OR ((kind = 'all_active'::text) AND (role IS NULL) AND (project_id IS NULL))))",
-    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))"
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))",
+    "CHECK ((kind = ANY (ARRAY['all_active'::text, 'role'::text, 'project'::text])))"
    ],
    "columns": {
     "id": {
@@ -3143,8 +3181,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE",
-    "FOREIGN KEY (project_id) REFERENCES project(id)"
+    "FOREIGN KEY (project_id) REFERENCES project(id)",
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "id"
@@ -3153,8 +3191,8 @@
   },
   "poll_option": {
    "check": [
-    "CHECK (((char_length(code) >= 1) AND (char_length(code) <= 2)))",
-    "CHECK ((label <> ''::text))"
+    "CHECK ((label <> ''::text))",
+    "CHECK (((char_length(code) >= 1) AND (char_length(code) <= 2)))"
    ],
    "columns": {
     "code": {
@@ -3192,11 +3230,11 @@
    "unique": [
     [
      "question_id",
-     "position"
+     "code"
     ],
     [
      "question_id",
-     "code"
+     "position"
     ]
    ]
   },
@@ -3233,11 +3271,11 @@
   },
   "poll_question": {
    "check": [
-    "CHECK (((kind = ANY (ARRAY['single'::text, 'multi'::text])) OR (free_text = false)))",
     "CHECK (((max_choices IS NULL) OR (max_choices > 0)))",
+    "CHECK (((kind = ANY (ARRAY['single'::text, 'multi'::text])) OR (free_text = false)))",
+    "CHECK ((\"position\" > 0))",
     "CHECK ((text <> ''::text))",
-    "CHECK ((kind = ANY (ARRAY['single'::text, 'multi'::text, 'yesno'::text, 'number'::text, 'text'::text])))",
-    "CHECK ((\"position\" > 0))"
+    "CHECK ((kind = ANY (ARRAY['single'::text, 'multi'::text, 'yesno'::text, 'number'::text, 'text'::text])))"
    ],
    "columns": {
     "free_text": {
@@ -3346,8 +3384,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
-    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE"
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "id"
@@ -3696,8 +3734,8 @@
   },
   "tag": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['approved'::text, 'draft'::text, 'rejected'::text])))",
-    "CHECK ((kind = ANY (ARRAY['topic'::text, 'project'::text, 'role'::text])))"
+    "CHECK ((kind = ANY (ARRAY['topic'::text, 'project'::text, 'role'::text])))",
+    "CHECK ((status = ANY (ARRAY['approved'::text, 'draft'::text, 'rejected'::text])))"
    ],
    "columns": {
     "approved_at": {
@@ -3822,7 +3860,7 @@
   "v_availability_summary": " SELECT a.day, a.hour, count(*) FILTER (WHERE a.is_free) AS free_cnt, count(*) FILTER (WHERE (NOT a.is_free)) AS busy_cnt, count(*) AS known_cnt FROM (availability_hour a JOIN participant p ON ((p.id = a.participant_id))) WHERE (p.status <> 'archived'::text) GROUP BY a.day, a.hour;",
   "v_balance": " SELECT ( SELECT COALESCE(sum(dues_charge.amount_due), (0)::numeric) AS \"coalesce\" FROM dues_charge) AS dues_total, ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'income'::text) AND (budget_tx.status = 'confirmed'::text))) AS income_tx, ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'expense'::text) AND (budget_tx.status = 'confirmed'::text))) AS expense_tx, ((( SELECT COALESCE(sum(dues_charge.amount_due), (0)::numeric) AS \"coalesce\" FROM dues_charge) + ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'income'::text) AND (budget_tx.status = 'confirmed'::text)))) - ( SELECT COALESCE(sum(budget_tx.amount), (0)::numeric) AS \"coalesce\" FROM budget_tx WHERE ((budget_tx.tx_type = 'expense'::text) AND (budget_tx.status = 'confirmed'::text)))) AS balance;",
   "v_dues_balance": " SELECT p.id AS participant_id, p.display_name, d.period, d.amount_due, d.amount_paid, (d.amount_due - d.amount_paid) AS balance, d.status FROM (dues_charge d JOIN participant p ON ((p.id = d.participant_id))) WHERE (d.amount_due <> d.amount_paid);",
-  "v_file_checks": " WITH f1 AS ( SELECT 'F1'::text AS code, 'У каждого файла есть владелец'::text AS name, (NOT (EXISTS ( SELECT 1 FROM file_object WHERE (file_object.participant_id IS NULL)))) AS ok, (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE (file_object.participant_id IS NULL)), '0'::text) || ' без владельца'::text) AS detail ), f2 AS ( SELECT 'F2'::text AS \"?column?\", 'Файл знает, где его байты'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.object_key IS NULL) AND (file_object.drive_file_id IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.object_key IS NULL) AND (file_object.drive_file_id IS NULL))), '0'::text) || ' без ключа'::text) AS \"?column?\" ), f3 AS ( SELECT 'F3'::text AS \"?column?\", 'Размер файла положительный'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.size_bytes IS NOT NULL) AND (file_object.size_bytes <= 0))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.size_bytes IS NOT NULL) AND (file_object.size_bytes <= 0))), '0'::text) || ' строк'::text) AS \"?column?\" ), f4 AS ( SELECT 'F4'::text AS \"?column?\", 'В ключе объекта нет имён и кириллицы'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE (file_object.object_key ~ '[А-Яа-яЁё]'::text)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE (file_object.object_key ~ '[А-Яа-яЁё]'::text)), '0'::text) || ' ключей с текстом'::text) AS \"?column?\" ), f5 AS ( SELECT 'F5'::text AS \"?column?\", 'Личная папка принадлежит человеку'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder WHERE ((folder.scope = 'personal'::text) AND (folder.participant_id IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder WHERE ((folder.scope = 'personal'::text) AND (folder.participant_id IS NULL))), '0'::text) || ' папок'::text) AS \"?column?\" ), f6 AS ( SELECT 'F6'::text AS \"?column?\", 'Глубина папок не больше 5'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder WHERE (folder.depth > 5)))) AS \"?column?\", (COALESCE(( SELECT (max(folder.depth))::text AS max FROM folder), '0'::text) || ' максимальная глубина'::text) AS \"?column?\" ), f7 AS ( SELECT 'F7'::text AS \"?column?\", 'У папки нет потерянного родителя'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder c WHERE ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE (p.id = c.parent_id)))))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder c WHERE ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE (p.id = c.parent_id)))))), '0'::text) || ' папок'::text) AS \"?column?\" ), f8 AS ( SELECT 'F8'::text AS \"?column?\", 'В папках нет удалённых файлов'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM (file_folder ff JOIN file_object f ON ((f.id = ff.file_id))) WHERE (f.deleted_at IS NOT NULL)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM (file_folder ff JOIN file_object f ON ((f.id = ff.file_id))) WHERE (f.deleted_at IS NOT NULL)), '0'::text) || ' связей'::text) AS \"?column?\" ), f9 AS ( SELECT 'F9'::text AS \"?column?\", 'Путь папки соответствует её имени и родителю'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder c WHERE (((c.parent_id IS NULL) AND (c.path <> c.name)) OR ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE ((p.id = c.parent_id) AND (c.path = ((p.path || '/'::text) || c.name))))))))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder c WHERE (((c.parent_id IS NULL) AND (c.path <> c.name)) OR ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE ((p.id = c.parent_id) AND (c.path = ((p.path || '/'::text) || c.name))))))))), '0'::text) || ' папок'::text) AS \"?column?\" ), f10 AS ( SELECT 'F10'::text AS \"?column?\", 'У доступа админа есть причина'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM access_grant WHERE (length(btrim(access_grant.reason)) = 0)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM access_grant WHERE (length(btrim(access_grant.reason)) = 0)), '0'::text) || ' записей'::text) AS \"?column?\" ) SELECT f1.code, f1.name, f1.ok, f1.detail FROM f1 UNION ALL SELECT f2.\"?column?\" AS code, f2.\"?column?_1\" AS name, f2.\"?column?_2\" AS ok, f2.\"?column?_3\" AS detail FROM f2 f2(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f3.\"?column?\" AS code, f3.\"?column?_1\" AS name, f3.\"?column?_2\" AS ok, f3.\"?column?_3\" AS detail FROM f3 f3(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f4.\"?column?\" AS code, f4.\"?column?_1\" AS name, f4.\"?column?_2\" AS ok, f4.\"?column?_3\" AS detail FROM f4 f4(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f5.\"?column?\" AS code, f5.\"?column?_1\" AS name, f5.\"?column?_2\" AS ok, f5.\"?column?_3\" AS detail FROM f5 f5(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f6.\"?column?\" AS code, f6.\"?column?_1\" AS name, f6.\"?column?_2\" AS ok, f6.\"?column?_3\" AS detail FROM f6 f6(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f7.\"?column?\" AS code, f7.\"?column?_1\" AS name, f7.\"?column?_2\" AS ok, f7.\"?column?_3\" AS detail FROM f7 f7(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f8.\"?column?\" AS code, f8.\"?column?_1\" AS name, f8.\"?column?_2\" AS ok, f8.\"?column?_3\" AS detail FROM f8 f8(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f9.\"?column?\" AS code, f9.\"?column?_1\" AS name, f9.\"?column?_2\" AS ok, f9.\"?column?_3\" AS detail FROM f9 f9(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f10.\"?column?\" AS code, f10.\"?column?_1\" AS name, f10.\"?column?_2\" AS ok, f10.\"?column?_3\" AS detail FROM f10 f10(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\");",
+  "v_file_checks": " WITH f1 AS ( SELECT 'F1'::text AS code, 'У каждого файла есть владелец'::text AS name, (NOT (EXISTS ( SELECT 1 FROM file_object WHERE (file_object.participant_id IS NULL)))) AS ok, (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE (file_object.participant_id IS NULL)), '0'::text) || ' без владельца'::text) AS detail ), f2 AS ( SELECT 'F2'::text AS \"?column?\", 'Файл знает, где его байты'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.object_key IS NULL) AND (file_object.drive_file_id IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.object_key IS NULL) AND (file_object.drive_file_id IS NULL))), '0'::text) || ' без ключа'::text) AS \"?column?\" ), f3 AS ( SELECT 'F3'::text AS \"?column?\", 'Размер файла положительный'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.size_bytes IS NOT NULL) AND (file_object.size_bytes <= 0))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.size_bytes IS NOT NULL) AND (file_object.size_bytes <= 0))), '0'::text) || ' строк'::text) AS \"?column?\" ), f4 AS ( SELECT 'F4'::text AS \"?column?\", 'В ключе объекта нет имён и кириллицы'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE (file_object.object_key ~ '[А-Яа-яЁё]'::text)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE (file_object.object_key ~ '[А-Яа-яЁё]'::text)), '0'::text) || ' ключей с текстом'::text) AS \"?column?\" ), f5 AS ( SELECT 'F5'::text AS \"?column?\", 'Личная папка принадлежит человеку'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder WHERE ((folder.scope = 'personal'::text) AND (folder.participant_id IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder WHERE ((folder.scope = 'personal'::text) AND (folder.participant_id IS NULL))), '0'::text) || ' папок'::text) AS \"?column?\" ), f6 AS ( SELECT 'F6'::text AS \"?column?\", 'Глубина папок не больше 5'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder WHERE (folder.depth > 5)))) AS \"?column?\", (COALESCE(( SELECT (max(folder.depth))::text AS max FROM folder), '0'::text) || ' максимальная глубина'::text) AS \"?column?\" ), f7 AS ( SELECT 'F7'::text AS \"?column?\", 'У папки нет потерянного родителя'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder c WHERE ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE (p.id = c.parent_id)))))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder c WHERE ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE (p.id = c.parent_id)))))), '0'::text) || ' папок'::text) AS \"?column?\" ), f8 AS ( SELECT 'F8'::text AS \"?column?\", 'В папках нет удалённых файлов'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM (file_folder ff JOIN file_object f ON ((f.id = ff.file_id))) WHERE (f.deleted_at IS NOT NULL)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM (file_folder ff JOIN file_object f ON ((f.id = ff.file_id))) WHERE (f.deleted_at IS NOT NULL)), '0'::text) || ' связей'::text) AS \"?column?\" ), f9 AS ( SELECT 'F9'::text AS \"?column?\", 'Путь папки соответствует её имени и родителю'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM folder c WHERE (((c.parent_id IS NULL) AND (c.path <> c.name)) OR ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE ((p.id = c.parent_id) AND (c.path = ((p.path || '/'::text) || c.name))))))))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM folder c WHERE (((c.parent_id IS NULL) AND (c.path <> c.name)) OR ((c.parent_id IS NOT NULL) AND (NOT (EXISTS ( SELECT 1 FROM folder p WHERE ((p.id = c.parent_id) AND (c.path = ((p.path || '/'::text) || c.name))))))))), '0'::text) || ' папок'::text) AS \"?column?\" ), f10 AS ( SELECT 'F10'::text AS \"?column?\", 'У доступа админа есть причина'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM access_grant WHERE (length(btrim(access_grant.reason)) = 0)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM access_grant WHERE (length(btrim(access_grant.reason)) = 0)), '0'::text) || ' записей'::text) AS \"?column?\" ), f11 AS ( SELECT 'F11'::text AS \"?column?\", 'Garage хранит байты, а не ссылку'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.storage = 'garage'::text) AND ((file_object.object_key IS NULL) OR (file_object.bucket IS NULL) OR (file_object.drive_url IS NOT NULL)))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.storage = 'garage'::text) AND ((file_object.object_key IS NULL) OR (file_object.bucket IS NULL) OR (file_object.drive_url IS NOT NULL)))), '0'::text) || ' строк'::text) AS \"?column?\" ), f12 AS ( SELECT 'F12'::text AS \"?column?\", 'Ссылка на Drive не держит байтов'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.storage = 'drive'::text) AND ((file_object.drive_url IS NULL) OR (file_object.object_key IS NOT NULL) OR (file_object.bucket IS NOT NULL) OR (file_object.sha256 IS NOT NULL) OR (file_object.cold_at IS NOT NULL) OR (file_object.last_access_at IS NOT NULL)))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.deleted_at IS NULL) AND (file_object.storage = 'drive'::text) AND ((file_object.drive_url IS NULL) OR (file_object.object_key IS NOT NULL) OR (file_object.bucket IS NOT NULL) OR (file_object.sha256 IS NOT NULL) OR (file_object.cold_at IS NOT NULL) OR (file_object.last_access_at IS NOT NULL)))), '0'::text) || ' строк'::text) AS \"?column?\" ), f13 AS ( SELECT 'F13'::text AS \"?column?\", 'Папка Drive — только ссылка'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM file_object WHERE ((file_object.kind = 'folder'::text) AND (file_object.storage <> 'drive'::text))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM file_object WHERE ((file_object.kind = 'folder'::text) AND (file_object.storage <> 'drive'::text))), '0'::text) || ' строк'::text) AS \"?column?\" ) SELECT f1.code, f1.name, f1.ok, f1.detail FROM f1 UNION ALL SELECT f2.\"?column?\" AS code, f2.\"?column?_1\" AS name, f2.\"?column?_2\" AS ok, f2.\"?column?_3\" AS detail FROM f2 f2(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f3.\"?column?\" AS code, f3.\"?column?_1\" AS name, f3.\"?column?_2\" AS ok, f3.\"?column?_3\" AS detail FROM f3 f3(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f4.\"?column?\" AS code, f4.\"?column?_1\" AS name, f4.\"?column?_2\" AS ok, f4.\"?column?_3\" AS detail FROM f4 f4(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f5.\"?column?\" AS code, f5.\"?column?_1\" AS name, f5.\"?column?_2\" AS ok, f5.\"?column?_3\" AS detail FROM f5 f5(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f6.\"?column?\" AS code, f6.\"?column?_1\" AS name, f6.\"?column?_2\" AS ok, f6.\"?column?_3\" AS detail FROM f6 f6(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f7.\"?column?\" AS code, f7.\"?column?_1\" AS name, f7.\"?column?_2\" AS ok, f7.\"?column?_3\" AS detail FROM f7 f7(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f8.\"?column?\" AS code, f8.\"?column?_1\" AS name, f8.\"?column?_2\" AS ok, f8.\"?column?_3\" AS detail FROM f8 f8(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f9.\"?column?\" AS code, f9.\"?column?_1\" AS name, f9.\"?column?_2\" AS ok, f9.\"?column?_3\" AS detail FROM f9 f9(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f10.\"?column?\" AS code, f10.\"?column?_1\" AS name, f10.\"?column?_2\" AS ok, f10.\"?column?_3\" AS detail FROM f10 f10(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f11.\"?column?\" AS code, f11.\"?column?_1\" AS name, f11.\"?column?_2\" AS ok, f11.\"?column?_3\" AS detail FROM f11 f11(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f12.\"?column?\" AS code, f12.\"?column?_1\" AS name, f12.\"?column?_2\" AS ok, f12.\"?column?_3\" AS detail FROM f12 f12(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT f13.\"?column?\" AS code, f13.\"?column?_1\" AS name, f13.\"?column?_2\" AS ok, f13.\"?column?_3\" AS detail FROM f13 f13(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\");",
   "v_intent_degraded": " SELECT (date_trunc('day'::text, ts))::date AS \"день\", COALESCE(degraded_reason, 'не записано'::text) AS \"причина\", CASE WHEN (degraded_reason = ANY (ARRAY['chat_tokens'::text, 'chat_steps'::text, 'token_budget'::text])) THEN 'бюджет'::text WHEN (degraded_reason = ANY (ARRAY['timeout'::text, 'llm_unavailable'::text, 'llm_error'::text, 'provider_timeout'::text])) THEN 'провайдер'::text WHEN (degraded_reason = 'step_limit'::text) THEN 'агент'::text WHEN (degraded_reason IS NULL) THEN 'не записано'::text ELSE 'прочее'::text END AS \"вид\", count(*) AS \"отказов\" FROM intent_log WHERE (agent_status = 'refusal'::text) GROUP BY ((date_trunc('day'::text, ts))::date), COALESCE(degraded_reason, 'не записано'::text), CASE WHEN (degraded_reason = ANY (ARRAY['chat_tokens'::text, 'chat_steps'::text, 'token_budget'::text])) THEN 'бюджет'::text WHEN (degraded_reason = ANY (ARRAY['timeout'::text, 'llm_unavailable'::text, 'llm_error'::text, 'provider_timeout'::text])) THEN 'провайдер'::text WHEN (degraded_reason = 'step_limit'::text) THEN 'агент'::text WHEN (degraded_reason IS NULL) THEN 'не записано'::text ELSE 'прочее'::text END;",
   "v_intent_gaps": " SELECT (date_trunc('day'::text, ts))::date AS day, count(*) AS \"всего\", count(*) FILTER (WHERE (source = 'llm'::text)) AS \"разобрала_модель\", count(*) FILTER (WHERE (source = ANY (ARRAY['buttons'::text, 'human_new'::text]))) AS \"спросили_человека\", count(*) FILTER (WHERE (NOT resolved)) AS \"не_записано\" FROM intent_log WHERE (agent_status IS NULL) GROUP BY ((date_trunc('day'::text, ts))::date) ORDER BY ((date_trunc('day'::text, ts))::date) DESC;",
   "v_invariant_checks": " WITH i1 AS ( SELECT 'I1'::text AS code, 'Баланс = накопленный итог последнего периода'::text AS name, (abs((( SELECT v_balance.balance FROM v_balance) - ( SELECT sum((v_period_totals.income_total - v_period_totals.expense_total)) AS sum FROM v_period_totals))) < 0.01) AS ok, concat('баланс ', ( SELECT round(v_balance.balance, 2) AS round FROM v_balance)) AS detail ), i2 AS ( SELECT 'I2'::text AS \"?column?\", 'Нет дублей операций'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE (budget_tx.status = 'confirmed'::text) GROUP BY budget_tx.period, budget_tx.block, budget_tx.tx_date, budget_tx.amount, budget_tx.article_raw HAVING (count(*) > 1)))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM ( SELECT 1 AS \"?column?\" FROM budget_tx WHERE (budget_tx.status = 'confirmed'::text) GROUP BY budget_tx.period, budget_tx.block, budget_tx.tx_date, budget_tx.amount, budget_tx.article_raw HAVING (count(*) > 1)) d), '0'::text) || ' групп'::text) AS \"?column?\" ), i3 AS ( SELECT 'I3'::text AS \"?column?\", 'Тип операции соответствует категории'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM (budget_tx t JOIN category c ON ((c.id = t.category_id))) WHERE ((c.direction = ANY (ARRAY['income'::text, 'expense'::text])) AND (c.direction <> t.tx_type))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM (budget_tx t JOIN category c ON ((c.id = t.category_id))) WHERE ((c.direction = ANY (ARRAY['income'::text, 'expense'::text])) AND (c.direction <> t.tx_type))), '0'::text) || ' строк'::text) AS \"?column?\" ), i5 AS ( SELECT 'I5'::text AS \"?column?\", 'Доли от сборов сходятся с базой'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE ((budget_tx.rate_pct IS NOT NULL) AND (budget_tx.base_amount IS NOT NULL) AND (abs((budget_tx.amount - round(((budget_tx.base_amount * budget_tx.rate_pct) / (100)::numeric), 2))) > (0.01 * budget_tx.base_amount)))))) AS \"?column?\", ((COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE (budget_tx.rate_pct IS NOT NULL)), '0'::text) || ' выплат, из них с расхождением: '::text) || COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE ((budget_tx.rate_pct IS NOT NULL) AND (abs((budget_tx.amount - round(((budget_tx.base_amount * budget_tx.rate_pct) / (100)::numeric), 2))) > (0.01 * budget_tx.base_amount)))), '0'::text)) AS \"?column?\" ), i6 AS ( SELECT 'I6'::text AS \"?column?\", 'У аванса указан период услуги'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE (budget_tx.is_advance AND (budget_tx.service_period IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE (budget_tx.is_advance AND (budget_tx.service_period IS NULL))), '0'::text) || ' без периода'::text) AS \"?column?\" ), i7 AS ( SELECT 'I7'::text AS \"?column?\", 'У операции есть блок, категория и дата'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE ((budget_tx.category_id IS NULL) OR (budget_tx.tx_date IS NULL) OR (budget_tx.block IS NULL))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE ((budget_tx.category_id IS NULL) OR (budget_tx.tx_date IS NULL))), '0'::text) || ' неполных'::text) AS \"?column?\" ), i8 AS ( SELECT 'I8'::text AS \"?column?\", 'План не попал в факт'::text AS \"?column?\", (NOT (EXISTS ( SELECT 1 FROM budget_tx WHERE ((budget_tx.status = 'expected'::text) AND (budget_tx.tx_type <> ALL (ARRAY['income'::text, 'expense'::text])))))) AS \"?column?\", (COALESCE(( SELECT (count(*))::text AS count FROM budget_tx WHERE (budget_tx.status = 'expected'::text)), '0'::text) || ' ожидаемых'::text) AS \"?column?\" ) SELECT i1.code, i1.name, i1.ok, i1.detail FROM i1 UNION ALL SELECT i2.\"?column?\" AS code, i2.\"?column?_1\" AS name, i2.\"?column?_2\" AS ok, i2.\"?column?_3\" AS detail FROM i2 i2(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i3.\"?column?\" AS code, i3.\"?column?_1\" AS name, i3.\"?column?_2\" AS ok, i3.\"?column?_3\" AS detail FROM i3 i3(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i5.\"?column?\" AS code, i5.\"?column?_1\" AS name, i5.\"?column?_2\" AS ok, i5.\"?column?_3\" AS detail FROM i5 i5(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i6.\"?column?\" AS code, i6.\"?column?_1\" AS name, i6.\"?column?_2\" AS ok, i6.\"?column?_3\" AS detail FROM i6 i6(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i7.\"?column?\" AS code, i7.\"?column?_1\" AS name, i7.\"?column?_2\" AS ok, i7.\"?column?_3\" AS detail FROM i7 i7(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\") UNION ALL SELECT i8.\"?column?\" AS code, i8.\"?column?_1\" AS name, i8.\"?column?_2\" AS ok, i8.\"?column?_3\" AS detail FROM i8 i8(\"?column?\", \"?column?_1\", \"?column?_2\", \"?column?_3\");",

@@ -205,7 +205,7 @@ def test_квота_проверяется_тем_же_запросом_что_�
     conn = _ScriptedConn([
         ("select id from participant", [{"id": 7}]),
         ("insert into file_object", []),                       # места не хватило
-        ("select coalesce(sum(size_bytes), 0) as used", [{"used": STORE.QUOTA_BYTES}]),
+        ("select coalesce(sum(f.size_bytes), 0) as used", [{"used": STORE.QUOTA_BYTES}]),
     ])
 
     with pytest.raises(STORE.FileRejected) as caught:
@@ -219,8 +219,11 @@ def test_квота_проверяется_тем_же_запросом_что_�
 
     insert = [sql for sql in conn.sql if "insert into file_object" in sql]
     assert len(insert) == 1
-    assert "where (select coalesce(sum(size_bytes), 0) from file_object" in insert[0]
-    assert "where participant_id = %s and deleted_at is null) + %s <= %s" in insert[0]
+    assert "where (select coalesce(sum(f.size_bytes), 0) from file_object" in insert[0]
+    assert "f.storage = 'garage' and f.scope <> %s" in insert[0], \
+        "квота при вставке считается по тому же правилу §5, что и `used_bytes`"
+    assert "fo.scope = 'shared'" in insert[0], "файл в общей папке личное место не занимает"
+    assert ") + %s <= %s" in insert[0]
     assert "from participant where id = %s for update" in conn.sql[0], \
         "параллельные коммиты сериализуются блокировкой строки участника"
 
@@ -231,7 +234,7 @@ def test_квота_считается_в_том_же_запросе_и_при_�
     conn = _ScriptedConn([
         ("select id from participant", [{"id": 7}]),
         ("insert into file_object", [{"id": 55}]),
-        ("select coalesce(sum(size_bytes), 0) as used", [{"used": 1024}]),
+        ("select coalesce(sum(f.size_bytes), 0) as used", [{"used": 1024}]),
         ("from folder", [{"id": 3, "path": "Личное/Фото"}]),
         ("insert into file_folder", []),
     ])

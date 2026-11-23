@@ -9,10 +9,42 @@ from fastapi import APIRouter, Depends, Header, Query, Request, status
 from fastapi.responses import StreamingResponse
 from pydantic import Field
 
-from .. import cold, core, file_access, files_store, folders, tags
+from .. import cold, core, file_access, file_kind, files_store, folders, tags
 from ..errors import ApiError
 
 router = APIRouter()
+
+EXTERNAL_MESSAGE = "Это ссылка на Drive — файл открывается в Drive, копии у студии нет."
+
+
+def _external_guard(row: dict) -> None:
+    """Ссылка не скачивается: байтов у нас нет, подписывать нечего (docs 192 §6.9)."""
+    if row.get("storage") == "drive":
+        raise ApiError(status.HTTP_409_CONFLICT, EXTERNAL_MESSAGE, code="file_external")
+
+
+def _upload_folder(conn, folder_id: int | None, who: dict) -> dict | None:
+    """Папка для загрузки: существует (404) и в неё можно класть (403), §6.1.
+
+    Проверка одна на `presign` и `commit`: разойдись они — человек получит ссылку на
+    загрузку в папку, куда подтверждение не пустит, и файл останется сиротой в хранилище.
+    """
+    if folder_id is None:
+        return None
+    try:
+        folder = folders.get(conn, int(folder_id))
+    except folders.FolderError:
+        raise
+    if not folders.can_manage(who, folder):
+        raise ApiError(status.HTTP_403_FORBIDDEN, "В эту папку класть нельзя.",
+                       code="folder_forbidden")
+    return folder
+
+
+def _folder_brief(folder: dict | None) -> dict | None:
+    if folder is None:
+        return None
+    return {"id": folder["id"], "path": folder["path"], "scope": folder["scope"]}
 
 @router.post("/files/upload")
 async def files_upload(request: Request,
@@ -117,6 +149,7 @@ def file_content(file_id: int, who: dict = Depends(core.current)) -> StreamingRe
         row, as_admin = files_store.file_for_viewer(conn, file_id, who)
         if row is None:
             raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.", code="file_not_found")
+        _external_guard(row)
         restored = False
         if row.get("cold_at"):
             # файл лежит на холодном томе: возвращаем в бакет, иначе читать нечего
@@ -153,6 +186,7 @@ def file_link(file_id: int, who: dict = Depends(core.current)) -> dict:
         row, as_admin = files_store.file_for_viewer(conn, file_id, who)
         if row is None:
             raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.", code="file_not_found")
+        _external_guard(row)
         if not row["object_key"]:
             raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не долетел до хранилища — загрузите заново.",
                        code="file_not_uploaded")
@@ -268,7 +302,7 @@ class WebAppPresignIn(core.ApiIn):
     name: str = Field(min_length=1, max_length=200)
     mime: str = Field(default="application/octet-stream", max_length=120)
     size: int = Field(default=0, ge=0)
-
+    folder_id: int | None = None
 
 
 class WebAppCommitIn(core.ApiIn):
@@ -276,6 +310,25 @@ class WebAppCommitIn(core.ApiIn):
     name: str = Field(min_length=1, max_length=200)
     mime: str = Field(default="application/octet-stream", max_length=120)
     sha256: str | None = Field(default=None, max_length=64)
+    folder_id: int | None = None
+    description: str | None = Field(default=None, max_length=files_store.MAX_DESCRIPTION)
+
+
+class WebAppLinkIn(core.ApiIn):
+    """Ссылка на Drive: адрес обязателен, остальное — по желанию (docs 192 §6.3)."""
+
+    url: str = Field(min_length=1, max_length=2000)
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=files_store.MAX_DESCRIPTION)
+    folder_id: int | None = None
+    drive_path: str | None = Field(default=None, max_length=200)
+
+
+class WebAppMetaIn(core.ApiIn):
+    """Хотя бы одно поле — иначе правка пустая и её нечем записать в аудит (§6.4)."""
+
+    name: str | None = Field(default=None, max_length=200)
+    description: str | None = Field(default=None, max_length=files_store.MAX_DESCRIPTION)
 
 
 
@@ -300,7 +353,9 @@ def webapp_files_presign(body: WebAppPresignIn,
     Тип проверяем сразу, до загрузки мегабайтов: если это видео или архив, человек узнает
     об этом мгновенно, а не после того, как телефон потратит трафик.
     """
-    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
+    # Роли нужны проверке папки: `_webapp_require` отдаёт участника вместе с ними,
+    # а сырой `who` из `webapp_actor` ролей не знает — тогда общая папка всегда 403.
+    viewer = core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     participant_id = int(who["id"])
     try:
         files_store.detect_kind(body.name, body.mime, b"")
@@ -312,14 +367,21 @@ def webapp_files_presign(body: WebAppPresignIn,
         raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
                        f"Файл больше {limit_mb} МБ — такой не приму.", code="file_too_large")
     with core.pool.connection() as conn:
-        left = files_store.QUOTA_BYTES - files_store.used_bytes(conn, participant_id)
-    if left <= 0:
-        raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, "Личное место закончилось: удалите что-нибудь.", code="file_quota_exceeded")
+        folder = _upload_folder(conn, body.folder_id, viewer)
+        shared = folder is not None and folder["scope"] == "shared"
+        left = (None if shared
+                else files_store.QUOTA_BYTES - files_store.used_bytes(conn, participant_id))
+    if left is not None and left <= 0:
+        raise ApiError(status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                       "Личное место закончилось: удалите что-нибудь.",
+                       code="file_quota_exceeded")
     try:
         data = files_store.presign_put(participant_id, body.name, body.mime)
     except files_store.FileRejected:
         raise
-    return {"ok": True, **data, "quota_left_mb": round(left / (1024 * 1024))}
+    return {"ok": True, **data,
+            "quota_left_mb": None if left is None else round(left / (1024 * 1024)),
+            "folder": _folder_brief(folder)}
 
 
 
@@ -331,7 +393,7 @@ def webapp_files_commit(body: WebAppCommitIn,
     Ключ обязан принадлежать человеку: иначе presigned-ссылка станет способом перезаписать
     чужой файл, подставив чужой ключ.
     """
-    core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
+    viewer = core._webapp_require(who, "files.access")  # V-039 (в): файлы — admin, org, master
     participant_id = int(who["id"])
     prefix = f"p{participant_id}/"
     if not body.object_key.startswith(prefix) or "/" in body.object_key[len(prefix):]:
@@ -350,20 +412,111 @@ def webapp_files_commit(body: WebAppCommitIn,
 
     head16 = files_store.head_bytes(body.object_key)
     with core.pool.connection() as conn:
+        _upload_folder(conn, body.folder_id, viewer)   # 404/403 до записи строки
         try:
             saved = files_store.save_committed(
                 conn, participant_id, body.name, body.mime or content_type,
-                size, body.sha256, body.object_key, head16)
+                size, body.sha256, body.object_key, head16,
+                folder_id=body.folder_id, description=body.description)
         except files_store.FileRejected:
             raise
         core.audit(conn, "human", participant_id, "file.upload", "file_object", str(saved.id),
               after={"name": saved.name, "kind": saved.kind, "size": saved.size_bytes,
-                     "via": "webapp", "duplicate": saved.duplicate})
+                     "via": "webapp", "duplicate": saved.duplicate,
+                     "folder_id": saved.folder_id,
+                     "description": bool(saved.description)})
     return {"ok": True, "file": {
         "id": saved.id, "name": saved.name, "kind": saved.kind,
-        "size_bytes": saved.size_bytes, "folder": saved.folder_path,
+        "kind_word": file_kind.kind_word(saved.kind, saved.name),
+        "storage": saved.storage, "size_bytes": saved.size_bytes,
+        "description": saved.description,
+        "folder": saved.folder_path, "folder_id": saved.folder_id,
         "duration_sec": saved.duration_sec, "duplicate": saved.duplicate,
         "quota_left_mb": round(saved.quota_left / (1024 * 1024))}}
+
+
+@router.post("/webapp/files/link")
+def webapp_files_link(body: WebAppLinkIn, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Добавить ссылку на Google Drive отдельной записью (V-123, docs/development/192 §6.3).
+
+    Байтов у нас нет: адрес разбирается без сетевых запросов, `size_bytes`, `sha256` и
+    `drive_mime` остаются пустыми. Папка Drive принимается как отдельная запись с
+    `kind='folder'`; отказ — только чужой хост, не-https и неразобранный адрес.
+    """
+    viewer = core._webapp_require(who, "files.access")
+    with core.pool.connection() as conn:
+        _upload_folder(conn, body.folder_id, viewer)
+        try:
+            row = files_store.link_drive(
+                conn, viewer, body.url, name=body.name, description=body.description,
+                folder_id=body.folder_id, drive_path=body.drive_path)
+        except files_store.FileRejected:
+            raise
+        core.audit(conn, "human", viewer["id"], "file.drive_link", "file_object",
+                   str(row["id"]),
+                   after={"name": row["name"], "drive_url": row["drive_url"],
+                          "is_folder": row["kind"] == "folder",
+                          "folder_id": row["folder_id"]})
+    return {"ok": True, "file": row}
+
+
+@router.post("/webapp/files/{file_id}/meta")
+def webapp_file_meta(file_id: int, body: WebAppMetaIn,
+                     who: dict = Depends(core.webapp_actor)) -> dict:
+    """Название и описание файла — только владелец (V-124, docs/development/192 §6.4).
+
+    Чужой и несуществующий файл отвечают одинаково — 404 (`FR-K8`). Аудит `file.meta`
+    несёт `before`/`after` только по изменённым полям: пустая правка не пишет события.
+    """
+    viewer = core._webapp_require(who, "files.access")
+    if body.name is None and body.description is None:
+        raise ApiError(status.HTTP_400_BAD_REQUEST,
+                       "Нужно название или описание — иначе менять нечего.",
+                       code="file_meta_empty")
+    with core.pool.connection() as conn:
+        try:
+            row = files_store.update_meta(
+                conn, viewer, file_id, name=body.name, description=body.description,
+                touch_name=body.name is not None,
+                touch_description=body.description is not None)
+        except files_store.FileRejected:
+            raise
+        if row["after"]:
+            core.audit(conn, "human", viewer["id"], "file.meta", "file_object", str(file_id),
+                       before=row["before"], after={**row["after"], "via": "webapp"})
+    return {"ok": True, "id": row["id"], "name": row["name"],
+            "description": row["description"], "kind": row["kind"],
+            "kind_word": row["kind_word"]}
+
+
+@router.get("/webapp/files/search")
+def webapp_files_search(who: dict = Depends(core.webapp_actor),
+                        q: str = Query(default="", max_length=200),
+                        folder: str = Query(default="", max_length=200),
+                        kind: str = Query(default="", max_length=40),
+                        storage: str = Query(default="", max_length=20),
+                        limit: int = Query(default=100, ge=1, le=200)) -> dict:
+    """Поиск: имя, папка, тип, место (docs/development/192 §6.6, FR-K17).
+
+    Пустой результат — `data: []` и `count: 0`; текст «Ничего не нашлось» рисует экран.
+    Неизвестное слово типа — 400 `kind_unknown`: это вход ручки, а не ошибка программиста.
+    """
+    viewer = core._webapp_require(who, "files.access")
+    word = (kind or "").strip()
+    if word and word not in file_kind.KIND_WORDS:
+        raise ApiError(status.HTTP_400_BAD_REQUEST,
+                       "Такого типа в фильтре нет: документ, текст, картинка, аудио.",
+                       code="kind_unknown")
+    place = (storage or "").strip()
+    if place and place not in ("garage", "drive"):
+        raise ApiError(status.HTTP_400_BAD_REQUEST,
+                       "Такого места нет: garage или drive.", code="storage_unknown")
+    with core.pool.connection() as conn:
+        rows = files_store.search_files(conn, viewer, q=q, folder=folder, kind=word,
+                                        storage=place, limit=limit)
+    return {"ok": True, "data": rows, "count": len(rows),
+            "query": {"q": " ".join(q.split()), "folder": " ".join(folder.split()),
+                      "kind": word, "storage": place}}
 
 
 
@@ -508,7 +661,13 @@ def webapp_folder_files(folder_id: int, who: dict = Depends(core.webapp_actor)) 
         items = files_store.folder_files(conn, folder_id)
     for item in items:
         key = item.pop("object_key", None)
-        item["url"] = files_store.presigned_url(key, item["name"] or "track") if key else ""
+        if item.get("storage") == "drive":
+            # Ссылке подпись не нужна: ключа нет, а открывать её надо в Drive (§6.7).
+            item["url"] = ""
+            item["open_url"] = item.get("drive_url") or ""
+        else:
+            item["url"] = files_store.presigned_url(key, item["name"] or "track") if key else ""
+            item["open_url"] = ""
     return {"ok": True,
             "folder": {"id": folder["id"], "path": folder["path"], "scope": folder["scope"]},
             "data": items, "count": len(items)}
@@ -653,6 +812,19 @@ def webapp_file_view(file_id: int, who: dict = Depends(core.webapp_actor)) -> di
         if row is None:
             raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.",
                            code="file_not_found")
+        if row.get("storage") == "drive":
+            # Ссылке подпись не нужна и вредна: ключа нет, `cold.restore` нечего
+            # возвращать, `last_access_at` — отметка нашего объекта, а не Drive (§6.8).
+            core.audit(conn, "human", who["id"], "file.view", "file_object", str(file_id),
+                       after={"name": row["name"], "kind": row["kind"], "via": "webapp",
+                              "external": True})
+            return {"ok": True, "id": file_id, "type": "external", "name": row["name"],
+                    "kind": row["kind"],
+                    "kind_word": file_kind.kind_word(row["kind"], row["name"]),
+                    "description": row.get("description"),
+                    "open_url": row.get("drive_url"), "drive_path": row.get("drive_path"),
+                    "folder": row.get("folder"), "size_bytes": None, "as_admin": False,
+                    "owner": int(row["participant_id"] or 0) == int(who["id"])}
         if not row["object_key"]:
             raise ApiError(status.HTTP_404_NOT_FOUND,
                            "Файл не долетел до хранилища — загрузите заново.",
@@ -670,13 +842,16 @@ def webapp_file_view(file_id: int, who: dict = Depends(core.webapp_actor)) -> di
         core.audit(conn, "human", who["id"], "file.view", "file_object", str(file_id),
                    after={"name": row["name"], "kind": row["kind"], "via": "webapp",
                           "as_admin": as_admin})
-    return {"ok": True, "id": file_id, "url": url, "expires_in": files_store.PRESIGN_TTL,
-            "kind": row["kind"], "name": row["name"], "mime": row["mime"],
+    return {"ok": True, "id": file_id, "type": "garage",
+            "url": url, "expires_in": files_store.PRESIGN_TTL,
+            "kind": row["kind"], "kind_word": file_kind.kind_word(row["kind"], row["name"]),
+            "description": row.get("description"), "name": row["name"], "mime": row["mime"],
             "size_bytes": row["size_bytes"],
             # `extension` держит точку ради Content-Disposition («file» + ext);
             # наружу расширение уходит без неё: `png`, а не `.png` (§3.1).
             "ext": files_store.extension(row["name"]).lstrip("."),
-            "folder": row.get("folder"), "as_admin": as_admin, "cold_restored": restored}
+            "folder": row.get("folder"), "as_admin": as_admin, "cold_restored": restored,
+            "owner": int(row["participant_id"] or 0) == int(who["id"])}
 
 
 @router.get("/webapp/files/{file_id}/link")
@@ -708,6 +883,7 @@ def webapp_file_link(file_id: int, who: dict = Depends(core.webapp_actor)) -> di
         if row is None:
             raise ApiError(status.HTTP_404_NOT_FOUND, "Файл не найден.",
                            code="file_not_found")
+        _external_guard(row)
         if not row["object_key"]:
             raise ApiError(status.HTTP_404_NOT_FOUND,
                            "Файл не долетел до хранилища — загрузите заново.",

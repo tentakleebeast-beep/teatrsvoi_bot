@@ -20,11 +20,20 @@
 
 from __future__ import annotations
 
+import json
+
+from app.file_kind import CHIP_LABELS, KIND_WORDS
 from app.pages import files_actions, layout
 from app.pages.admin_core import CORE
 
 _BODY_FOLDER = files_actions.EMPTY_FOLDER + """
 <p class="ui-small ui-muted" id="subtitle">считаю</p>
+<div class="ui-field">
+  <label class="ui-field__label" for="q">Поиск в папке</label>
+  <input class="ui-input" id="q" type="search" maxlength="200"
+         placeholder="Имя, папка или тип" autocomplete="off">
+</div>
+<div class="ui-actions files-chips" id="chips"></div>
 <p class="ui-small ui-muted" id="now" hidden></p>
 <div class="ui-list" id="tracks"></div>
 <div id="player-slot"></div>
@@ -38,6 +47,15 @@ _SCRIPT_FOLDER = r"""
   var folderId = Number(new URLSearchParams(location.search).get("id"));
   var tracks = [];
   var current = -1;
+  // Поиск внутри папки идёт с `folder=<полный путь этой папки>`: это и есть ответ на
+  // вопрос «что в папке Пурга», включая её подпапки (docs/development/192 §8.3).
+  var folderPath = "";
+  var searchQ = "";
+  var searchKind = "";
+  var searchStorage = "";
+  var searchTimer = null;
+
+  function filterActive() { return Boolean(searchQ || searchKind || searchStorage); }
 
   function mmss(seconds) {
     if (!seconds) return "";
@@ -45,7 +63,8 @@ _SCRIPT_FOLDER = r"""
     return Math.floor(total / 60) + ":" + String(total % 60).padStart(2, "0");
   }
 
-  function isAudio(track) { return track.kind === "audio"; }
+  function isAudio(track) { return track.kind === "audio" && track.storage !== "drive"; }
+  function isExternal(track) { return track.storage === "drive"; }
 
   // Первый звук после `from`: «Слушать всё» и `ended` идут только по звуку,
   // картинки и документы в очередь воспроизведения не попадают (6.5).
@@ -65,14 +84,33 @@ _SCRIPT_FOLDER = r"""
 
   function trackRow(track, index) {
     var node = el("div", "ui-row");
+    if (isExternal(track)) node.classList.add("ui-row--external");
     var main = el("span", "ui-row__main");
     // Без своего номера: порядок видно по месту в списке и стрелками, а в именах
     // треков часто уже стоит «01 …» — два номера подряд читались как ошибка.
     main.appendChild(el("span", "ui-row__title", track.name));
-    var meta = [mmss(track.duration_sec), kindWord(track.kind, track.name)];
+    var meta = [isExternal(track) ? "в Drive" : mmss(track.duration_sec),
+                track.kind_word || "файл"];
     if (index === current) meta.unshift("играет");
     main.appendChild(el("span", "ui-row__meta", meta.filter(Boolean).join(" \u00b7 ")));
     node.appendChild(main);
+
+    if (isExternal(track)) {
+      // Ссылка на Drive — ссылка, а не плеер: байтов у нас нет, `url` пуст,
+      // скачивание ответило бы 409 (docs/development/192 §8.5).
+      var open = el("button", "ui-btn ui-btn--sm ui-btn--primary", "Открыть");
+      open.type = "button";
+      open.setAttribute("aria-label", "Открыть в Drive: " + track.name);
+      open.addEventListener("click", function (event) {
+        event.stopPropagation();
+        openDownload(track.open_url || track.drive_url || "");
+      });
+      node.appendChild(open);
+      node.addEventListener("click", function () {
+        openDownload(track.open_url || track.drive_url || "");
+      });
+      return node;
+    }
 
     // «Скачать» в строке: 44×44 со встроенной SVG-стрелкой в лоток. Символ U+2B07
     // запрещён тестом на эмодзи на экранах файлов, поэтому иконка нарисована.
@@ -218,11 +256,86 @@ _SCRIPT_FOLDER = r"""
     });
   }
 
+  // --- поиск внутри папки: тот же `/webapp/files/search` с `folder=<путь> -----------
+  function chips() {
+    var holder = $("chips");
+    if (!holder) return;
+    clear(holder);
+    var items = [{ label: "Все", kind: "", storage: "" }];
+    fileKindWords.forEach(function (word) {
+      items.push({ label: fileChipLabels[word] || word, kind: word, storage: "" });
+    });
+    items.push({ label: "Ссылки", kind: "", storage: "drive" });
+    items.forEach(function (item) {
+      var chip = el("button", "ui-btn ui-btn--sm", item.label);
+      chip.type = "button";
+      if (item.kind === searchKind && item.storage === searchStorage) {
+        chip.classList.add("ui-btn--primary");
+      }
+      chip.addEventListener("click", function () {
+        searchKind = item.kind;
+        searchStorage = item.storage;
+        chips();
+        reloadResults();
+      });
+      holder.appendChild(chip);
+    });
+  }
+
+  function searchFolder() {
+    var parts = ["folder=" + encodeURIComponent(folderPath)];
+    if (searchQ) parts.push("q=" + encodeURIComponent(searchQ));
+    if (searchKind) parts.push("kind=" + encodeURIComponent(searchKind));
+    if (searchStorage) parts.push("storage=" + encodeURIComponent(searchStorage));
+    api("/webapp/files/search?" + parts.join("&")).then(function (res) {
+      if (res.status !== 200) { status(problem(res), true); return; }
+      tracks = res.body.data || [];
+      $("subtitle").textContent = "Найдено: " + tracks.length;
+      render();
+    });
+  }
+
+  function reloadResults() {
+    if (!folderId || !folderPath) return;
+    if (filterActive()) { searchFolder(); return; }
+    loadFolder();
+  }
+
+  function loadFolder() {
+    api("/webapp/folder/" + folderId + "/files").then(function (res) {
+      if (res.status === 403) {
+        $("subtitle").textContent = "Раздел доступен администратору, организатору и мастеру.";
+        return;
+      }
+      if (res.status !== 200) { $("subtitle").textContent = problem(res); return; }
+      var folder = res.body.folder || {};
+      folderPath = folder.path || "";
+      tracks = res.body.data || [];
+      // «Трек» про картинки и pdf врёт: в папке теперь лежит всё, что угодно (6.7).
+      $("subtitle").textContent = (folder.path || "Папка") + " \u00b7 "
+        + tracks.length + " " + plural(tracks.length, "файл", "файла", "файлов");
+      render();
+    });
+  }
+
+  $("q").addEventListener("input", function () {
+    var value = ($("q").value || "").trim();
+    if (value === searchQ) return;
+    searchQ = value;
+    if (searchTimer) clearTimeout(searchTimer);
+    searchTimer = setTimeout(reloadResults, 250);
+  });
+  $("q").addEventListener("change", function () {
+    searchQ = ($("q").value || "").trim();
+    reloadResults();
+  });
+
   $("play-all").addEventListener("click", function () {
     var index = firstAudio();
     if (index >= 0) play(index);
   });
 
+  chips();
   auth().then(function (denied) {
     // Имя не `problem`: ниже вызывается помощник `problem(res)` — параметр
     // с тем же именем его бы затенил.
@@ -233,19 +346,13 @@ _SCRIPT_FOLDER = r"""
       $("no-folder").hidden = false;
       return;
     }
-    api("/webapp/folder/" + folderId + "/files").then(function (res) {
-      if (res.status === 403) { $("subtitle").textContent = "Раздел доступен администратору, организатору и мастеру."; return; }
-      if (res.status !== 200) { $("subtitle").textContent = problem(res); return; }
-      var folder = res.body.folder || {};
-      tracks = res.body.data || [];
-      // «Трек» про картинки и pdf врёт: в папке теперь лежит всё, что угодно (6.7).
-      $("subtitle").textContent = (folder.path || "Папка") + " \u00b7 "
-        + tracks.length + " " + plural(tracks.length, "файл", "файла", "файлов");
-      render();
-    });
+    loadFolder();
   });
 """
 
 FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files", head=files_actions.STYLE,
-                          scripts="<script>\n" + CORE + files_actions.KIND_WORD + _SCRIPT_FOLDER
-                          + "\n})();\n</script>")
+                          scripts="<script>\n" + CORE
+                          + "var fileKindWords = " + json.dumps(list(KIND_WORDS), ensure_ascii=False)
+                          + ";\nvar fileChipLabels = "
+                          + json.dumps(dict(CHIP_LABELS), ensure_ascii=False)
+                          + ";\n" + _SCRIPT_FOLDER + "\n})();\n</script>")

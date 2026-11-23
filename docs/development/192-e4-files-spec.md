@@ -24,10 +24,10 @@
 | База спецификации | `3ec4c6a` (`main`, «merge: дизайн проектов E6»), работа — ветка `wt/t_f1ded32d` |
 | Дата | 22.11.2026 |
 | Проверено в коде | `app/files_store.py` (992 стр.: наборы расширений 53–63, `extension` 96–106, `detect_kind` 144–174, `used_bytes` 266–276, `_insert_with_quota` 289–321, `_FILE_SELECT` 350–356, `file_for_reader` 383–432, `remove` 458–487, `list_files` 490–506, `save_committed` 727–794, `folder_files` 833–849, `search` 947–992), `app/api/files.py` (827: `WebAppCommitIn` 274–278, presign 295–322, commit 326–366, view 632–679, link 682–730, папка 502–514, ZIP 463–490), `app/folders.py` (`can_manage` 60–64, `tree` 81–92), `app/pages/files.py` (273), `files_actions.py` (`KIND_WORD` 38–49), `files_grid.py` (`ICON_FOR` 26–40), `files_tree.py`, `files_file.py` (289), `files_folder.py` (251), `app/webapp.py` (315–316, 369–370), `db/init/001_schema.sql:242–254`, `db/init/046_files_folders.sql`, `db/init/054_folder_roots.sql`, `tests/webapp/server.py` (1467–1608), `tests/unit/test_webapp_files_grid.py:88–101` (набор иконок — ровно семь) |
-| Проверено прогоном на живой БД | Создана пустая база, накатаны все `db/init/*.sql` (67 файлов, 0 ошибок), затем черновик миграции 072 — **дважды** (второй накат без ошибок). Замеры ниже в §3.4, §4.3, §5 |
+| Проверено прогоном на живой БД | Создана пустая база, накатаны все `db/init/*.sql` (67 файлов, 0 ошибок), затем черновик миграции (тогда номер 072, теперь 073) — **дважды** (второй накат без ошибок). Замеры ниже в §3.4, §4.3, §5 |
 | Проверено прогоном на коде | `scripts/gen_alembic_revisions.py --check`, `openapi_snapshot.py --write`, `db_schema_snapshot.py --write`, `audit_actions.py --check/--write/--json`, `check_action_matrix.py` (проверка режимом по умолчанию) — флаги сверены через `--help`; `ls db/init/*.sql` — 67, голова ревизий `070_personal_invite_code` |
 | Не проверено | Живой Drive: 21 папка / 273 файла / 11,24 ГБ — снимок `docs/development/160` (11.11.2026), не перепроверялся. Прод-база: сколько строк `file_object` (в dev 0) |
-| Сверено при мерже | `main` на момент слияния — `9e30ae4`: **68** файлов `db/init`, голова `071_drop_dead_capabilities` (E9-6 влит уже после базы спецификации). Числа «сколько файлов станет» в §10, AC-1 и §12 поправлены на 68 → 69 и сверены с этим деревом |
+| Сверено при мерже | `main` на момент слияния — `9e30ae4`: **68** файлов `db/init`, голова `071_drop_dead_capabilities` (E9-6 влит уже после базы спецификации). Тогда числа «сколько файлов станет» в §10, AC-1 и §12 поправлены на 68 → 69; после перенумерации 073 и слияния E1-4 (`072_google_event_calendar.sql`) в дереве **70** файлов — числа в §10, AC-1 и §12 сверены с этим деревом |
 | Что не запускал | `pytest` по файловым тестам: код не менялся, прогон ничего не доказывает. Гейт спецификации — §11 |
 
 **Что из этого следует.** Таблица `file_object` в dev пуста, поэтому миграция ничего не
@@ -94,7 +94,7 @@
 (`save_committed`, `detect_kind`, бот, агент) его не выставляет, и `detect_kind` по-прежнему
 бросает `FileRejected` на всё, что не документ/картинка/аудио.
 
-### 3.3. Инварианты F11–F13 (в `v_file_checks`, миграция 072)
+### 3.3. Инварианты F11–F13 (в `v_file_checks`, миграция 073)
 
 ```sql
 -- F11: garage держит байты, а не ссылку
@@ -123,10 +123,13 @@ F1–F10 не меняются. F2 («файл знает, где его бай�
 
 ### 3.4. Миграция: номер, порядок шагов, backfill
 
-**Номер — 072** при сегодняшнем максимуме `071_drop_dead_capabilities.sql` (влит в `main`
-коммитом `9e30ae4`, карта E9-6). Номер берётся как максимум + 1 по **всем** ветвям
-в момент работы: если E1-4 или E5-4 займут 072 раньше — следующий свободный. Проверка:
-`ls db/init/*.sql | tail -3` во всех живых `wt/*`.
+**Номер — 073** (в первой редакции спеки был 072; перенумеровано 23.11.2026 картой
+t_92b8538e до мержа). Причина: номер 072 заняла E1-4 — `072_google_event_calendar.sql`
+влита в `main` коммитом `e18c88c`, а ветка E4-4 держала под тем же номером свой файл.
+Номер берётся как максимум + 1 по **всем** ветвям в момент работы, и проверять надо не
+только `main`: невлитая ветка держит номер так же крепко. Проверка —
+`git ls-tree -r --name-only origin/main origin/wt/* | grep db/init`, а не `ls` в своём
+worktree.
 
 Порядок шагов внутри файла — обязателен, иначе инвариант краснеет на собственной миграции:
 
@@ -156,7 +159,7 @@ F1–F10 не меняются. F2 («файл знает, где его бай�
 
 | Проверка | Результат |
 |---|---|
-| Накат 072 дважды | второй прогон — только `NOTICE ... already exists`, ошибок нет |
+| Накат 073 (тогда 072) дважды | второй прогон — только `NOTICE ... already exists`, ошибок нет |
 | F1–F13 на пустой базе | 13 строк, `ok = true` |
 | Строка-заглушка (`drive_file_id` есть, `object_key` нет) до backfill | **F11 красная** («1 строк») — пропущенный backfill виден |
 | Та же строка после backfill без адреса | **F12 красная** — поэтому адрес собирается в том же `update` |
@@ -636,11 +639,11 @@ drive_url, drive_path, size_bytes}}`.
 | `app/pages/files_file.py` | ветка `type='external'`: «Открыть в Drive», без «Скачать», блок описания |
 | `app/pages/files_folder.py` | строка `drive`: ссылка вместо плеера; поле `q` и чипы, запрос с `folder=<путь>` |
 | `app/pages/routes.py`, `app/webapp_page.py` | импорт новых модулей страниц |
-| `db/init/072_*.sql` | колонки, backfill, ограничения, `file_ext`, F11–F13, индекс |
-| `services/tool-api/migrations/versions/072_*.py` | ревизия через `scripts/gen_alembic_revisions.py` |
+| `db/init/073_*.sql` | колонки, backfill, ограничения, `file_ext`, F11–F13, индекс (номер 073 вместо 072 после перенумерации) |
+| `services/tool-api/migrations/versions/073_*.py` | ревизия через `scripts/gen_alembic_revisions.py` |
 | `contracts/openapi.json`, `contracts/db-schema.json` | пересобрать скриптами |
 | `tests/webapp/server.py` | ответы стенда: `kind_word`, `storage`, `description`, `/search`, `/link`, `/meta`, `view` для `drive` |
-| `tests/unit/test_migrations_registry.py` | 68 → 69 файлов, голова `072_…` |
+| `tests/unit/test_migrations_registry.py` | 69 → 70 файлов после слияния с main, голова `073_…` |
 | `docs/development/86` | FR-K1/K3/K14/K17 — уточнения §3.1, §5, §6 (без новых FR-ID) |
 | `docs/development/19` | строка FR-F5: два расположения, описание, поиск, тесты |
 | `docs/development/189` | одна пометка с датой: AC-3 про папку и «имя из заголовка» уточнены спецификацией 192; отдельные пометки у §D5 (квота и видимость читают папку, а не колонку `scope`) и §D8 (`drive_path` — необязательное поле формы) |
@@ -654,7 +657,7 @@ drive_url, drive_path, size_bytes}}`.
 
 1. **AC-1.** Миграция накатывается на пустую базу (`alembic upgrade head`), повторный прогон
    SQL идемпотентен; `scripts/gen_alembic_revisions.py --check` — код 0;
-   `tests/unit/test_migrations_registry.py` зелёный (69 файлов, голова `072_…`).
+   `tests/unit/test_migrations_registry.py` зелёный (70 файлов, голова `073_…`).
 2. **AC-2.** `storage` — `not null default 'garage'`; `description`, `drive_url`, `drive_path`,
    `drive_mime` допускают `null`; `file_object_kind_check` принимает `folder` и по-прежнему
    отвергает `video`.
@@ -767,7 +770,7 @@ drive_url, drive_path, size_bytes}}`.
 - `tests/unit/test_webapp_files_pages.py`, `test_webapp_files_view_page.py` — новые модули
   и поля ответа.
 - `tests/unit/test_webapp_pages_split.py` — новые модули под порогом.
-- `tests/unit/test_migrations_registry.py` — 69 файлов, голова 072.
+- `tests/unit/test_migrations_registry.py` — 70 файлов, голова 073.
 - `tests/integration/test_files_quota.py`, `test_files_upload.py`, `test_webapp_files.py`,
   `test_webapp_files_view.py`, `test_webapp_files_link.py`, `test_files_delete.py`,
   `test_files_actions_screen.py`, `test_files_studio_roles.py` — ожидания по новым полям

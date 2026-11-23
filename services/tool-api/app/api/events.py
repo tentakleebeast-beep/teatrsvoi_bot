@@ -573,21 +573,45 @@ def _create_draft_event(event_id: int, private: dict, start: datetime, end: date
     return created.get("id"), calendar_id
 
 
+#: Статусы Google Calendar, при которых событие живым не считается.
+#: `cancelled` — единственный такой: удалённое через `events.delete` событие Google
+#: продолжает отдавать по id, но с этим статусом (живой прогон 23.11.2026).
+DEAD_EVENT_STATUSES = frozenset({"cancelled"})
+
+
+def _event_alive(event: dict | None) -> bool:
+    """Живо ли событие из ответа `events.get`.
+
+    Успешный `get` сам по себе ничего не доказывает: после удаления Google отдаёт
+    событие по `id` со `status="cancelled"`, и проверка «событие есть» отвечала `True`
+    там, где события уже нет (карта Д-2). `tentative` — событие существует, человек
+    лишь не подтвердил участие, поэтому править и удалять его можно; отсутствие
+    статуса в ответе тоже считается живым (старые подменённые клиенты и частичные
+    ответы API).
+    """
+    if not isinstance(event, dict):
+        return False
+    status = str(event.get("status") or "").strip().lower()
+    return status not in DEAD_EVENT_STATUSES
+
+
 def _draft_event_exists(gcal_id: str) -> bool:
-    """Событие найдено в черновом календаре — только такие бот правит и удаляет.
+    """Событие живо в черновом календаре — только такие бот правит и удаляет.
 
     Боевой календарь здесь не участвует: событие, которого нет в черновом, считается
-    чужим (`not_bot_event`), даже если оно создано ботом когда-то давно.
+    чужим (`not_bot_event`), даже если оно создано ботом когда-то давно. Отменённое
+    (`status="cancelled"`) событие тоже чужое: `events.delete` не убирает его из
+    выдачи `events.get`, и без проверки статуса бот шёл бы удалять его повторно.
     """
     try:
         calendar_id = google_targets.resolve("calendar.draft")
-        core._calendar_write().events().get(calendarId=calendar_id,
-                                            eventId=gcal_id).execute()
+        event = core._calendar_write().events().get(calendarId=calendar_id,
+                                                    eventId=gcal_id).execute()
     except GOOGLE_API_ERRORS:
         return False
     except ApiError:
         return False
-    return True
+    return _event_alive(event)
 
 
 def _delete_calendar_event(gcal_id: str) -> tuple[bool, str | None]:

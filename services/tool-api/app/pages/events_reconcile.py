@@ -215,12 +215,14 @@ _SCRIPT_EVENTS_RECONCILE = r"""<script>
     var url = "/webapp/events/list?calendar=read&from=" + win.from + "&to=" + win.to;
     if (append && pageToken) { url += "&page_token=" + encodeURIComponent(pageToken); }
     return SVOI.api(url).then(function (res) {
+      if (res.status === 403) { deny(); return; }
       if (res.status === 200 && res.body && res.body.ok) { drawEvents(res.body, append); }
     });
   }
 
   function refreshFreshness() {
     return SVOI.api("/tools/google/freshness").then(function (res) {
+      if (res.status === 403) { deny(); return; }
       if (res.status === 200 && res.body && res.body.ok) { drawFresh(res.body.sources); }
     });
   }

@@ -25,7 +25,7 @@ _HEAD_EVENT_TYPES = (
     "<style>\n"
     "  #types-form { display: flex; flex-direction: column; gap: var(--ui-s4); }\n"
     "  #types-form[hidden], #denied[hidden] { display: none; }\n"
-    "  .ev-type-row { display: grid; grid-template-columns: 2.2rem 1fr auto;\n"
+    "  .ev-type-row { display: grid; grid-template-columns: 44px 1fr auto;\n"
     "                 gap: var(--ui-s2); align-items: center; }\n"
     "  .ev-type-row .ui-input { min-width: 0; }\n"
     "  .ev-letter { text-align: center; text-transform: uppercase; }\n"
@@ -47,6 +47,12 @@ _BODY_EVENT_TYPES = """
   <p class="ui-small ui-muted">Буква ставится в начало заголовка события: «[С] Спектакль».
     После создания типа буква не меняется — меняются название, цвет и порядок.</p>
   <div class="ui-list" id="types"></div>
+  <section class="ui-section" id="hidden-block" hidden>
+    <div class="ui-section__head"><h2 class="ui-section__title">Скрытые</h2></div>
+    <div class="ui-small ui-muted">Эти типы не предлагаются при создании события:
+      старые события сохраняют свой тип.</div>
+    <div class="ui-list" id="types-hidden"></div>
+  </section>
   <button class="ui-btn ui-btn--primary ui-btn--block" id="save" type="button">Сохранить</button>
   <div class="ui-alert ui-alert--ok" id="done" hidden></div>
 </div>
@@ -135,13 +141,23 @@ _SCRIPT_EVENT_TYPES = r"""
     COLOR_NAMES = {};
     types = body.types || [];
     mode = body.mode || "transitional";
+    // Неактивные типы — отдельным блоком «Скрытые» (190 §6.2): строка та же
+    // (название и цвет правятся), но видно, что при создании их не предлагают.
     var list = $("types");
+    var hiddenList = $("types-hidden");
     list.innerHTML = "";
-    types.forEach(function (item, index) { list.appendChild(rowOf(item, index)); });
+    hiddenList.innerHTML = "";
+    var hiddenCount = 0;
+    types.forEach(function (item, index) {
+      var row = rowOf(item, index);
+      if (item.is_active) { list.appendChild(row); }
+      else { hiddenList.appendChild(row); hiddenCount += 1; }
+    });
+    $("hidden-block").hidden = hiddenCount === 0;
   }
 
   function collect() {
-    var rows = document.querySelectorAll("#types .ev-type-row");
+    var rows = document.querySelectorAll("#types-form .ev-type-row");
     var out = [];
     for (var index = 0; index < rows.length; index += 1) {
       var row = rows[index];

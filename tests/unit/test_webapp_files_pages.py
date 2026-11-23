@@ -170,27 +170,30 @@ def test_строка_списка_открывает_файл_а_не_молч�
     assert "ui-row__chevron" not in page, "второй путь в ту же папку вернулся"
 
 
-def test_слово_вида_одно_на_списки_и_экран():
-    """D8 (А3 §4): pdf и docx — «документ», .txt/.md — «текст».
+def test_слово_вида_приходит_с_сервера():
+    """D8 (А3 §4), docs/development/192 §4.4: слово вида собирает сервер, не экран.
 
-    Слово живёт в одной функции `kindWord(kind, name)` (`pages/files_actions.py`):
-    три экрана не должны разойтись в названии одного и того же файла.
+    Раньше `kindWord(kind, name)` жил в JS и спорил с сервером: pdf приходил как
+    `kind='text'`, а человеку это «документ». Теперь сервер отдаёт `kind_word` в каждой
+    строке, а второго списка расширений на клиенте нет — он и был причиной расхождения.
     """
-    assert "function kindWord(kind, name)" in files_actions.KIND_WORD
+    assert not hasattr(files_actions, "KIND_WORD"), "JS-список расширений вернулся"
     for page in (files.FILES_PAGE, files.FOLDER_PAGE, files.FILE_PAGE):
-        assert "function kindWord(kind, name)" in page, "экран собирает слово вида сам"
-    word = files_actions.KIND_WORD
-    for ext in ("pdf", "docx", "xlsx", "pptx", "odt", "ods", "rtf"):
-        assert f'"{ext}"' in word
-    assert '"txt", "md", "csv"' in word
-    assert "if (kind === \"document\") return \"документ\";" in word
-    assert "return \"файл\";" in word
+        assert "function kindWord(" not in page, "экран собирает слово вида сам"
+        assert "kind_word" in page, "экран не читает слово с сервера"
+    # Слова чипов — из одного списка на сервере (`file_kind.KIND_WORDS`).
+    assert "документ" in files.FILES_PAGE and "картинка" in files.FILES_PAGE
 
 
 def test_в_папке_не_звук_уводит_на_экран_файла():
-    """А3 §6.4: играет только `audio`, остальное открывает `/webapp/file?id=N`."""
+    """А3 §6.4: играет только `audio`, остальное открывает `/webapp/file?id=N`.
+
+    Ссылка на Drive (`storage='drive'`) — не звук и не наш файл: её строка открывает
+    Drive, а не плеер (docs/development/192 §8.5).
+    """
     page = files.FOLDER_PAGE
-    assert "function isAudio(track) { return track.kind === \"audio\"; }" in page
+    assert 'function isAudio(track) { return track.kind === "audio" && track.storage !== "drive"; }' in page
+    assert 'function isExternal(track) { return track.storage === "drive"; }' in page
     assert 'location.href = "/webapp/file?id=" + track.id' in page
     assert "function nextAudio(from)" in page, "«Слушать всё» идёт только по звуку"
     assert 'plural(tracks.length, "файл", "файла", "файлов")' in page

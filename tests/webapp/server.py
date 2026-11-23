@@ -23,12 +23,13 @@ import struct
 import sys
 from urllib.parse import quote
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
 
+from app import file_kind  # noqa: E402
 from app import webapp_page as pages  # noqa: E402
 from app.pages import files as files_pages  # noqa: E402
 from app.pages import home as home_pages  # noqa: E402
@@ -1515,7 +1516,28 @@ async def tx_save(request: Request):
                          "sheet": "ok", "sheet_error": None})
 
 
-app.add_api_route("/webapp/files/list", _files_data({
+def _stand_file_row(row: dict) -> dict:
+    """Строка файла той же формы, что отдаёт tool-api: слово вида, место, описание.
+
+    Слово считает `app.file_kind.kind_word` — тот же модуль, что у сервера: второго
+    списка расширений на стенде нет (docs/development/192 §4.4). Стенд, который
+    придумывает слово сам, разошёлся бы с боевым ответом молча.
+    """
+    row = dict(row)
+    row.setdefault("storage", "garage")
+    row.setdefault("description", None)
+    row.setdefault("kind_word", file_kind.kind_word(row.get("kind"), row.get("name") or ""))
+    return row
+
+
+def _files_with_words(payload: dict) -> dict:
+    """Ответ стенда со словами вида во всех строках списка файлов."""
+    answer = dict(payload)
+    answer["data"] = [_stand_file_row(row) for row in payload["data"]]
+    return answer
+
+
+app.add_api_route("/webapp/files/list", _files_data(_files_with_words({
     "ok": True,
     "data": [
         {"id": 1, "name": "Репетиция 12 октября.m4a", "kind": "audio", "size_bytes": 18 * 1024 * 1024,
@@ -1547,7 +1569,7 @@ app.add_api_route("/webapp/files/list", _files_data({
          "folder": "Спектакли/Бунин/заметки", "folder_id": 3},
     ],
     "quota": {"used": 25 * 1024 * 1024, "total": 1024 * 1024 * 1024, "left": 999 * 1024 * 1024},
-}))
+})))
 
 # Папка по номеру: 7 — только звук, 8 — только документы, 9 — только картинки,
 # 10 — смешанная, 11 — звук/документ/звук (очередь), 12 — отказ архива (413).
@@ -1573,10 +1595,15 @@ FOLDER_FILES = {
             {"id": 52, "name": "Сцена.png", "kind": "image", "duration_sec": None, "url": "/stand/image.png"},
         ]},
     10: {"ok": True, "folder": {"id": 10, "path": "Спектакль/Пурга", "scope": "folder"},
-         "count": 3, "data": [
+         "count": 4, "data": [
             {"id": 31, "name": "01 Увертюра.mp3", "kind": "audio", "duration_sec": 184, "url": "/stand/tone.wav?track=1"},
             {"id": 41, "name": "Гаммы для хора.pdf", "kind": "text", "duration_sec": None, "url": "/stand/sample.pdf"},
             {"id": 51, "name": "Афиша.png", "kind": "image", "duration_sec": None, "url": "/stand/image.png"},
+            # Строка ссылки на Drive в папке (§8.5): ни `url`, ни длительности —
+            # «Открыть в Drive», а не плеер. Остальные строки не меняются.
+            {"id": 12, "name": "Пурга — папка в Drive", "kind": "folder", "kind_word": "папка",
+             "storage": "drive", "duration_sec": None,
+             "drive_url": "https://drive.google.com/drive/folders/1FoLdEr123456789"},
         ]},
     11: {"ok": True, "folder": {"id": 11, "path": "Спектакль/Прогон", "scope": "folder"},
          "count": 3, "data": [
@@ -1598,7 +1625,10 @@ def _files_folder_files():
         denied = _files_guard(request)
         if denied is not None:
             return denied
-        return JSONResponse(FOLDER_FILES.get(folder_id) or FOLDER_FILES[7])
+        payload = FOLDER_FILES.get(folder_id) or FOLDER_FILES[7]
+        answer = dict(payload)
+        answer["data"] = [_stand_file_row(row) for row in payload["data"]]
+        return JSONResponse(answer)
     return handler
 
 
@@ -1668,6 +1698,18 @@ VIEW_FILES = {
          "kind": "image", "name": "IMG_0421.png", "mime": "image/png",
          "size_bytes": 1834921, "ext": "png", "folder": None, "as_admin": True,
          "cold_restored": False},
+    # Два расположения (docs/development/192 §6.8): у ссылки на Drive нет ни `url`,
+    # ни `expires_in`, ни `ext` — только `type='external'` и адрес в Drive.
+    11: {"ok": True, "id": 11, "type": "external", "kind": "text", "kind_word": "документ",
+         "storage": "drive", "name": "Смета на реквизит — Drive",
+         "open_url": "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUv/view",
+         "drive_path": "Спектакли/Пурга", "description": "Считает бухгалтер, правки до пятницы",
+         "folder": "Спектакли/Пурга", "size_bytes": None, "as_admin": False, "owner": True},
+    12: {"ok": True, "id": 12, "type": "external", "kind": "folder", "kind_word": "папка",
+         "storage": "drive", "name": "Пурга — папка в Drive",
+         "open_url": "https://drive.google.com/drive/folders/1FoLdEr123456789",
+         "drive_path": "Спектакли/Пурга", "description": None,
+         "folder": None, "size_bytes": None, "as_admin": False, "owner": False},
 }
 
 #: 1×1 прозрачный PNG: больше для проверки «картинка нарисовалась» не нужно.
@@ -1691,7 +1733,9 @@ def _webapp_file_view():
         if payload is None:
             return JSONResponse({"ok": False, "error": "file_not_found",
                                  "detail": "Файл не найден."}, status_code=404)
-        return JSONResponse(payload)
+        # Слово вида приходит с сервера (`kind_word`), а не собирается в браузере:
+        # иначе карточка pdf в тесте говорила бы «файл» (docs/development/192 §4.4).
+        return JSONResponse(_stand_file_row(payload))
     return handler
 
 
@@ -1780,6 +1824,138 @@ def stand_link_calls(file_id: int, reset: int = 0) -> dict:
 app.add_api_route("/webapp/files/{file_id}/link", _webapp_file_link(), methods=["GET"])
 
 
+#: Строки поиска стенда (docs/development/192 §6.6): документ, текст, картинка, ссылка
+#: файла и ссылка папки. Отдельный набор, а не список «Мои файлы»: поиск видит и общие
+#: папки, и ссылки Drive, а список — только своё.
+SEARCH_FILES = [
+    {"id": 2, "name": "Гаммы для хора.pdf", "kind": "text", "size_bytes": 420 * 1024,
+     "folder": "Документы/Ноты"},
+    {"id": 4, "name": "Смета.pdf", "kind": "text", "size_bytes": 96 * 1024,
+     "folder": "Спектакли/Пурга"},
+    {"id": 9, "name": "заметки.md", "kind": "text", "size_bytes": 4 * 1024,
+     "folder": "Спектакли/Пурга"},
+    {"id": 51, "name": "Афиша.png", "kind": "image", "size_bytes": 96 * 1024,
+     "folder": "Спектакль/Афиши"},
+    {"id": 11, "name": "Смета на реквизит — Drive", "kind": "text", "storage": "drive",
+     "drive_url": "https://drive.google.com/file/d/1AbCdEfGhIjKlMnOpQrStUv/view",
+     "drive_path": "Спектакли/Пурга", "description": "Считает бухгалтер",
+     "size_bytes": None},
+    {"id": 12, "name": "Пурга — папка в Drive", "kind": "folder", "storage": "drive",
+     "drive_url": "https://drive.google.com/drive/folders/1FoLdEr123456789",
+     "drive_path": "Спектакли/Пурга", "size_bytes": None},
+]
+
+#: Журнал поисковых запросов: по нему видно, что экран папки ищет с `folder=<путь>`,
+#: а не просто перерисовал те же строки (docs/development/192 §8.3).
+SEARCH_CALLS: list[dict] = []
+
+
+@app.get("/webapp/files/search")
+def stand_files_search(request: Request, q: str = "", folder: str = "", kind: str = "",
+                       storage: str = "", limit: int = 100):
+    """Поиск стенда: имя, папка, слово вида и место — те же четыре фильтра, что на сервере."""
+    denied = _files_guard(request)
+    if denied is not None:
+        return denied
+    word = (q or "").strip().lower()
+    place = (folder or "").strip().lower()
+    kind = (kind or "").strip()
+    where = (storage or "").strip()
+    SEARCH_CALLS.append({"q": q or "", "folder": folder or "", "kind": kind, "storage": where})
+    rows = []
+    for raw in SEARCH_FILES:
+        if kind and file_kind.kind_word(raw.get("kind"), raw.get("name") or "") != kind:
+            continue
+        if where and (raw.get("storage") or "garage") != where:
+            continue
+        if place:
+            haystack = f"{raw.get('folder') or ''}|{raw.get('drive_path') or ''}".lower()
+            if place not in haystack:
+                continue
+        if word and word not in (raw.get("name") or "").lower():
+            continue
+        rows.append(_stand_file_row(raw))
+    return JSONResponse({"ok": True, "data": rows[:limit], "count": len(rows[:limit]),
+                         "query": {"q": q or "", "folder": folder or "", "kind": kind,
+                                   "storage": where}})
+
+
+@app.get("/stand/search-calls")
+def stand_search_calls(reset: int = 0) -> dict:
+    calls = list(SEARCH_CALLS)
+    if reset:
+        SEARCH_CALLS.clear()
+    return {"count": len(calls), "last": calls[-1] if calls else None}
+
+
+#: Журнал добавленных ссылок: экран после успеха перерисовывает список, и без записи
+#: браузерный тест не отличил бы отправку от простой смены места.
+LINK_CREATED: list[dict] = []
+
+
+@app.post("/webapp/files/link")
+async def stand_files_link(request: Request):
+    """Регистрация ссылки на стенде: адрес, имя по умолчанию, папка и описание."""
+    denied = _files_guard(request)
+    if denied is not None:
+        return denied
+    body = await request.json()
+    url = (body.get("url") or "").strip()
+    if not url.startswith("https://drive.google.com/"):
+        return JSONResponse({"ok": False, "error": "link_invalid",
+                             "detail": "Это не ссылка Google Drive. Нужен адрес вида "
+                                       "https://drive.google.com/…"},
+                            status_code=400)
+    is_folder = "/folders/" in url
+    name = (body.get("name") or "").strip() or ("Папка в Drive" if is_folder else "Ссылка на Drive")
+    row = {"id": 12 if is_folder else 11, "name": name,
+           "kind": "folder" if is_folder else "text", "storage": "drive",
+           "drive_url": url, "drive_path": body.get("drive_path"),
+           "description": body.get("description"), "folder_id": body.get("folder_id"),
+           "size_bytes": None}
+    LINK_CREATED.append({"url": url, "body": body, "file": row})
+    return JSONResponse({"ok": True, "file": row})
+
+
+@app.get("/stand/link-created")
+def stand_link_created(reset: int = 0) -> dict:
+    rows = list(LINK_CREATED)
+    if reset:
+        LINK_CREATED.clear()
+    return {"count": len(rows), "last": rows[-1] if rows else None}
+
+
+#: Журнал правок описания: `POST /webapp/files/{id}/meta` (V-124, §6.4).
+META_CALLS: list[dict] = []
+
+
+@app.post("/webapp/files/{file_id}/meta")
+async def stand_files_meta(file_id: int, request: Request):
+    """Правка описания и имени на стенде: 404 на чужой файл, эхо в ответе."""
+    denied = _files_guard(request)
+    if denied is not None:
+        return denied
+    if file_id not in VIEW_FILES:
+        return JSONResponse({"ok": False, "error": "file_not_found",
+                             "detail": "Файл не найден."}, status_code=404)
+    body = await request.json()
+    META_CALLS.append({"file_id": file_id, "body": body})
+    row = dict(VIEW_FILES[file_id])
+    if "description" in body:
+        row["description"] = body["description"]
+    if body.get("name"):
+        row["name"] = body["name"]
+    return JSONResponse({"ok": True, "file": row})
+
+
+@app.get("/stand/meta-calls")
+def stand_meta_calls(reset: int = 0) -> dict:
+    rows = list(META_CALLS)
+    if reset:
+        META_CALLS.clear()
+    return {"count": len(rows), "last": rows[-1] if rows else None}
+
+
 @app.get("/stand/image.png")
 def stand_image() -> Response:
     return Response(PIXEL_PNG, media_type="image/png")
@@ -1848,23 +2024,32 @@ def _data_tag(payload: dict):
     return handler
 
 
-app.add_api_route("/webapp/folders", _data({
-    "ok": True,
-    "count": 6,
-    # Шесть папок стенда для дерева (155 §4): два корня, второй уровень, третий
-    # уровень и настоящая сирота — ребёнок папки, которой нет в ответе (`folders.tree`
-    # фильтрует `deleted_at is null`, поэтому закрытая папка приходит с `parent_id`
-    # в никуда). Цикл в стенд не кладём: сервер такой формы не производит, цикл
-    # проверяется юнит-тестом.
-    "data": [
-        {"id": 1, "parent_id": None, "name": "Спектакли", "path": "Спектакли", "depth": 1},
-        {"id": 2, "parent_id": 1, "name": "Бунин", "path": "Спектакли/Бунин", "depth": 2},
-        {"id": 3, "parent_id": 2, "name": "заметки", "path": "Спектакли/Бунин/заметки", "depth": 3},
-        {"id": 4, "parent_id": 2, "name": "музыка", "path": "Спектакли/Бунин/музыка", "depth": 3},
-        {"id": 5, "parent_id": None, "name": "Архив 2024", "path": "Архив 2024", "depth": 1},
-        {"id": 6, "parent_id": 999, "name": "старое", "path": "Архив 2024/старое", "depth": 2},
-    ],
-}), methods=["GET"])
+#: Папки стенда по типу: `scope=shared` — студийные, `scope=personal` — свои (E4).
+#: Экран спрашивает оба списка и складывает их в один выбор «Куда» (§8.1); стенд,
+#: отдающий один и тот же набор на оба запроса, не отличил бы общую папку от личной.
+SHARED_FOLDERS = [
+    {"id": 1, "parent_id": None, "name": "Спектакли", "path": "Спектакли", "depth": 1},
+    {"id": 2, "parent_id": 1, "name": "Бунин", "path": "Спектакли/Бунин", "depth": 2},
+    {"id": 3, "parent_id": 2, "name": "заметки", "path": "Спектакли/Бунин/заметки", "depth": 3},
+    {"id": 4, "parent_id": 2, "name": "музыка", "path": "Спектакли/Бунин/музыка", "depth": 3},
+    {"id": 5, "parent_id": None, "name": "Архив 2024", "path": "Архив 2024", "depth": 1},
+    {"id": 6, "parent_id": 999, "name": "старое", "path": "Архив 2024/старое", "depth": 2},
+]
+PERSONAL_FOLDERS = [
+    {"id": 21, "parent_id": None, "name": "Мои заметки", "path": "Мои заметки", "depth": 1},
+    {"id": 22, "parent_id": 21, "name": "Черновики", "path": "Мои заметки/Черновики", "depth": 2},
+]
+
+
+@app.get("/webapp/folders")
+def stand_folders(request: Request, scope: str = "shared"):
+    """Дерево папок стенда: тип выбирает набор, как `folders.tree` на сервере."""
+    denied = _files_guard(request)
+    if denied is not None:
+        return denied
+    rows = PERSONAL_FOLDERS if scope == "personal" else SHARED_FOLDERS
+    return JSONResponse({"ok": True, "count": len(rows), "data": rows})
+
 
 app.add_api_route("/webapp/folders", _data({
     "ok": True, "id": 13, "parent_id": None, "name": "Реквизит",
@@ -2382,6 +2567,10 @@ def dump_state() -> str:
 #: Роли без права `calendar.write` (миграция 008: право есть у admin и org).
 NO_CALENDAR_WRITE_ROLES = {"participant", "troupe", "master"}
 
+#: Роли без `schedule.read.all`: участник календарь не читает (стенд отвечает 403,
+#: как tool-api), поэтому экран сверки показывает фразу, а не кнопку.
+NO_SCHEDULE_READ_ROLES = {"participant"}
+
 EVENT_TYPES = [
     {"code": "rental", "letter": "А", "title": "Аренда", "color_id": 10,
      "sort_order": 10, "is_active": True},
@@ -2473,10 +2662,15 @@ def webapp_event_card_stand(request: Request, calendar: str = "read",
 
 @app.get("/webapp/events/list")
 def webapp_events_list_stand(request: Request, calendar: str = "read",
-                             **params):
+                             limit: int = 100, page_token: str = "",
+                             from_: str = Query("", alias="from"), to: str = ""):
     denied = _guard(request)
     if denied is not None:
         return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_SCHEDULE_READ_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
     page = (request.query_params.get("page_token") or "").strip()
     if page:
         return JSONResponse({"ok": True, "calendar": calendar,
@@ -2526,7 +2720,9 @@ def webapp_event_types_stand(request: Request):
         return JSONResponse({"code": "capability_required",
                              "detail": "Типы и цвета настраивает организатор."},
                             status_code=403)
-    return JSONResponse({"ok": True, "can_edit": True, "mode": "transitional",
+    mode = (request.headers.get("x-svoi-google-mode") or "").strip().lower()
+    return JSONResponse({"ok": True, "can_edit": True,
+                         "mode": "target" if mode == "target" else "transitional",
                          "palette": EVENT_PALETTE, "types": EVENT_TYPES})
 
 
@@ -2567,6 +2763,10 @@ def google_freshness_stand(request: Request):
     denied = _guard(request)
     if denied is not None:
         return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_SCHEDULE_READ_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
     stale = (request.headers.get("x-svoi-fresh") or "").strip().lower() == "stale"
     error = (request.headers.get("x-svoi-fresh") or "").strip().lower() == "error"
     entry = {"key": "calendar.read",
@@ -2581,6 +2781,10 @@ async def google_refresh_stand(request: Request):
     denied = _guard(request)
     if denied is not None:
         return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_SCHEDULE_READ_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
     body = await request.json()
     REFRESH_CALLS.append(body)
     failed = (request.headers.get("x-svoi-fresh") or "").strip().lower() == "error"

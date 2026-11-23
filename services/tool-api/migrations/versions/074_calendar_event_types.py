@@ -1,7 +1,7 @@
 """db/init/074_calendar_event_types.sql
 
 Revision ID: 074_calendar_event_types
-Revises: 072_google_event_calendar
+Revises: 073_files_two_locations
 Create Date: 2026-11-05
 
 Обоснование: единственный источник схемы — db/init/*.sql (docs/reports/132).
@@ -13,12 +13,12 @@ from __future__ import annotations
 from alembic import op
 
 revision = "074_calendar_event_types"
-down_revision = "072_google_event_calendar"
+down_revision = "073_files_two_locations"
 branch_labels = None
 depends_on = None
 
 SQL_FILE = "074_calendar_event_types.sql"
-SQL_SHA256 = "413350f247d8170356d28ecbc23eb9878b12873d08eb5b56284398758aeb2782"
+SQL_SHA256 = "379f5971995db3413b9680bad29821ccdb925c93f71f9c4dc6e3174ecaa61ed8"
 
 
 def upgrade() -> None:

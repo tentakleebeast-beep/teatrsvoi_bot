@@ -25,6 +25,7 @@ TABLES = ("poll", "poll_question", "poll_option", "poll_audience", "poll_person"
 
 
 def test_alembic_дошёл_до_071(test_db: str) -> None:
+    """Голова учёта — текущая миграция: E1-4 добавила 072, E4 — 073 (два расположения файла)."""
     with psycopg.connect(test_db, row_factory=dict_row) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()
     assert head["version_num"] == "074_calendar_event_types"
