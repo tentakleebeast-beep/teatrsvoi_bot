@@ -27,7 +27,7 @@ def test_dev_env_disables_sheet_write(monkeypatch) -> None:
     marked: list[tuple[int, str | None]] = []
     monkeypatch.setattr(budget, "_mark_sheet_state", lambda tid, error=None: marked.append((tid, error)))
     called: list[list] = []
-    monkeypatch.setattr(budget, "_append_sheet_row", lambda row: called.append(row))
+    monkeypatch.setattr(budget, "_write_row", lambda row, tx_id: called.append(row))
 
     error = budget._append_tx_sheet(_body(), {"id": 900})
 
@@ -42,7 +42,7 @@ def test_enabled_sheet_write_still_works(monkeypatch) -> None:
     marked: list[tuple[int, str | None]] = []
     monkeypatch.setattr(budget, "_mark_sheet_state", lambda tid, error=None: marked.append((tid, error)))
     called: list[list] = []
-    monkeypatch.setattr(budget, "_append_sheet_row", lambda row: called.append(row))
+    monkeypatch.setattr(budget, "_write_row", lambda row, tx_id: called.append(row))
 
     error = budget._append_tx_sheet(_body(), {"id": 901})
 

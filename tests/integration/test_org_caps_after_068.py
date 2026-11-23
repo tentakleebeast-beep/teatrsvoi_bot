@@ -74,8 +74,9 @@ def test_повторный_накат_068_ничего_не_меняет(test_d
 def test_голова_alembic_после_071(test_db: str) -> None:
     """Учёт версий совпадает с файлом: накат дошёл до головы 071, а не остановился раньше.
 
-    Голова сдвигается каждой новой миграцией: E4 добавила 072 (два расположения файла).
+    Голова сдвигается каждой новой миграцией: E1-4 добавила 072 (календарь события),
+    E4 — 073 (два расположения файла).
     """
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "072_files_two_locations"
+    assert head == "073_files_two_locations"

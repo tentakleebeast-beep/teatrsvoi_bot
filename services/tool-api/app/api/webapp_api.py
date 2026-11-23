@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime, time, timedelta
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -206,35 +206,77 @@ def ui_texts_all(who: dict = Depends(core.current)) -> dict:
 
 
 
-def _today_block() -> dict:
-    """Ближайшее событие сегодня из календаря.
+def _calendar_events(start: datetime, end: datetime, limit: int) -> list[dict] | None:
+    """События промежутка из календаря студии: день, время, название, место.
 
-    Блок необязательный: календарь может быть недоступен, и тогда «Главная» просто
-    не показывает его — падать из-за Google главный экран не должен.
+    `None` — календарь не настроен или не ответил. Это не ошибка Главной: экран
+    живёт без Google и говорит об этом словами (V-131, docs/reports/74-questions.md).
+    Поле `day` служебное: по нему один ответ делится на «сегодня» и «завтра»,
+    наружу оно не уходит — там только время, название и место.
     """
     if not core.CALENDAR_ID_READ:
-        return {}
-    now = datetime.now(core.TZ)
+        return None
     try:
         service = core._calendar()
         found = service.events().list(
             calendarId=core.CALENDAR_ID_READ,
-            timeMin=now.isoformat(),
-            timeMax=now.replace(hour=23, minute=59, second=59).isoformat(),
-            singleEvents=True, orderBy="startTime", maxResults=3).execute().get("items", [])
+            timeMin=start.isoformat(),
+            timeMax=end.isoformat(),
+            singleEvents=True, orderBy="startTime", maxResults=limit).execute().get("items", [])
     except GOOGLE_API_ERRORS:
-        # адаптер календаря: главный экран живёт без «ближайшего события»
-        return {}
-    if not found:
-        return {}
-    first = found[0]
-    start = (first.get("start") or {}).get("dateTime") or (first.get("start") or {}).get("date") or ""
-    return {
-        "label": "сегодня, " + page_layout.WEEKDAYS_FULL[now.weekday()],
-        "event": {"time": start[11:16] if "T" in start else "",
-                  "title": first.get("summary") or "Событие",
-                  "place": first.get("location") or ""},
-    }
+        # адаптер календаря: главный экран живёт без расписания
+        return None
+    events = []
+    for item in found:
+        raw = (item.get("start") or {}).get("dateTime") or (item.get("start") or {}).get("date") or ""
+        events.append({"day": raw[:10],
+                       "time": raw[11:16] if "T" in raw else "",
+                       "title": item.get("summary") or "Событие",
+                       "place": item.get("location") or ""})
+    return events
+
+
+def _event_out(event: dict) -> dict:
+    """Событие для ответа Главной: время, название, место — без служебного дня."""
+    return {"time": event["time"], "title": event["title"], "place": event["place"]}
+
+
+def _calendar_blocks() -> tuple[dict, dict | None]:
+    """«Сегодня» и «Завтра» одним походом в календарь (V-131).
+
+    Один запрос к Google на оба блока: второй поход за следующим днём удваивал
+    ожидание Главной, а данные те же — календарь читается от текущего момента до
+    конца завтрашнего дня и делится по дате.
+
+    Возвращает `(today, tomorrow)`:
+    * `today` — как раньше: `{}` без события, иначе подпись дня и `event`;
+    * `tomorrow` — `None`, если календарь не прочитан; иначе подпись даты словами
+      и `events` списком (`[]` — день пуст, и экран говорит об этом словами).
+    """
+    now = datetime.now(core.TZ)
+    next_day = (now + timedelta(days=1)).date()
+    day_start = datetime.combine(next_day, time(0, 0), tzinfo=core.TZ)
+    found = _calendar_events(now, day_start + timedelta(days=1), 40)
+    if found is None:
+        return {}, None
+    today_events = [event for event in found if event["day"] == now.date().isoformat()]
+    tomorrow_events = [event for event in found if event["day"] == next_day.isoformat()]
+    today = ({"label": "сегодня, " + page_layout.WEEKDAYS_FULL[now.weekday()],
+              "event": _event_out(today_events[0])} if today_events else {})
+    tomorrow = {"label": "завтра, " + page_layout.human_date(next_day),
+                "events": [_event_out(event) for event in tomorrow_events]}
+    return today, tomorrow
+
+
+def _calendar_url(caps) -> str:
+    """Адрес «Весь календарь» по правам: сводка читает всю труппу.
+
+    `/webapp/week/summary` закрыт `schedule.read.all` (FR-H9, docs/development/92 §7);
+    без права ссылка вела бы на 403, поэтому человек получает свой экран недели.
+    Решение серверное, как у остальных блоков Главной: страница — публичная константа.
+    """
+    return ("/webapp/week/summary" if page_layout.has(caps, "schedule.read.all")
+            else "/webapp/week")
 
 
 
@@ -350,6 +392,7 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
     if "master" in roles and not {"admin", "org"} & set(roles):
         role = "master"
     staff = bool(management)
+    today, tomorrow = _calendar_blocks()
     return {
         "ok": True,
         "name": who.get("display_name") or "",
@@ -359,7 +402,11 @@ def webapp_home_data(who: dict = Depends(core.webapp_actor)) -> dict:
         "staff": staff,
         "can_record": page_layout.has(caps, "budget.write"),
         "attention": attention,
-        "today": _today_block(),
+        "today": today,
+        # «Завтра» и вход в календарь студии (V-131): тем же ответом, что «Сегодня»,
+        # чтобы Главная не делала второго запроса и не прыгала скелетом.
+        "tomorrow": tomorrow,
+        "calendar_url": _calendar_url(caps),
         "week": week,
         "debt": debt,
         # «Мои опросы»: строка-вход на Главной и счётчик бейджа (docs/164 §12.6).

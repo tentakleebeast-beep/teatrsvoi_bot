@@ -12,7 +12,7 @@
 * `kind_predicate` — SQL-фрагмент чипа, собранный из **тех же** наборов.
 
 Второго списка расширений нет ни в Python, ни в SQL, ни в JS. SQL-функция `file_ext`
-(`db/init/072_files_two_locations.sql`) повторяет `extension` — их равенство проверяет
+(`db/init/073_files_two_locations.sql`) повторяет `extension` — их равенство проверяет
 `tests/integration/test_files_ext_function.py`.
 
 Обоснование: docs/development/192 §4.1–§4.3, решение V-123 (папка — слово, но не чип),

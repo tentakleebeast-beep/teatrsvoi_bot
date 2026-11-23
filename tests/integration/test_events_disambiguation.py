@@ -51,6 +51,7 @@ def _person(conn, chat_id: int, name: str, short: str | None = None,
 
 def _setup_calendar(monkeypatch, api):
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
 

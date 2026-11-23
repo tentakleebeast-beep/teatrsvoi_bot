@@ -1,4 +1,4 @@
-"""Два расположения файла: инварианты F11–F13 и backfill миграции 072 (docs/development/192 §3).
+"""Два расположения файла: инварианты F11–F13 и backfill миграции 073 (docs/development/192 §3).
 
 Что проверяется:
 * F11 — garage хранит байты, а не ссылку;
@@ -20,7 +20,7 @@ import psycopg
 import pytest
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
-MIGRATION = ROOT / "db" / "init" / "072_files_two_locations.sql"
+MIGRATION = ROOT / "db" / "init" / "073_files_two_locations.sql"
 
 
 def _person(conn, chat_id: int) -> int:

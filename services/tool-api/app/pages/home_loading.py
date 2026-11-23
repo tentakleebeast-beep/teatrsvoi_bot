@@ -20,6 +20,8 @@
 
 from __future__ import annotations
 
+from app.pages import home_tomorrow
+
 #: Разметка знака «СВОИ» — **одно** место на серверную разметку и на сборку в
 #: `render()`. Знак не `<img>`: маска на картинке не режет её белые пиксели, а `alt`
 #: битого `<img>` WebKit не рисует — поэтому пустой `span` под маску плюс скрытая
@@ -264,6 +266,10 @@ SCRIPT = """
     var attention = data.attention || [];
     if (attention.length) { node.appendChild(attentionBlock(attention)); }
     if (data.today && data.today.event) { node.appendChild(todayCard(data.today)); }
+    // «Завтра» сразу под «Сегодня» и вход в календарь студии (V-131). Блок стоит
+    // и при пустом дне, и без календаря: молча пропавший блок человек читает как
+    // «завтра свободно», а это неправда.
+    node.appendChild(tomorrowSection(data.tomorrow, data.calendar_url));
     node.appendChild(weekCard(data.week || {}));
     var debt = data.debt || null;
     if (debt && debt.rest > 0) { node.appendChild(debtCard(debt)); }
@@ -342,8 +348,12 @@ SCRIPT = """
   };
   logoProbe.src = LOGO_SRC;
 
+  // Блок «Завтра» и ссылка «Весь календарь» (V-131) — из `home_tomorrow.JS`:
+  // модуль страницы не больше 400 строк, а разметка блока живёт рядом со своими
+  // подписями. Функции подклеиваются в это же замыкание и берут общий `el`.
+{tomorrow}
   busy(true);
   load();
 })();
 </script>
-""".replace("{logo}", LOGO_MARKUP)
+""".replace("{logo}", LOGO_MARKUP).replace("{tomorrow}", home_tomorrow.JS)

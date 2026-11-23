@@ -3,6 +3,7 @@
 import importlib
 
 from tests.conftest import _test_dsn, google_error
+from tests.integration.test_sheet_retry import _FakeAppend, _FakeSheets
 
 
 def _payload(key: str) -> dict:
@@ -20,45 +21,13 @@ def _sheet_state(key: str) -> tuple[str | None, str | None]:
     return (row[0], row[1])
 
 
-class _FakeAppend:
-    def __init__(self, error: Exception | None = None) -> None:
-        self.error = error
-        self.calls = 0
-
-    def execute(self):
-        self.calls += 1
-        if self.error:
-            raise self.error
-        return {}
-
-
-class _FakeValues:
-    def __init__(self, append: _FakeAppend) -> None:
-        self.append_obj = append
-        self.kwargs = None
-
-    def append(self, **kwargs):
-        self.kwargs = kwargs
-        return self.append_obj
-
-
-class _FakeSheets:
-    def __init__(self, append: _FakeAppend) -> None:
-        self.values_obj = _FakeValues(append)
-
-    def spreadsheets(self):
-        return self
-
-    def values(self):
-        return self.values_obj
-
-
 def test_сбой_записи_в_лист_помечается_в_бд(client, auth, monkeypatch):
     """Google ответил ошибкой: операция в БД, но лист её не подтвердил."""
     main = importlib.import_module("app.core")
     append = _FakeAppend(error=google_error(400, "quota exceeded"))
     monkeypatch.setattr(main, "BUDGET_SPREADSHEET_ID", "sheet-test")
-    monkeypatch.setattr(main, "_sheets", lambda: _FakeSheets(append))
+    monkeypatch.setattr(main, "_sheets", lambda: _FakeSheets(append, []))
+    monkeypatch.setattr(main, "_sheets_read", lambda: _FakeSheets(append, []))
 
     r = client.post("/tools/budget/commit", json=_payload("tg:sheet:fail"), headers=auth)
     assert r.status_code == 200
@@ -67,7 +36,7 @@ def test_сбой_записи_в_лист_помечается_в_бд(client, 
 
     written_at, error = _sheet_state("tg:sheet:fail")
     assert written_at is None
-    assert error and "quota" in error
+    assert error and "sheet_write_failed" in error
 
 
 def test_успешная_запись_в_лист_подтверждает_операцию(client, auth, monkeypatch):
@@ -75,7 +44,8 @@ def test_успешная_запись_в_лист_подтверждает_оп
     main = importlib.import_module("app.core")
     append = _FakeAppend()
     monkeypatch.setattr(main, "BUDGET_SPREADSHEET_ID", "sheet-test")
-    monkeypatch.setattr(main, "_sheets", lambda: _FakeSheets(append))
+    monkeypatch.setattr(main, "_sheets", lambda: _FakeSheets(append, []))
+    monkeypatch.setattr(main, "_sheets_read", lambda: _FakeSheets(append, []))
 
     r = client.post("/tools/budget/commit", json=_payload("tg:sheet:ok"), headers=auth)
     assert r.status_code == 200

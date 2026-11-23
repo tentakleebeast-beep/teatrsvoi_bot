@@ -80,7 +80,7 @@ class FakeSheets:
                                              for r in (ranges or [])]})
 
     def get(self, spreadsheetId=None, range=None, fields=None, majorDimension=None):
-        if fields and "sheets(" in fields:
+        if fields and "sheets" in fields:
             return _Req(lambda: {"sheets": [{"properties": {"sheetId": 7, "title": TITLE}}]})
         return _Req(lambda: {"values": self._slice(range or "A1")})
 
@@ -125,6 +125,7 @@ def _setup(monkeypatch, client, chat_id: int = 793001):
         _person(conn, chat_id, "Дарья Смирнова")
     fake = FakeSheets(_grid(monday))
     monkeypatch.setattr(core, "_sheets", lambda: fake)
+    monkeypatch.setattr(core, "_sheets_read", lambda: fake)
     monkeypatch.setattr(core, "SCHEDULE_SPREADSHEET_ID", "fake")
     monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", TITLE)
     headers = {**HEADERS, "X-Actor-Chat-Id": str(chat_id)}

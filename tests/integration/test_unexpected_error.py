@@ -28,6 +28,7 @@ def test_отказ_google_даёт_ok_false(client, auth, monkeypatch):
         raise google_error()
 
     monkeypatch.setattr(api, "_calendar", broken)
+    monkeypatch.setattr(api, "_calendar_write", broken)
     response = client.get("/tools/calendar/events?days=7", headers=auth)
     assert response.status_code == 200
     assert response.json()["error"] == "calendar_unavailable"
@@ -51,6 +52,7 @@ def test_опечатка_в_имени_поля_даёт_500_с_request_id(clie
         raise AttributeError("'Resource' object has no attribute 'eventz'")
 
     monkeypatch.setattr(api, "_calendar", broken)
+    monkeypatch.setattr(api, "_calendar_write", broken)
     probe = TestClient(app, base_url="https://testserver", raise_server_exceptions=False)
     response = probe.get("/tools/calendar/events?days=7", headers=auth)
 

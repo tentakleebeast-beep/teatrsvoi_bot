@@ -1,4 +1,4 @@
--- 072: у файла два расположения — Garage и ссылка на Google Drive (E4-4, docs/development/192).
+-- 073: у файла два расположения — Garage и ссылка на Google Drive (E4-4, docs/development/192).
 --
 -- Что меняется
 --   1. Колонки: `storage` ('garage' | 'drive'), `drive_url`, `drive_path`, `drive_mime`,
@@ -12,9 +12,10 @@
 --   5. Инварианты F11–F13 в `v_file_checks`; F1–F10 переносятся без изменений.
 --   6. Индекс `ix_file_object_storage` под фильтр «только ссылки».
 --
--- Номер. Максимум по всем ветвям на 22.11.2026 — 071 (`071_drop_dead_capabilities.sql`,
--- влит в main коммитом 9e30ae4). Проверено `git ls-tree` по всем `refs/heads`: файлов 072
--- нет ни в одной ветви. Пропусков нет.
+-- Номер. Изначально файл шёл под 072, но этот номер занят миграцией E1-4
+-- (`072_google_event_calendar.sql`, влита в main коммитом e18c88c). Поэтому номер 073,
+-- а `down_revision` — 072_google_event_calendar. Исправлено 23.11.2026 до мержа ветки:
+-- название 072_files_two_locations перенумеровано в 073_files_two_locations.
 --
 -- Порядок шагов обязателен: колонки без `not null` (таблица может быть непустой) → backfill →
 -- ограничения → функция → представление → индекс. Иначе инвариант краснеет на своей миграции.
@@ -43,7 +44,7 @@ begin
      and object_key is null
      and storage is distinct from 'drive';
   get diagnostics moved = row_count;
-  raise notice '072: строк, перенесённых в drive: %', moved;
+  raise notice '073: строк, перенесённых в drive: %', moved;
 end $$;
 
 update file_object set storage = 'garage' where storage is null;

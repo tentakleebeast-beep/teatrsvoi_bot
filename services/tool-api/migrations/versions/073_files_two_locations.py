@@ -1,7 +1,7 @@
-"""db/init/072_files_two_locations.sql
+"""db/init/073_files_two_locations.sql
 
-Revision ID: 072_files_two_locations
-Revises: 071_drop_dead_capabilities
+Revision ID: 073_files_two_locations
+Revises: 072_google_event_calendar
 Create Date: 2026-11-05
 
 Обоснование: единственный источник схемы — db/init/*.sql (docs/reports/132).
@@ -12,17 +12,17 @@ from __future__ import annotations
 
 from alembic import op
 
-revision = "072_files_two_locations"
-down_revision = "071_drop_dead_capabilities"
+revision = "073_files_two_locations"
+down_revision = "072_google_event_calendar"
 branch_labels = None
 depends_on = None
 
-SQL_FILE = "072_files_two_locations.sql"
-SQL_SHA256 = "62ac34774ebb7cb578aa3781b0688611e428af7f958da1a4c1e7780a277db232"
+SQL_FILE = "073_files_two_locations.sql"
+SQL_SHA256 = "6fde1cee195d6d3cef5a1232f76ca2b03b2496fcf68438b38ff115c2849f373c"
 
 
 def upgrade() -> None:
-    """Накат db/init/072_files_two_locations.sql целиком."""
+    """Накат db/init/073_files_two_locations.sql целиком."""
     # Импорт внутри функции: `alembic heads/history` читают ревизии без env.py,
     # а путь к пакету `migrations` добавляет env.py от своего __file__, не от cwd.
     from migrations.sql import run_sql  # noqa: PLC0415

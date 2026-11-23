@@ -105,6 +105,8 @@ def _setup(monkeypatch, client, cells: dict[int, str], name: str = "Дарья �
         pid = _person(conn, chat_id, name)
     fake = FakeSheet(_grid(monday, cells, names or [sheet_name or name]))
     monkeypatch.setattr(core, "_sheets", lambda: fake)
+    # чтение живого листа идёт отдельным read-only клиентом (186 §2.2 п.4)
+    monkeypatch.setattr(core, "_sheets_read", lambda: fake)
     monkeypatch.setattr(core, "SCHEDULE_HUMAN_SPREADSHEET_ID", "user-sheet")
     monkeypatch.setattr(core, "SCHEDULE_HUMAN_SHEET_TITLE", TAB)
     return fake, monday, _token(client, chat_id), pid
@@ -305,6 +307,7 @@ def test_э5_лист_недоступен_и_база_не_тронута(monke
         raise google_error(503)
 
     monkeypatch.setattr(core, "_sheets", broken)
+    monkeypatch.setattr(core, "_sheets_read", broken)
     preview = _preview(client, headers, monday).json()
     assert preview["ok"] is False and preview["error"] == "sheet_unavailable"
     assert "недоступен" in preview["detail"]
@@ -367,6 +370,7 @@ def test_э5_псевдоним_из_базы_находит_колонку(monk
 
     core_sheet = FakeSheet(_grid(monday, {}, ["Мастер"]))
     monkeypatch.setattr(core, "_sheets", lambda: core_sheet)
+    monkeypatch.setattr(core, "_sheets_read", lambda: core_sheet)
     role_only = _preview(client, headers, monday).json()
     assert role_only["ok"] is False and role_only["error"] == "person_not_found"
 

@@ -136,7 +136,7 @@ _SCRIPT_WEEK_MARKS = r"""
         var low = clock(from.value);
         var high = clock(to.value);
         if (low === null || high === null) {
-          return { error: "Время пишется так: 18:00 или 18:30." };
+          return { error: "Время пишется так: 18:00 или 18.30." };
         }
         from.value = low;
         to.value = high;

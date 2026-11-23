@@ -56,6 +56,7 @@ def test_на_музыку_идёт_только_педагог_музыки(cli
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
 
@@ -80,6 +81,7 @@ def test_на_актёрский_идёт_педагог_актёрского(cl
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
@@ -102,6 +104,7 @@ def test_без_дисциплины_добавляются_все_с_преду
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:
@@ -120,6 +123,7 @@ def test_режиссёр_фиксируется_как_факт_присутс�
 
     _allow(client)
     monkeypatch.setattr(api, "_calendar", lambda: FakeService())
+    monkeypatch.setattr(api, "_calendar_write", lambda: FakeService())
     monkeypatch.setattr(api, "CALENDAR_ID_DRAFT", "draft")
     monkeypatch.setattr(api, "venue_busy_for", lambda *a, **k: ([], {"source": "events"}))
     with psycopg.connect(_test_dsn()) as conn:

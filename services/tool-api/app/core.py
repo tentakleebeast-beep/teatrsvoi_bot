@@ -80,6 +80,16 @@ SCHEDULE_HUMAN_SPREADSHEET_ID = settings.schedule_human_spreadsheet_id
 
 SCHEDULE_HUMAN_SHEET_TITLE = settings.schedule_human_sheet_title
 
+# Тестовый лист цветов: объект записи `schedule.test` (docs/development/186 §2.2).
+SCHEDULE_TEST_SPREADSHEET_ID = settings.schedule_test_spreadsheet_id
+
+SCHEDULE_TEST_SHEET_PATTERN = settings.schedule_test_sheet_pattern
+
+# Живой источник бюджета и корень Drive — только чтение.
+FINANCE_SOURCE_ID = settings.finance_source_id
+
+DRIVE_ROOT_ID = settings.drive_root_id
+
 CALENDAR_ID_READ = settings.calendar_id_read
 
 CALENDAR_ID_VENUE = settings.calendar_id_venue     # актуальный календарь зала, только чтение
@@ -116,6 +126,8 @@ def configure(cfg: Settings) -> None:
     global GOOGLE_SA_JSON, BUDGET_SPREADSHEET_ID, SCHEDULE_SPREADSHEET_ID
     global SCHEDULE_SHEET_TITLE, CALENDAR_ID_READ, CALENDAR_ID_VENUE, CALENDAR_ID_DRAFT
     global SCHEDULE_HUMAN_SPREADSHEET_ID, SCHEDULE_HUMAN_SHEET_TITLE
+    global SCHEDULE_TEST_SPREADSHEET_ID, SCHEDULE_TEST_SHEET_PATTERN
+    global FINANCE_SOURCE_ID, DRIVE_ROOT_ID
     global ZIP_MAX_BYTES
     global pool
 
@@ -137,6 +149,10 @@ def configure(cfg: Settings) -> None:
     SCHEDULE_SHEET_TITLE = cfg.schedule_sheet_title
     SCHEDULE_HUMAN_SPREADSHEET_ID = cfg.schedule_human_spreadsheet_id
     SCHEDULE_HUMAN_SHEET_TITLE = cfg.schedule_human_sheet_title
+    SCHEDULE_TEST_SPREADSHEET_ID = cfg.schedule_test_spreadsheet_id
+    SCHEDULE_TEST_SHEET_PATTERN = cfg.schedule_test_sheet_pattern
+    FINANCE_SOURCE_ID = cfg.finance_source_id
+    DRIVE_ROOT_ID = cfg.drive_root_id
     CALENDAR_ID_READ = cfg.calendar_id_read
     CALENDAR_ID_VENUE = cfg.calendar_id_venue
     CALENDAR_ID_DRAFT = cfg.calendar_id_draft
@@ -555,12 +571,62 @@ HOWTO_SECTIONS = (("admin", "Администратор"), ("org", "Органи
 
 
 
-def _sheets():
+#: Области доступа Google. Пишущие — только у клиентов записи; чтение живых файлов
+#: и боевого календаря идёт read-only клиентами (docs/development/186 §2.2 п.4).
+READ_SCOPES = {
+    "sheets": "https://www.googleapis.com/auth/spreadsheets.readonly",
+    "calendar": "https://www.googleapis.com/auth/calendar.readonly",
+    "drive": "https://www.googleapis.com/auth/drive.readonly",
+}
+WRITE_SCOPES = {
+    "sheets": "https://www.googleapis.com/auth/spreadsheets",
+    "calendar": "https://www.googleapis.com/auth/calendar",
+}
+API_VERSIONS = {"sheets": "v4", "calendar": "v3", "drive": "v3"}
+
+
+def _credentials(scopes: list[str]):
+    """Учётные данные сервисного аккаунта. Отдельная функция — чтобы тест видел области."""
     from google.oauth2 import service_account
+
+    return service_account.Credentials.from_service_account_file(GOOGLE_SA_JSON, scopes=scopes)
+
+
+def google_service(kind: str, *, write: bool = False):
+    """Клиент Google: один вход для всех путей, области — по признаку записи.
+
+    Чтение по умолчанию: забыть `write=True` на пишущем пути безопасно (получится
+    отказ Google), а обратное — нет: пишущая область на чтении и была расхождением R-5.
+    """
     from googleapiclient.discovery import build
-    cred = service_account.Credentials.from_service_account_file(
-        GOOGLE_SA_JSON, scopes=["https://www.googleapis.com/auth/spreadsheets"])
-    return build("sheets", "v4", credentials=cred, cache_discovery=False)
+
+    scopes = [WRITE_SCOPES[kind] if write else READ_SCOPES[kind]]
+    return build(kind, API_VERSIONS[kind], credentials=_credentials(scopes), cache_discovery=False)
+
+
+def _sheets(write: bool = True):
+    """Sheets-клиент. По умолчанию пишущий: этот вход исторически использовали записи."""
+    return google_service("sheets", write=write)
+
+
+def _sheets_read():
+    """Sheets только для чтения: живые листы, снимки, сверка."""
+    return google_service("sheets")
+
+
+def _calendar():
+    """Calendar только для чтения: боевой календарь, окна, сверка."""
+    return google_service("calendar")
+
+
+def _calendar_write():
+    """Calendar с пишущей областью: единственный клиент, которым можно менять события."""
+    return google_service("calendar", write=True)
+
+
+def _drive_read():
+    """Drive только для чтения: метаданные файлов, содержимое не качается."""
+    return google_service("drive")
 
 
 
@@ -729,15 +795,6 @@ _prompt_cache: dict[tuple[str, str | None], str] = {}
 
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8").strip() if path.exists() else ""
-
-
-
-def _calendar():
-    from google.oauth2 import service_account
-    from googleapiclient.discovery import build
-    cred = service_account.Credentials.from_service_account_file(
-        GOOGLE_SA_JSON, scopes=["https://www.googleapis.com/auth/calendar"])
-    return build("calendar", "v3", credentials=cred, cache_discovery=False)
 
 
 

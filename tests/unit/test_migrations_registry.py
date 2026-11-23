@@ -46,8 +46,8 @@ SQL_FILES = sorted(INIT_DIR.glob("*.sql"))
 
 
 def test_one_revision_per_sql_file() -> None:
-    """69 файлов → 69 ревизий с теми же именами: ни лишних, ни забытых."""
-    assert len(SQL_FILES) == 69, f"файлов db/init: {len(SQL_FILES)}, ожидалось 69"
+    """70 файлов → 70 ревизий с теми же именами: ни лишних, ни забытых."""
+    assert len(SQL_FILES) == 70, f"файлов db/init: {len(SQL_FILES)}, ожидалось 70"
     assert [path.stem for path in REVISION_PATHS] == [path.stem for path in SQL_FILES]
 
 
@@ -58,7 +58,7 @@ def test_chain_is_linear_with_one_head() -> None:
     assert down[1:] == [path.stem for path in REVISION_PATHS[:-1]]
     heads = [module.revision for module in REVISIONS
              if module.revision not in set(down)]
-    assert heads == ["072_files_two_locations"]
+    assert heads == ["073_files_two_locations"]
 
 
 def test_revision_points_to_its_sql_file() -> None:

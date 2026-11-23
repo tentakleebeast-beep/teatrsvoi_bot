@@ -8,7 +8,15 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field, field_validator
 
-from .. import availability_store, core, month_grid, sheet_load
+from .. import (
+    availability_store,
+    core,
+    google_targets,
+    month_grid,
+    schedule_test_sheet,
+    sheet_binding,
+    sheet_load,
+)
 from ..availability_card import (
     DayCard,
     DayCardError,
@@ -96,10 +104,10 @@ def _schedule_values() -> tuple[list[list] | None, str]:
     if not core.SCHEDULE_SPREADSHEET_ID:
         return None, "no_spreadsheet"
     try:
-        service = core._sheets()
+        service = core._sheets_read()
         _, title = _schedule_sheet_meta(service)
         values = service.spreadsheets().values().get(
-            spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
+            spreadsheetId=google_targets.resolve("schedule.workload"),
             range=f"'{title}'!A1:AZ3000",
             majorDimension="ROWS").execute().get("values", [])
     except GOOGLE_API_ERRORS as e:
@@ -1123,29 +1131,37 @@ def webapp_template_apply(body: TemplateApplyIn, who: dict = Depends(core.webapp
 
 
 
+def _row_map_plan(plan, target: int) -> list[dict]:
+    """Строки `row_map` для записанных клеток: адрес, день, содержимое.
+
+    Дедуп и «что бот записал» живут в `row_map` (186 §4.3 шаг 10): без них повторный
+    прогон создавал вторую запись, а сверка не знала адреса.
+    """
+    rows = []
+    for cell in plan.cells:
+        if not cell.day:
+            continue
+        rows.append({"cell_key": cell.day,
+                     "sheet_row": int("".join(ch for ch in cell.a1 if ch.isdigit())),
+                     "entity_id": f"{target}:{cell.day}",
+                     "content_hash": sheet_binding.content_hash(cell.text)})
+    return rows
+
+
+
 def _schedule_sheet_meta(service) -> tuple[int, str]:
-    """sheetId и название листа занятости: нужны, чтобы прятать служебную колонку."""
+    """Лист занятости — **по имени** (`sheet_binding`), а не «первый лист файла».
+
+    Пустое или повторяющееся имя — `sheet_ambiguous` (186 §4.3 шаг 4). Функция нужна
+    читающим путям (сетка месяца, сверка), где значения листа берутся целиком.
+    """
+    with core.pool.connection() as conn:
+        binding = sheet_binding.load_binding(conn, "schedule.workload")
+    title = (binding.title if binding else "") or str(core.SCHEDULE_SHEET_TITLE or "").strip()
     meta = service.spreadsheets().get(
-        spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
-        fields="sheets(properties(sheetId,title))").execute()
-    for item in meta.get("sheets") or []:
-        props = item.get("properties") or {}
-        if not core.SCHEDULE_SHEET_TITLE or props.get("title") == core.SCHEDULE_SHEET_TITLE:
-            return int(props["sheetId"]), props["title"]
-    raise ValueError("sheet_not_found")
-
-
-
-def _hide_column(service, sheet_id: int, column: int) -> None:
-    """Скрыть служебную колонку: людям она не нужна, машине — да."""
-    service.spreadsheets().batchUpdate(
-        spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
-        body={"requests": [{"updateDimensionProperties": {
-            "range": {"sheetId": sheet_id, "dimension": "COLUMNS",
-                      "startIndex": column - 1, "endIndex": column},
-            "properties": {"hiddenByUser": True},
-            "fields": "hiddenByUser"}}]}).execute()
-
+        spreadsheetId=google_targets.resolve("schedule.workload"),
+        fields=sheet_binding.SHEET_FIELDS).execute()
+    return sheet_binding.pick_sheet(meta.get("sheets") or [], title)
 
 
 class WeekSheetIn(core.ApiIn):
@@ -1158,11 +1174,13 @@ class WeekSheetIn(core.ApiIn):
 def _sheet_sync(target: int, start: str | None, apply: bool, force: bool,
                 actor_id: int) -> dict:
     """
-    Записать неделю занятости в лист «Расписание студийцы» (FR-C9).
+    Записать неделю занятости в лист бота (FR-C9): копия `schedule.workload`.
 
-    Порядок как у бюджета: сначала план и расхождения (без `apply` ничего не пишем),
-    потом запись каноническим текстом в клетку дня и снимок в скрытую колонку `svoi`.
-    После записи адреса перечитываются: «записали» без проверки не считается.
+    Живой «Расписание студийцы» здесь не пишется никогда — он источник чтения
+    (`schedule.human`). Порядок как у бюджета: сначала план и расхождения (без
+    `apply` ничего не пишем), потом запись каноническим текстом в клетку дня и снимок
+    в скрытую колонку `svoi`. После записи адреса перечитываются: «записали» без
+    проверки не считается.
 
     Привязка не угадывается: строки — из колонки B (там даты), колонка человека — из
     шапки. Не нашли или нашли двоих — возвращаем расхождение, а не пишем наугад.
@@ -1180,72 +1198,73 @@ def _sheet_sync(target: int, start: str | None, apply: bool, force: bool,
 
     display, aliases = _sheet_load_person(target)
 
-    service = core._sheets()
-    try:
-        sheet_id, title = _schedule_sheet_meta(service)
-        values = service.spreadsheets().values().get(
-            spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
-            range=f"'{title}'!A1:AZ3000",
-            majorDimension="ROWS").execute().get("values", [])
-    except GOOGLE_API_ERRORS as e:
-        core.log.warning("лист занятости недоступен: %s", e)
-        return {"ok": False, "error": "sheet_unavailable",
-                "detail": "Лист недоступен: повторите позже"}
-
-    # политика: правку человека не затираем молча — показываем и спрашиваем `force`
-    week_days = {day.isoformat() for day in texts}
-    conflicts = [row for row in snapshot_mismatches(values, target, display, aliases=aliases)
-                 if row["day"] in week_days]
-    if conflicts and not force:
-        return {"ok": False, "applied": False, "error": "mismatches_present",
-                "detail": "в листе есть правки после записи бота — решите, что верно",
-                "mismatches": conflicts}
-
-    plan = plan_week(values, texts, target, display, aliases=aliases)
-    preview = [{"cell": cell.a1, "text": cell.text} for cell in plan.cells]
-    if plan.problems:
-        return {"ok": False, "error": "plan_problems", "problems": plan.problems,
-                "cells": preview}
-    if not apply:
-        return {"ok": True, "applied": False, "start": first.isoformat(),
-                "sheet": title, "person_column": plan.person_column,
-                "service_column": plan.service_column, "cells": preview}
-
-    try:
-        service.spreadsheets().values().batchUpdate(
-            spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
-            body={"valueInputOption": "RAW",
-                  "data": [{"range": f"'{title}'!{cell.a1}", "values": [[cell.text]]}
-                           for cell in plan.cells]}).execute()
-        header_cell = cell_a1(plan.names_row, plan.service_column)
-        if plan.service_column and any(cell.a1 == header_cell for cell in plan.cells):
-            _hide_column(service, sheet_id, plan.service_column)
-    except GOOGLE_API_ERRORS as e:
-        core.log.warning("запись в лист не прошла: %s", e)
-        return {"ok": False, "applied": False, "error": "sheet_write_failed",
-                "detail": "Лист недоступен: повторите позже", "cells": preview}
-
-    # проверка фактом: читаем те же адреса поимённо (batchGet) и сравниваем.
-    # Кусок листа читать нельзя: ответ API обрезает хвост и пустые строки, и адреса
-    # в ответе перестают совпадать с тем, что мы записали.
-    verified, mismatched = True, []
-    try:
-        ranges = [f"'{title}'!{cell.a1}" for cell in plan.cells]
-        answer = service.spreadsheets().values().batchGet(
-            spreadsheetId=core.SCHEDULE_SPREADSHEET_ID, ranges=ranges).execute()
-        for cell, value_range in zip(plan.cells, answer.get("valueRanges", []),
-                                     strict=False):
-            rows = value_range.get("values") or [[""]]
-            got = str((rows[0] or [""])[0] or "")
-            if " ".join(got.split()) != " ".join(cell.text.split()):
-                verified = False
-                mismatched.append({"cell": cell.a1, "expected": cell.text, "got": got})
-    except GOOGLE_API_ERRORS as e:
-        # адаптер листа: контрольное чтение не прошло — это «не проверили», не «не записали»
-        verified = False
-        mismatched.append({"error": str(e)[:200]})
-
     with core.pool.connection() as conn:
+        # шаги 1–6 протокола: ключ реестра, привязка, лист по имени, шапка, свежесть
+        session = sheet_binding.open_sheet("schedule.workload", conn=conn)
+        title = session.sheet_title
+        try:
+            values = session.service.spreadsheets().values().get(
+                spreadsheetId=session.spreadsheet_id,
+                range=f"'{title}'!A1:AZ3000",
+                majorDimension="ROWS").execute().get("values", [])
+        except GOOGLE_API_ERRORS as e:
+            core.log.warning("лист занятости недоступен: %s", e)
+            return {"ok": False, "error": "sheet_unavailable",
+                    "detail": "Лист недоступен: повторите позже"}
+
+        # политика: правку человека не затираем молча — показываем и спрашиваем `force`
+        week_days = {day.isoformat() for day in texts}
+        conflicts = [row for row in snapshot_mismatches(values, target, display, aliases=aliases)
+                     if row["day"] in week_days]
+        if conflicts and not force:
+            return {"ok": False, "applied": False, "error": "mismatches_present",
+                    "detail": "в листе есть правки после записи бота — решите, что верно",
+                    "mismatches": conflicts}
+
+        plan = plan_week(values, texts, target, display, aliases=aliases)
+        preview = [{"cell": cell.a1, "text": cell.text} for cell in plan.cells]
+        if plan.problems:
+            return {"ok": False, "error": "plan_problems", "problems": plan.problems,
+                    "cells": preview}
+        if not apply:
+            return {"ok": True, "applied": False, "start": first.isoformat(),
+                    "sheet": title, "person_column": plan.person_column,
+                    "service_column": plan.service_column, "cells": preview}
+
+        cells = [(cell.a1, cell.text) for cell in plan.cells]
+        try:
+            sheet_binding.write_cells(session, cells)
+            for a1, text in cells:
+                sheet_binding.note_header_cell(session, a1, text)
+            header_cell = cell_a1(plan.names_row, plan.service_column)
+            if plan.service_column and any(cell.a1 == header_cell for cell in plan.cells):
+                sheet_binding.hide_column(session, plan.service_column)
+        except ApiError as e:
+            core.log.warning("запись в лист не прошла: %s", e.code)
+            return {"ok": False, "applied": False, "error": e.code,
+                    "detail": str(e.detail), "cells": preview}
+
+        # проверка фактом: читаем те же адреса поимённо (batchGet) и сравниваем.
+        # Кусок листа читать нельзя: ответ API обрезает хвост и пустые строки, и адреса
+        # в ответе перестают совпадать с тем, что мы записали.
+        verified, mismatched = True, []
+        try:
+            mismatched = sheet_binding.verify_cells(session, cells)
+            verified = not mismatched
+        except ApiError as e:
+            # контрольное чтение не прошло — это «не проверили», не «не записали»
+            verified = False
+            mismatched.append({"error": str(e.detail)[:200]})
+
+        if verified:
+            sheet_binding.remember_header(conn, session)
+            for item in _row_map_plan(plan, target):
+                sheet_binding.row_map_save(conn, "schedule.workload", "availability_cell",
+                                           item["entity_id"], sheet_row=item["sheet_row"],
+                                           cell_key=item["cell_key"],
+                                           content_hash=item["content_hash"])
+            sheet_binding.touch_after_write(conn, session)
+
         core.audit(conn, "human", actor_id, "availability.sheet", "availability_hour",
               f"{target}:{first.isoformat()}",
               after={"cells": len(plan.cells), "verified": verified,
@@ -1271,6 +1290,36 @@ def webapp_availability_sheet(body: WeekSheetIn, who: dict = Depends(core.webapp
     return _sheet_sync(who["id"], body.start, body.apply, body.force, who["id"])
 
 
+class TestSheetIn(core.ApiIn):
+    """Одна проба в тестовый лист цветов: страница `MM.YYYY · Ник` (186 AC-10)."""
+
+    month: str = Field(min_length=6, max_length=10)
+    nick: str = Field(min_length=1, max_length=40)
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    hour: int = Field(ge=8, le=23)
+    status: str = "busy"
+    text: str | None = Field(default=None, max_length=40)
+    apply: bool = False
+
+
+@router.post("/tools/availability/test-sheet")
+def availability_test_sheet(body: TestSheetIn,
+                            who: dict = Depends(core.require("admin.panel"))) -> dict:
+    """Репетиция цветов: запись только ключом `schedule.test` (186 §4.3, AC-10).
+
+    Страница выбирается по шаблону `SCHEDULE_TEST_SHEET_PATTERN`; нет страницы или
+    она не одна — `sheet_ambiguous`, страница не создаётся. Право `admin.panel`:
+    это проверка раскладки, а не действие человека над своей занятостью.
+    """
+    probe = schedule_test_sheet.Probe(day=schedule_test_sheet.parse_day(body.date),
+                                      hour=body.hour, status=body.status,
+                                      text=(body.text or "").strip())
+    with core.pool.connection() as conn:
+        return schedule_test_sheet.write_probes(
+            conn, month=body.month, nick=body.nick, probes=[probe],
+            actor_id=who.get("id"), apply=body.apply)
+
+
 
 def _sheet_load_values() -> tuple[list[list] | None, str]:
     """Значения общего листа «Расписание студийцы» целиком: (строки, причина отказа).
@@ -1283,9 +1332,9 @@ def _sheet_load_values() -> tuple[list[list] | None, str]:
     if not core.SCHEDULE_HUMAN_SPREADSHEET_ID:
         return None, "no_spreadsheet"
     try:
-        service = core._sheets()
+        service = core._sheets_read()
         values = service.spreadsheets().values().get(
-            spreadsheetId=core.SCHEDULE_HUMAN_SPREADSHEET_ID,
+            spreadsheetId=google_targets.read_id("schedule.human"),
             range=f"'{core.SCHEDULE_HUMAN_SHEET_TITLE}'!A1:AZ3000",
             majorDimension="ROWS").execute().get("values", [])
     except GOOGLE_API_ERRORS as e:
@@ -1457,11 +1506,11 @@ def availability_sheet_mismatches(start: str | None = None,
     if not core.SCHEDULE_SPREADSHEET_ID:
         return {"ok": False, "error": "no_spreadsheet"}
     first = _week_start(start)
-    service = core._sheets()
+    service = core._sheets_read()
     try:
         _, title = _schedule_sheet_meta(service)
         values = service.spreadsheets().values().get(
-            spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
+            spreadsheetId=google_targets.resolve("schedule.workload"),
             range=f"'{title}'!A1:AZ3000",
             majorDimension="ROWS").execute().get("values", [])
     except GOOGLE_API_ERRORS as e:
@@ -1512,11 +1561,12 @@ def availability_reconcile(body: AvailabilityReconcileIn,
 
     first = _week_start(body.start)
     week = {(first + timedelta(days=offset)).isoformat() for offset in range(core.WEEK_DAYS)}
-    service = core._sheets()
+    with core.pool.connection() as conn:
+        session = sheet_binding.open_sheet("schedule.workload", conn=conn)
+    service, title = session.service, session.sheet_title
     try:
-        _, title = _schedule_sheet_meta(service)
         values = service.spreadsheets().values().get(
-            spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
+            spreadsheetId=session.spreadsheet_id,
             range=f"'{title}'!A1:AZ3000",
             majorDimension="ROWS").execute().get("values", [])
     except GOOGLE_API_ERRORS as e:
@@ -1586,20 +1636,18 @@ def availability_reconcile(body: AvailabilityReconcileIn,
 
     sheet_error = None
     if snapshots and service_column:
-        data = []
+        cells = []
         for row_index, text in snapshots:
             existing = ""
             if row_index - 1 < len(values) and len(values[row_index - 1]) >= service_column:
                 existing = values[row_index - 1][service_column - 1]
-            data.append({"range": f"'{title}'!{cell_a1(row_index, service_column)}",
-                         "values": [[merge_snapshot(existing, target, text)]]})
+            cells.append((cell_a1(row_index, service_column),
+                          merge_snapshot(existing, target, text)))
         try:
-            service.spreadsheets().values().batchUpdate(
-                spreadsheetId=core.SCHEDULE_SPREADSHEET_ID,
-                body={"valueInputOption": "RAW", "data": data}).execute()
-        except GOOGLE_API_ERRORS as e:
-            # адаптер листа: строка не дошла — показываем человеку sheet_error
-            sheet_error = str(e)[:200]
+            sheet_binding.write_cells(session, cells)
+        except ApiError as e:
+            # строка не дошла — показываем человеку sheet_error
+            sheet_error = f"{e.code}: {e.detail}"[:200]
 
     return {"ok": True, "applied": True, "start": first.isoformat(), "sheet": title,
             "accepted": accepted, "problems": problems, "sheet_error": sheet_error}
