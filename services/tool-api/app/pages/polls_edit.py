@@ -77,6 +77,9 @@ _BODY = """
       <button class="ui-btn ui-btn--ghost" id="save-draft" type="button">
         Сохранить черновик
       </button>
+      <button class="ui-btn ui-btn--danger" id="delete-draft" type="button" hidden>
+        Удалить черновик
+      </button>
       <button class="ui-btn ui-btn--primary" id="to-audience" type="button">
         Дальше: кому отправить
       </button>

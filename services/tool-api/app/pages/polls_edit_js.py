@@ -22,6 +22,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
                 people: [], projects: [], frozen: false, editing: -1, shown: 8,
                 dirty: false };
   var EXIT_TEXT = "Выйти без сохранения? Черновик не сохранён.";
+  var DELETE_TEXT = "Удалить черновик? Вернуть его будет нельзя.";
   var COPY_NOTE = "Копия сохранена как черновик. Адресаты не перенесены: " +
                   "выберите их заново.";
   tgBoot();
@@ -187,6 +188,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     }
     state.poll_id = result.body.poll_id;
     state.dirty = false;
+    syncDelete();
     showError("");
     return true;
   }
@@ -199,6 +201,43 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     var ok = await saveDraft();
     button.disabled = false;
     if (ok) { showNote("Черновик сохранён"); }
+  }
+
+  /* Кнопка «Удалить черновик» появляется только у сохранённого черновика: у нового
+     удалять нечего, у отправленного — нельзя (есть ответы), поэтому у замороженного
+     её нет вовсе, а не «нажми и получи отказ». */
+  function syncDelete() {
+    $("delete-draft").hidden = !state.poll_id || state.frozen;
+  }
+
+  function tgConfirm(text) {
+    return new Promise(function (resolve) {
+      var tg = window.Telegram && window.Telegram.WebApp ? window.Telegram.WebApp : null;
+      if (tg && tg.showConfirm) {
+        tg.showConfirm(text, function (ok) { resolve(!!ok); });
+        return;
+      }
+      resolve(window.confirm(text));
+    });
+  }
+
+  async function deleteDraft() {
+    if (!state.poll_id) { showError("Черновик ещё не сохранён: удалять нечего."); return; }
+    if (!(await tgConfirm(DELETE_TEXT))) { return; }
+    var button = $("delete-draft");
+    button.disabled = true;
+    var result = await api("/webapp/polls/delete", { poll_id: state.poll_id });
+    button.disabled = false;
+    if (result.status === 403) { showDenied(); return; }
+    if (result.status !== 200) {
+      var body = result.body || {};
+      showError(body.code === "poll_not_draft"
+        ? "Отправленный опрос не удаляют: в нём есть ответы."
+        : detailOf(result));
+      return;
+    }
+    state.dirty = false;
+    window.location.href = "/webapp/polls";
   }""" + _AUDIENCE_JS + r"""
   /* ------------------------------------------------------------ шаги */
 
@@ -230,6 +269,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     $("q-done").addEventListener("click", editorDone);
     $("q-delete").addEventListener("click", deleteQuestion);
     $("save-draft").addEventListener("click", saveDraftOnly);
+    $("delete-draft").addEventListener("click", deleteDraft);
     $("title").addEventListener("input", markDirty);
     bindExit();
     $("to-audience").addEventListener("click", toAudience);
@@ -310,6 +350,7 @@ SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     state.frozen = !result.body.can_edit;
     $("title").value = state.title || "";
     renderQuestions();
+    syncDelete();
     if (state.frozen) {
       showNote("Опрос уже отправлен: вопросы и адресаты заморожены.");
       $("add-question").hidden = true;

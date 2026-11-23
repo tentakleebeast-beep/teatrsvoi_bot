@@ -29,12 +29,12 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 
 | Показатель | Значение |
 |---|---|
-| Маршрутов (методов) в `contracts/openapi.json` | 279 |
-| Маршрутов в коде, которые есть в контракте | 279 |
-| Всего маршрутов в коде (с редиректами и ресурсами) | 280 |
-| Из них с тестом (по вызову пути в `tests/`) | 267 |
+| Маршрутов (методов) в `contracts/openapi.json` | 280 |
+| Маршрутов в коде, которые есть в контракте | 280 |
+| Всего маршрутов в коде (с редиректами и ресурсами) | 281 |
+| Из них с тестом (по вызову пути в `tests/`) | 268 |
 | Действий без права (ни возможности, ни сессии) | 58 |
-| Действий с правом, проверенным в теле через `core._webapp_require(…)` | 70 |
+| Действий с правом, проверенным в теле через `core._webapp_require(…)` | 71 |
 | Действий с правом, проверенным в теле через «*» в caps | 4 |
 | Маршрутов с сервисным Bearer-токеном на входе | 3 |
 | Эндпоинтов, которые не зовёт ни один интерфейс | 34 |
@@ -159,9 +159,9 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/participants/{participant_id}/card` | `services/tool-api/app/api/people.py:18` | чат: _card_of, panel_person, panel_person_caps, panel_person_roles, panel_person_tariff | participants.view | test_gateway_chat_parity.py, test_master_role.py, test_participants_card.py (+1) | — |
 | GET `/tools/participants/{participant_id}/dues-tariff` | `services/tool-api/app/api/people.py:677` | чат: panel_tariff_save | participants.view | test_dues_tariff.py | — |
 | POST `/tools/participants/{participant_id}/dues-tariff` | `services/tool-api/app/api/people.py:694` | чат: panel_tariff_save | budget.write | test_dues_tariff.py | — |
-| POST `/tools/polls/answer` | `services/tool-api/app/api/polls.py:827` | чат: _answer, poll_free_text | любой активный | test_poll_text_answer.py, test_polls_answer_overwrite.py, test_polls_delivery.py (+2) | — |
-| GET `/tools/polls/mine` | `services/tool-api/app/api/polls.py:792` | чат: show_runs | любой активный | test_poll_resume_chat.py, test_polls_resume.py, test_polls_webapp.py | — |
-| GET `/tools/polls/step` | `services/tool-api/app/api/polls.py:809` | чат: poll_step | любой активный | test_poll_resume_chat.py, test_poll_text_answer.py, test_polls_questionnaire_161.py (+1) | — |
+| POST `/tools/polls/answer` | `services/tool-api/app/api/polls.py:858` | чат: _answer, poll_free_text | любой активный | test_poll_text_answer.py, test_polls_answer_overwrite.py, test_polls_delivery.py (+2) | — |
+| GET `/tools/polls/mine` | `services/tool-api/app/api/polls.py:823` | чат: show_runs | любой активный | test_poll_resume_chat.py, test_polls_resume.py, test_polls_webapp.py | — |
+| GET `/tools/polls/step` | `services/tool-api/app/api/polls.py:840` | чат: poll_step | любой активный | test_poll_resume_chat.py, test_poll_text_answer.py, test_polls_questionnaire_161.py (+1) | — |
 | POST `/tools/profile/intro-parse` | `services/tool-api/app/api/people.py:281` | чат: intro_answer | любой активный | test_intro.py, test_intro_llm_api.py | — |
 | GET `/tools/profile/me` | `services/tool-api/app/api/people.py:118` | чат: intro_fill, intro_save, intro_start, profile_cmd | любой активный | test_availability_week.py, test_cm01_login.py, test_cm11_degradation.py (+4) | — |
 | POST `/tools/profile/me` | `services/tool-api/app/api/people.py:191` | чат: intro_fill, intro_save, intro_start, profile_cmd | любой активный | test_availability_week.py, test_cm01_login.py, test_cm11_degradation.py (+4) | — |
@@ -279,25 +279,26 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/person` | `services/tool-api/app/pages/routes.py:215` | Mini App: person, routes; чат: panel_person; скрипты: build_screen_map, ui_review | — | server.py, test_miniapp_js_behavior.py, test_miniapp_system.py (+3) | экран Mini App: HTML без данных |
 | GET `/webapp/person/info` | `services/tool-api/app/api/people.py:643` | Mini App: person | сессия Mini App + participants.view | server.py, test_org_miniapp_screens.py | право проверяется в теле обработчика, а не в зависимости: participants.view |
 | POST `/webapp/person/tariff` | `services/tool-api/app/api/people.py:669` | Mini App: person | сессия Mini App + budget.write | server.py, test_org_miniapp_screens.py | право проверяется в теле обработчика, а не в зависимости: budget.write |
-| GET `/webapp/polls` | `services/tool-api/app/pages/routes.py:260` | Mini App: polls_edit, polls_results; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+3) | экран Mini App: HTML без данных |
+| GET `/webapp/polls` | `services/tool-api/app/pages/routes.py:260` | Mini App: polls_edit, polls_edit_js, polls_results; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+3) | экран Mini App: HTML без данных |
 | GET `/webapp/polls/answer` | `services/tool-api/app/pages/routes.py:246` | Mini App: polls_answer, routes; скрипты: build_screen_map, ui_review | — | server.py, test_miniapp_polls_answer_narrow.py, test_miniapp_polls_mine.py (+5) | экран Mini App: HTML без данных |
-| POST `/webapp/polls/answer` | `services/tool-api/app/api/polls.py:834` | Mini App: polls_answer, routes; скрипты: build_screen_map, ui_review | сессия Mini App | server.py, test_miniapp_polls_answer_narrow.py, test_miniapp_polls_mine.py (+5) | — |
-| POST `/webapp/polls/audience` | `services/tool-api/app/api/polls.py:422` | Mini App: polls_audience_js | сессия Mini App + no_poll_manage + poll.manage | polls_helpers.py, server.py | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
-| GET `/webapp/polls/audience/data` | `services/tool-api/app/api/polls.py:393` | Mini App: polls_audience_js | сессия Mini App + no_poll_manage + poll.manage | server.py | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
-| POST `/webapp/polls/close` | `services/tool-api/app/api/polls.py:550` | Mini App: polls_results | сессия Mini App + no_poll_manage + poll.manage | server.py, test_miniapp_polls_draft_copy.py, test_polls_delivery.py (+2) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| POST `/webapp/polls/answer` | `services/tool-api/app/api/polls.py:865` | Mini App: polls_answer, routes; скрипты: build_screen_map, ui_review | сессия Mini App | server.py, test_miniapp_polls_answer_narrow.py, test_miniapp_polls_mine.py (+5) | — |
+| POST `/webapp/polls/audience` | `services/tool-api/app/api/polls.py:453` | Mini App: polls_audience_js | сессия Mini App + no_poll_manage + poll.manage | polls_helpers.py, server.py | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| GET `/webapp/polls/audience/data` | `services/tool-api/app/api/polls.py:424` | Mini App: polls_audience_js | сессия Mini App + no_poll_manage + poll.manage | server.py | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| POST `/webapp/polls/close` | `services/tool-api/app/api/polls.py:581` | Mini App: polls_results | сессия Mini App + no_poll_manage + poll.manage | server.py, test_miniapp_polls_draft_copy.py, test_polls_delivery.py (+2) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
 | POST `/webapp/polls/copy` | `services/tool-api/app/api/polls.py:250` | Mini App: polls_results | сессия Mini App + no_poll_manage + poll.manage | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+1) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| POST `/webapp/polls/delete` | `services/tool-api/app/api/polls.py:292` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | test_miniapp_polls_draft_copy.py, test_poll_delete.py | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
 | GET `/webapp/polls/edit` | `services/tool-api/app/pages/routes.py:222` | Mini App: polls, routes; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+2) | экран Mini App: HTML без данных |
-| GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:292` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage (в теле — poll.results.all) | server.py, test_poll_interview_draft.py, test_polls_copy.py (+1) | проверка права в теле обработчика (через «*»); право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
-| GET `/webapp/polls/export` | `services/tool-api/app/api/polls.py:663` | — | — | server.py, test_miniapp_polls.py, test_polls_export_link.py (+3) | никто не зовёт |
-| GET `/webapp/polls/export/link` | `services/tool-api/app/api/polls.py:643` | Mini App: polls_results | сессия Mini App | server.py, test_polls_export_link.py | — |
+| GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:323` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage (в теле — poll.results.all) | server.py, test_poll_interview_draft.py, test_polls_copy.py (+1) | проверка права в теле обработчика (через «*»); право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| GET `/webapp/polls/export` | `services/tool-api/app/api/polls.py:694` | — | — | server.py, test_miniapp_polls.py, test_polls_export_link.py (+3) | никто не зовёт |
+| GET `/webapp/polls/export/link` | `services/tool-api/app/api/polls.py:674` | Mini App: polls_results | сессия Mini App | server.py, test_polls_export_link.py | — |
 | GET `/webapp/polls/list` | `services/tool-api/app/api/polls.py:133` | Mini App: polls, polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | server.py, test_poll_interview_draft.py, test_poll_interview_drafts.py (+3) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
 | GET `/webapp/polls/mine` | `services/tool-api/app/pages/routes.py:236` | Mini App: home, home_loading, polls_answer, routes; скрипты: build_screen_map, ui_review | — | server.py, test_miniapp_polls_mine.py, test_polls_webapp_home_marker.py | экран Mini App: HTML без данных |
-| GET `/webapp/polls/mine/data` | `services/tool-api/app/api/polls.py:987` | Mini App: polls_mine, routes | сессия Mini App | server.py, test_polls_webapp.py | — |
+| GET `/webapp/polls/mine/data` | `services/tool-api/app/api/polls.py:1018` | Mini App: polls_mine, routes | сессия Mini App | server.py, test_polls_webapp.py | — |
 | GET `/webapp/polls/results` | `services/tool-api/app/pages/routes.py:231` | Mini App: polls, polls_edit_js, routes; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+1) | экран Mini App: HTML без данных |
-| GET `/webapp/polls/results/data` | `services/tool-api/app/api/polls.py:580` | Mini App: polls_results | сессия Mini App | server.py, test_polls_questionnaire_161.py, test_polls_results_caps.py (+1) | — |
-| POST `/webapp/polls/save` | `services/tool-api/app/api/polls.py:207` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | polls_helpers.py, server.py, test_miniapp_polls.py (+3) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
-| POST `/webapp/polls/start` | `services/tool-api/app/api/polls.py:498` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+10) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
-| GET `/webapp/polls/step` | `services/tool-api/app/api/polls.py:998` | Mini App: polls_answer | сессия Mini App | server.py, test_polls_webapp.py | — |
+| GET `/webapp/polls/results/data` | `services/tool-api/app/api/polls.py:611` | Mini App: polls_results | сессия Mini App | server.py, test_polls_questionnaire_161.py, test_polls_results_caps.py (+1) | — |
+| POST `/webapp/polls/save` | `services/tool-api/app/api/polls.py:207` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | polls_helpers.py, server.py, test_miniapp_polls.py (+4) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| POST `/webapp/polls/start` | `services/tool-api/app/api/polls.py:529` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+11) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
+| GET `/webapp/polls/step` | `services/tool-api/app/api/polls.py:1029` | Mini App: polls_answer | сессия Mini App | server.py, test_polls_webapp.py | — |
 | POST `/webapp/preview` | `services/tool-api/app/api/events.py:1039` | Mini App: misc_slots | сессия Mini App | server.py, test_miniapp_master_slots.py, test_miniapp_slots.py (+1) | — |
 | GET `/webapp/profile` | `services/tool-api/app/api/people.py:364` | Mini App: misc_profile | сессия Mini App | server.py, test_master_role.py, test_webapp_profile.py | — |
 | POST `/webapp/profile` | `services/tool-api/app/api/people.py:403` | Mini App: misc_profile | сессия Mini App | server.py, test_master_role.py, test_webapp_profile.py | — |
@@ -362,7 +363,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | `/webapp/person` | `services/tool-api/app/pages/routes.py:215` | `person.PERSON_PAGE` | `/webapp/home`, `/webapp/person/info`, `/webapp/person/tariff` | нет |
 | `/webapp/polls` | `services/tool-api/app/pages/routes.py:260` | `admin.POLLS_PAGE` | `/webapp/more`, `/webapp/polls/list` | нет |
 | `/webapp/polls/answer` | `services/tool-api/app/pages/routes.py:246` | `polls_answer.POLLS_ANSWER_PAGE` | `/webapp/polls/answer`, `/webapp/polls/mine`, `/webapp/polls/step` | нет |
-| `/webapp/polls/edit` | `services/tool-api/app/pages/routes.py:222` | `polls_edit.POLL_EDIT_PAGE` | `/webapp/polls`, `/webapp/polls/audience`, `/webapp/polls/audience/data`, `/webapp/polls/edit/data`, `/webapp/polls/list`, `/webapp/polls/save`, `/webapp/polls/start` | нет |
+| `/webapp/polls/edit` | `services/tool-api/app/pages/routes.py:222` | `polls_edit.POLL_EDIT_PAGE` | `/webapp/polls`, `/webapp/polls/audience`, `/webapp/polls/audience/data`, `/webapp/polls/delete`, `/webapp/polls/edit/data`, `/webapp/polls/list`, `/webapp/polls/save`, `/webapp/polls/start` | нет |
 | `/webapp/polls/mine` | `services/tool-api/app/pages/routes.py:236` | `polls_mine.POLLS_MINE_PAGE` | `/webapp/home`, `/webapp/polls/mine/data` | нет |
 | `/webapp/polls/results` | `services/tool-api/app/pages/routes.py:231` | `polls_results.POLL_RESULTS_PAGE` | `/webapp/polls`, `/webapp/polls/close`, `/webapp/polls/copy`, `/webapp/polls/export/link`, `/webapp/polls/results/data` | нет |
 | `/webapp/project` | `services/tool-api/app/pages/routes.py:206` | `projects.PROJECT_CARD_PAGE` | `/webapp/project/data`, `/webapp/project/plan`, `/webapp/project/save`, `/webapp/projects` | нет |
@@ -582,10 +583,10 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/notifications` | `services/tool-api/app/pages/routes.py:129` | Mini App: admin_notifications, home, routes; чат: quiet_text; скрипты: build_screen_map, ui_review, ux_audit | — | server.py, test_gateway_quiet.py, test_miniapp_hub.py | экран Mini App: HTML без данных |
 | GET `/webapp/people` | `services/tool-api/app/pages/routes.py:296` | Mini App: routes; скрипты: ui_review | — | test_agent_task.py | — |
 | GET `/webapp/person` | `services/tool-api/app/pages/routes.py:215` | Mini App: person, routes; чат: panel_person; скрипты: build_screen_map, ui_review | — | server.py, test_miniapp_js_behavior.py, test_miniapp_system.py (+3) | экран Mini App: HTML без данных |
-| GET `/webapp/polls` | `services/tool-api/app/pages/routes.py:260` | Mini App: polls_edit, polls_results; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+3) | экран Mini App: HTML без данных |
+| GET `/webapp/polls` | `services/tool-api/app/pages/routes.py:260` | Mini App: polls_edit, polls_edit_js, polls_results; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+3) | экран Mini App: HTML без данных |
 | GET `/webapp/polls/answer` | `services/tool-api/app/pages/routes.py:246` | Mini App: polls_answer, routes; скрипты: build_screen_map, ui_review | — | server.py, test_miniapp_polls_answer_narrow.py, test_miniapp_polls_mine.py (+5) | экран Mini App: HTML без данных |
 | GET `/webapp/polls/edit` | `services/tool-api/app/pages/routes.py:222` | Mini App: polls, routes; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+2) | экран Mini App: HTML без данных |
-| GET `/webapp/polls/export` | `services/tool-api/app/api/polls.py:663` | — | — | server.py, test_miniapp_polls.py, test_polls_export_link.py (+3) | никто не зовёт |
+| GET `/webapp/polls/export` | `services/tool-api/app/api/polls.py:694` | — | — | server.py, test_miniapp_polls.py, test_polls_export_link.py (+3) | никто не зовёт |
 | GET `/webapp/polls/mine` | `services/tool-api/app/pages/routes.py:236` | Mini App: home, home_loading, polls_answer, routes; скрипты: build_screen_map, ui_review | — | server.py, test_miniapp_polls_mine.py, test_polls_webapp_home_marker.py | экран Mini App: HTML без данных |
 | GET `/webapp/polls/results` | `services/tool-api/app/pages/routes.py:231` | Mini App: polls, polls_edit_js, routes; скрипты: build_screen_map, polls_screens_review, ui_review | — | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+1) | экран Mini App: HTML без данных |
 | GET `/webapp/project` | `services/tool-api/app/pages/routes.py:206` | Mini App: projects, routes; скрипты: ui_review | — | server.py | экран Mini App: HTML без данных |
@@ -669,14 +670,15 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | DELETE `/webapp/notes/{note_id}` | `services/tool-api/app/api/notes.py:319` | notes.write | сессия Mini App | server.py, test_cm08_miniapp.py, test_notes_api.py |
 | GET `/webapp/person/info` | `services/tool-api/app/api/people.py:643` | participants.view | сессия Mini App | server.py, test_org_miniapp_screens.py |
 | POST `/webapp/person/tariff` | `services/tool-api/app/api/people.py:669` | budget.write | сессия Mini App | server.py, test_org_miniapp_screens.py |
-| POST `/webapp/polls/audience` | `services/tool-api/app/api/polls.py:422` | no_poll_manage, poll.manage | сессия Mini App | polls_helpers.py, server.py |
-| GET `/webapp/polls/audience/data` | `services/tool-api/app/api/polls.py:393` | no_poll_manage, poll.manage | сессия Mini App | server.py |
-| POST `/webapp/polls/close` | `services/tool-api/app/api/polls.py:550` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_miniapp_polls_draft_copy.py, test_polls_delivery.py (+2) |
+| POST `/webapp/polls/audience` | `services/tool-api/app/api/polls.py:453` | no_poll_manage, poll.manage | сессия Mini App | polls_helpers.py, server.py |
+| GET `/webapp/polls/audience/data` | `services/tool-api/app/api/polls.py:424` | no_poll_manage, poll.manage | сессия Mini App | server.py |
+| POST `/webapp/polls/close` | `services/tool-api/app/api/polls.py:581` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_miniapp_polls_draft_copy.py, test_polls_delivery.py (+2) |
 | POST `/webapp/polls/copy` | `services/tool-api/app/api/polls.py:250` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+1) |
-| GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:292` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_poll_interview_draft.py, test_polls_copy.py (+1) |
+| POST `/webapp/polls/delete` | `services/tool-api/app/api/polls.py:292` | no_poll_manage, poll.manage | сессия Mini App | test_miniapp_polls_draft_copy.py, test_poll_delete.py |
+| GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:323` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_poll_interview_draft.py, test_polls_copy.py (+1) |
 | GET `/webapp/polls/list` | `services/tool-api/app/api/polls.py:133` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_poll_interview_draft.py, test_poll_interview_drafts.py (+3) |
-| POST `/webapp/polls/save` | `services/tool-api/app/api/polls.py:207` | no_poll_manage, poll.manage | сессия Mini App | polls_helpers.py, server.py, test_miniapp_polls.py (+3) |
-| POST `/webapp/polls/start` | `services/tool-api/app/api/polls.py:498` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+10) |
+| POST `/webapp/polls/save` | `services/tool-api/app/api/polls.py:207` | no_poll_manage, poll.manage | сессия Mini App | polls_helpers.py, server.py, test_miniapp_polls.py (+4) |
+| POST `/webapp/polls/start` | `services/tool-api/app/api/polls.py:529` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+11) |
 | POST `/webapp/project/event` | `services/tool-api/app/api/projects.py:443` | calendar.write, no_access, schedule.write, Аренду создаёт администратор и организатор | сессия Mini App | test_project_events.py |
 | POST `/webapp/project/event/amount` | `services/tool-api/app/api/projects.py:397` | no_access, schedule.write | сессия Mini App | нет |
 | POST `/webapp/slots/find` | `services/tool-api/app/api/schedule.py:1071` | schedule.slots | сессия Mini App | server.py, test_org_miniapp_screens.py |
@@ -703,7 +705,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 |---|---|---|---|
 | POST `/tools/availability/reconcile` | `services/tool-api/app/api/schedule.py:1533` | schedule.availability.self | schedule.read.all |
 | GET `/tools/availability/week` | `services/tool-api/app/api/schedule.py:742` | schedule.availability.self | schedule.read.all |
-| GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:292` | сессия Mini App + no_poll_manage + poll.manage | poll.results.all |
+| GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:323` | сессия Mini App + no_poll_manage + poll.manage | poll.results.all |
 | GET `/webapp/project/data` | `services/tool-api/app/api/projects.py:144` | сессия Mini App | budget.write, calendar.write, schedule.write |
 
 ## 8. Эндпоинты, которые не зовёт ни один интерфейс
@@ -743,13 +745,13 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/webapp/availability/sheet` | `services/tool-api/app/api/schedule.py:1287` | сессия Mini App | нет |
 | GET `/webapp/availability/template` | `services/tool-api/app/api/schedule.py:1110` | сессия Mini App | test_gateway_quiet_parity.py |
 | GET `/webapp/my` | `services/tool-api/app/api/people.py:318` | сессия Mini App | server.py, test_admin_people_actions.py, test_smoke_api_fixes.py (+1) |
-| GET `/webapp/polls/export` | `services/tool-api/app/api/polls.py:663` | — | server.py, test_miniapp_polls.py, test_polls_export_link.py (+3) |
+| GET `/webapp/polls/export` | `services/tool-api/app/api/polls.py:694` | — | server.py, test_miniapp_polls.py, test_polls_export_link.py (+3) |
 | POST `/webapp/project/event` | `services/tool-api/app/api/projects.py:443` | сессия Mini App + calendar.write + no_access + schedule.write + Аренду создаёт администратор и организатор | test_project_events.py |
 | POST `/webapp/project/event/amount` | `services/tool-api/app/api/projects.py:397` | сессия Mini App + no_access + schedule.write | нет |
 
 ## 9. Самопроверка
 
-* маршрутов в контракте: 279, в коде: 279
+* маршрутов в контракте: 280, в коде: 280
 * нет в коде, но есть в контракте: 0
 * есть в коде, но нет в контракте: 0
 <!-- audit-actions:end -->

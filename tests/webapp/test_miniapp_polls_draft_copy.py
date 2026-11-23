@@ -68,6 +68,7 @@ COPY_ENDPOINT = "/webapp/polls/copy"
 SAVE_ENDPOINT = "/webapp/polls/save"
 START_ENDPOINT = "/webapp/polls/start"
 CLOSE_ENDPOINT = "/webapp/polls/close"
+DELETE_ENDPOINT = "/webapp/polls/delete"
 
 
 # --- помощники ---------------------------------------------------------------
@@ -450,3 +451,52 @@ def test_черновик_и_копия_на_двух_движках(device_page
     assert page.evaluate(OVERFLOW) <= 0, f"{device}: конструктор копии едет вбок"
     _tap_targets(page)
     assert not page.svoi_errors, (device, page.svoi_errors)
+
+
+# --- 6. удаление черновика ---------------------------------------------------
+
+def test_кнопка_удаления_появляется_у_сохранённого_и_удаляет(app_page) -> None:
+    """V-136: у нового черновика кнопки нет, у сохранённого — есть, и она удаляет.
+
+    Проверяется фактом: спрятана на новом, видна после `save`, уходит ровно один
+    `POST /webapp/polls/delete` с `{"poll_id": 55}`, страница уходит в список.
+    Подтверждение — настоящий `confirm`, поэтому тест отвечает на диалог согласием.
+    """
+    page = app_page("/webapp/polls/edit")
+    page.set_viewport_size({"width": 320, "height": 658})
+    page.wait_for_selector("#questions .ui-row", timeout=10_000)
+    assert page.locator("#delete-draft").is_hidden(), "кнопка удаления у нового черновика"
+
+    store: dict = {}
+    _serve_draft(page, store)
+    deleted: list[str] = []
+
+    def delete(route):
+        deleted.append(route.request.post_data or "")
+        route.fulfill(status=200, content_type="application/json",
+                      body=json.dumps({"ok": True, "poll_id": DRAFT_ID}))
+
+    page.route(f"**{DELETE_ENDPOINT}", delete)
+    page.fill("#title", DRAFT_TITLE)
+    page.click("#save-draft")
+    page.wait_for_selector("#note:not([hidden])", timeout=10_000)
+    assert page.locator("#delete-draft").is_visible(), "после сохранения кнопки удаления нет"
+
+    _no_overflow(page)
+    _tap_targets(page)
+
+    # Заглушка стенда на `showConfirm` не зовёт колбэк, поэтому согласие подставляем
+    # сами и запоминаем вопрос: читать его надо до перехода — после него документ новый.
+    # Вопрос пишем в `localStorage`: страница после удаления уходит в список, и
+    # переменная в старом документе уже не прочитать.
+    page.evaluate("""() => { window.Telegram.WebApp.showConfirm = (text, cb) => {
+        localStorage.setItem('asks', text); cb(true); }; }""")
+    with page.expect_response("**/webapp/polls/delete") as response:
+        page.click("#delete-draft")
+    assert response.value.status == 200
+    page.wait_for_url("**/webapp/polls", timeout=10_000)
+    ask = page.evaluate("localStorage.getItem('asks')") or ""
+    assert "Удалить черновик" in ask, ask
+    assert len(deleted) == 1, deleted
+    assert json.loads(deleted[0]) == {"poll_id": DRAFT_ID}
+    assert not page.svoi_errors, page.svoi_errors

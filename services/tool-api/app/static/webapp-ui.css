@@ -331,8 +331,14 @@ body.ui-page {
   position: sticky; bottom: 0; z-index: 15;
   padding: var(--ui-s3) 0 calc(var(--ui-s3) + env(safe-area-inset-bottom));
   background: linear-gradient(to top, var(--ui-bg) 72%, transparent);
+  /* Сетка, а не flex. У сетки дорожка не бывает шире контейнера, поэтому длинная
+     подпись переносится внутри кнопки. Во flex с `flex: 1` «Экспорт Markdown»
+     в веб-версии Telegram обрезался и наезжал на соседа: доля ширины считалась
+     по контейнеру, а текст не ужимался. */
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
 }
-.ui-actions--bottom .ui-btn { flex: 1; }
+.ui-actions--bottom .ui-btn { min-width: 0; }
 
 /* ---------- поля ---------- */
 

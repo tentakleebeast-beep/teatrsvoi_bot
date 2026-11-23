@@ -289,6 +289,37 @@ def polls_copy(body: PollIdIn, who: dict = Depends(core.webapp_actor)) -> dict:
             "url": f"/webapp/polls/edit?poll_id={new_id}&note=copy"}
 
 
+@router.post("/webapp/polls/delete")
+def polls_delete(body: PollIdIn, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Удалить черновик опроса — V-136 (решение владельца 23.11.2026).
+
+    Удаляется только черновик: у отправленного опроса есть прохождения и ответы,
+    и «удалить» там значило бы стереть чужие ответы. Второй стоп — любое прохождение
+    у черновика (в норме его быть не может, но полагаться на «в норме» нельзя).
+    Дочерние строки уходят каскадом (`065_polls.sql`), поэтому одной командой.
+    """
+    viewer = core._webapp_require(who, "poll.manage", deny_code="no_poll_manage",
+                                  deny_text=DENY_MANAGE_TEXT)
+    with core.pool.connection() as conn:
+        poll = _poll_or_404(conn, body.poll_id)
+        _own_draft(conn, viewer, poll, viewer.get("caps") or [])
+        if poll["status"] != "draft":
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "Отправленный опрос не удаляют: в нём есть ответы. Если он больше "
+                           "не нужен — закройте его.", code="poll_not_draft")
+        runs = conn.execute("select count(*) as c from poll_run where poll_id = %s",
+                            (poll["id"],)).fetchone()["c"]
+        if runs:
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "У опроса есть прохождения: удалить нельзя.", code="poll_has_runs")
+        questions = len(_questions(conn, poll["id"]))
+        conn.execute("delete from poll where id = %s", (poll["id"],))
+        core.audit(conn, "human", viewer["id"], "poll.delete", "poll", str(poll["id"]),
+                   before={"title": poll["title"], "status": poll["status"],
+                           "questions": questions})
+    return {"ok": True, "poll_id": body.poll_id}
+
+
 @router.get("/webapp/polls/edit/data")
 def polls_edit_data(poll_id: int = Query(ge=1),
                     who: dict = Depends(core.webapp_actor)) -> dict:
