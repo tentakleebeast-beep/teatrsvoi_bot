@@ -1,6 +1,6 @@
 {
  "meta": {
-  "alembic": "072_files_two_locations",
+  "alembic": "073_files_two_locations",
   "note": "Снимок формы схемы. Индексы, права и данные не входят. Описание — docs/architecture/172-db-schema.md."
  },
  "tables": {
@@ -56,8 +56,8 @@
   },
   "agent_action": {
    "check": [
-    "CHECK ((kind = ANY (ARRAY['move'::text, 'rename'::text, 'tag'::text, 'summarize'::text, 'answer'::text])))",
-    "CHECK ((status = ANY (ARRAY['proposed'::text, 'applied'::text, 'rejected'::text, 'expired'::text])))"
+    "CHECK ((status = ANY (ARRAY['proposed'::text, 'applied'::text, 'rejected'::text, 'expired'::text])))",
+    "CHECK ((kind = ANY (ARRAY['move'::text, 'rename'::text, 'tag'::text, 'summarize'::text, 'answer'::text])))"
    ],
    "columns": {
     "file_id": {
@@ -102,8 +102,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "id"
@@ -361,8 +361,8 @@
    },
    "foreign_keys": [
     "FOREIGN KEY (category_id) REFERENCES category(id)",
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
-    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)"
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
     "id"
@@ -418,9 +418,9 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
+    "FOREIGN KEY (category_id) REFERENCES category(id)",
     "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
-    "FOREIGN KEY (category_id) REFERENCES category(id)"
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
     "id"
@@ -510,9 +510,9 @@
   },
   "availability_hour": {
    "check": [
+    "CHECK ((source = ANY (ARRAY['bot'::text, 'sheet_import'::text, 'admin'::text])))",
     "CHECK (((hour >= 0) AND (hour <= 23)))",
-    "CHECK ((kind = ANY (ARRAY['busy'::text, 'free'::text, 'uncertain'::text, 'preferred'::text, 'declared'::text, 'imported'::text])))",
-    "CHECK ((source = ANY (ARRAY['bot'::text, 'sheet_import'::text, 'admin'::text])))"
+    "CHECK ((kind = ANY (ARRAY['busy'::text, 'free'::text, 'uncertain'::text, 'preferred'::text, 'declared'::text, 'imported'::text])))"
    ],
    "columns": {
     "at_theatre": {
@@ -582,11 +582,11 @@
   },
   "availability_template": {
    "check": [
-    "CHECK (((from_min IS NULL) OR (to_min IS NULL) OR (from_min < to_min)))",
-    "CHECK (((to_min >= 0) AND (to_min <= 1440)))",
-    "CHECK ((status = ANY (ARRAY['free'::text, 'busy'::text, 'uncertain'::text])))",
     "CHECK (((from_min >= 0) AND (from_min <= 1440)))",
-    "CHECK (((weekday >= 0) AND (weekday <= 6)))"
+    "CHECK ((status = ANY (ARRAY['free'::text, 'busy'::text, 'uncertain'::text])))",
+    "CHECK (((to_min >= 0) AND (to_min <= 1440)))",
+    "CHECK (((weekday >= 0) AND (weekday <= 6)))",
+    "CHECK (((from_min IS NULL) OR (to_min IS NULL) OR (from_min < to_min)))"
    ],
    "columns": {
     "from_min": {
@@ -800,9 +800,9 @@
   "budget_tx": {
    "check": [
     "CHECK ((tx_type = ANY (ARRAY['income'::text, 'expense'::text, 'transfer'::text])))",
+    "CHECK ((origin = ANY (ARRAY['bot'::text, 'manual'::text, 'import'::text])))",
     "CHECK ((amount > (0)::numeric))",
     "CHECK ((method = ANY (ARRAY['cash'::text, 'card'::text, 'transfer'::text, 'unknown'::text])))",
-    "CHECK ((origin = ANY (ARRAY['bot'::text, 'manual'::text, 'import'::text])))",
     "CHECK ((block = ANY (ARRAY['dues'::text, 'expense'::text, 'show_income'::text, 'show_cost'::text, 'sublease'::text])))",
     "CHECK ((status = ANY (ARRAY['draft'::text, 'expected'::text, 'pending_approval'::text, 'confirmed'::text, 'rejected'::text, 'reversed'::text])))"
    ],
@@ -989,12 +989,12 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (entered_by) REFERENCES participant(id)",
-    "FOREIGN KEY (base_tx_id) REFERENCES budget_tx(id)",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
     "FOREIGN KEY (replaces) REFERENCES budget_tx(id)",
-    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (base_tx_id) REFERENCES budget_tx(id)",
     "FOREIGN KEY (category_id) REFERENCES category(id)",
+    "FOREIGN KEY (confirmed_by) REFERENCES participant(id)",
+    "FOREIGN KEY (entered_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
     "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
@@ -1192,8 +1192,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (participant_id) REFERENCES participant(id)",
-    "FOREIGN KEY (payment_tx_id) REFERENCES budget_tx(id)"
+    "FOREIGN KEY (payment_tx_id) REFERENCES budget_tx(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id)"
    ],
    "primary_key": [
     "id"
@@ -1284,6 +1284,11 @@
      "not_null": true,
      "type": "timestamp with time zone"
     },
+    "gcal_calendar_id": {
+     "default": null,
+     "not_null": false,
+     "type": "text"
+    },
     "gcal_event_id": {
      "default": null,
      "not_null": false,
@@ -1331,9 +1336,9 @@
     }
    },
    "foreign_keys": [
+    "FOREIGN KEY (created_by) REFERENCES participant(id)",
     "FOREIGN KEY (project_id) REFERENCES project(id)",
-    "FOREIGN KEY (discipline_id) REFERENCES discipline(id)",
-    "FOREIGN KEY (created_by) REFERENCES participant(id)"
+    "FOREIGN KEY (discipline_id) REFERENCES discipline(id)"
    ],
    "primary_key": [
     "id"
@@ -1342,8 +1347,8 @@
   },
   "feedback": {
    "check": [
-    "CHECK ((kind = ANY (ARRAY['bug'::text, 'wish'::text, 'wish-fl'::text, 'question'::text, 'praise'::text])))",
-    "CHECK ((status = ANY (ARRAY['new'::text, 'seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))"
+    "CHECK ((status = ANY (ARRAY['new'::text, 'seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))",
+    "CHECK ((kind = ANY (ARRAY['bug'::text, 'wish'::text, 'wish-fl'::text, 'question'::text, 'praise'::text])))"
    ],
    "columns": {
     "context": {
@@ -1402,8 +1407,8 @@
   },
   "feedback_answer": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))",
-    "CHECK ((source = ANY (ARRAY['agent'::text, 'human'::text, 'server'::text])))"
+    "CHECK ((source = ANY (ARRAY['agent'::text, 'human'::text, 'server'::text])))",
+    "CHECK ((status = ANY (ARRAY['seen'::text, 'planned'::text, 'done'::text, 'rejected'::text])))"
    ],
    "columns": {
     "commit_sha": {
@@ -1568,8 +1573,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (folder_id) REFERENCES folder(id) ON DELETE CASCADE",
-    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE"
+    "FOREIGN KEY (file_id) REFERENCES file_object(id) ON DELETE CASCADE",
+    "FOREIGN KEY (folder_id) REFERENCES folder(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "file_id",
@@ -1579,10 +1584,10 @@
   },
   "file_object": {
    "check": [
-    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text, 'feedback'::text])))",
+    "CHECK ((uploaded_via = ANY (ARRAY['human_drive'::text, 'human_telegram'::text, 'bot'::text, 'webapp'::text, 'agent'::text])))",
     "CHECK (((kind IS NULL) OR (kind = ANY (ARRAY['text'::text, 'image'::text, 'audio'::text, 'folder'::text]))))",
-    "CHECK ((storage = ANY (ARRAY['garage'::text, 'drive'::text])))",
-    "CHECK ((uploaded_via = ANY (ARRAY['human_drive'::text, 'human_telegram'::text, 'bot'::text, 'webapp'::text, 'agent'::text])))"
+    "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text, 'feedback'::text])))",
+    "CHECK ((storage = ANY (ARRAY['garage'::text, 'drive'::text])))"
    ],
    "columns": {
     "bucket": {
@@ -1856,9 +1861,9 @@
   },
   "folder": {
    "check": [
-    "CHECK ((((scope = 'shared'::text) AND (participant_id IS NULL)) OR ((scope = 'personal'::text) AND (participant_id IS NOT NULL))))",
+    "CHECK (((depth >= 1) AND (depth <= 5)))",
     "CHECK ((scope = ANY (ARRAY['personal'::text, 'shared'::text])))",
-    "CHECK (((depth >= 1) AND (depth <= 5)))"
+    "CHECK ((((scope = 'shared'::text) AND (participant_id IS NULL)) OR ((scope = 'personal'::text) AND (participant_id IS NOT NULL))))"
    ],
    "columns": {
     "created_at": {
@@ -1918,10 +1923,10 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (parent_id) REFERENCES folder(id) ON DELETE CASCADE",
-    "FOREIGN KEY (created_by) REFERENCES participant(id)",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
     "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE SET NULL",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (parent_id) REFERENCES folder(id) ON DELETE CASCADE",
+    "FOREIGN KEY (created_by) REFERENCES participant(id)"
    ],
    "primary_key": [
     "id"
@@ -2399,8 +2404,8 @@
   },
   "llm_usage": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['ok'::text, 'error'::text, 'stopped'::text])))",
-    "CHECK ((price_status = ANY (ARRAY['known'::text, 'no_price'::text])))"
+    "CHECK ((price_status = ANY (ARRAY['known'::text, 'no_price'::text])))",
+    "CHECK ((status = ANY (ARRAY['ok'::text, 'error'::text, 'stopped'::text])))"
    ],
    "columns": {
     "cost_rub": {
@@ -2559,8 +2564,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (project_id) REFERENCES project(id)",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (project_id) REFERENCES project(id)"
    ],
    "primary_key": [
     "id"
@@ -2685,14 +2690,14 @@
   },
   "participant": {
    "check": [
-    "CHECK (((person_key IS NULL) OR (person_key ~ '^[a-zа-я0-9]+(-[a-zа-я0-9]+)*$'::text)))",
     "CHECK ((write_gender = ANY (ARRAY['m'::text, 'f'::text])))",
     "CHECK (((travel_minutes >= 0) AND (travel_minutes <= 240)))",
-    "CHECK (((birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2020-12-31'::date))))",
-    "CHECK (((phone IS NULL) OR (phone ~ '^\\+?[0-9]{10,15}$'::text)))",
+    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'blocked'::text, 'archived'::text])))",
     "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'troupe'::text, 'master'::text])))",
+    "CHECK (((phone IS NULL) OR (phone ~ '^\\+?[0-9]{10,15}$'::text)))",
     "CHECK (((dues_tariff IS NULL) OR (dues_tariff >= (0)::numeric)))",
-    "CHECK ((status = ANY (ARRAY['pending'::text, 'active'::text, 'blocked'::text, 'archived'::text])))"
+    "CHECK (((person_key IS NULL) OR (person_key ~ '^[a-zа-я0-9]+(-[a-zа-я0-9]+)*$'::text)))",
+    "CHECK (((birth_date IS NULL) OR ((birth_date >= '1900-01-01'::date) AND (birth_date <= '2020-12-31'::date))))"
    ],
    "columns": {
     "activated_at": {
@@ -2874,9 +2879,9 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (granted_by) REFERENCES participant(id)",
     "FOREIGN KEY (capability) REFERENCES rbac_capability(code) ON DELETE CASCADE",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (granted_by) REFERENCES participant(id)"
    ],
    "primary_key": [
     "participant_id",
@@ -2906,8 +2911,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (discipline_id) REFERENCES discipline(id) ON DELETE CASCADE",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (discipline_id) REFERENCES discipline(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "participant_id",
@@ -2958,8 +2963,8 @@
    },
    "foreign_keys": [
     "FOREIGN KEY (revoked_by) REFERENCES participant(id)",
-    "FOREIGN KEY (granted_by) REFERENCES participant(id)",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (granted_by) REFERENCES participant(id)"
    ],
    "primary_key": [
     "participant_id",
@@ -3010,8 +3015,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE",
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
+    "FOREIGN KEY (project_id) REFERENCES project(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "id"
@@ -3025,8 +3030,8 @@
   },
   "poll": {
    "check": [
-    "CHECK ((title <> ''::text))",
-    "CHECK ((status = ANY (ARRAY['draft'::text, 'running'::text, 'closed'::text])))"
+    "CHECK ((status = ANY (ARRAY['draft'::text, 'running'::text, 'closed'::text])))",
+    "CHECK ((title <> ''::text))"
    ],
    "columns": {
     "anonymous": {
@@ -3144,9 +3149,9 @@
   },
   "poll_audience": {
    "check": [
+    "CHECK ((((kind = 'role'::text) AND (role IS NOT NULL) AND (project_id IS NULL)) OR ((kind = 'project'::text) AND (project_id IS NOT NULL) AND (role IS NULL)) OR ((kind = 'all_active'::text) AND (role IS NULL) AND (project_id IS NULL))))",
     "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))",
-    "CHECK ((kind = ANY (ARRAY['all_active'::text, 'role'::text, 'project'::text])))",
-    "CHECK ((((kind = 'role'::text) AND (role IS NOT NULL) AND (project_id IS NULL)) OR ((kind = 'project'::text) AND (project_id IS NOT NULL) AND (role IS NULL)) OR ((kind = 'all_active'::text) AND (role IS NULL) AND (project_id IS NULL))))"
+    "CHECK ((kind = ANY (ARRAY['all_active'::text, 'role'::text, 'project'::text])))"
    ],
    "columns": {
     "id": {
@@ -3225,11 +3230,11 @@
    "unique": [
     [
      "question_id",
-     "position"
+     "code"
     ],
     [
      "question_id",
-     "code"
+     "position"
     ]
    ]
   },
@@ -3255,8 +3260,8 @@
     }
    },
    "foreign_keys": [
-    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE",
-    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE"
+    "FOREIGN KEY (poll_id) REFERENCES poll(id) ON DELETE CASCADE",
+    "FOREIGN KEY (participant_id) REFERENCES participant(id) ON DELETE CASCADE"
    ],
    "primary_key": [
     "poll_id",
@@ -3266,9 +3271,9 @@
   },
   "poll_question": {
    "check": [
-    "CHECK ((\"position\" > 0))",
-    "CHECK (((kind = ANY (ARRAY['single'::text, 'multi'::text])) OR (free_text = false)))",
     "CHECK (((max_choices IS NULL) OR (max_choices > 0)))",
+    "CHECK (((kind = ANY (ARRAY['single'::text, 'multi'::text])) OR (free_text = false)))",
+    "CHECK ((\"position\" > 0))",
     "CHECK ((text <> ''::text))",
     "CHECK ((kind = ANY (ARRAY['single'::text, 'multi'::text, 'yesno'::text, 'number'::text, 'text'::text])))"
    ],
@@ -3394,8 +3399,8 @@
   },
   "poll_viewer": {
    "check": [
-    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))",
-    "CHECK (((participant_id IS NULL) <> (role IS NULL)))"
+    "CHECK (((participant_id IS NULL) <> (role IS NULL)))",
+    "CHECK ((role = ANY (ARRAY['admin'::text, 'org'::text, 'master'::text, 'troupe'::text])))"
    ],
    "columns": {
     "participant_id": {
@@ -3729,8 +3734,8 @@
   },
   "tag": {
    "check": [
-    "CHECK ((status = ANY (ARRAY['approved'::text, 'draft'::text, 'rejected'::text])))",
-    "CHECK ((kind = ANY (ARRAY['topic'::text, 'project'::text, 'role'::text])))"
+    "CHECK ((kind = ANY (ARRAY['topic'::text, 'project'::text, 'role'::text])))",
+    "CHECK ((status = ANY (ARRAY['approved'::text, 'draft'::text, 'rejected'::text])))"
    ],
    "columns": {
     "approved_at": {
