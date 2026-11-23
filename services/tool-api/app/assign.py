@@ -235,11 +235,15 @@ def parse_assignment(text: str, today: date | None = None) -> Assignment:
     return result
 
 
-def describe(assignment: Assignment, weekday_names: list[str]) -> str:
-    """Короткое описание для карточки подтверждения."""
-    kind_titles = {"rehearsal": "Репетиция", "show": "Показ", "training": "Тренинг",
-                   "rental": "Аренда", "meeting": "Встреча"}
-    parts = [kind_titles.get(assignment.kind or "", "Событие")]
+def describe(assignment: Assignment, weekday_names: list[str],
+             kind_titles: dict[str, str] | None = None) -> str:
+    """Короткое описание для карточки подтверждения.
+
+    Названия типов приходят параметром: словарь живёт в `calendar_event_type`
+    (docs/development/190 §7.4), второй копии в коде нет. Без словаря остаётся
+    нейтральное «Событие» — это честнее выдуманного названия.
+    """
+    parts = [(kind_titles or {}).get(assignment.kind or "", "Событие")]
     if assignment.weekday is not None:
         parts.append(weekday_names[assignment.weekday])
     if assignment.hour is not None:

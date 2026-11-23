@@ -16,6 +16,7 @@ from app.pages.admin_agent import AGENT_PAGE
 from app.pages.admin_archive import ARCHIVE_PAGE
 from app.pages.admin_audit import AUDIT_PAGE
 from app.pages.admin_dues import DUES_ADMIN_PAGE
+from app.pages.admin_event_types import EVENT_TYPES_PAGE
 from app.pages.admin_feedback import FEEDBACK_QUEUE_PAGE
 from app.pages.admin_invites import INVITES_PAGE
 from app.pages.admin_notifications import NOTIFICATION_DEFAULTS_PAGE
@@ -37,4 +38,6 @@ __all__ = [
     "POLLS_PAGE",
     "PROJECTS_PAGE",
     "PROJECT_CARD_PAGE",
+    # E5 (190 §6): настройка типов и цветов событий.
+    "EVENT_TYPES_PAGE",
 ]

@@ -51,8 +51,18 @@ def test_без_времени_отмечает_пробел():
 
 def test_описание_для_карточки():
     a = parse_assignment("назначь репетицию с Витей в четверг в 20:00")
-    text = describe(a, WEEKDAYS)
+    text = describe(a, WEEKDAYS, {"rehearsal": "Репетиция"})
     assert "Репетиция" in text and "четверг" in text and "20:00" in text
+
+
+def test_описание_без_словаря_типов_не_выдумывает_название():
+    """Словарь типов один — в `calendar_event_type` (docs/development/190 §7.4).
+
+    Функция получает названия параметром; без него остаётся нейтральное «Событие»,
+    а не копия словаря в коде.
+    """
+    a = parse_assignment("назначь репетицию с Витей в четверг в 20:00")
+    assert describe(a, WEEKDAYS).startswith("Событие")
 
 
 def test_интервал_времени_через_дефис():

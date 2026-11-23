@@ -70,6 +70,8 @@ UI_KIT_PAGE = _kit.UI_KIT_PAGE                  # справочник комп�
 NOTES_PAGE = _notes.NOTES_PAGE                  # заметки: личные и общие (FR-F7)
 PROJECTS_PAGE = _admin.PROJECTS_PAGE            # проекты: список (E6-2)
 PROJECT_CARD_PAGE = _admin.PROJECT_CARD_PAGE    # карточка проекта (E6-2)
+EVENT_CARD_PAGE = _misc.EVENT_CARD_PAGE         # карточка события календаря (E5)
+EVENTS_RECONCILE_PAGE = _misc.EVENTS_RECONCILE_PAGE   # сверка календаря (E5)
 
 PEOPLE_PAGE = _admin.PEOPLE_PAGE
 RIGHTS_PAGE = _admin.RIGHTS_PAGE
@@ -80,6 +82,7 @@ FEEDBACK_QUEUE_PAGE = _admin.FEEDBACK_QUEUE_PAGE
 AGENT_PAGE = _admin.AGENT_PAGE                  # разбор агентных сессий (A-5)
 DUES_ADMIN_PAGE = _admin.DUES_ADMIN_PAGE        # взносы: тариф и начисление (Д6, Д8)
 NOTIFICATION_DEFAULTS_PAGE = _admin.NOTIFICATION_DEFAULTS_PAGE   # общие уведомления (FR-G17)
+EVENT_TYPES_PAGE = _admin.EVENT_TYPES_PAGE      # типы и цвета событий (E5)
 
 # --- старые имена, которые ещё читают маршруты, стенд и тесты ---------------
 # Каждое имя — ровно тот экран, который заменяет прежний (docs/development/86 §3).

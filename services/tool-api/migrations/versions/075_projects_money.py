@@ -1,7 +1,7 @@
 """db/init/075_projects_money.sql
 
 Revision ID: 075_projects_money
-Revises: 073_files_two_locations
+Revises: 074_calendar_event_types
 Create Date: 2026-11-05
 
 Обоснование: единственный источник схемы — db/init/*.sql (docs/reports/132).
@@ -13,7 +13,7 @@ from __future__ import annotations
 from alembic import op
 
 revision = "075_projects_money"
-down_revision = "073_files_two_locations"
+down_revision = "074_calendar_event_types"
 branch_labels = None
 depends_on = None
 

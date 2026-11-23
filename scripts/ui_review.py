@@ -115,6 +115,11 @@ SCREEN_LABELS: dict[str, tuple[int, str, str]] = {
     # E8-D4: свои прохождения и экран вопроса (docs/development/164 §12.1).
     "/webapp/polls/mine": (35, "polls-mine", "Мои опросы"),
     "/webapp/polls/answer": (36, "polls-answer", "Вопрос опроса"),
+    # E5: карточка события, сверка календаря, типы и цвета (docs/development/190).
+    # Номера 37–38 заняло E6-2 (проекты), поэтому E5 идёт с 39.
+    "/webapp/event": (39, "event", "Карточка события"),
+    "/webapp/events/reconcile": (40, "events-reconcile", "Сверка календаря"),
+    "/webapp/admin/t/event-types": (41, "admin-t-event-types", "Типы и цвета"),
 }
 
 # Редиректы: старый адрес → новый, критерий А10 «301 и цель открывается».

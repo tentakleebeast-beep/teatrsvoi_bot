@@ -74,7 +74,7 @@
 | Время в пути | `participant.travel_minutes` | свойство человека, не события |
 | Роли и псевдонимы | `person_alias` | в календаре нет людей |
 | Строгость поиска | `app/window_policy.py` | правило алгоритма, а не данные |
-| Палитра | `config/calendar-palette.yaml` | отображение, а не смысл |
+| Палитра | `calendar_event_type` (БД), правится на `/webapp/admin/t/event-types` | цвет типа — настройка, а не смысл события; файл `config/calendar-palette.yaml` с 23.11.2026 остался историческим источником и входом `scripts/calendar_fill_draft.py` |
 | Маска названий | `config/calendar-rules.yaml` | соглашение, живёт рядом с парсером |
 | Тихие часы | `.env` / `notification_pref` | настройки эксплуатации |
 

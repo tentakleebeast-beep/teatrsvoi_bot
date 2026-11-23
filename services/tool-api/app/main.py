@@ -33,6 +33,7 @@ from .api import (
     route,
     schedule,
     webapp_api,
+    webapp_events,
 )
 from .errors import new_request_id, problem_response, request_id_of, valid_request_id
 from .pages.routes import build_router as build_webapp_routes
@@ -283,6 +284,7 @@ app.include_router(quota.router)
 app.include_router(polls.router)
 app.include_router(webapp_api.router)
 app.include_router(projects.router)
+app.include_router(webapp_events.router)
 
 
 # --- прежний вход для тестов и скриптов ---------------------------------------

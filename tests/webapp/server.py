@@ -23,7 +23,7 @@ import struct
 import sys
 from urllib.parse import quote
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Query, Request
 from fastapi.responses import HTMLResponse, JSONResponse, PlainTextResponse, Response
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -87,6 +87,11 @@ PAGE_ROUTES = {
     # E6-2: проекты — список и карточка (docs/development/196 §6).
     "/webapp/projects": pages.PROJECTS_PAGE,
     "/webapp/project": pages.PROJECT_CARD_PAGE,
+    # E5 (docs/development/190 §3, §5, §6): карточка события, сверка календаря,
+    # настройка типов и цветов.
+    "/webapp/event": pages.EVENT_CARD_PAGE,
+    "/webapp/events/reconcile": pages.EVENTS_RECONCILE_PAGE,
+    "/webapp/admin/t/event-types": pages.EVENT_TYPES_PAGE,
 }
 
 DAYS = [
@@ -2558,3 +2563,272 @@ def polls_reset_stand():
 def dump_state() -> str:
     """Отладочный снимок стенда — используется в отчётах тестов."""
     return json.dumps({"pages": sorted(PAGE_ROUTES), "token": VALID_TOKEN}, ensure_ascii=False)
+
+
+# --- E5: карточка события, сверка календаря, типы и цвета (190 §3–§6) ---------
+
+#: Роли без права `calendar.write` (миграция 008: право есть у admin и org).
+NO_CALENDAR_WRITE_ROLES = {"participant", "troupe", "master"}
+
+#: Роли без `schedule.read.all`: участник календарь не читает (стенд отвечает 403,
+#: как tool-api), поэтому экран сверки показывает фразу, а не кнопку.
+NO_SCHEDULE_READ_ROLES = {"participant"}
+
+EVENT_TYPES = [
+    {"code": "rental", "letter": "А", "title": "Аренда", "color_id": 10,
+     "sort_order": 10, "is_active": True},
+    {"code": "show", "letter": "С", "title": "Спектакль", "color_id": 11,
+     "sort_order": 20, "is_active": True},
+    {"code": "rehearsal", "letter": "Р", "title": "Репетиция", "color_id": 9,
+     "sort_order": 30, "is_active": True},
+    {"code": "training", "letter": "Т", "title": "Тренинг", "color_id": 5,
+     "sort_order": 40, "is_active": True},
+    {"code": "project", "letter": "П", "title": "Проект", "color_id": None,
+     "sort_order": 50, "is_active": False},
+    {"code": "meeting", "letter": None, "title": "Встреча", "color_id": 8,
+     "sort_order": 90, "is_active": False},
+    {"code": "other", "letter": None, "title": "Другое", "color_id": 8,
+     "sort_order": 91, "is_active": False},
+]
+
+EVENT_PALETTE = [
+    {"color_id": 1, "name": "Лаванда"}, {"color_id": 2, "name": "Шалфей"},
+    {"color_id": 3, "name": "Виноград"}, {"color_id": 4, "name": "Фламинго"},
+    {"color_id": 5, "name": "Банан"}, {"color_id": 6, "name": "Мандарин"},
+    {"color_id": 7, "name": "Павлин"}, {"color_id": 8, "name": "Графит"},
+    {"color_id": 9, "name": "Голубика"}, {"color_id": 10, "name": "Базилик"},
+    {"color_id": 11, "name": "Помидор"},
+]
+
+
+def _event_card(calendar: str, event_id: str) -> dict:
+    """Ответ карточки на стенде: сценарий выбирается id события.
+
+    `human-1` — людское событие без метки и пустых подписей, `bot-1` — событие бота
+    создателя, `foreign-1` — чужое, `gone-1` — метка без строки, `cancelled-1` —
+    отменённое, `allday-1` — на весь день (времени нет).
+    """
+    base = {"calendar": calendar, "event_id": event_id, "plan_id": None,
+            "letter": None, "kind": None, "kind_title": "Без типа",
+            "title": "Запись в Google", "title_raw": "Запись в Google",
+            "color_id": None, "start": "2026-11-24T19:00:00+04:00",
+            "end": "2026-11-24T21:30:00+04:00", "all_day": False,
+            "date": "2026-11-24", "weekday": "вторник",
+            "time_from": "19:00", "time_to": "21:30",
+            "location": None, "creator": None, "description": None,
+            "state": "draft" if calendar == "draft" else "live",
+            "editable": False, "not_editable_reason": "human_event"}
+    if event_id == "bot-1":
+        base.update({"plan_id": 412, "letter": "С", "kind": "show",
+                     "kind_title": "Спектакль", "title": "Жизнь насекомых",
+                     "title_raw": "[С] Жизнь насекомых", "color_id": 11,
+                     "location": "Сцена", "creator": {"id": 7, "name": "Мария"},
+                     "description": "Сбор за час до начала",
+                     "editable": True, "not_editable_reason": None})
+    elif event_id == "foreign-1":
+        base.update({"plan_id": 413, "letter": "Р", "kind": "rehearsal",
+                     "kind_title": "Репетиция", "title": "Чёрная пурга",
+                     "title_raw": "[Р] Чёрная пурга", "color_id": 9,
+                     "creator": {"id": 9, "name": "Пётр"},
+                     "not_editable_reason": "not_your_event"})
+    elif event_id == "gone-1":
+        base.update({"plan_id": 99, "letter": "С", "kind": "show",
+                     "kind_title": "Спектакль", "not_editable_reason": "plan_missing"})
+    elif event_id == "cancelled-1":
+        base.update({"plan_id": 414, "state": "cancelled",
+                     "not_editable_reason": "cancelled"})
+    elif event_id == "allday-1":
+        base.update({"all_day": True, "time_from": None, "time_to": None,
+                     "start": "2026-11-25T00:00:00+04:00",
+                     "end": "2026-11-26T00:00:00+04:00", "date": "2026-11-25"})
+    if calendar == "read":
+        base["editable"] = False
+        base["not_editable_reason"] = (None if event_id == "cancelled-1"
+                                       else "live_calendar")
+    return base
+
+
+@app.get("/webapp/events/card")
+def webapp_event_card_stand(request: Request, calendar: str = "read",
+                            event_id: str = ""):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() == "participant":
+        return JSONResponse({"detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
+    if event_id == "missing-1":
+        return JSONResponse({"code": "event_not_found", "detail": "События нет."},
+                            status_code=404)
+    return JSONResponse({"ok": True, "event": _event_card(calendar, event_id or "human-1")})
+
+
+@app.get("/webapp/events/list")
+def webapp_events_list_stand(request: Request, calendar: str = "read",
+                             limit: int = 100, page_token: str = "",
+                             from_: str = Query("", alias="from"), to: str = ""):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_SCHEDULE_READ_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
+    page = (request.query_params.get("page_token") or "").strip()
+    if page:
+        return JSONResponse({"ok": True, "calendar": calendar,
+                             "from": "2026-11-01", "to": "2026-11-30",
+                             "count": 1, "total_scanned": 3,
+                             "next_page_token": None,
+                             "items": [{"event_id": "ev-3", "title": "Тренинг утра",
+                                        "title_raw": "[Т] Тренинг утра", "letter": "Т",
+                                        "kind": "training", "color_id": 5,
+                                        "start": "2026-11-27T10:00:00+04:00",
+                                        "end": "2026-11-27T12:00:00+04:00",
+                                        "all_day": False, "location": None,
+                                        "status": "confirmed", "has_plan": False,
+                                        "plan_id": None}]})
+    return JSONResponse({"ok": True, "calendar": calendar,
+                         "from": "2026-11-01", "to": "2026-11-30",
+                         "count": 2, "total_scanned": 2,
+                         "next_page_token": "page-2",
+                         "items": [
+                             {"event_id": "human-1", "title": "Запись в Google",
+                              "title_raw": "Запись в Google", "letter": None,
+                              "kind": None, "color_id": None,
+                              "start": "2026-11-24T19:00:00+04:00",
+                              "end": "2026-11-24T21:30:00+04:00", "all_day": False,
+                              "location": None, "status": "confirmed",
+                              "has_plan": False, "plan_id": None},
+                             {"event_id": "bot-1", "title": "Жизнь насекомых",
+                              "title_raw": "[С] Жизнь насекомых", "letter": "С",
+                              "kind": "show", "color_id": 11,
+                              "start": "2026-11-25T19:00:00+04:00",
+                              "end": "2026-11-25T21:00:00+04:00", "all_day": False,
+                              "location": "Сцена", "status": "confirmed",
+                              "has_plan": True, "plan_id": 412}]})
+
+
+#: Журнал сохранений настройки типов: по нему видно, что диалог отправил `apply`,
+#: а «Отмена» не отправила ничего (190 §6.4).
+EVENT_TYPES_CALLS: list[dict] = []
+
+
+@app.get("/webapp/events/types")
+def webapp_event_types_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_CALENDAR_WRITE_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Типы и цвета настраивает организатор."},
+                            status_code=403)
+    mode = (request.headers.get("x-svoi-google-mode") or "").strip().lower()
+    return JSONResponse({"ok": True, "can_edit": True,
+                         "mode": "target" if mode == "target" else "transitional",
+                         "palette": EVENT_PALETTE, "types": EVENT_TYPES})
+
+
+@app.post("/webapp/events/types")
+async def webapp_event_types_save_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_CALENDAR_WRITE_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Типы и цвета настраивает организатор."},
+                            status_code=403)
+    body = await request.json()
+    EVENT_TYPES_CALLS.append(body)
+    apply = body.get("apply")
+    mode = (request.headers.get("x-svoi-google-mode") or "").strip().lower()
+    if mode == "target" and apply == "all":
+        # I-7 / AC-15: в целевом режиме боевой календарь не пишется, отказ — до
+        # сохранения настройки, поэтому стенд отвечает 409 без записи.
+        return JSONResponse({"code": "recolor_target_forbidden",
+                             "detail": "перекраска в боевом календаре не включена"},
+                            status_code=409)
+    if apply == "all":
+        return JSONResponse({"ok": True, "saved": True, "recolored": 3, "total": 4,
+                             "failed": [{"plan_id": 414, "gcal_event_id": "ev-4",
+                                         "error": "not_found"}], "failed_more": 0})
+    return JSONResponse({"ok": True, "saved": True, "recolored": 0, "total": 0,
+                         "failed": [], "failed_more": 0})
+
+
+@app.get("/stand/event-types/calls")
+def stand_event_types_calls(reset: int = 0) -> dict:
+    calls = list(EVENT_TYPES_CALLS)
+    if reset:
+        EVENT_TYPES_CALLS.clear()
+    return {"count": len(calls), "last": calls[-1] if calls else None}
+
+
+#: Журнал сверки календаря: тело `POST /tools/google/refresh` и число нажатий.
+REFRESH_CALLS: list[dict] = []
+
+
+@app.get("/tools/google/freshness")
+def google_freshness_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_SCHEDULE_READ_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
+    stale = (request.headers.get("x-svoi-fresh") or "").strip().lower() == "stale"
+    error = (request.headers.get("x-svoi-fresh") or "").strip().lower() == "error"
+    entry = {"key": "calendar.read",
+             "as_of": None if error else "2026-11-23T17:20:00+00:00",
+             "last_edit_time": "2026-11-23T16:40:00+00:00",
+             "stale": stale, "error": "calendar_unavailable" if error else None}
+    return JSONResponse({"ok": True, "sources": [entry], "stale": stale or error})
+
+
+@app.post("/tools/google/refresh")
+async def google_refresh_stand(request: Request):
+    denied = _guard(request)
+    if denied is not None:
+        return denied
+    if (request.headers.get(ROLE_HEADER) or "").strip().lower() in NO_SCHEDULE_READ_ROLES:
+        return JSONResponse({"code": "capability_required",
+                             "detail": "Календарь смотрит организатор и педагог."},
+                            status_code=403)
+    body = await request.json()
+    REFRESH_CALLS.append(body)
+    failed = (request.headers.get("x-svoi-fresh") or "").strip().lower() == "error"
+    block = {"calendar": "read", "window": body.get("window") or {},
+             "as_of": None if failed else "2026-11-23T17:20:00+00:00",
+             "stale": True, "error": "calendar_unavailable" if failed else None,
+             "scanned": 0 if failed else 5,
+             "changed_in_google": [], "moved_to_live": [], "color_mismatch": [],
+             "label_mismatch": [],
+             "orphan_marker": [], "untyped": {"total": 0, "human": 0},
+             "counts": {}}
+    if not failed:
+        block["changed_in_google"] = [
+            {"plan_id": 412, "gcal_event_id": "ev-1", "start_google": "19:00",
+             "start_db": "20:00"}]
+        block["moved_to_live"] = [
+            {"plan_id": 415, "gcal_event_id": "ev-9", "draft_event_id": "ev-15"}]
+        block["color_mismatch"] = [
+            {"plan_id": 416, "kind": "show", "color_id": 8, "expected_color_id": 11}]
+        block["label_mismatch"] = [
+            {"plan_id": 417, "letter": "Р", "expected_letter": "С", "kind": "show"}]
+        block["orphan_marker"] = [{"plan_id": 99, "gcal_event_id": "ev-7"}]
+        block["untyped"] = {"total": 4, "human": 3}
+        block["counts"] = {"changed_in_google": 1, "moved_to_live": 1,
+                           "color_mismatch": 1, "label_mismatch": 1,
+                           "untyped": 4, "orphan_marker": 1}
+    return JSONResponse({"ok": True, "dry_run": body.get("dry_run"),
+                         "window": body.get("window") or {},
+                         "sources": {"calendar.read": block}})
+
+
+@app.get("/stand/refresh/calls")
+def stand_refresh_calls(reset: int = 0) -> dict:
+    calls = list(REFRESH_CALLS)
+    if reset:
+        REFRESH_CALLS.clear()
+    return {"count": len(calls), "last": calls[-1] if calls else None}

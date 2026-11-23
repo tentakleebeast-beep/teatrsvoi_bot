@@ -21,6 +21,25 @@ END = datetime(2026, 12, 19, 21, 0, tzinfo=UTC)
 class FakeConn:
     """Соединение без БД: планы событий, настройки и журнал запросов."""
 
+    #: Словарь типов из засева 074: сверка берёт из него ожидаемые букву и цвет
+    #: (docs/development/190 §7.2), литеральных словарей в коде больше нет.
+    TYPES = (
+        {"code": "rental", "letter": "А", "title": "Аренда", "color_id": 10,
+         "sort_order": 10, "is_active": True},
+        {"code": "show", "letter": "С", "title": "Спектакль", "color_id": 11,
+         "sort_order": 20, "is_active": True},
+        {"code": "rehearsal", "letter": "Р", "title": "Репетиция", "color_id": 9,
+         "sort_order": 30, "is_active": True},
+        {"code": "training", "letter": "Т", "title": "Тренинг", "color_id": 5,
+         "sort_order": 40, "is_active": True},
+        {"code": "project", "letter": "П", "title": "Проект", "color_id": None,
+         "sort_order": 50, "is_active": False},
+        {"code": "meeting", "letter": None, "title": "Встреча", "color_id": 8,
+         "sort_order": 90, "is_active": False},
+        {"code": "other", "letter": None, "title": "Другое", "color_id": 8,
+         "sort_order": 91, "is_active": False},
+    )
+
     def __init__(self, plans: list[dict] | None = None,
                  settings: dict[str, str] | None = None) -> None:
         self.plans = plans or []
@@ -34,7 +53,10 @@ class FakeConn:
         return self
 
     def fetchall(self):
-        return self.plans if "from event_plan" in self._sql.lower() else []
+        low = self._sql.lower()
+        if "from calendar_event_type" in low:
+            return [dict(item) for item in self.TYPES]
+        return self.plans if "from event_plan" in low else []
 
     def fetchone(self):
         low = self._sql.lower()

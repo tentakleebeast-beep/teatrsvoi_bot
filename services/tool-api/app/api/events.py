@@ -8,7 +8,7 @@ from datetime import date, datetime, time, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field
 
-from .. import core, google_targets, project_money
+from .. import core, event_types, google_targets, project_money
 from ..assign import parse_assignment
 from ..calendar_blocks import (
     PROP_EVENT_ID,
@@ -40,6 +40,7 @@ class AssignIn(core.ApiIn):
     discipline: str | None = None              # код дисциплины тренинга
     project_id: int | None = None
     venue: str | None = None
+    description: str | None = Field(default=None, max_length=2000)   # поле Google, не база
     persist: bool = False                      # сохранить заявку для подтверждения
 
 
@@ -49,6 +50,19 @@ def _next_date(weekday: int, today: date | None = None) -> date:
     current = today or datetime.now(core.TZ).date()
     delta = (weekday - current.weekday()) % 7
     return current + timedelta(days=delta)
+
+
+def _can_move(plan: dict, who: dict) -> bool:
+    """Можно ли переносить событие: создатель или администратор (FR-D19).
+
+    Одна функция на два ответа — `POST /tools/events/move` и карточку события
+    (190 §3.3): кнопка «Перенести» не может появиться там, где перенос получит 403.
+    Ролевая правка (`t_4d081225`) меняет это правило в одном месте.
+    """
+    caps = who.get("caps") or []
+    roles = who.get("roles") or []
+    is_admin = "*" in caps or "admin" in roles
+    return plan.get("created_by") == who.get("id") or is_admin
 
 
 
@@ -204,9 +218,13 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
     """
     parsed = parse_assignment(body.text) if body.text else None
     kind = body.kind or (parsed.kind if parsed else None)
-    if not kind or kind not in core.KIND_TITLES_RU:
+    # Словарь типов — таблица `calendar_event_type` (190 §7.4): второй копии в коде нет.
+    with core.pool.connection() as conn:
+        kind_titles = event_types.titles(conn)
+    if not kind or kind not in kind_titles:
         return None, [{"code": "no_kind",
                        "text": "Не понял тип события: репетиция, показ, тренинг или аренда?"}], []
+
 
     if body.date:
         try:
@@ -288,8 +306,8 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
 
     default_title = (body.title
                      or (" / ".join(person["name"] for person in people) or None)
-                     or core.KIND_TITLES_RU[kind])
-    card = {"kind": kind, "kind_title": core.KIND_TITLES_RU[kind],
+                     or kind_titles[kind])
+    card = {"kind": kind, "kind_title": kind_titles[kind],
             "title": default_title,
             "date": day.isoformat(),
             "weekday": core.WEEKDAY_TITLES[day.weekday()],
@@ -303,6 +321,7 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
             "staff_required": added_teachers,
             "directors": directors,          # присутствие фиксируется, а не «по желанию»
             "discipline": body.discipline,
+            "description": body.description,
             "staff_note": staff_note,
             "venue_source": venue_info.get("source", "unknown")}
 
@@ -428,7 +447,7 @@ def events_assign(payload: dict,
         from_hour, to_hour = int(card["from_hour"]), int(card["to_hour"])
         # проверки бывшего POST /tools/calendar/event живут здесь: путь записи один,
         # и карточку можно прислать руками — тип и границы проверяются до записи
-        if card.get("kind") not in core.KIND_TITLES_RU:
+        if card.get("kind") not in event_types.titles(conn):
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "unknown_kind")
         if not 0 <= from_hour < to_hour <= 24:
             raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad_time_range")
@@ -495,8 +514,10 @@ def events_assign(payload: dict,
              card.get("venue") or card.get("venue_name"), people,
              who["id"], card.get("discipline"), revenue_amount)).fetchone()
 
-        gcal_id, gcal_calendar_id = _create_draft_event(plan["id"], private, start, end,
-                                                        card)
+        gcal_id, gcal_calendar_id = _create_draft_event(
+            plan["id"], private, start, end, card,
+            letter=event_types.letter_of(conn, card["kind"]),
+            color_id=event_types.color_of(conn, card["kind"]))
         if gcal_id:
             conn.execute("update event_plan set gcal_event_id = %s, gcal_calendar_id = %s "
                          "where id = %s", (gcal_id, gcal_calendar_id, plan["id"]))
@@ -542,24 +563,36 @@ class EventCancelIn(core.ApiIn):
 
 
 def _create_draft_event(event_id: int, private: dict, start: datetime, end: datetime,
-                        card: dict) -> tuple[str | None, str | None]:
+                        card: dict, *, letter: str | None = None,
+                        color_id: int | None = None) -> tuple[str | None, str | None]:
     """Создать событие **только** в черновом календаре.
 
     Пишущий вызов возможен лишь с ключом `calendar.draft` из реестра (186 §2.2):
     боевой календарь в реестре записи отсутствует, поэтому «создать сразу в боевом»
     здесь невозможно даже случайно. Best effort: отказ Google не отменяет строку БД.
+
+    Заголовок — `[X] Название` (метка типа, I-4 документа 190), слово типа в текст
+    не дублируется: «Спектакль - Жизнь насекомых» осталось в прошлом. Цвет берётся
+    из настройки типа, описание — поле Google (базы у него нет, §2).
     """
     private = dict(private)
     private[PROP_EVENT_ID] = str(event_id)
+    summary = f"[{letter}] {card['title']}" if letter else str(card.get("title") or "")
+    body: dict = {
+        "summary": summary,
+        "start": {"dateTime": start.isoformat(), "timeZone": "Europe/Samara"},
+        "end": {"dateTime": end.isoformat(), "timeZone": "Europe/Samara"},
+        "extendedProperties": {"private": private},
+    }
+    if color_id is not None:
+        body["colorId"] = str(color_id)
+    description = (card.get("description") or "").strip()
+    if description:
+        body["description"] = description
     try:
         calendar_id = google_targets.resolve("calendar.draft")
-        created = core._calendar_write().events().insert(calendarId=calendar_id, body={
-            "summary": f"{core.KIND_TITLES_RU.get(card['kind'], 'Событие')} - {card['title']}",
-            "start": {"dateTime": start.isoformat(), "timeZone": "Europe/Samara"},
-            "end": {"dateTime": end.isoformat(), "timeZone": "Europe/Samara"},
-            "colorId": str(core.EVENT_COLORS.get(card["kind"], 8)),
-            "extendedProperties": {"private": private},
-        }).execute()
+        created = core._calendar_write().events().insert(calendarId=calendar_id,
+                                                         body=body).execute()
     except GOOGLE_API_ERRORS as exc:
         core.log.warning("событие не записано в календарь: %s", str(exc)[:150])
         return None, None
@@ -647,10 +680,7 @@ def events_cancel(body: EventCancelIn,
         if plan is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "event_not_found")
 
-        caps = who.get("caps") or []
-        roles = who.get("roles") or []
-        is_admin = "*" in caps or "admin" in roles
-        if plan["created_by"] != who["id"] and not is_admin:
+        if not _can_move(plan, who):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "not_your_event")
 
         if plan["status"] == "cancelled":
@@ -675,7 +705,7 @@ def events_cancel(body: EventCancelIn,
         recipients = set(plan["participant_ids"] or [])
         if plan["created_by"]:
             recipients.add(plan["created_by"])
-        title_ru = core.KIND_TITLES_RU.get(plan["kind"], "Событие")
+        title_ru = event_types.titles(conn).get(plan["kind"], "Событие")
         moment = plan["starts_at"].astimezone(core.TZ)
         body_text = (f"{title_ru} «{plan['title']}» {moment.strftime('%d.%m.%Y %H:%M')} "
                      "отменяется.")
@@ -761,13 +791,13 @@ def events_move(body: EventMoveIn,
         if plan is None:
             raise HTTPException(status.HTTP_404_NOT_FOUND, "event_not_found")
 
-        caps = who.get("caps") or []
-        roles = who.get("roles") or []
-        is_admin = "*" in caps or "admin" in roles
-        if plan["created_by"] != who["id"] and not is_admin:
+        if not _can_move(plan, who):
             raise HTTPException(status.HTTP_403_FORBIDDEN, "not_your_event")
         if plan["status"] == "cancelled":
             raise HTTPException(status.HTTP_409_CONFLICT, "event_cancelled")
+
+        titles = event_types.titles(conn)
+        letter = event_types.letter_of(conn, plan["kind"])
 
         old_start = plan["starts_at"].astimezone(core.TZ)
         old_end = plan["ends_at"].astimezone(core.TZ)
@@ -824,12 +854,14 @@ def events_move(body: EventMoveIn,
             project_money.ensure_period_open(conn, start.strftime("%Y-%m"), who,
                                              "event.move")
 
-    title_ru = core.KIND_TITLES_RU.get(plan["kind"], "Событие")
+    title_ru = titles.get(plan["kind"], "Событие")
     calendar_updated, calendar_error = False, None
     if plan["gcal_event_id"]:
+        # заголовок в Google остаётся в формате «[X] Название» (I-4): метку типа
+        # при переносе не теряем, иначе событие перестанет узнаваться по букве
+        summary = f"[{letter}] {plan['title']}" if letter else plan["title"]
         calendar_updated, calendar_error = _update_calendar_event(
-            plan["gcal_event_id"], start, end,
-            f"{title_ru} - {plan['title']}")
+            plan["gcal_event_id"], start, end, summary)
 
     with core.pool.connection() as conn:
         conn.execute("update event_plan set starts_at = %s, ends_at = %s where id = %s",
@@ -900,12 +932,13 @@ def events_card(event_id: int,
         ids = list(plan["participant_ids"] or [])
         rows = conn.execute("select id, display_name from participant where id = any(%s) "
                             "order by display_name", (ids,)).fetchall() if ids else []
+        kind_title = event_types.titles(conn).get(plan["kind"], "Событие")
 
     start = plan["starts_at"].astimezone(core.TZ)
     end = plan["ends_at"].astimezone(core.TZ)
     return {"ok": True, "event": {
         "event_id": plan["id"], "title": plan["title"], "kind": plan["kind"],
-        "kind_title": core.KIND_TITLES_RU.get(plan["kind"], "Событие"),
+        "kind_title": kind_title,
         "status": plan["status"],
         "date": start.date().isoformat(), "weekday": core.WEEKDAY_TITLES[start.weekday()],
         "from_hour": start.hour,

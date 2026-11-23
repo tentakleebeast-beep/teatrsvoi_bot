@@ -107,7 +107,12 @@
   }
 
   function isWebappApi(url) {
-    return typeof url === "string" && url.indexOf("/webapp/") === 0 && url !== "/webapp/auth";
+    // Токен прикладываем и к `/tools/`: Mini App зовёт чат-контракты напрямую
+    // (`/tools/events/move`, `/tools/google/refresh`). До 23.11.2026 Bearer шёл
+    // только на `/webapp/`, и перенос из карточки события, а также свежесть
+    // календаря получали 401 (карта t_751ba368).
+    return typeof url === "string" && url !== "/webapp/auth"
+      && (url.indexOf("/webapp/") === 0 || url.indexOf("/tools/") === 0);
   }
 
   const nativeFetch = window.fetch.bind(window);

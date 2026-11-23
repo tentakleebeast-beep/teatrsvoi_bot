@@ -303,6 +303,10 @@ SECTIONS: tuple[WebappSection, ...] = (
                   "/webapp/polls", "конструктор, адресаты, сводка", page="POLLS_PAGE"),
     WebappSection("reconcile", ("budget.import",), "Сверка листов",
                   "/webapp/reconcile", "база против таблицы"),
+    # E5: сверка календаря — свой предмет и своё право (190 §5.1). Стоит сразу после
+    # «Сверки листов», но страница у неё отдельная: смешивать бюджет и календарь нельзя.
+    WebappSection("events_reconcile", ("schedule.read.all",), "Сверка календаря",
+                  "/webapp/events/reconcile", "что изменили в Google"),
     # E6: проекты — время, деньги и люди в одной карточке. Право `budget.read`:
     # список и карточку видят только admin и org (V-127, docs/development/196 §5).
     WebappSection("projects", ("budget.read",), "Проекты",
@@ -316,6 +320,10 @@ SECTIONS: tuple[WebappSection, ...] = (
     WebappSection("notifications", ("admin.panel",), "Уведомления",
                   "/webapp/admin/t/notifications", "тихие часы по умолчанию",
                   page="NOTIFICATION_DEFAULTS_PAGE"),
+    # E5: типы и цвета событий — право `calendar.write` (есть у admin и org), 190 §6.1.
+    WebappSection("event_types", ("calendar.write",), "Типы и цвета",
+                  "/webapp/admin/t/event-types", "буквы, цвета, порядок",
+                  page="EVENT_TYPES_PAGE"),
     # Личный раздел на «Ещё»: решение V-039 (в) — файлы видят admin, org и master.
     # Право — `files.access`; у troupe его сняла миграция 062, и он читает отказ словами.
     WebappSection("files", ("files.access",), "Файлы студии",
@@ -383,6 +391,9 @@ SCREEN_CAPS: dict[str, tuple[str, ...]] = {
     # `participant_id` в `/webapp/polls/mine/data` (docs/development/164 §12.1).
     "/webapp/polls/mine": (),
     "/webapp/polls/answer": (),
+    # E5: карточка события — свой экран с параметрами, не строка реестра (190 §3.1);
+    # право то же, что у списка календаря.
+    "/webapp/event": ("schedule.read.all",),
     # E6: карточка проекта — вложенный экран (вход со списка). Запись спрашивает
     # `budget.write` отдельно; здесь достаточно права чтения.
     "/webapp/project": ("budget.read",),

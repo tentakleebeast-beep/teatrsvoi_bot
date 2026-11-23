@@ -34,10 +34,14 @@ MANAGEMENT_URLS = [
     "/webapp/broadcast",
     "/webapp/polls",
     "/webapp/reconcile",
+    # E5 (190 §5.1): сверка календаря — сразу после «Сверки листов», свой предмет.
+    "/webapp/events/reconcile",
     "/webapp/projects",
     "/webapp/services",
     "/webapp/admin/t/agent",
     "/webapp/admin/t/notifications",
+    # E5 (190 §6.1): типы и цвета — после «Уведомлений».
+    "/webapp/admin/t/event-types",
 ]
 
 #: Файлы, где раньше лежали копии списка разделов. Новых копий (словарь с готовыми

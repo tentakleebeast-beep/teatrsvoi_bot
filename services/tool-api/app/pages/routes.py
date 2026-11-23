@@ -146,6 +146,24 @@ def build_router(*, actor: Callable[..., dict], caps_for: Callable[[dict], list[
         """Сверка листов: сначала расхождения, потом применение."""
         return misc.RECONCILE_PAGE
 
+    @router.get("/webapp/events/reconcile", response_class=HTMLResponse)
+    def webapp_events_reconcile_page() -> str:
+        """Сверка календаря: что изменили в Google руками (docs/development/190 §5).
+
+        Отдельный адрес, а не `/webapp/reconcile`: у «Сверки листов» другое право
+        (`budget.import`) и другой предмет — смешивать их нельзя (§5.1).
+        """
+        return misc.EVENTS_RECONCILE_PAGE
+
+    @router.get("/webapp/event", response_class=HTMLResponse)
+    def webapp_event_card_page() -> str:
+        """Карточка события: ключ — календарь и id события Google (190 §3.1).
+
+        Адрес с параметрами (`?calendar=read&event_id=…`), как у `/webapp/file`:
+        страница публична, право `schedule.read.all` проверяет API.
+        """
+        return misc.EVENT_CARD_PAGE
+
     @router.get("/webapp/broadcast", response_class=HTMLResponse)
     def webapp_broadcast_page() -> str:
         """Рассылка: шаблон, текст, число адресатов, подтверждение."""

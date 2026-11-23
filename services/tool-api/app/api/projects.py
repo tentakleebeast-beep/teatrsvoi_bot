@@ -17,7 +17,7 @@ from fastapi import APIRouter, Depends, Query
 from fastapi import status as http_status
 from pydantic import Field
 
-from .. import core, project_money
+from .. import core, event_types, project_money
 from ..api import budget as budget_api
 from ..api import events as events_api
 from ..errors import ApiError
@@ -112,6 +112,9 @@ def projects_data(kind: str = Query(default="all"), status: str = Query(default=
     """
     with core.pool.connection() as conn:
         rows = conn.execute(sql, tuple(params)).fetchall()
+        # E5 (190): подписи типов событий — из настройки `calendar_event_type`,
+        # второго словаря в коде нет (AC-4, I-1).
+        titles = event_types.titles(conn)
 
     items = []
     for row in rows:
@@ -132,7 +135,7 @@ def projects_data(kind: str = Query(default="all"), status: str = Query(default=
                          "time_from": row["next_start"].astimezone(core.TZ).strftime("%H:%M"),
                          "time_to": row["next_start"].astimezone(core.TZ).strftime("%H:%M"),
                          "kind": row["next_kind"],
-                         "kind_title": core.KIND_TITLES_RU.get(row["next_kind"], "Событие")}
+                         "kind_title": titles.get(row["next_kind"], "Событие")}
                         if row["next_start"] else None),
         })
     return {"ok": True, "count": len(items), "items": items}
@@ -187,6 +190,7 @@ def project_data(id: int | None = Query(default=None),
                       unnest(e.participant_ids) as pid
                 where e.project_id = %s and e.status <> 'cancelled'""",
             (id,)).fetchone()["n"]
+        titles = event_types.titles(conn)
 
     plan = _money(plan_row["s"])
     fact = _money(fact_row["total"])
@@ -209,7 +213,7 @@ def project_data(id: int | None = Query(default=None),
                   "unlinked_income": _money(unlinked)},
         "events": {"total": total_events, "items": [
             {"id": e["id"], **_moment(e["starts_at"]), "kind": e["kind"],
-             "kind_title": core.KIND_TITLES_RU.get(e["kind"], "Событие"),
+             "kind_title": titles.get(e["kind"], "Событие"),
              "location": e["location"], "revenue_amount": _money(e["revenue_amount"])}
             for e in events]},
         "people": {"roles": [{"alias": r["alias"], "participant_id": r["participant_id"],

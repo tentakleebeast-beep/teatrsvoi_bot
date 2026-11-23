@@ -33,7 +33,7 @@
 <!-- summary:begin -->
 | Показатель | Значение |
 |---|---:|
-| Строк-действий | 58 |
+| Строк-действий | 59 |
 | Требований в docs/19 | 114 |
 | Из них с действием участника | 65 |
 | Сценариев в docs/20 | 30 |
@@ -41,15 +41,15 @@
 | Интерфейс сейчас | Действий |
 |---|---:|
 | чат | 16 |
-| Mini App | 11 |
+| Mini App | 12 |
 | оба | 15 |
 | нигде | 16 |
 
 | Кто | Действий |
 |---|---:|
 | участник | 18 |
-| организатор | 21 |
-| админ | 20 |
+| организатор | 22 |
+| админ | 21 |
 | владелец | 3 |
 | педагог | 1 |
 <!-- summary:end -->
@@ -122,6 +122,7 @@
 | Настроить общие уведомления студии | админ | Mini App | docs/development/19-functional-requirements.md#L137<br>docs/development/92-navigation-model.md#L176 | P1, готово<br><small>Обещано 92 §2.4; экран /webapp/admin/t/notifications, маршрут /webapp/admin/notifications/settings, право admin.panel (Ш-11)</small> |
 | Создать и отправить опрос: конструктор, адресаты, черновик | админ, организатор | Mini App | docs/development/19-functional-requirements.md#L138<br>docs/development/162-bot-polls.md#L473 | P1, готово<br><small>Экраны /webapp/polls и /webapp/polls/edit, право poll.manage (admin и org, V-088), отправка через очередь notification</small> |
 | Пройти опрос: вопрос, прогресс, «назад», «пропустить», черновик | участник | оба | docs/development/19-functional-requirements.md#L138<br>docs/development/164-miniapp-home-polls.md#L440 | P1, готово<br><small>Чат — кнопки и черновик в БД; Mini App — «Мои опросы» и экран /webapp/polls/answer (docs/164 §12)</small> |
+| Настроить типы и цвета событий: буква, название, цвет, порядок, видимость | организатор, админ | Mini App | docs/development/19-functional-requirements.md#L84 | P1, готово<br><small>Экран /webapp/admin/t/event-types (право calendar.write); чтение и запись — GET/POST /webapp/events/types, перекраска в календарь (docs/development/190 §6)</small> |
 <!-- matrix:end -->
 
 ## Требования без отдельного действия участника

@@ -1170,6 +1170,25 @@
    ],
    "note": "Чат — кнопки и черновик в БД; Mini App — «Мои опросы» и экран /webapp/polls/answer (docs/164 §12)",
    "anchor": "экран «Мои опросы» со строкой-входом на Главной"
+  },
+  {
+   "id": "ACT-059",
+   "action": "Настроить типы и цвета событий: буква, название, цвет, порядок, видимость",
+   "who": [
+    "организатор",
+    "админ"
+   ],
+   "interface": "Mini App",
+   "status": "P1, готово",
+   "requirements": [
+    "FR-D3"
+   ],
+   "scenarios": [],
+   "sources": [
+    "docs/development/19-functional-requirements.md#L84"
+   ],
+   "note": "Экран /webapp/admin/t/event-types (право calendar.write); чтение и запись — GET/POST /webapp/events/types, перекраска в календарь (docs/development/190 §6)",
+   "anchor": "настройка"
   }
  ],
  "requirements": [
@@ -1595,11 +1614,12 @@
    "id": "FR-D3",
    "priority": "P1",
    "status": "готово",
-   "text": "Палитра: цвет события по типу (`config/calendar-palette.yaml`)",
+   "text": "Палитра: цвет события по типу — **настройка** `calendar_event_type` (буква, название, цвет 1–11, порядок; правит организатор на `/webapp/admin/t/event-types`). Файл `config/calendar-palette.yaml` с 23.11.2026 — исторический источник и вход `scripts/calendar_fill_draft.py`; продуктовые модули его не читают",
    "source": "docs/development/19-functional-requirements.md#L84",
    "participant_action": true,
    "actions": [
-    "ACT-031"
+    "ACT-031",
+    "ACT-059"
    ]
   },
   {

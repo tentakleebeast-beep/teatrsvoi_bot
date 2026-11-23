@@ -17,6 +17,8 @@
 
 from __future__ import annotations
 
+from app.pages.events import EVENT_CARD_PAGE
+from app.pages.events_reconcile import EVENTS_RECONCILE_PAGE
 from app.pages.misc_broadcast import BROADCAST_PAGE
 from app.pages.misc_dues import DUES_PAGE
 from app.pages.misc_feedback import FEEDBACK_PAGE
@@ -33,4 +35,7 @@ __all__ = [
     "RECONCILE_PAGE",
     "SLOTS_PAGE",
     "PROFILE_PAGE",
+    # E5 (190 §3, §5): карточка события и сверка календаря.
+    "EVENT_CARD_PAGE",
+    "EVENTS_RECONCILE_PAGE",
 ]
