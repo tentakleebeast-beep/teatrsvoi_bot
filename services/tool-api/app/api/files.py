@@ -452,11 +452,12 @@ def webapp_files_link(body: WebAppLinkIn, who: dict = Depends(core.webapp_actor)
                 folder_id=body.folder_id, drive_path=body.drive_path)
         except files_store.FileRejected:
             raise
+        revived = bool(row.pop("revived", False))
         core.audit(conn, "human", viewer["id"], "file.drive_link", "file_object",
                    str(row["id"]),
                    after={"name": row["name"], "drive_url": row["drive_url"],
                           "is_folder": row["kind"] == "folder",
-                          "folder_id": row["folder_id"]})
+                          "folder_id": row["folder_id"], "revived": revived})
     return {"ok": True, "file": row}
 
 

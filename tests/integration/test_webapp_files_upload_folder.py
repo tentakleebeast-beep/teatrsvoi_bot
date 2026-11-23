@@ -109,6 +109,24 @@ def test_файл_ложится_именно_в_выбранную_папку(c
     assert file_row(file_id)["storage"] == "garage"
 
 
+def test_повтор_тех_же_байтов_отдаёт_описание_из_БД(client, folders) -> None:
+    """AC-12, §6.2: у найденной по `sha256` строки описание не перезаписывается.
+
+    Первая загрузка кладёт подпись «старое», повтор тех же байтов с подписью «новое»
+    возвращает `duplicate: true` и **старую** подпись: ответ `commit` обязан совпадать
+    с БД, иначе он говорит не то, что сохранено.
+    """
+    head = headers(client)
+    first = _upload(client, head, "Афиша.pdf", description="старое")
+    second = _upload(client, head, "Афиша (копия).pdf", description="новое")
+
+    assert second["commit"]["duplicate"] is True
+    assert second["commit"]["id"] == first["commit"]["id"]
+    assert second["commit"]["name"] == "Афиша.pdf"
+    assert second["commit"]["description"] == "старое"
+    assert file_row(second["commit"]["id"])["description"] == "старое"
+
+
 def test_без_folder_id_поведение_прежнее(client, folders) -> None:
     """Без папки файл идёт в `Личное/<вид>` — FR-K11 не изменился."""
     result = _upload(client, headers(client), "Заметки.pdf")
