@@ -132,6 +132,79 @@ def test_list_без_страниц_месяца_даёт_код_1(configured):
     assert schedule_rehearsal.pages(titles, "2026-11") == []
 
 
+def _run_main(monkeypatch, service, argv):
+    """`main()` на подменённом клиенте: обе ветки исполняются, живой лист не читается."""
+    monkeypatch.setattr(core, "_sheets_read", lambda: service)
+    monkeypatch.setattr(sys, "argv", ["fill_test_schedule.py", *argv])
+    return rehearsal.main()
+
+
+def test_main_list_со_страницами_даёт_код_0(configured, monkeypatch, capsys):
+    """Контракт карты: `--list` со страницами исполняет `main()` и возвращает 0.
+
+    Строка называет человека из шапки живого листа — то есть `--list` действительно
+    читает источник, а не «не читает», как врала прежняя подсказка.
+    """
+    service = FakeService(titles=("11.2026 · Даина", "студийцы (копия)"))
+    assert _run_main(monkeypatch, service, ["--list", "--month", "2026-11"]) == 0
+    out = capsys.readouterr().out
+    assert "11.2026 · Даина — человек «Даина Анна», колонка D" in out
+
+
+def test_main_list_без_страниц_даёт_код_1(configured, monkeypatch, capsys):
+    """Ветка «страниц нет» до конца: `main(--list)` возвращает 1 и говорит «нет страниц»."""
+    service = FakeService(titles=("студийцы (копия)",))
+    assert _run_main(monkeypatch, service, ["--list", "--month", "2026-11"]) == 1
+    assert "нет страниц" in capsys.readouterr().out
+
+
+def test_main_list_код_0_даже_если_живой_лист_не_прочитан(configured, monkeypatch, capsys):
+    """Код `--list` отвечает на вопрос «есть ли страницы», а не «нашёлся ли человек»."""
+    service = FakeService(titles=("11.2026 · Даина",))
+    monkeypatch.setattr(core, "SCHEDULE_HUMAN_SPREADSHEET_ID", "")
+    assert _run_main(monkeypatch, service, ["--list", "--month", "2026-11"]) == 0
+    assert "живой лист не прочитан (no_spreadsheet)" in capsys.readouterr().out
+
+
+def test_main_неверный_месяц_даёт_код_2_а_не_traceback(configured, monkeypatch, capsys):
+    """Докстринг обещает 2 на неверный месяц: `--month foo` — отказ, не падение."""
+    service = FakeService(titles=("11.2026 · Даина",))
+    assert _run_main(monkeypatch, service, ["--list", "--month", "foo"]) == 2
+    assert "неверный месяц: bad_month" in capsys.readouterr().err
+
+
+def test_main_без_ключа_google_отказ_а_не_traceback(configured, monkeypatch, capsys):
+    """Нет `secrets/google-sa.json` — код 2 и строка «нет доступа», как у отказа API."""
+    def broken():
+        raise FileNotFoundError("secrets/google-sa.json")
+
+    monkeypatch.setattr(core, "_sheets_read", broken)
+    monkeypatch.setattr(sys, "argv", ["fill_test_schedule.py", "--list", "--month", "2026-11"])
+    assert rehearsal.main() == 2
+    err = capsys.readouterr().err
+    assert "тестовый лист не открыт: нет доступа к Google" in err
+    assert "Traceback" not in err
+
+
+def test_пустые_клетки_месяца_это_не_отсутствие_дней(configured, capsys):
+    """Дни месяца есть, клетки пусты — `no_probes`, а не «в листе нет дней месяца»."""
+    live = [
+        ["Расписание студийцы"],
+        ["№", "Дата", "День недели", "Даина Анна"],
+        ["1", "01.11.2026", "сб", ""],
+        ["2", "02.11.2026", "вс", ""],
+    ]
+    values, reason = schedule_rehearsal.live_sheet_values(FakeService(live=live))
+    assert reason == ""
+    report = schedule_rehearsal.page_report(values, _page())
+    assert report.problems == ["no_probes"]
+    assert schedule_rehearsal.month_days(values, "11.2026"), "дни месяца в листе есть"
+    assert report.counts["empty"] == 2
+
+    rehearsal.print_page(report)
+    assert "в клетках месяца нет разобранных проб" in capsys.readouterr().out
+
+
 def test_флаг_list_существует_и_не_пишет():
     """Регресс Д-1: `--list` разбирается argparse, а с `--apply` отказывает кодом 2."""
     ap = rehearsal.build_parser()

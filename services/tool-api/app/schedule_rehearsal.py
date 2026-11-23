@@ -49,6 +49,7 @@ PROBLEMS: dict[str, str] = {
     "person_ambiguous": "подпись колонки неоднозначна",
     "not_month_page": "не страница месяца",
     "no_cells_in_month": "в листе нет дней этого месяца",
+    "no_probes": "в клетках месяца нет разобранных проб",
 }
 
 
@@ -205,7 +206,9 @@ def page_report(values: list[list], page: Page) -> PageReport:
             counts[probe.status] += 1
     report.counts = counts
     if not report.probes:
-        report.problems.append("no_cells_in_month")
+        # Дни месяца в листе есть, а клетки человека пусты или не разобраны:
+        # это не «нет дней месяца», и говорить так человеку нельзя.
+        report.problems.append("no_probes")
     return report
 
 

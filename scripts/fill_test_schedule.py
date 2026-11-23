@@ -23,9 +23,15 @@
 ставит фиолетовую клетку и объединение — они уже стоят в тестовом файле, а писать мимо
 ключа `schedule.test` нельзя.
 
-Код выхода: 0 — страницы на месте (`--list`) или все пробы разобраны; 1 — нет страниц
-месяца, живой лист не прочитан, человек не найден или месяц без дней; 2 — неверный месяц
-или несовместимые флаги.
+Код выхода:
+
+* 0 — `--list` показал страницы месяца (человек мог не найтись: живой лист не прочитан
+  или подписи нет в шапке — это видно в строке, но код остаётся 0, потому что вопрос
+  команды «есть ли страницы» решён) либо план/запись разобрали все пробы;
+* 1 — нет страниц месяца, живой лист не прочитан в режиме плана, человек не найден
+  или в клетках месяца нечего записывать;
+* 2 — неверный месяц, нет доступа к Google (ключ сервисного аккаунта, права) или
+  несовместимые флаги.
 """
 
 from __future__ import annotations
@@ -45,6 +51,7 @@ if __name__ == "__main__":   # запуск файлом: `.env` читаетс�
 
 from app import core, schedule_rehearsal, schedule_sheet, schedule_test_sheet  # noqa: E402
 from app.errors import ApiError  # noqa: E402
+from app.external import GOOGLE_API_ERRORS  # noqa: E402
 
 
 def _pool_open() -> None:
@@ -90,7 +97,8 @@ def build_parser():
     ap.add_argument("--month", default=now_local().strftime("%Y-%m"),
                     help="месяц страницы: YYYY-MM или MM.YYYY (по умолчанию текущий)")
     ap.add_argument("--list", action="store_true", dest="list_only",
-                    help="показать страницы тестового листа и не читать источник")
+                    help="показать страницы тестового листа и найденного в шапке "
+                         "живого листа человека; ничего не пишет")
     return ap
 
 
@@ -100,13 +108,37 @@ def validate_args(ap, args) -> None:
         ap.error("--list несовместим с --apply: просмотр ничего не пишет")
 
 
+def read_sheets():
+    """Клиент чтения тестового файла: (клиент, код выхода). Без ключа — чистый отказ.
+
+    `core._sheets_read()` строит сервисного клиента и падает `OSError`
+    (`FileNotFoundError` на `secrets/google-sa.json`) или `GoogleAuthError`, если ключа
+    нет. Это тот же класс сбоя, что и отказ Google при чтении, и человеку нужен код 2
+    и строка «нет доступа», а не traceback.
+    """
+    try:
+        return core._sheets_read(), 0
+    except GOOGLE_API_ERRORS as exc:
+        print("тестовый лист не открыт: нет доступа к Google "
+              f"({type(exc).__name__}: проверьте ключ сервисного аккаунта и права)",
+              file=sys.stderr)
+        return None, 2
+
+
 def main() -> int:
     ap = build_parser()
     args = ap.parse_args()
     validate_args(ap, args)
 
-    label = schedule_test_sheet.month_label(args.month)
-    read = core._sheets_read()
+    try:
+        label = schedule_test_sheet.month_label(args.month)
+    except ApiError as exc:
+        print(f"неверный месяц: {exc.code}", file=sys.stderr)
+        return 2
+
+    read, code = read_sheets()
+    if read is None:
+        return code
     try:
         titles = test_titles(read)
     except ApiError as exc:
