@@ -268,10 +268,13 @@ erDiagram
 
 **`file_object`** — файл: `name`, `mime`, `size_bytes`, `scope`
 (`personal|shared|feedback`), `uploaded_via` (`human_drive|human_telegram|bot|webapp|agent`),
-`kind` (`text|image|audio|NULL`), хранилище — либо `drive_file_id` (уникальный), либо
+`kind` (`text|image|audio|folder|NULL`; `folder` — только при `storage='drive'`, инвариант F13),
+`storage` (`garage|drive`, по умолчанию `garage` — E4, миграция 072), хранилище —
+либо `drive_file_id` (уникальный) + `drive_url`/`drive_path`/`drive_mime`, либо
 `bucket` + `object_key` (Garage/S3), `sha256` (дедупликация), `search_tsv` (полнотекстовый
-поиск), `deleted_at` (корзина), `cold_at` (вынесен в холодное хранилище), `meta`, `participant_id`
-(владелец личного файла).
+поиск), `description` (описание от загрузившего, `NULL` допустим), `deleted_at` (корзина),
+`cold_at` (вынесен в холодное хранилище), `meta`, `participant_id`
+(владелец личного файла). Байты держит только `garage`: у ссылки Drive их нет (F11, F12).
 
 **`file_text`** — извлечённый текст: PK `file_id`, `body`, `lang`, `status`
 (`ok|text_unavailable`). **`file_audio`** — длительность, битрейт, формат, теги.

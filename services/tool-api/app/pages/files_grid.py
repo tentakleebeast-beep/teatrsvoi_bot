@@ -62,6 +62,17 @@ SCRIPT = r"""
     // `.ui-row__main` с обработчиком click не было (155 §3 D3).
     var link = el("a", "ui-grid__tile");
     link.href = "/webapp/file?id=" + file.id;
+    // Ссылка на Drive открывается там, где живёт файл (§8.3): карточка нужна для
+    // описания и пути, а байтов у нас нет — «Открыть в Drive» через `tg.openLink`.
+    var driveUrl = file.storage === "drive" ? (file.drive_url || "") : "";
+    if (driveUrl) {
+      link.href = driveUrl;
+      link.addEventListener("click", function (event) {
+        event.preventDefault();
+        if (tg && tg.openLink) { tg.openLink(driveUrl); return; }
+        window.open(driveUrl, "_blank");
+      });
+    }
     var box = el("span", "ui-grid__icon");
     box.setAttribute("aria-hidden", "true");
     box.appendChild(iconSvg(iconFor(word)));

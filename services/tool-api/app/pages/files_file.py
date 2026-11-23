@@ -332,6 +332,9 @@ _SCRIPT_FILE = r"""
     });
   }
 
+  // Кнопка описания живёт вне `#file-actions`: она часть блока правки, а не сцены.
+  if ($("file-save")) $("file-save").addEventListener("click", saveDescription);
+
   if (!fileId) {
     setHead("Файл", "");
     showNote("Файл не выбран");

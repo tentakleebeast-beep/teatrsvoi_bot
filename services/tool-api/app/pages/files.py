@@ -24,7 +24,7 @@ from __future__ import annotations
 
 import json
 
-from app.file_kind import KIND_WORDS
+from app.file_kind import CHIP_LABELS, KIND_WORDS
 from app.pages import (
     files_actions,
     files_file,
@@ -41,6 +41,11 @@ from app.pages.admin_core import CORE
 def files_kind_words() -> str:
     """Слова чипов из одного списка: `file_kind.KIND_WORDS` уезжает в JS как данные."""
     return json.dumps(list(KIND_WORDS), ensure_ascii=False)
+
+
+def files_chip_labels() -> str:
+    """Надписи чипов из одной таблицы: «Документы», «Текст», «Картинки», «Аудио»."""
+    return json.dumps(dict(CHIP_LABELS), ensure_ascii=False)
 
 _BODY_FILES = """
 <section class="ui-section">
@@ -227,13 +232,14 @@ _SCRIPT_FILES = r"""
   }
 
   // --- чипы: Все · Документы · Текст · Картинки · Аудио · Ссылки -----------------
+  // Подписи чипов — отдельная таблица, а не слово + «ы» (§8.3): она приходит
+  // с сервера из `file_kind.CHIP_LABELS`, одна на экран «Файлы» и «Папка».
   function chips() {
     var holder = $("chips");
     clear(holder);
     var items = [{ label: "Все", kind: "", storage: "" }];
     fileKindWords.forEach(function (word) {
-      items.push({ label: word.charAt(0).toUpperCase() + word.slice(1) + "ы",
-                   kind: word, storage: "" });
+      items.push({ label: fileChipLabels[word] || word, kind: word, storage: "" });
     });
     items.push({ label: "Ссылки", kind: "", storage: "drive" });
     items.forEach(function (item) {
@@ -283,6 +289,7 @@ _SCRIPT_FILES = r"""
 FILES_PAGE = layout.page(
     "Файлы", _BODY_FILES + files_actions.BODY, back="/webapp/more", head=files_actions.STYLE,
     scripts="<script>\n" + CORE + "var fileKindWords = " + files_kind_words() + ";\n"
+            + "var fileChipLabels = " + files_chip_labels() + ";\n"
             + files_upload.SCRIPT + files_link.SCRIPT
             + files_grid.ICON_FOR + files_grid.SCRIPT
             + files_tree.TREE_BUILD + files_tree.SCRIPT

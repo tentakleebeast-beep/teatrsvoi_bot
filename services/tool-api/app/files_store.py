@@ -27,9 +27,6 @@ from . import audio, extract
 from .errors import ApiError
 from .external import SQL_ERRORS, STORAGE_ERRORS
 from .file_kind import (
-    AUDIO_EXT,
-    IMAGE_EXT,
-    TEXT_EXT,
     extension,
     kind_by_name,
     kind_predicate,
@@ -68,10 +65,6 @@ EXEC_EXT = {".exe", ".dll", ".so", ".dylib", ".bat", ".cmd", ".sh", ".ps1", ".ms
 
 # Контейнеры Office: по сигнатуре это zip, но по смыслу — документ.
 OFFICE_EXT = {".docx", ".xlsx", ".pptx", ".odt", ".ods"}
-
-# Всё, что принимаем по имени. Собрано из наборов `file_kind`, чтобы второй список
-# расширений не завёлся здесь снова; используется проверками и тестами приёма.
-ACCEPTED_EXT = TEXT_EXT | IMAGE_EXT | AUDIO_EXT
 
 FOLDER_BY_KIND = {"text": "Мои документы", "image": "Фото", "audio": "Аудио"}
 PERSONAL_ROOT = "Личное"

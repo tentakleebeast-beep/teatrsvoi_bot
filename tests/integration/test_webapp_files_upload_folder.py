@@ -18,8 +18,8 @@ import pathlib
 import urllib.request
 
 import psycopg
-from psycopg.rows import dict_row
 import pytest
+from psycopg.rows import dict_row
 
 from tests.conftest import _test_dsn
 from tests.integration.webapp_files_support import file_row, headers, participant

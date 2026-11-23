@@ -14,7 +14,6 @@ from __future__ import annotations
 
 import psycopg
 import pytest
-
 from app import file_kind
 
 # Имена из замера §4.3: регистр, ведущая точка, двойное расширение, имя без расширения.

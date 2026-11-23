@@ -22,7 +22,7 @@ from __future__ import annotations
 
 import json
 
-from app.file_kind import KIND_WORDS
+from app.file_kind import CHIP_LABELS, KIND_WORDS
 from app.pages import files_actions, layout
 from app.pages.admin_core import CORE
 
@@ -263,8 +263,7 @@ _SCRIPT_FOLDER = r"""
     clear(holder);
     var items = [{ label: "Все", kind: "", storage: "" }];
     fileKindWords.forEach(function (word) {
-      items.push({ label: word.charAt(0).toUpperCase() + word.slice(1) + "ы",
-                   kind: word, storage: "" });
+      items.push({ label: fileChipLabels[word] || word, kind: word, storage: "" });
     });
     items.push({ label: "Ссылки", kind: "", storage: "drive" });
     items.forEach(function (item) {
@@ -354,4 +353,6 @@ _SCRIPT_FOLDER = r"""
 FOLDER_PAGE = layout.page("Папка", _BODY_FOLDER, back="/webapp/files", head=files_actions.STYLE,
                           scripts="<script>\n" + CORE
                           + "var fileKindWords = " + json.dumps(list(KIND_WORDS), ensure_ascii=False)
+                          + ";\nvar fileChipLabels = "
+                          + json.dumps(dict(CHIP_LABELS), ensure_ascii=False)
                           + ";\n" + _SCRIPT_FOLDER + "\n})();\n</script>")

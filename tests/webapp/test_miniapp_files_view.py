@@ -266,7 +266,7 @@ def test_папка_с_картинками_не_играет_а_открыва�
 def test_смешанная_папка_играет_только_звук(app_page) -> None:
     """К3: «Слушать всё» есть, но документ в очередь воспроизведения не попадает."""
     page = app_page("/webapp/folder?id=10")
-    _tracks(page, 3)
+    _tracks(page, 4)
     assert page.locator("#play-all").is_visible() is True
 
     page.locator("#tracks .ui-row").nth(1).click()
