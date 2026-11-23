@@ -20,6 +20,7 @@ import ast
 import hashlib
 import importlib.util
 import pathlib
+import re
 
 import pytest
 import yaml
@@ -80,6 +81,22 @@ def test_downgrade_is_disabled() -> None:
     for module in REVISIONS:
         with pytest.raises(NotImplementedError):
             module.downgrade()
+
+
+def test_doc_mentions_existing_migration_numbers() -> None:
+    """Номер миграции в docs/architecture указывает на существующий файл.
+
+    Перенумерация 072 → 073 оставила в `172-db-schema.md` строку «E4, миграция 072»:
+    читатель открывал чужую миграцию E1-4, а гейт был зелёным — номер жил только
+    прозой. Правило и разбор: docs/development/69-lessons.md, L-057.
+    """
+    numbers = {path.name[:3] for path in SQL_FILES}
+    cited: set[str] = set()
+    for doc in sorted((ROOT / "docs" / "architecture").glob("*.md")):
+        for match in re.finditer(r"миграци\S* (\d{3})", doc.read_text(encoding="utf-8")):
+            cited.add(match.group(1))
+    assert cited, "в docs/architecture нет ссылок на миграции — проверка обесценилась"
+    assert cited <= numbers, f"номера без файла в db/init: {sorted(cited - numbers)}"
 
 
 def test_core_has_no_schema_description() -> None:
