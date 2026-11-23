@@ -114,6 +114,34 @@ def test_org_видит_список_с_планом_и_фактом(clean, clie
     assert bad.status_code == 400 and bad.json()["code"] == "bad_kind"
 
 
+def test_список_отдаёт_null_когда_плана_и_операций_нет(clean, client):
+    """AC-39: у проекта без плана и операций в списке `plan` и `fact` — `null`, не 0.
+
+    Ноль означает «запланировали ноль», поэтому отсутствие плана печатается в строке
+    списка прочерком «план —» (§6.1). Список считает суммы теми же запросами, что
+    карточка: без `coalesce`, иначе `null` превращается в `0.0`.
+    Обоснование: docs/development/196 §4.1, §6.1, AC-39.
+    """
+    _person(792008, "org")
+    empty = _project(name="Пурга")
+    filled = _project(name="Валерий", kind="rental")
+    with psycopg.connect(_test_dsn()) as conn:
+        category = conn.execute("select id from category where direction = 'expense' "
+                                "order by id limit 1").fetchone()[0]
+        conn.execute("insert into budget_plan (period, block, category_id, project_id, "
+                     "amount_planned) values ('2026-11','expense',%s,%s,120000)",
+                     (category, filled))
+        conn.commit()
+    _tx(filled, 86400)
+
+    headers = _webapp_headers(client, 792008)
+    body = client.get("/webapp/projects/data", headers=headers).json()
+    rows = {row["id"]: row for row in body["items"]}
+
+    assert rows[empty]["plan"] is None and rows[empty]["fact"] is None
+    assert rows[filled]["plan"] == 120000.0 and rows[filled]["fact"] == 86400.0
+
+
 def test_карточка_считает_остаток_и_честно_показывает_пустое(clean, client):
     """AC-39: план − факт; у проекта без плана `plan` и `rest` — `null`, не ноль."""
     _person(792003, "org")

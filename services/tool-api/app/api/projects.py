@@ -93,10 +93,10 @@ def projects_data(kind: str = Query(default="all"), status: str = Query(default=
 
     sql = f"""
         select p.id, p.name, p.kind, p.status, p.starts_on, p.ends_on,
-               (select coalesce(sum(bp.amount_planned), 0)
+               (select sum(bp.amount_planned)
                   from budget_plan bp where bp.project_id = p.id and bp.status = 'planned')
                  as plan_amount,
-               (select coalesce(sum(t.amount), 0)
+               (select sum(t.amount)
                   from budget_tx t where t.project_id = p.id and t.status = 'confirmed'
                     and not t.is_plan) as fact_amount,
                ev.starts_at as next_start, ev.kind as next_kind
@@ -128,8 +128,8 @@ def projects_data(kind: str = Query(default="all"), status: str = Query(default=
             "status_title": STATUS_TITLES.get(row["status"], row["status"]),
             "starts_on": row["starts_on"].isoformat() if row["starts_on"] else None,
             "ends_on": row["ends_on"].isoformat() if row["ends_on"] else None,
-            "plan": plan if row["plan_amount"] is not None else None,
-            "fact": fact if row["fact_amount"] is not None else None,
+            "plan": plan,
+            "fact": fact,
             "nearest": ({"date": row["next_start"].astimezone(core.TZ).date().isoformat(),
                          "weekday": WEEKDAYS[row["next_start"].astimezone(core.TZ).weekday()],
                          "time_from": row["next_start"].astimezone(core.TZ).strftime("%H:%M"),
