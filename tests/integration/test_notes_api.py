@@ -148,3 +148,90 @@ def test_экран_mini_app_читает_и_создаёт_ту_же_замет
         "id": saved["note"]["id"], "title": "С экрана", "body": "исправлено",
         "scope": "shared"}).json()
     assert edited["note"]["body"] == "исправлено"
+
+
+def test_своя_личная_заметка_удаляется_и_исчезает_из_списка(client) -> None:
+    """Своя personal: мягкая метка, строка уходит из списка, повторный DELETE — 404."""
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 810011, "Заметки Удаление Своя")
+
+    note = client.post("/tools/notes", headers=_headers(810011), json={
+        "body": "удалить это", "scope": "personal"}).json()["note"]
+    assert note["deletable"] is True, note
+
+    removed = client.delete(f"/tools/notes/{note['id']}", headers=_headers(810011))
+    assert removed.status_code == 200, removed.text
+    assert removed.json()["ok"] is True and removed.json()["id"] == note["id"]
+
+    listed = client.get("/tools/notes", headers=_headers(810011)).json()["notes"]
+    assert note["id"] not in [row["id"] for row in listed]
+
+    again = client.delete(f"/tools/notes/{note['id']}", headers=_headers(810011))
+    assert again.status_code == 404, again.text
+    assert again.json()["code"] == "note_not_found"
+
+    update = client.post(f"/tools/notes/{note['id']}", headers=_headers(810011),
+                         json={"body": "воскресить"})
+    assert update.status_code == 404, update.text
+
+
+def test_своя_общая_заметка_удаляется(client) -> None:
+    """Свою shared автор удаляет так же, как личную; другим она больше не приходит."""
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 810012, "Заметки Удаление Общая")
+        _person(conn, 810013, "Заметки Удаление Читатель")
+
+    note = client.post("/tools/notes", headers=_headers(810012), json={
+        "body": "общая на удаление", "scope": "shared"}).json()["note"]
+
+    assert client.delete(f"/tools/notes/{note['id']}",
+                         headers=_headers(810013)).status_code == 404
+    assert client.delete(f"/tools/notes/{note['id']}",
+                         headers=_headers(810012)).status_code == 200
+
+    reader = client.get("/tools/notes", headers=_headers(810013)).json()["notes"]
+    assert note["id"] not in [row["id"] for row in reader]
+
+
+def test_админ_удаляет_чужую_общую_но_не_чужую_личную(client) -> None:
+    """Администратор: shared — можно, чужую personal — 404, и она остаётся живой."""
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 810014, "Заметки Удаление Автор")
+        _person(conn, 810015, "Заметки Удаление Админ", role="admin")
+
+    shared = client.post("/tools/notes", headers=_headers(810014), json={
+        "body": "общая, сносит админ", "scope": "shared"}).json()["note"]
+    personal = client.post("/tools/notes", headers=_headers(810014), json={
+        "body": "личная, не трогать", "scope": "personal"}).json()["note"]
+
+    denied = client.delete(f"/tools/notes/{personal['id']}", headers=_headers(810015))
+    assert denied.status_code == 404, denied.text
+    assert denied.json()["code"] == "note_not_found"
+
+    own = client.get("/tools/notes", headers=_headers(810014)).json()["notes"]
+    assert personal["id"] in [row["id"] for row in own], "чужая личная удалилась"
+
+    assert client.delete(f"/tools/notes/{shared['id']}",
+                         headers=_headers(810015)).status_code == 200
+    assert shared["id"] not in [
+        row["id"] for row in client.get("/tools/notes",
+                                        headers=_headers(810014)).json()["notes"]]
+
+
+def test_удалённая_заметка_не_приходит_ни_чату_ни_экрану(client) -> None:
+    """Отдельно на экране: `/webapp/notes/list` фильтрует удалённое, DELETE-оболочка работает."""
+    _api()
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 810016, "Заметки Удаление Экран")
+
+    headers = _webapp_headers(client, 810016)
+    saved = client.post("/webapp/notes/save", headers=headers, json={
+        "title": "С экрана", "body": "с экрана, на удаление", "scope": "personal"}).json()
+    note_id = saved["note"]["id"]
+
+    assert client.delete(f"/webapp/notes/{note_id}", headers=headers).status_code == 200
+    assert note_id not in [row["id"] for row in
+                           client.get("/webapp/notes/list", headers=headers).json()["notes"]]
+    assert note_id not in [row["id"] for row in
+                           client.get("/tools/notes", headers=_headers(810016)).json()["notes"]]
+    assert client.delete(f"/webapp/notes/{note_id}", headers=headers).status_code == 404

@@ -140,7 +140,7 @@
 | Ф3 | Утвердить тег | админ | `files.access` | `POST /tags/{id}/approve` | Mini App «Файлы» | — | FR-F5, docs/86 | чат |
 | Ф4 | Папки: создать, переименовать, удалить, порядок | админ | `admin.panel` | `POST /folders` + `rename`, `delete`, `order` (один путь) | Mini App «Файлы» | — | FR-F5, docs/86 | дубль |
 | Ф5 | Скачать папку архивом | админ | `admin.panel` | чтение `GET /folders/{id}/zip` | Mini App «Файлы» | — | FR-F5, docs/86 | оба |
-| Ф6 | Записать и посмотреть заметку | участник | `notes.write` | нет пути: новые маршруты заметок | Mini App «Ещё → Заметки» | текст с подтверждением в чате | FR-F7 (новое) | нет |
+| Ф6 | Записать, поправить и удалить заметку | участник; общую — автор или админ | `notes.write` | `POST /tools/notes`, `POST /tools/notes/{note_id}`, `DELETE /tools/notes/{note_id}`, оболочки `POST /webapp/notes/save`, `DELETE /webapp/notes/{note_id}` | Mini App «Ещё → Заметки» | текст с подтверждением в чате; удаление — кнопка «Удалить» с подтверждением на экране | FR-F7 (новое) | нет |
 | Ф7 | Удалить свой файл | владелец файла | чат — `admin.panel`, экран — `files.access` | `DELETE /files/{id}` (оболочка `DELETE /webapp/files/{id}`) | Mini App «Файлы» и чат (файлы студии) | кнопка «Удалить» с подтверждением в чате и на экране, команда `/rm` | FR-F5, docs/86 (FR-K5, FR-M8, FR-L8) | нет |
 
 ### Обращения, уведомления, настройки

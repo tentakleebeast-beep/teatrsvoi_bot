@@ -6,11 +6,12 @@
 
 Два входа — один код записи, как у уведомлений и бюджета:
 
-    чат           POST /tools/notes, POST /tools/notes/{id}
-    Mini App      POST /webapp/notes/save, GET /webapp/notes/list
+    чат           POST /tools/notes, POST /tools/notes/{id}, DELETE /tools/notes/{id}
+    Mini App      POST /webapp/notes/save, GET /webapp/notes/list,
+                  DELETE /webapp/notes/{id}
 
-Оба входа зовут одни и те же `create_note` / `update_note` / `list_notes`, поэтому
-правила видимости и прав не могут разъехаться между экраном и карточкой в чате.
+Оба входа зовут одни и те же `create_note` / `update_note` / `delete_note` / `list_notes`,
+поэтому правила видимости и прав не могут разъехаться между экраном и карточкой в чате.
 
 Правила (решение по П-9 и docs/reports/124 §3):
 
@@ -20,8 +21,9 @@
 * `shared` видят все с `notes.write`; правит автор, а администратор — любую;
 * менять область (`personal` ↔ `shared`) может только автор: поделиться можно своей
   заметкой, но не чужой;
-* удаление в этой карте не делается: мягкое удаление (`deleted_at`) уже есть в схеме,
-  но требования «удалить заметку» в FR-F7 нет.
+* удаление мягкое (`deleted_at`), права те же, что у правки: личную удаляет только автор,
+  общую — автор или администратор. Удалённая заметка не приходит ни в список, ни по номеру
+  (404), поэтому повторное удаление тоже 404, а не 403: чужого существования не подтверждаем.
 """
 
 from __future__ import annotations
@@ -119,10 +121,12 @@ def _can_edit(row: dict, participant_id: int, caps: set[str] | list[str]) -> boo
 def note_out(row: dict, participant_id: int, caps: set[str] | list[str]) -> dict:
     """Заметка для клиента: без чужих номеров людей и без служебных полей.
 
-    `mine` и `editable` считает сервер: страница лишь не рисует кнопку, решение
-    остаётся за эндпоинтом.
+    `mine`, `editable` и `deletable` считает сервер: страница лишь не рисует кнопку,
+    решение остаётся за эндпоинтом. Сейчас правила правки и удаления совпадают, но
+    поля разные: если удаление когда-нибудь сузят, клиенту не придётся об этом догадываться.
     """
     mine = int(row["participant_id"]) == int(participant_id)
+    allowed = _can_edit(row, participant_id, caps)
     return {
         "id": row["id"],
         "title": row["title"],
@@ -132,7 +136,8 @@ def note_out(row: dict, participant_id: int, caps: set[str] | list[str]) -> dict
         "scope_title": SCOPE_TITLES.get(row["scope"], row["scope"]),
         "author": row["author"],
         "mine": mine,
-        "editable": _can_edit(row, participant_id, caps),
+        "editable": allowed,
+        "deletable": allowed,
         "created_at": row["created_at"].isoformat(timespec="seconds")
                       if row.get("created_at") else None,
         "updated_at": row["updated_at"].isoformat(timespec="seconds")
@@ -218,6 +223,26 @@ def update_note(conn, who: dict, note_id: int, *, title: str | None, body: str |
     return note_out(saved, participant_id, caps)
 
 
+def delete_note(conn, who: dict, note_id: int) -> dict:
+    """Мягко удалить заметку: `deleted_at`, а не `delete from`.
+
+    Права те же, что у правки (`_can_edit`): свою — всегда, общую — автор и администратор.
+    Чужая личная и уже удалённая отвечают 404, а не 403: чужого существования не подтверждаем.
+    Повторный вызов поэтому тоже 404 — по `_row_by_id`, который фильтрует `deleted_at`.
+    """
+    participant_id = int(who["id"])
+    caps = _caps(conn, participant_id)
+    row = _row_by_id(conn, note_id)
+    if row is None or not _can_edit(row, participant_id, caps):
+        raise ApiError(status.HTTP_404_NOT_FOUND, "Заметка не найдена.", code="note_not_found")
+    conn.execute("update note set deleted_at = now() where id = %s", (note_id,))
+    core.audit(conn, "human", participant_id, "note.delete", "note", str(note_id),
+               before={"title": row["title"], "scope": row["scope"],
+                       "author_id": row["participant_id"]},
+               after={"deleted": True, "soft": True})
+    return {"id": note_id}
+
+
 class NoteIn(core.ApiIn):
     """Общая форма создания и правки: правка приходит с `id`.
 
@@ -260,6 +285,14 @@ def notes_update(note_id: int, body: NoteIn,
     return {"ok": True, "note": note}
 
 
+@router.delete("/tools/notes/{note_id}")
+def notes_delete(note_id: int, who: dict = Depends(core.require("notes.write"))) -> dict:
+    """Мягко удалить заметку. Повторный вызов и чужая личная — 404."""
+    with core.pool.connection() as conn:
+        result = delete_note(conn, who, note_id)
+    return {"ok": True, **result}
+
+
 @router.get("/webapp/notes/list")
 def webapp_notes_list(who: dict = Depends(core.webapp_actor)) -> dict:
     """Экран «Ещё → Заметки»: тот же список, что у чата."""
@@ -281,3 +314,12 @@ def webapp_notes_save(body: NoteIn, who: dict = Depends(core.webapp_actor)) -> d
             note = create_note(conn, who, title=body.title, body=body.body,
                                tags=body.tags, scope=body.scope)
     return {"ok": True, "note": note}
+
+
+@router.delete("/webapp/notes/{note_id}")
+def webapp_notes_delete(note_id: int, who: dict = Depends(core.webapp_actor)) -> dict:
+    """Удалить заметку с экрана: тот же `delete_note`, что и `DELETE /tools/notes/{id}`."""
+    core._webapp_require(who, "notes.write")
+    with core.pool.connection() as conn:
+        result = delete_note(conn, who, note_id)
+    return {"ok": True, **result}
