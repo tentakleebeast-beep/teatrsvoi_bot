@@ -1573,14 +1573,15 @@ def webapp_admin_notifications_save(body: NotificationDefaultsIn,
     смена общего значения не переписывает то, что человек настроил себе сам.
     """
     admin = core._webapp_require(who, "admin.panel")
-    for value in (body.quiet_from, body.quiet_to):
-        if not core.CLOCK_RE.match(value or ""):
-            raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad_time: формат ЧЧ:ММ")
+    quiet_from = core.clock_text(body.quiet_from)
+    quiet_to = core.clock_text(body.quiet_to)
+    if quiet_from is None or quiet_to is None:
+        raise HTTPException(status.HTTP_400_BAD_REQUEST, "bad_time: формат ЧЧ:ММ")
     muted = notification_store.form_to_kinds(body.rehearsals, body.dues,
                                              body.schedule_changes)
     with core.pool.connection() as conn:
         before = _defaults_out(notification_store.load_defaults(conn))
-        notification_store.save_defaults(conn, muted, body.quiet_from, body.quiet_to)
+        notification_store.save_defaults(conn, muted, quiet_from, quiet_to)
         after = notification_store.load_defaults(conn)
         core.audit(conn, "human", admin.get("id"), "notify.defaults.set", "app_setting",
                    "notification", before=before, after=_defaults_out(after))

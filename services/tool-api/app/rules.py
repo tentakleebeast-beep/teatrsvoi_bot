@@ -200,8 +200,10 @@ def parse_availability(text: str, today: date | None = None) -> dict[str, Any]:
         kind = "busy"
 
     start, end = WORK_DAY_START, WORK_DAY_END
-    m = re.search(r"с\s*(\d{1,2})(?::(\d{2}))?\s*(?:до|по)\s*(\d{1,2})(?::(\d{2}))?", t)
-    if m:
+    # Разделитель часов и минут — двоеточие, точка или запятая: «с 10.30 до 14.30»
+    # человек пишет так же часто, как «с 10:30» (обращение №45).
+    m = re.search(r"с\s*(\d{1,2})(?:[:.,](\d{2}))?\s*(?:до|по)\s*(\d{1,2})(?:[:.,](\d{2}))?", t)
+    if m and max(int(m.group(2) or 0), int(m.group(4) or 0)) <= 59:
         start, end = int(m.group(1)), int(m.group(3))
     else:
         explicit_start = False
@@ -233,9 +235,11 @@ def parse_availability(text: str, today: date | None = None) -> dict[str, Any]:
 
 # ---------------------------------------------------------------- интервал без даты
 
-# «с 10 до 14», «10-14», «с 10:00 до 14:00», «10 — 14»
+# «с 10 до 14», «10-14», «с 10:00 до 14:00», «с 10.30 до 14.30», «10 — 14».
+# Точка и запятая — те же разделители часов и минут, что двоеточие: время через
+# точку человек пишет в чате и таблицах (обращение №45).
 _INTERVAL_RE = re.compile(
-    r"(?:^|\s)(?:с\s*)?(\d{1,2})(?::(\d{2}))?\s*(?:до|по|—|–|-)\s*(\d{1,2})(?::(\d{2}))?")
+    r"(?:^|\s)(?:с\s*)?(\d{1,2})(?:[:.,](\d{2}))?\s*(?:до|по|—|–|-)\s*(\d{1,2})(?:[:.,](\d{2}))?")
 
 
 def parse_interval(text: str) -> dict[str, Any]:
@@ -251,6 +255,9 @@ def parse_interval(text: str) -> dict[str, Any]:
         return {"ok": False, "error": "need_time",
                 "hint": "Напишите интервал: «с 10 до 14»"}
     start, end = int(match.group(1)), int(match.group(3))
+    if max(int(match.group(2) or 0), int(match.group(4) or 0)) > 59:
+        return {"ok": False, "error": "bad_interval",
+                "hint": "Минуты — от 00 до 59, а часы от 0 до 24"}
     if not 0 <= start < end <= 24:
         return {"ok": False, "error": "bad_interval",
                 "hint": "Начало должно быть раньше конца, часы от 0 до 24"}

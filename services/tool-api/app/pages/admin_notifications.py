@@ -20,6 +20,7 @@
 from __future__ import annotations
 
 from app.pages.admin_core import screen
+from app.pages.misc_common import JS_CLOCK as _JS_CLOCK
 
 # `.ui-section` — флекс, поэтому атрибут `hidden` его не прячет: правило нужно
 # своё (та же причина, что в `pages/money_tx.py`).
@@ -32,7 +33,7 @@ _HEAD_NOTIFICATION_DEFAULTS = (
 
 _SCRIPT_NOTIFICATION_DEFAULTS = r"""
   var KEYS = ["rehearsals", "dues", "schedule_changes"];
-  var CLOCK = /^([01]\d|2[0-3]):[0-5]\d$/;
+""" + _JS_CLOCK + r"""
 
   function row(key) {
     return document.querySelector('.ui-switch-row[data-key="' + key + '"]');
@@ -51,10 +52,10 @@ _SCRIPT_NOTIFICATION_DEFAULTS = r"""
   }
 
   function checkClock(field) {
-    var value = field.value.trim();
-    if (CLOCK.test(value)) { return true; }
+    var value = clock(field.value);
+    if (value) { field.value = value; return true; }
     var error = $("quiet_error");
-    error.textContent = "Время пишется как 20:00.";
+    error.textContent = "Время пишется как 20:00 или 20.00.";
     error.hidden = false;
     field.focus();
     return false;
