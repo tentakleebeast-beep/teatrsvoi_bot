@@ -8,7 +8,13 @@
 Правила:
 
 * нашёл маркер в боевом — удаляет **только черновик** и пишет аудит; боевое не трогает;
-* `status = cancelled` у боевого события с нашим маркером — в базе `cancelled`;
+* `status = cancelled` у боевого события с нашим маркером — в базе `cancelled`, а участники
+  и создатель получают `notification` kind `event_cancelled` (V-133) тем же текстом и с тем
+  же дедупом `event:<id>:cancelled`, что и отмена через бота: двойной отмены не бывает;
+* разошлось `start` — `notification` kind `event_moved` с прежним и новым временем,
+  дедуп `event:<id>:moved:<новый start>`; правку в базу не переносим (190 §5.3);
+* прочие правки (название, место, конец без сдвига начала) — строка «Изменено в Google»,
+  без уведомления;
 * отсутствие события в боевом отменой не считается;
 * фоновой синхронизации нет: `scan` вызывается из `POST /tools/google/refresh`.
 
@@ -28,7 +34,7 @@ from __future__ import annotations
 import re
 from datetime import UTC, date, datetime, timedelta
 
-from app import core, event_types, google_targets, sheet_binding
+from app import core, event_notify, event_types, google_targets, sheet_binding
 from app.calendar_blocks import PROP_EVENT_ID, PROP_KIND
 from app.errors import ApiError
 from app.external import GOOGLE_API_ERRORS
@@ -255,6 +261,11 @@ def _changes(event: dict, plan: dict, titles: dict[str, str] | None = None) -> d
     if not _same_moment(start_google, start_db):
         item["start_google"] = _show_moment(start_google)
         item["start_db"] = _show_moment(start_db)
+    end_google, _ = _moment(event, "end")
+    end_db = _to_dt(plan.get("ends_at"))
+    if not _same_moment(end_google, end_db):
+        item["end_google"] = _show_moment(end_google)
+        item["end_db"] = _show_moment(end_db)
     location_google = str(event.get("location") or "").strip()
     location_db = str(plan.get("location") or "").strip()
     if location_google != location_db:
@@ -262,10 +273,43 @@ def _changes(event: dict, plan: dict, titles: dict[str, str] | None = None) -> d
     return item if len(item) > 3 else {}
 
 
+def _moved_in_google(event: dict, plan: dict) -> bool:
+    """Человек перенёс событие бота в Google: начало разошлось с базой.
+
+    Правку в базу не переносим (190 §5.3), поэтому расхождение видно и в следующей
+    сверке; повторной рассылки не будет — дедуп по новому `start` (`event_notify`).
+    Правка одного окончания переносом не считается: уведомление «было 12:00, стало
+    12:00» только путало бы, такая строка остаётся в отчёте (`changed_in_google`).
+    """
+    start_google, all_day = _moment(event, "start")
+    if start_google is None or all_day:
+        # событие на весь день: полночь в UTC — не перенос, а формат (`date` вместо `dateTime`)
+        return False
+    return not _same_moment(start_google, _to_dt(plan.get("starts_at")))
+
+
+def _notify_moved_in_google(conn, event: dict, plan: dict, titles: dict[str, str]) -> int:
+    """Уведомление участникам о переносе, случившемся в Google (V-133).
+
+    «Было» — время из базы, «стало» — из Google. Часы окончания считаются так же,
+    как в `events_move`: целый час плюс час, если есть минуты.
+    """
+    start_google, _all_day = _moment(event, "start")
+    if start_google is None:
+        return 0
+    old_start = _to_dt(plan.get("starts_at")) or start_google
+    end_google, _ = _moment(event, "end")
+    to_hour = (end_google.hour + (1 if end_google.minute else 0)
+               if end_google else start_google.hour + 1)
+    title_ru = titles.get(str(plan.get("kind") or ""), "Событие")
+    return event_notify.notify_moved(conn, plan, old_start, start_google, to_hour,
+                                     None, title_ru)
+
+
 def _live_plans(conn) -> dict[int, dict]:
     rows = conn.execute("""
         select id, status, gcal_event_id, gcal_calendar_id, title, kind,
-               starts_at, ends_at, location
+               starts_at, ends_at, location, participant_ids, created_by
         from event_plan
         where gcal_event_id is not null or gcal_calendar_id = %s""",
         (LIVE_MARK,)).fetchall()
@@ -289,6 +333,7 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
         "changed_in_google": [], "moved_to_live": [], "color_mismatch": [],
         "label_mismatch": [], "orphan_marker": [],
         "totals": {key: 0 for key in CATEGORIES},
+        "notified": {"cancelled": 0, "moved": 0},
     }
     for key in CATEGORIES:
         report[f"{key}_more"] = 0
@@ -349,9 +394,16 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
             if not dry_run and plan.get("status") != "cancelled":
                 conn.execute("update event_plan set status = 'cancelled' where id = %s",
                              (plan_id,))
-                core.audit(conn, "google", None, "event.cancelled_in_google", "event_plan",
+                # actor_type — только human/bot/system (001_schema.sql:355): «google»
+                # ронял сверку CheckViolation ещё до уведомления (V-133).
+                core.audit(conn, "system", None, "event.cancelled_in_google", "event_plan",
                            str(plan_id), before={"status": plan.get("status")},
                            after={"status": "cancelled", "gcal_event_id": event.get("id")})
+                moment = _to_dt(plan.get("starts_at"))
+                if moment is not None:
+                    report["notified"]["cancelled"] += event_notify.notify_cancelled(
+                        conn, plan, moment, None,
+                        type_titles.get(str(plan.get("kind") or ""), "Событие"))
             continue
 
         event_kind = kind or letter_to_code.get(letter or "") or str(plan.get("kind") or "")
@@ -378,6 +430,13 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
         if changes:
             _add(report, "changed_in_google", changes)
 
+        if _moved_in_google(event, plan):
+            report["totals"]["moved_in_google"] = \
+                report["totals"].get("moved_in_google", 0) + 1
+            if not dry_run:
+                report["notified"]["moved"] += _notify_moved_in_google(
+                    conn, event, plan, type_titles)
+
         if plan.get("gcal_calendar_id") == LIVE_MARK:
             continue                    # черновик уже убран в прошлую сверку
         start_google, _all_day = _moment(event, "start")
@@ -393,6 +452,8 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
     report["counts"]["untyped"] = report["untyped"]["total"]
     if report["totals"].get("cancelled_in_live"):
         report["counts"]["cancelled_in_live"] = report["totals"]["cancelled_in_live"]
+    if report["totals"].get("moved_in_google"):
+        report["counts"]["moved_in_google"] = report["totals"]["moved_in_google"]
     if not dry_run:
         mark_read(conn, last_edit)
     return report
@@ -411,7 +472,8 @@ def _clean_draft(conn, draft_service, plan: dict, item: dict) -> None:
         deleted = False
     conn.execute("update event_plan set gcal_event_id = null, gcal_calendar_id = %s "
                  "where id = %s", (LIVE_MARK, plan.get("id")))
-    core.audit(conn, "google", None, "event.draft_cleaned", "event_plan", str(plan.get("id")),
+    # actor_type «google» в схеме нет (001_schema.sql:355) — сверка пишет как система.
+    core.audit(conn, "system", None, "event.draft_cleaned", "event_plan", str(plan.get("id")),
                before={"gcal_event_id": draft_event_id},
                after={"draft_deleted": deleted, "live_event_id": item.get("id"),
                       "calendar": "read"})
