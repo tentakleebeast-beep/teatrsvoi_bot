@@ -178,6 +178,23 @@ def test_самопроверка_пропускает_адрес_из_реес�
     assert find_violations(source, "synthetic.py") == []
 
 
+def test_самопроверка_пропускает_только_ключ_реестра_записи():
+    """`calendar.live` проходит сторож как ключ `WRITE_TARGETS`, `calendar.read` — нет.
+
+    Сторож не знает про режим: он пропускает литерал, объявленный в реестре записи, а
+    режимную оговорку держит `resolve`/`allowed_for_write` (их проверяет
+    `test_самопроверка_ключ_боевого_календаря_закрыт_в_переходном`).
+    """
+    live = ('def good():\n'
+            '    core._calendar_write().events().update(\n'
+            '        calendarId=google_targets.resolve("calendar.live"), eventId="x", body={})\n')
+    assert find_violations(live, "synthetic.py") == []
+    read = ('def bad():\n'
+            '    core._calendar_write().events().update(\n'
+            '        calendarId=google_targets.resolve("calendar.read"), eventId="x", body={})\n')
+    assert find_violations(read, "synthetic.py")
+
+
 def test_самопроверка_ловит_адрес_чтения_в_соседней_ветке():
     """Тот самый обход: имя присвоено из `read_id`, а в другой ветке — из `resolve`.
 
@@ -272,9 +289,30 @@ def test_без_строки_привязки_запись_остановлен�
 
 
 def test_список_объектов_записи_не_меняется_режимом(monkeypatch):
-    """Дизайн D7: набор объектов записи одинаков в `transitional` и `target`."""
+    """Дизайн D7: набор объектов записи одинаков в `transitional` и `target`.
+
+    Исключение — `calendar.live` (V-120 б): ключ объявлен всегда, но в переходном
+    режиме `allowed_for_write` возвращает `False`, и `resolve` отказывает
+    `write_target_mode_refused`. Самопроверка обязательна: без неё исключение из V-072
+    жило бы в реестре и не проверялось бы ничем.
+    """
+    monkeypatch.setattr(core, "CALENDAR_ID_READ", "live-calendar")
     for mode in google_targets.MODES:
         monkeypatch.setattr(google_targets, "google_mode", lambda _conn=None, m=mode: m)
         for key in google_targets.WRITE_TARGETS:
-            assert google_targets.allowed_for_write(key)
+            if key == google_targets.LIVE_CALENDAR:
+                assert google_targets.allowed_for_write(key) is (mode == "target")
+            else:
+                assert google_targets.allowed_for_write(key)
         assert not google_targets.allowed_for_write("calendar.read")
+
+
+def test_самопроверка_ключ_боевого_календаря_закрыт_в_переходном(monkeypatch):
+    """`resolve("calendar.live")` в transitional обязан отказывать (V-120 б)."""
+    monkeypatch.setattr(core, "CALENDAR_ID_READ", "live-calendar")
+    monkeypatch.setattr(google_targets, "google_mode",
+                        lambda _conn=None: google_targets.MODE_TRANSITIONAL)
+    with pytest.raises(ApiError) as caught:
+        google_targets.resolve("calendar.live")
+    assert caught.value.status_code == 403
+    assert caught.value.code == "write_target_mode_refused"

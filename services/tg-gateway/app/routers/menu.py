@@ -877,7 +877,11 @@ QUIET_COMMANDS = ("/quiet", "/тихие")
 
 
 def parse_quiet_hours(arg: str) -> tuple[str, str] | None:
-    """`21:00-09:00` / `20-8` / `выкл` → тихие часы парой ЧЧ:ММ. None — не разобрали.
+    """`21:00-09:00` / `21.00-09.00` / `20-8` / `выкл` → тихие часы парой ЧЧ:ММ.
+
+    Разделитель часов и минут — двоеточие, точка или запятая: время через точку
+    человек пишет в чате и таблицах, и отказ на «21.00» — загадка (обращение №45,
+    `docs/architecture/25` §9.2). Минуты только двузначные: «21.5» — не время.
 
     `выкл` — это 00:00–00:00: пустой интервал, в который не попадает ни один час,
     поэтому отдельного поля «включено» не нужно.
@@ -887,11 +891,14 @@ def parse_quiet_hours(arg: str) -> tuple[str, str] | None:
         return None
     if text in (texts.QUIET_OFF_WORD, "выключить", "нет"):
         return "00:00", "00:00"
-    match = re.fullmatch(r"(\d{1,2})(?::(\d{2}))?\s*-\s*(\d{1,2})(?::(\d{2}))?", text)
+    match = re.fullmatch(r"(\d{1,2})(?:[:.,](\d{2}))?\s*-\s*(\d{1,2})(?:[:.,](\d{2}))?",
+                         text)
     if not match:
         return None
     hour_from, minute_from, hour_to, minute_to = match.groups()
     if int(hour_from) > 23 or int(hour_to) > 23:
+        return None
+    if int(minute_from or 0) > 59 or int(minute_to or 0) > 59:
         return None
     start = f"{int(hour_from):02d}:{minute_from or '00'}"
     end = f"{int(hour_to):02d}:{minute_to or '00'}"

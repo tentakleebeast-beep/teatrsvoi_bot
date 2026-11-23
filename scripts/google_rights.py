@@ -5,13 +5,17 @@
 редактор на копиях, тестовом листе и черновом календаре. Скрипт показывает фактическую
 роль и расхождение с требуемой, код выхода 1 при расхождении.
 
-Как меряется роль. Требуемой операцией, а не списком прав: `acl.list` и
+После возврата ревью E5-4 (боевой календарь не трогаем пробой). `acl.list` и
 `permissions.list` отдают 403 тому, кто не владелец объекта, даже когда читать и писать
 он может (так отчёт показывал расхождение на календарях, где бот работает). Поэтому:
 
 * читатель календаря — `events.list` по текущему окну;
-* писатель календаря — `acl.list` пишущим клиентом, а если он закрыт (403) —
-  пробное событие `insert` + `delete` в этом же календаре;
+* писатель календаря — `acl.list` пишущим клиентом, а если он закрыт (403) — для
+  чернового календаря пробное событие `insert` + `delete`, для боевого (`calendar.live`)
+  — `accessRole` из `calendarList.get`: в боевой календарь пробное событие не вставляется
+  никогда (V-120 б, `docs/development/190` I-7);
+* `calendar.live` в переходном режиме пропускается строкой отчёта: ключ там не действует;
+
 * читатель/писатель таблицы — `files.get(fields="capabilities(canEdit,canModifyContent)")`
   (Drive считает возможности для того, кто спрашивает);
 * предупреждение «доступ на anyone с правом записи» — по `permissions.list`, его
@@ -59,10 +63,30 @@ WRITER_ROLES = {"owner", "organizer", "writer", "writerWithoutPrivateAccess"}
 #: Как подписывается роль, измеренная операцией, а не списком прав.
 READER_PROBE = "reader (events.list)"
 WRITER_PROBE = "writer (insert+delete)"
+#: Боевой календарь: пишущая проба запрещена, роль берётся из `accessRole`.
+ACL_PROBE = "calendarList.accessRole"
 
 #: Заголовки пробного события в календаре: его видно человеку, поэтому без эмодзи.
 PROBE_SUMMARY = "[svoi] проверка прав бота"
 PROBE_KIND = "rights_probe"
+
+
+def _pool_open() -> None:
+    """Пул в проекте создаётся закрытым (его открывает FastAPI) — открываем сами.
+
+    Без этого `core.pool.connection()` поднимает `PoolClosed`, и строка, которой нужен
+    режим из БД (`calendar.live`), падала бы «the pool is not open yet» на здоровой
+    системе (образец — `google_seed_bindings._open_pool`).
+    """
+    opener = getattr(core.pool, "open", None)
+    if opener is not None:
+        opener()
+
+
+def _pool_close() -> None:
+    closer = getattr(core.pool, "close", None)
+    if closer is not None:
+        closer()
 
 
 def _http_status(exc: BaseException) -> int | None:
@@ -150,8 +174,31 @@ def _calendar_write_probe(service, calendar_id: str, warnings: list[str]) -> str
     return WRITER_PROBE
 
 
-def _calendar_write_role(calendar_id: str) -> tuple[str | None, list[str]]:
-    """Писатель календаря: сначала `acl.list` пишущим клиентом, затем проба вставкой."""
+def _calendar_access_role(calendar_id: str) -> tuple[str | None, list[str]]:
+    """Роль по `accessRole` из `calendarList.get`: без пишущей пробы.
+
+    Нужна боевому календарю: вставить туда пробное событие нельзя (V-120 б, I-7), а
+    `acl.list` закрыт не владельцу. `accessRole` — то, что Google думает о правах
+    этого аккаунта на календарь: `owner`/`writer`/`reader`/`freeBusyReader`.
+    """
+    try:
+        answer = core._calendar().calendarList().get(calendarId=calendar_id).execute()
+    except Exception as exc:  # noqa: BLE001 — исход отчёта, не поломка
+        if _http_status(exc) not in (403, 404):
+            raise
+        return None, [f"accessRole недоступен ({_http_status(exc) or 'нет ответа'}) — "
+                      "роль боевого календаря подтвердите вручную"]
+    return str(answer.get("accessRole") or "") or None, []
+
+
+def _calendar_write_role(calendar_id: str,
+                         allow_probe: bool = True) -> tuple[str | None, list[str]]:
+    """Писатель календаря: сначала `acl.list` пишущим клиентом, затем — по ключу.
+
+    Для чернового календаря `acl.list` может быть закрыт не владельцу, и тогда роль
+    подтверждает пробная вставка. Для боевого (`allow_probe=False`) проба запрещена:
+    остаётся `accessRole`, а не измеренная роль честно называется не измеренной.
+    """
     warnings: list[str] = []
     service = core._calendar_write()
     our_email = _service_account_email()
@@ -170,6 +217,12 @@ def _calendar_write_role(calendar_id: str) -> tuple[str | None, list[str]]:
             role = str(item.get("role") or "")
     if role:
         return role, warnings
+    if not allow_probe:
+        role, extra = _calendar_access_role(calendar_id)
+        warnings.extend(extra)
+        if role:
+            warnings.append(f"роль взята из {ACL_PROBE}, пишущая проба не выполнялась")
+        return role, warnings
     return _calendar_write_probe(service, calendar_id, warnings), warnings
 
 
@@ -182,12 +235,36 @@ def _enough(role: str | None, required: str) -> bool:
     return role in WRITER_ROLES or role == WRITER_PROBE
 
 
-def _check(key: str) -> dict:
+def _live_calendar_skip(conn=None) -> dict | None:
+    """`calendar.live` в переходном режиме не действует — строка отчёта, не расхождение.
+
+    Режим читается в уже открытом соединении (`conn` из `main`): иначе отчёт открывал бы
+    своё и упирался в закрытый пул.
+    """
+    key = google_targets.LIVE_CALENDAR
+    required = google_targets.target(key).required_role
+    try:
+        mode = google_targets.google_mode(conn)
+    except Exception as exc:  # noqa: BLE001 — исход отчёта
+        return {"key": key, "required": required, "role": None, "ok": False,
+                "warnings": [], "error": f"google.mode: {str(exc)[:100]}"}
+    if mode == google_targets.MODE_TARGET:
+        return None
+    return {"key": key, "required": required, "role": None, "ok": True,
+            "warnings": [f"ключ действует только в целевом режиме (google.mode={mode}) — "
+                         "пропущен"], "error": None}
+
+
+def _check(key: str, conn=None) -> dict:
     target = google_targets.target(key)
     required = target.required_role
+    if key == google_targets.LIVE_CALENDAR:
+        skipped = _live_calendar_skip(conn)
+        if skipped is not None:
+            return skipped
     try:
         object_id = google_targets.read_id(key) if key in google_targets.READ_SOURCES \
-            else google_targets.resolve(key)
+            else google_targets.resolve(key, conn=conn)
     except Exception as exc:  # noqa: BLE001 — исход отчёта
         return {"key": key, "required": required, "role": None, "ok": False,
                 "warnings": [], "error": getattr(exc, "code", str(exc))}
@@ -199,7 +276,8 @@ def _check(key: str) -> dict:
             if required == google_targets.ROLE_READER:
                 role, warnings = _calendar_read_role(object_id)
             else:
-                role, warnings = _calendar_write_role(object_id)
+                role, warnings = _calendar_write_role(
+                    object_id, allow_probe=key != google_targets.LIVE_CALENDAR)
         else:
             role, warnings = _sheets_role(object_id)
     except Exception as exc:  # noqa: BLE001
@@ -218,7 +296,14 @@ def main(argv: list[str] | None = None) -> int:
         print("нет ключа сервисного аккаунта (GOOGLE_SA_JSON)")
         return 2
     keys = sorted(set(google_targets.READ_SOURCES) | set(google_targets.WRITE_TARGETS))
-    rows = [_check(key) for key in keys]
+    # Пул создаётся закрытым: строка `calendar.live` читает режим из БД, поэтому пул
+    # открывает и закрывает сам скрипт, а режим читается в этом соединении.
+    _pool_open()
+    try:
+        with core.pool.connection() as conn:
+            rows = [_check(key, conn) for key in keys]
+    finally:
+        _pool_close()
     if args.json:
         print(json.dumps(rows, ensure_ascii=False, indent=2))
     else:
