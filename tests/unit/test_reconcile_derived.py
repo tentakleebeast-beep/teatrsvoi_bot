@@ -136,13 +136,20 @@ def test_производная_строка_не_в_изменено_и_вид�
 
 
 def test_производная_строка_не_отклоняется_как_удалённая(rec):
-    """Лист её не «удалял»: статус строки держит событие, а не файл."""
-    derived = {"id": 12, "origin": "event", "sheet_written_at": "2026-11-06T10:00:00",
+    """Лист её не «удалял»: статус строки держит событие, а не файл.
+
+    Проверка идёт на строке с `origin='import'`: такую лист мог бы счесть удалённой
+    (она в него писалась), и только условие `event_id is not null` её спасает.
+    Строка с `origin='event'` рядом — чтобы правило не сузилось до одного источника.
+    """
+    derived = {"id": 12, "origin": "import", "sheet_written_at": "2026-11-06T10:00:00",
                "sheet_error": None, "event_id": 99}
+    from_event = {"id": 14, "origin": "event", "sheet_written_at": None,
+                  "sheet_error": None, "event_id": 99}
     hand = {"id": 13, "origin": "file", "sheet_written_at": "2026-11-06T10:00:00",
             "sheet_error": None, "event_id": None}
 
-    rejected, unconfirmed = rec.triage_missing([derived, hand], set())
+    rejected, unconfirmed = rec.triage_missing([derived, from_event, hand], set())
 
     assert [row["id"] for row in rejected] == [13], "производная ушла в rejected"
     assert unconfirmed == []
