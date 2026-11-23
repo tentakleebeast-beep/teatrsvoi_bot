@@ -163,3 +163,46 @@ def test_заполнить_по_шаблону_показывает_предп�
     assert rows == 2, "в предпросмотре не видно дней шаблона"
     previews = [body for kind, body in WEEK_EVENTS if kind == "TEMPLATE_APPLY"]
     assert previews and previews[0]["apply"] is False, previews
+
+
+def _open_hours(page) -> None:
+    """Лист дня в режиме «Указать часы»: поля «с» и «до» на экране."""
+    _open_day(page)
+    page.locator('#day-modes .ui-radio-row[data-mode="hours"]').click()
+    page.wait_for_selector("#day-from", timeout=5_000)
+
+
+def test_время_через_точку_сохраняется_как_двоеточие(week_page) -> None:
+    """Обращение №45: «18.30» из чата и таблиц лист дня принимает наравне с «18:30».
+
+    Проверяем именно запись: человек вводит привычный формат, закрывает лист,
+    а на сервер уходит каноническое «18:30», а не отказ «время пишется так».
+    """
+    page = week_page
+    _open_hours(page)
+    page.locator("#day-from").fill("18.30")
+    page.locator("#day-to").fill("23.00")
+    _close_outside(page)
+
+    page.wait_for_timeout(300)
+    posts = _posts()
+    assert posts, "время с точкой не записалось — лист закрылся без сохранения"
+    day = {item["day"]: item for item in posts[-1]["days"]}["2026-10-28"]
+    assert day["from_time"] == "18:30", day
+    assert day["to_time"] == "23:00", day
+
+
+def test_время_без_двузначных_минут_отклоняется_с_подсказкой(week_page) -> None:
+    """Обращение №45: «10.3» — не время, отказ называет оба формата и не теряет лист."""
+    page = week_page
+    _open_hours(page)
+    page.locator("#day-from").fill("10.3")
+    page.locator("#day-to").fill("23.00")
+
+    page.mouse.click(10, 10)      # закрытие мимо кнопки: лист остаётся открытым
+    error = page.locator("#day-error")
+    error.wait_for(state="visible", timeout=5_000)
+    assert error.inner_text().strip() == "Время пишется так: 18:00 или 18.30."
+
+    page.wait_for_timeout(300)
+    assert _posts() == [], "лист записал кривое время вместо отказа"
