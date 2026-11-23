@@ -166,6 +166,13 @@ def test_отчёт_отдаёт_все_ключи_контракта(monkeypatc
     assert set(report["untyped"]) == {"total", "human"}
 
 
+def test_окно_отчёта_включает_последний_день(monkeypatch):
+    """Одно правило с `refresh`: границы окна в отчёте включающие (190 §10.2, §10.1)."""
+    _conn, _draft, report = _fixture(monkeypatch)
+
+    assert report["window"] == {"from": "2026-12-19", "to": "2026-12-19"}
+
+
 def test_цвет_и_метка_считаются_по_настройке(monkeypatch):
     """AC-13: цвет show=11, метка show=С — расхождение видно поимённо."""
     _conn, _draft, report = _fixture(monkeypatch)

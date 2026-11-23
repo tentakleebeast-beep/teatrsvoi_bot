@@ -96,8 +96,7 @@ def google_refresh(body: RefreshIn | None = None,
     time_from, time_to = _window(body)
 
     report: dict = {"ok": True, "dry_run": body.dry_run,
-                    "window": {"from": time_from.date().isoformat(),
-                               "to": (time_to - timedelta(days=1)).date().isoformat()},
+                    "window": calendar_sync.window_dates(time_from, time_to),
                     "sources": {}}
     with core.pool.connection() as conn:
         for key in requested:

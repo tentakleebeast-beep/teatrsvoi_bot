@@ -72,6 +72,17 @@ LABEL_RE = re.compile(r"^\s*\[([А-ЯЁ])\]\s*")
 LEGACY_SEPS = (" - ", " — ", " – ", "- ")
 
 
+def window_dates(time_from: datetime, time_to: datetime) -> dict[str, str]:
+    """Границы окна для отчёта: включающие, по последней секунде окна.
+
+    `time_to` — исключающая граница (так её понимает `events.list`), поэтому
+    «до 2026-12-01T00:00» в отчёте печатается как `2026-11-30`, а не `2026-12-01`:
+    иначе экран показывает день, событий которого в отчёт не попало.
+    """
+    return {"from": time_from.date().isoformat(),
+            "to": (time_to - timedelta(seconds=1)).date().isoformat()}
+
+
 def default_window(today: date | None = None) -> tuple[datetime, datetime]:
     """Окно чтения по умолчанию — текущий календарный месяц в зоне сервиса."""
     now = datetime.now(core.TZ)
@@ -278,8 +289,7 @@ def scan(conn, *, read_service, draft_service, time_from: datetime, time_to: dat
     read_id = google_targets.read_id("calendar.read")
     previous = read_as_of(conn)
     report: dict = {
-        "calendar": "read", "window": {"from": time_from.date().isoformat(),
-                                       "to": time_to.date().isoformat()},
+        "calendar": "read", "window": window_dates(time_from, time_to),
         "as_of": None, "stale": True, "error": None, "scanned": 0,
         "untyped": {"total": 0, "human": 0}, "counts": {}, "dry_run": dry_run,
         "changed_in_google": [], "moved_to_live": [], "color_mismatch": [],

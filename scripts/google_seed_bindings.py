@@ -38,7 +38,16 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
+# Корень проекта — раньше tool-api: `app.settings` импортирует `services.shared.settings`,
+# поэтому одного `services/tool-api` в пути мало (та же схема, что в `scripts/_cli.py`
+# и `scripts/build_screen_map.py`). Проверяется запуском `python scripts/<имя>.py`.
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "services" / "tool-api"))
+
+if __name__ == "__main__":   # запуск файлом: `.env` проекта читается до настроек сервиса
+    from _cli import apply_env
+
+    apply_env()
 
 from app import core, google_targets, sheet_binding  # noqa: E402
 
