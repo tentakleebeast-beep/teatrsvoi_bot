@@ -73,9 +73,13 @@ WRITE_TARGETS: dict[str, Target] = {
         meta={"header_row": 1, "first_col": 1, "meta": {"date_col": 2, "people_from": 4}}),
     "schedule.test": Target(
         "schedule.test", SHEET, "hour_matrix",
-        meta={"header_row": 1, "first_col": 1, "meta": {"dates_row": 1,
-                                                       "hours": [f"{hour:02d}:00"
-                                                                 for hour in range(8, 24)]}}),
+        # Шапка hour_matrix — только A1 «Час»: строка 1 хранит даты месяца и меняется
+        # каждый месяц, поэтому суммой её крыть нельзя (иначе `header_mismatch`
+        # навсегда после первой смены месяца). Часы и даты проверяет
+        # `schedule_test_sheet.plan_probes` перед записью.
+        meta={"header_row": 1, "first_col": 1, "last_col": 1,
+              "meta": {"dates_row": 1,
+                       "hours": [f"{hour:02d}:00" for hour in range(8, 24)]}}),
     "calendar.draft": Target("calendar.draft", CALENDAR),
 }
 

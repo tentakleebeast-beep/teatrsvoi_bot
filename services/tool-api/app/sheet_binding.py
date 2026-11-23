@@ -216,12 +216,14 @@ def _service(key: str, write: bool):
 
 
 def _resolve_title(key: str, binding: Binding) -> str:
-    """Имя листа: привязка, иначе (для занятости) настройка `SCHEDULE_SHEET_TITLE`."""
+    """Имя листа: привязка, иначе настройка (`SCHEDULE_SHEET_TITLE`, шаблон теста)."""
     title = binding.title
     if title:
         return title
     if key == "schedule.workload":
         return str(core.SCHEDULE_SHEET_TITLE or "").strip()
+    if key == "schedule.test":
+        return str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip()
     return ""
 
 
@@ -232,8 +234,12 @@ def _header_values(service, spreadsheet_id: str, title: str, header_row: int) ->
 
 
 def open_sheet(key: str, *, conn, write: bool = True, service: Any = None,
-               drive: Any = None) -> SheetSession:
+               drive: Any = None, title: str | None = None) -> SheetSession:
     """Шаги 1–6 протокола: ключ, режим, привязка, лист по имени, шапка, свежесть.
+
+    `title` — явное имя листа для объектов, у которых страниц много (`schedule.test`:
+    «MM.YYYY · Ник»). Оно сильнее привязки, но не отменяет её: без строки `sheet_binding`
+    запись всё равно отказывает `binding_missing`.
 
     Возвращает открытый лист. Любой шаг может отказать кодом из 186 §9 — и это
     правильный исход: писать наугад бот не умеет.
@@ -255,7 +261,7 @@ def open_sheet(key: str, *, conn, write: bool = True, service: Any = None,
 
     binding = require_binding(conn, key)
     service = service if service is not None else _service(key, write)
-    title = _resolve_title(key, binding)
+    title = (title or "").strip() or _resolve_title(key, binding)
     if not title:
         raise ApiError(409, "sheet_ambiguous: лист не определён однозначно",
                        code="sheet_ambiguous")
@@ -321,11 +327,17 @@ def remember_header(conn, session: SheetSession) -> None:
                  "where key = %s", (computed, session.key))
 
 
-def touch_after_write(conn, session: SheetSession) -> None:
-    """Свежесть после записи: `last_read_at = now()`, `last_edit_time` — время файла."""
+def touch_after_write(conn, session: SheetSession,
+                      modified_time: datetime | None = None) -> None:
+    """Свежесть после записи: `last_read_at = now()`, `last_edit_time` — время файла.
+
+    `modified_time` передаётся, когда после записи удалось перечитать метаданные файла:
+    собственное изменение двигает `modifiedTime`, и без свежего значения следующая
+    запись в тот же лист честно упёрлась бы в `sheet_changed_since_read`.
+    """
+    stamp = modified_time or session.modified_time or datetime.now(UTC)
     conn.execute("update sheet_binding set last_read_at = now(), last_edit_time = %s, "
-                 "updated_at = now() where key = %s",
-                 (session.modified_time or datetime.now(UTC), session.key))
+                 "updated_at = now() where key = %s", (stamp, session.key))
 
 
 def touch_after_read(conn, key: str, modified_time: datetime | None) -> None:
@@ -419,6 +431,113 @@ def column_name(index: int) -> str:
         index, rest = divmod(index - 1, 26)
         letters = chr(ord("A") + rest) + letters
     return letters or "A"
+
+
+def column_index(letters: str) -> int:
+    """A → 1, AA → 27. Обратная к `column_name`."""
+    index = 0
+    for char in str(letters or "").upper():
+        if not "A" <= char <= "Z":
+            raise ValueError(f"bad column letters: {letters}")
+        index = index * 26 + (ord(char) - ord("A") + 1)
+    return index
+
+
+def a1_row_col(a1: str) -> tuple[int, int] | None:
+    """`B7` → (7, 2). Неразборчивый адрес — None (писать некуда)."""
+    text = str(a1 or "").split("!")[-1].strip().upper()
+    letters = "".join(char for char in text if char.isalpha())
+    digits = "".join(char for char in text if char.isdigit())
+    if not letters or not digits:
+        return None
+    try:
+        return int(digits), column_index(letters)
+    except ValueError:
+        return None
+
+
+#: Предел запросов в одном `batchUpdate`: у Sheets API он ограничен, а проба цветов
+#: пишет сотни клеток за прогон. Пачку режем молча — это транспорт, не правило.
+BATCH_LIMIT = 100
+
+
+def write_colors(session: SheetSession, cells: Iterable[tuple[str, dict]],
+                 *, field: str = "userEnteredFormat.backgroundColor") -> None:
+    """Залить фон клеток по адресам одним (или несколькими) `batchUpdate`.
+
+    Текст пишется `values`, а цвет — только `repeatCell`: `values.batchUpdate` формат
+    не меняет. Для тестового листа цвет и есть содержание пробы (186 §4.3, AC-10).
+    """
+    requests = []
+    for a1, color in cells:
+        position = a1_row_col(a1)
+        if position is None:
+            continue
+        row, column = position
+        requests.append({"repeatCell": {
+            "range": {"sheetId": session.sheet_id,
+                      "startRowIndex": row - 1, "endRowIndex": row,
+                      "startColumnIndex": column - 1, "endColumnIndex": column},
+            "cell": {"userEnteredFormat": {"backgroundColor": dict(color)}},
+            "fields": field}})
+    for start in range(0, len(requests), BATCH_LIMIT):
+        chunk = requests[start:start + BATCH_LIMIT]
+        try:
+            session.service.spreadsheets().batchUpdate(
+                spreadsheetId=session.spreadsheet_id, body={"requests": chunk}).execute()
+        except core.GOOGLE_API_ERRORS as exc:
+            raise _google_error(exc, "sheet_write_failed") from None
+
+
+def _same_color(got: dict, expected: dict, tolerance: float = 0.02) -> bool:
+    """Совпадает ли фон с записанным (Google отдаёт доли 0…1 с округлением)."""
+    if not isinstance(got, dict) or not got:
+        return False
+    for key in ("red", "green", "blue"):
+        try:
+            left = float(got.get(key, 0) or 0)
+            right = float((expected or {}).get(key, 0) or 0)
+        except (TypeError, ValueError):
+            return False
+        if abs(left - right) > tolerance:
+            return False
+    return True
+
+
+def verify_colors(session: SheetSession, cells: Iterable[tuple[str, dict]]) -> list[dict]:
+    """Перечитать фон тех же клеток: цвет — тоже данные записи, а не оформление «на глаз».
+
+    `values.batchGet` формат не отдаёт, поэтому читаем сетку страницы один раз
+    (`spreadsheets.get` с `includeGridData`) и сравниваем адреса из плана.
+    """
+    positions: list[tuple[str, dict, tuple[int, int]]] = []
+    for a1, color in cells:
+        position = a1_row_col(a1)
+        if position is not None:
+            positions.append((a1, dict(color), position))
+    if not positions:
+        return []
+    max_row = max(item[2][0] for item in positions)
+    max_col = max(item[2][1] for item in positions)
+    budget = f"{session.a1}A1:{column_name(max_col)}{max_row}"
+    try:
+        answer = session.service.spreadsheets().get(
+            spreadsheetId=session.spreadsheet_id, ranges=[budget], includeGridData=True,
+            fields="sheets.data.rowData.values.userEnteredFormat.backgroundColor").execute()
+    except core.GOOGLE_API_ERRORS as exc:
+        raise _google_error(exc, "sheet_verify_failed") from None
+    data = ((answer.get("sheets") or [{}])[0].get("data") or [{}])[0].get("rowData") or []
+    mismatched = []
+    for a1, expected, (row, column) in positions:
+        got: dict = {}
+        if row - 1 < len(data):
+            values = (data[row - 1] or {}).get("values") or []
+            if column - 1 < len(values) and isinstance(values[column - 1], dict):
+                got = ((values[column - 1].get("userEnteredFormat") or {})
+                       .get("backgroundColor") or {})
+        if not _same_color(got, expected):
+            mismatched.append({"cell": a1, "expected": expected, "got": got})
+    return mismatched
 
 
 def read_row(session: SheetSession, sheet_row: int, width: int) -> list[str]:

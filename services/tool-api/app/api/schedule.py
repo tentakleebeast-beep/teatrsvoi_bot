@@ -8,7 +8,15 @@ from typing import Any, Literal
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field, field_validator
 
-from .. import availability_store, core, google_targets, month_grid, sheet_binding, sheet_load
+from .. import (
+    availability_store,
+    core,
+    google_targets,
+    month_grid,
+    schedule_test_sheet,
+    sheet_binding,
+    sheet_load,
+)
 from ..availability_card import (
     DayCard,
     DayCardError,
@@ -1166,11 +1174,13 @@ class WeekSheetIn(core.ApiIn):
 def _sheet_sync(target: int, start: str | None, apply: bool, force: bool,
                 actor_id: int) -> dict:
     """
-    Записать неделю занятости в лист «Расписание студийцы» (FR-C9).
+    Записать неделю занятости в лист бота (FR-C9): копия `schedule.workload`.
 
-    Порядок как у бюджета: сначала план и расхождения (без `apply` ничего не пишем),
-    потом запись каноническим текстом в клетку дня и снимок в скрытую колонку `svoi`.
-    После записи адреса перечитываются: «записали» без проверки не считается.
+    Живой «Расписание студийцы» здесь не пишется никогда — он источник чтения
+    (`schedule.human`). Порядок как у бюджета: сначала план и расхождения (без
+    `apply` ничего не пишем), потом запись каноническим текстом в клетку дня и снимок
+    в скрытую колонку `svoi`. После записи адреса перечитываются: «записали» без
+    проверки не считается.
 
     Привязка не угадывается: строки — из колонки B (там даты), колонка человека — из
     шапки. Не нашли или нашли двоих — возвращаем расхождение, а не пишем наугад.
@@ -1278,6 +1288,36 @@ def webapp_availability_sheet(body: WeekSheetIn, who: dict = Depends(core.webapp
     """Запись в лист из Mini App: та же логика, что и из чата, без второго набора правил."""
     _webapp_self(who)
     return _sheet_sync(who["id"], body.start, body.apply, body.force, who["id"])
+
+
+class TestSheetIn(core.ApiIn):
+    """Одна проба в тестовый лист цветов: страница `MM.YYYY · Ник` (186 AC-10)."""
+
+    month: str = Field(min_length=6, max_length=10)
+    nick: str = Field(min_length=1, max_length=40)
+    date: str = Field(pattern=r"^\d{4}-\d{2}-\d{2}$")
+    hour: int = Field(ge=8, le=23)
+    status: str = "busy"
+    text: str | None = Field(default=None, max_length=40)
+    apply: bool = False
+
+
+@router.post("/tools/availability/test-sheet")
+def availability_test_sheet(body: TestSheetIn,
+                            who: dict = Depends(core.require("admin.panel"))) -> dict:
+    """Репетиция цветов: запись только ключом `schedule.test` (186 §4.3, AC-10).
+
+    Страница выбирается по шаблону `SCHEDULE_TEST_SHEET_PATTERN`; нет страницы или
+    она не одна — `sheet_ambiguous`, страница не создаётся. Право `admin.panel`:
+    это проверка раскладки, а не действие человека над своей занятостью.
+    """
+    probe = schedule_test_sheet.Probe(day=schedule_test_sheet.parse_day(body.date),
+                                      hour=body.hour, status=body.status,
+                                      text=(body.text or "").strip())
+    with core.pool.connection() as conn:
+        return schedule_test_sheet.write_probes(
+            conn, month=body.month, nick=body.nick, probes=[probe],
+            actor_id=who.get("id"), apply=body.apply)
 
 
 
