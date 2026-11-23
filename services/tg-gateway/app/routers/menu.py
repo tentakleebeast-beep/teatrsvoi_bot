@@ -371,7 +371,8 @@ async def run_menu_action(message: Message, state: FSMContext, label: str) -> No
 
 
 @router.message(StateFilter(None, AssignDraft.await_kind, AssignDraft.await_date,
-                            AssignDraft.await_time), F.text.in_(keyboards.MENU_SURFACE))
+                            AssignDraft.await_time, AssignDraft.await_window),
+                F.text.in_(keyboards.MENU_SURFACE))
 async def on_menu_button(message: Message, state: FSMContext) -> None:
     # Кнопка меню снимает незавершённый диалог назначения: человек ушёл в другой дом.
     await state.clear()
@@ -663,7 +664,8 @@ async def task_frame_text(message: Message, state: FSMContext) -> None:
 
 
 @router.message(StateFilter(None, Reg.await_code, AssignDraft.await_kind,
-                            AssignDraft.await_date, AssignDraft.await_time),
+                            AssignDraft.await_date, AssignDraft.await_time,
+                            AssignDraft.await_window),
                 F.text & ~F.text.startswith("/"))
 async def on_text(message: Message, state: FSMContext) -> None:
     text = (message.text or "").strip()

@@ -1415,27 +1415,25 @@
       },
       "ParticipationIn": {
         "properties": {
-          "from_hour": {
+          "participant_id": {
+            "type": "integer"
+          },
+          "time_from": {
             "anyOf": [
               {
-                "maximum": 24.0,
-                "minimum": 0.0,
-                "type": "integer"
+                "maxLength": 5,
+                "type": "string"
               },
               {
                 "type": "null"
               }
             ]
           },
-          "participant_id": {
-            "type": "integer"
-          },
-          "to_hour": {
+          "time_to": {
             "anyOf": [
               {
-                "maximum": 24.0,
-                "minimum": 0.0,
-                "type": "integer"
+                "maxLength": 5,
+                "type": "string"
               },
               {
                 "type": "null"

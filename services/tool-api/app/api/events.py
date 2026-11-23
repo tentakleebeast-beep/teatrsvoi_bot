@@ -32,13 +32,14 @@ class ParticipationIn(core.ApiIn):
     """Личное окно участия одного человека (V-134).
 
     Пустые поля значат «весь интервал события»: время участия необязательно,
-    и организатор не должен упираться в форму. Часы считаются в тот же день,
-    что и событие, — других суток у репетиции нет.
+    и организатор не должен упираться в форму. Время — «ЧЧ:ММ» того же дня, что
+    и событие, с минутами: актёр просит «19:30–21:00», и форма не имеет права
+    молча округлить его до 19:00.
     """
 
     participant_id: int
-    from_hour: int | None = Field(default=None, ge=0, le=24)
-    to_hour: int | None = Field(default=None, ge=0, le=24)
+    time_from: str | None = Field(default=None, max_length=5)
+    time_to: str | None = Field(default=None, max_length=5)
 
 
 class AssignIn(core.ApiIn):
@@ -225,8 +226,51 @@ def _discipline_denied(conn, who: dict, kind: str | None,
     return f"Вы не ведёте эту дисциплину: доступны {names or 'ни одной'}."
 
 
+def _minutes_of(value) -> int | None:
+    """«19:30» → 1170 минут от полуночи; пусто — None (весь интервал события).
+
+    Минуты, а не часы: актёр в анкете просит «со скольки задействован», и окно
+    19:30–21:00 обязано остаться 19:30–21:00, а не превратиться в 19:00.
+    """
+    if value is None or value == "":
+        return None
+    if isinstance(value, int):
+        return value * 60
+    text = str(value).strip()
+    parts = text.split(":")
+    try:
+        hours, minutes = int(parts[0]), int(parts[1])
+        total = hours * 60 + minutes
+    except (IndexError, ValueError):
+        hours, minutes, total = 0, 0, -1
+    if not 0 <= total <= 24 * 60 or minutes >= 60 or hours >= 24:
+        raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
+                       f"Время участия «{text}» не понял: нужно ЧЧ:ММ, например 19:30.",
+                       code="participation_bad_time")
+    return total
+
+
+def _clock(minutes: int | None) -> str | None:
+    """Минуты от полуночи → «ЧЧ:ММ» для ответа и карточки."""
+    if minutes is None:
+        return None
+    return f"{minutes // 60:02d}:{minutes % 60:02d}"
+
+
+def _local_minutes(moment) -> int:
+    """Момент в поясе студии → минуты от полуночи (сравнение окон, V-134).
+
+    Сутки в сравнении не участвуют: личное время — это часы того дня, на
+    который стоит событие, и после переноса на другой день оно остаётся теми же
+    часами. Иначе окно 19:00 при переносе на завтра «выходило» бы за событие
+    только из-за смены даты.
+    """
+    local = moment.astimezone(core.TZ)
+    return local.hour * 60 + local.minute
+
+
 def _windows_map(items) -> dict[int, tuple[int | None, int | None]]:
-    """Личные окна из запроса: человек → (час «с», час «до») (V-134).
+    """Личные окна из запроса: человек → (минуты «с», минуты «до») (V-134).
 
     Пустая пара значит «весь интервал события»: поле необязательное, и
     организатор не должен упираться в форму. Обратная пара отвергается 422
@@ -237,18 +281,21 @@ def _windows_map(items) -> dict[int, tuple[int | None, int | None]]:
     for item in items or []:
         if isinstance(item, dict):
             pid = item.get("participant_id", item.get("id"))
-            from_hour, to_hour = item.get("from_hour"), item.get("to_hour")
+            from_min = item.get("time_from", item.get("from_hour"))
+            to_min = item.get("time_to", item.get("to_hour"))
         else:
-            pid, from_hour, to_hour = item.participant_id, item.from_hour, item.to_hour
+            pid = item.participant_id
+            from_min, to_min = item.time_from, item.time_to
         if pid is None:
             raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
                            "Не понял, чьё это время участия: нужен человек.",
                            code="participation_person_required")
-        if from_hour is not None and to_hour is not None and to_hour <= from_hour:
+        start_min, end_min = _minutes_of(from_min), _minutes_of(to_min)
+        if start_min is not None and end_min is not None and end_min <= start_min:
             raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
                            "Время участия должно идти вперёд: «с» раньше «до».",
                            code="participation_bad_window")
-        result[int(pid)] = (from_hour, to_hour)
+        result[int(pid)] = (start_min, end_min)
     return result
 
 
@@ -256,14 +303,15 @@ def _windows_outside(windows: dict[int, tuple[int | None, int | None]],
                      event_from: int, event_to: int) -> list[int]:
     """Люди, чьё личное окно не помещается в интервал события.
 
-    Пустое поле берётся из интервала события, поэтому «с 19:00 до пустого»
-    при событии 19:00–21:00 — норма, а «до 22:00» — уже ошибка.
+    Границы события и окна — в минутах от полуночи. Пустое поле берётся из
+    интервала события, поэтому «с 19:00 до пустого» при событии 19:00–21:00 —
+    норма, а «до 22:00» — уже ошибка.
     """
     outside = []
-    for pid, (from_hour, to_hour) in windows.items():
-        start_hour = event_from if from_hour is None else from_hour
-        end_hour = event_to if to_hour is None else to_hour
-        if start_hour < event_from or end_hour > event_to or end_hour <= start_hour:
+    for pid, (from_min, to_min) in windows.items():
+        start_min = event_from if from_min is None else from_min
+        end_min = event_to if to_min is None else to_min
+        if start_min < event_from or end_min > event_to or end_min <= start_min:
             outside.append(pid)
     return outside
 
@@ -273,12 +321,15 @@ def _upsert_windows(conn, event_id: int, day: date,
     """Записать личные окна перечисленных людей (V-134).
 
     Пишется строка на каждого, даже с пустым окном: состав события тогда живёт
-    в одном месте, а «пусто = весь интервал» решает чтение.
+    в одном месте, а «пусто = весь интервал» решает чтение. Пустая граница
+    остаётся `null` — это и значит «край следует за событием»; подставлять сюда
+    края прежнего интервала нельзя, иначе после переноса окно «весь интервал»
+    превращается в чужое личное время (так и вышло в первом заходе карты).
     """
     base = datetime.combine(day, datetime.min.time(), core.TZ)
-    for pid, (from_hour, to_hour) in windows.items():
-        from_at = base + timedelta(hours=from_hour) if from_hour is not None else None
-        to_at = base + timedelta(hours=to_hour) if to_hour is not None else None
+    for pid, (from_min, to_min) in windows.items():
+        from_at = base + timedelta(minutes=from_min) if from_min is not None else None
+        to_at = base + timedelta(minutes=to_min) if to_min is not None else None
         conn.execute("""
             insert into event_participant (event_id, participant_id, from_at, to_at)
             values (%s, %s, %s, %s)
@@ -411,7 +462,7 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
         unknown_windows = [pid for pid in windows if pid not in known]
         outside_windows = _windows_outside(
             {pid: window for pid, window in windows.items() if pid in known},
-            from_hour, to_hour)
+            from_hour * 60, to_hour * 60)
 
         # Мастер — только по своей дисциплине (140 §1). Проверка после разбора
         # `discipline` и до записи: иначе карточка строилась бы, а отказ приходил
@@ -451,8 +502,8 @@ def _prepare_assignment(body: AssignIn, who: dict | None = None
             "duration_hours": to_hour - from_hour,
             "venue": venue, "venue_name": venue_name,
             "participants": [{"id": person["id"], "name": person["name"],
-                              "from_hour": windows.get(person["id"], (None, None))[0],
-                              "to_hour": windows.get(person["id"], (None, None))[1]}
+                              "time_from": _clock(windows.get(person["id"], (None, None))[0]),
+                              "time_to": _clock(windows.get(person["id"], (None, None))[1])}
                              for person in people],
             "project_id": body.project_id,
             "missed_names": missed, "busy_people": busy,
@@ -648,7 +699,7 @@ def events_assign(payload: dict,
         if payload.get("windows"):
             windows.update(_windows_map(payload["windows"]))
         windows = {pid: window for pid, window in windows.items() if pid in people}
-        outside = _windows_outside(windows, from_hour, to_hour)
+        outside = _windows_outside(windows, from_hour * 60, to_hour * 60)
         if outside:
             raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
                            "Личное время участия выходит за интервал события.",
@@ -995,10 +1046,17 @@ def events_move(body: EventMoveIn,
                            code="participation_outside_event")
         saved = conn.execute("select participant_id, from_at, to_at from event_participant "
                              "where event_id = %s", (plan["id"],)).fetchall()
+        # `null` в строке значит «край следует за событием», а не «край старого
+        # интервала»: сравниваем только явно заданные границы, иначе человек без
+        # личного времени выглядел бы вышедшим за событие на каждом переносе.
+        start_min = start.hour * 60 + start.minute
+        end_min = end.hour * 60 + end.minute
         uncovered = [row["participant_id"] for row in saved
                      if row["participant_id"] not in new_windows
-                     and ((row["from_at"] or old_start) < start
-                          or (row["to_at"] or old_end) > end)]
+                     and ((row["from_at"] is not None
+                           and _local_minutes(row["from_at"]) < start_min)
+                          or (row["to_at"] is not None
+                              and _local_minutes(row["to_at"]) > end_min))]
         names_by_id = {r["id"]: r["display_name"] for r in conn.execute(
             "select id, display_name from participant where id = any(%s)",
             (sorted(set(uncovered) | roster),)).fetchall()}
@@ -1082,9 +1140,11 @@ def events_card(event_id: int,
     расписания студии (`schedule.read.all`) — чтобы актёр видел своё участие.
     Запись карточка не делает; отмена и перенос остаются за `schedule.write`.
 
-    Личных полей в ответе нет и быть не должно: участник — только id и имя.
-    Телефон, взносы, дорога и день рождения живут в карточке человека и в бюджетных
-    ответах, а не в расписании; отдавать их пришлось бы только тому, у кого есть
+    Личных данных человека здесь нет: участник — только id и имя. Личное время
+    участия (V-134) — не персональные данные, а расписание: своё окно получает
+    каждый, чужие окна — только при `schedule.write`. Телефон, взносы, дорога и
+    день рождения живут в карточке человека и в бюджетных ответах, а не в
+    расписании; отдавать их пришлось бы только тому, у кого есть
     `participants.contact` (`app/privacy.py`). Структуру ответа сторожит
     `tests/integration/test_troupe_schedule.py`: она сверяет набор ключей, а не их значения.
     """

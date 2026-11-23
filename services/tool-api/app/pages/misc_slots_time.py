@@ -46,10 +46,18 @@ TIME_FIELDS_SCRIPT = r"""
     return host;
   }
 
-  // Что уйдёт на сервер: только заполненные поля. Ошибка возвращается словами,
-  // а не молчаливой потерей ввода.
+  // Что уйдёт на сервер: только заполненные поля. Время — строка «ЧЧ:ММ» с
+  // минутами: сервер хранит минуты, поэтому «19:30» не превращается в 19:00.
+  // Ошибка возвращается словами, а не молчаливой потерей ввода.
   function collectWindows(host, picked) {
     var windows = [];
+    function parseClock(text) {
+      var match = /^(\d{1,2}):(\d{2})$/.exec(text);
+      if (!match) { return null; }
+      var hours = Number(match[1]), minutes = Number(match[2]);
+      if (hours > 23 || minutes > 59) { return null; }
+      return text;
+    }
     for (var i = 0; i < picked.length; i += 1) {
       var id = String(picked[i].id);
       var fromInput = host.querySelector('[data-win-from="' + id + '"]');
@@ -57,12 +65,13 @@ TIME_FIELDS_SCRIPT = r"""
       var from = fromInput ? fromInput.value.trim() : "";
       var to = toInput ? toInput.value.trim() : "";
       if (!from && !to) { continue; }
-      if (!/^\d{1,2}:\d{2}$/.test(from || "") || (to && !/^\d{1,2}:\d{2}$/.test(to))) {
+      var fromText = from ? parseClock(from) : null;
+      var toText = to ? parseClock(to) : null;
+      if ((from && !fromText) || (to && !toText)) {
         return { error: "Время участия — ЧЧ:ММ, например 19:30.", windows: [] };
       }
       windows.push({ participant_id: picked[i].id,
-                     from_hour: from ? Number(from.split(":")[0]) : null,
-                     to_hour: to ? Number(to.split(":")[0]) : null });
+                     time_from: fromText, time_to: toText });
     }
     return { error: null, windows: windows };
   }

@@ -2949,3 +2949,23 @@ def stand_refresh_calls(reset: int = 0) -> dict:
     if reset:
         REFRESH_CALLS.clear()
     return {"count": len(calls), "last": calls[-1] if calls else None}
+
+
+@app.post("/tools/events/move")
+async def tools_events_move_stand(request: Request) -> JSONResponse:
+    """Стенд переноса события: предупреждение о личных окнах (V-134 AC4).
+
+    Страница обязана показать `warnings` словами, а не только «Перенесено.».
+    Предупреждение стабильно при раннем начале: событие 19:00–21:30, перенос на
+    18:00 не покрывает личное окно 19:30–21:00.
+    """
+    body = await request.json()
+    warnings = []
+    if body.get("from_hour") is not None and int(body["from_hour"]) < 19:
+        warnings = [{"code": "personal_windows_outside",
+                     "text": "Новый интервал не покрывает личное время: Витя. "
+                             "Окна не сдвинуты."}]
+    return JSONResponse({"ok": True, "event_id": body.get("event_id"), "changed": True,
+                         "in_calendar": True, "calendar_updated": True,
+                         "calendar_error": None, "notified": 1,
+                         "warnings": warnings})

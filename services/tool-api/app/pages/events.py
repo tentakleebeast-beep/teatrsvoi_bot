@@ -190,11 +190,13 @@ _SCRIPT_EVENT_CARD = r"""<script>
     }).then(function (res) {
       if (res.status === 200 && res.body && res.body.ok) {
         SVOI.closeSheet();
+        var notes = (res.body.warnings || []).map(function (item) {
+          return item.text;
+        }).filter(function (text) { return !!text; });
         if (res.body.calendar_error) {
-          SVOI.toast("Время изменено в расписании; в календарь записать не удалось.");
-        } else {
-          SVOI.toast("Перенесено.");
+          notes.unshift("Время изменено в расписании; в календарь записать не удалось.");
         }
+        SVOI.toast(notes.length ? notes.join(" ") : "Перенесено.");
         load();
         return;
       }

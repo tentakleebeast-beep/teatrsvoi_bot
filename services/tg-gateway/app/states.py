@@ -36,6 +36,9 @@ class AssignDraft(StatesGroup):
     await_kind = State()
     await_date = State()
     await_time = State()
+    # Личное время участия (V-134): ждём «19:30–21:00» для выбранного кнопкой
+    # человека. Необязательный шаг: подтвердить карточку можно и без него.
+    await_window = State()
 
 
 class Feedback(StatesGroup):

@@ -285,6 +285,10 @@ async def _move(cb: CallbackQuery, state: FSMContext) -> None:
     busy = [name for name in busy if name]
     if busy:
         lines.append("По отметкам заняты: " + ", ".join(busy) + ".")
+    for warning in res.get("warnings") or []:
+        note = warning.get("text")
+        if note:
+            lines.append("Внимание: " + note)
     if res.get("calendar_error"):
         lines.append("Календарь не ответил — время изменено в расписании, "
                      "в календаре проверить вручную.")

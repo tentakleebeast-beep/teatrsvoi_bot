@@ -100,6 +100,27 @@ def test_событие_на_весь_день_без_строки_времен�
     assert page.locator("#row-date").is_visible(), "потерялась дата события"
 
 
+def test_перенос_показывает_предупреждение_о_личных_окнах(app_page) -> None:
+    """V-134 AC4: «окна не сдвинуты» доходит до организатора словами.
+
+    Обоснование: docs/reports/194 §2 п.3. API возвращает предупреждение в JSON;
+    страница обязана показать его текстом, а не только «Перенесено.».
+    """
+    page = app_page("/webapp/event?calendar=draft&event_id=bot-1")
+    page.wait_for_selector("#card:not([hidden])", timeout=10_000)
+    page.locator("#move").click()
+    page.wait_for_selector("#m-date", timeout=10_000)
+    page.fill("#m-date", "2026-11-24")
+    page.fill("#m-from", "18:00")
+    page.fill("#m-to", "20:00")
+    page.locator(".ui-sheet__actions button", has_text="Перенести").last.click()
+
+    toast = page.wait_for_selector(".ui-toast", timeout=10_000)
+    text = toast.inner_text()
+    assert "Окна не сдвинуты" in text, f"предупреждение не показано: {text}"
+    assert page.svoi_errors == [], page.svoi_errors
+
+
 def test_карточка_на_320_px_без_горизонтальной_прокрутки(app_page) -> None:
     """Самый узкий экран: карточка не шире 320 px и JS-ошибок нет."""
     page = app_page("/webapp/event?calendar=draft&event_id=bot-1")

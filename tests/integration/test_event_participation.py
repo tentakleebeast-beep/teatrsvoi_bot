@@ -4,8 +4,9 @@
 
 Проверяется то, что человек увидит, а не форма запроса: пустое окно значит весь
 интервал события; заданное окно приходит своему участнику; чужое окно роли без
-`schedule.write` не приходит; окно вне события — 422; перенос события личные
-окна не сдвигает и говорит об этом предупреждением.
+`schedule.write` не приходит; окно вне события — 422; минуты не округляются до
+часа; перенос события личные окна не сдвигает и говорит об этом предупреждением,
+а перенос события без личных окон не предупреждает вовсе.
 """
 
 from __future__ import annotations
@@ -115,7 +116,8 @@ def test_заданное_окно_отдаётся_своему_участни�
         luda = _person(conn, 785003, "Своё Окно Людмила")
 
     assigned = _assign(client, "2026-12-22", 18, 22, [vitya, luda],
-                       windows=[{"participant_id": vitya, "from_hour": 19, "to_hour": 21}])
+                       windows=[{"participant_id": vitya,
+                                 "time_from": "19:00", "time_to": "21:00"}])
     assert assigned["ok"] is True, assigned
 
     card = client.get(f"/tools/events/{assigned['event_id']}",
@@ -124,6 +126,33 @@ def test_заданное_окно_отдаётся_своему_участни�
     assert card["my_time"]["time_to"] == "21:00"
     assert [row["participant_id"] for row in card["participation"]] == [vitya], \
         "роль без schedule.write не получает чужие строки"
+
+
+def test_минуты_не_округляются_до_часа(client, monkeypatch):
+    """«19:30–21:00» остаётся 19:30–21:00 и в базе, и в карточке (V-134)."""
+    _allow(client)
+    _prepare(monkeypatch)
+    with psycopg.connect(_test_dsn()) as conn:
+        vitya = _person(conn, 785008, "Минуты Виктор")
+
+    assigned = _assign(client, "2026-12-28", 18, 22, [vitya],
+                       windows=[{"participant_id": vitya,
+                                 "time_from": "19:30", "time_to": "21:00"}])
+    assert assigned["ok"] is True, assigned
+
+    card = client.get(f"/tools/events/{assigned['event_id']}",
+                      headers=_headers(785008)).json()["event"]
+    assert (card["my_time"]["time_from"], card["my_time"]["time_to"]) == ("19:30", "21:00"), \
+        "минуты потерялись: карточка показала бы чужое время"
+
+    with psycopg.connect(_test_dsn()) as conn:
+        row = conn.execute("select from_at, to_at from event_participant "
+                           "where event_id = %s and participant_id = %s",
+                           (assigned["event_id"], vitya)).fetchone()
+    from app import core as api
+
+    assert (row[0].astimezone(api.TZ).minute, row[1].astimezone(api.TZ).minute) == (30, 0), \
+        "в базе 19:30 превратилось в 19:00"
 
 
 def test_чужое_окно_не_приходит(client, monkeypatch):
@@ -135,7 +164,8 @@ def test_чужое_окно_не_приходит(client, monkeypatch):
         luda = _person(conn, 785005, "Чужое Окно Людмила")
 
     assigned = _assign(client, "2026-12-23", 18, 22, [vitya, luda],
-                       windows=[{"participant_id": vitya, "from_hour": 19, "to_hour": 21}])
+                       windows=[{"participant_id": vitya,
+                                 "time_from": "19:00", "time_to": "21:00"}])
     assert assigned["ok"] is True, assigned
 
     card = client.get(f"/tools/events/{assigned['event_id']}",
@@ -159,7 +189,8 @@ def test_окно_вне_события_это_422(client, monkeypatch):
     preview = client.post("/tools/events/preview", headers=HEADERS, json={
         "persist": True, "kind": "rehearsal", "date": "2026-12-24",
         "from_hour": 18, "to_hour": 21, "participants": [vitya],
-        "windows": [{"participant_id": vitya, "from_hour": 20, "to_hour": 23}]}).json()
+        "windows": [{"participant_id": vitya,
+                     "time_from": "20:30", "time_to": "23:00"}]}).json()
     assert preview["ok"] is False
     assert any(error["code"] == "participation_outside_event" for error in preview["errors"])
 
@@ -167,6 +198,21 @@ def test_окно_вне_события_это_422(client, monkeypatch):
                          json={"proposal_id": preview["proposal_id"]})
     assert answer.status_code == 422, answer.text
     assert answer.json()["code"] == "participation_outside_event"
+
+
+def test_время_не_чч_мм_это_422_словами(client, monkeypatch):
+    """«19.30» и «25:00» — отказ 422 с кодом, а не тихое округление."""
+    _allow(client)
+    _prepare(monkeypatch)
+    with psycopg.connect(_test_dsn()) as conn:
+        vitya = _person(conn, 785009, "Кривое Время Виктор")
+
+    answer = client.post("/tools/events/preview", headers=HEADERS, json={
+        "persist": True, "kind": "rehearsal", "date": "2026-12-29",
+        "from_hour": 18, "to_hour": 22, "participants": [vitya],
+        "windows": [{"participant_id": vitya, "time_from": "19.30", "time_to": "21:00"}]})
+    assert answer.status_code == 422, answer.text
+    assert answer.json()["code"] == "participation_bad_time"
 
 
 def test_перенос_не_сдвигает_личные_окна_и_предупреждает(client, monkeypatch):
@@ -177,7 +223,8 @@ def test_перенос_не_сдвигает_личные_окна_и_пред�
         vitya = _person(conn, 785007, "Перенос Окно Виктор")
 
     assigned = _assign(client, "2026-12-25", 18, 22, [vitya],
-                       windows=[{"participant_id": vitya, "from_hour": 19, "to_hour": 21}])
+                       windows=[{"participant_id": vitya,
+                                 "time_from": "19:00", "time_to": "21:00"}])
     assert assigned["ok"] is True, assigned
 
     moved = client.post("/tools/events/move", headers=HEADERS, json={
@@ -195,3 +242,28 @@ def test_перенос_не_сдвигает_личные_окна_и_пред�
 
     assert (row[0].astimezone(api.TZ).hour, row[1].astimezone(api.TZ).hour) == (19, 21), \
         "личное окно не сдвигается автоматически"
+
+
+def test_перенос_без_личных_окон_не_предупреждает(client, monkeypatch):
+    """Пустое окно = весь интервал события: перенос не делает его «вне события».
+
+    Регресс первого захода карты: `null` подменялся краями прежнего интервала,
+    и любое обычное событие при переносе получало ложное предупреждение.
+    """
+    _allow(client)
+    _prepare(monkeypatch)
+    with psycopg.connect(_test_dsn()) as conn:
+        vitya = _person(conn, 785010, "Без Окна Виктор")
+
+    assigned = _assign(client, "2026-12-26", 18, 22, [vitya])
+    assert assigned["ok"] is True, assigned
+
+    moved = client.post("/tools/events/move", headers=HEADERS, json={
+        "event_id": assigned["event_id"], "from_hour": 19, "to_hour": 21}).json()
+    assert moved["ok"] is True, moved
+    assert moved["warnings"] == [], f"ложное предупреждение: {moved['warnings']}"
+
+    card = client.get(f"/tools/events/{assigned['event_id']}",
+                      headers=_headers(785010)).json()["event"]
+    assert (card["my_time"]["time_from"], card["my_time"]["time_to"]) == ("19:00", "21:00"), \
+        "окно «весь интервал» должно следовать за событием"
