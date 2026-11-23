@@ -26,10 +26,15 @@ class _Req:
 
 
 class FakeSheets:
-    """Минимальная подделка googleapiclient: get/batchUpdate по A1-адресам."""
+    """Минимальная подделка googleapiclient: get/batchUpdate по A1-адресам.
 
-    def __init__(self, grid: list[list]):
+    `titles` — страницы файла. Значения отдаются одни и те же независимо от имени:
+    подделке важно, **какую** страницу выбрал бот, а не содержимое каждой.
+    """
+
+    def __init__(self, grid: list[list], titles: list[str] | None = None):
         self.grid = [list(row) for row in grid]
+        self.titles = list(titles or [TITLE])
         self.writes = 0
         self.hidden = []
 
@@ -81,7 +86,8 @@ class FakeSheets:
 
     def get(self, spreadsheetId=None, range=None, fields=None, majorDimension=None):
         if fields and "sheets" in fields:
-            return _Req(lambda: {"sheets": [{"properties": {"sheetId": 7, "title": TITLE}}]})
+            return _Req(lambda: {"sheets": [{"properties": {"sheetId": 7 + index, "title": title}}
+                                            for index, title in enumerate(self.titles)]})
         return _Req(lambda: {"values": self._slice(range or "A1")})
 
     def batchUpdate(self, spreadsheetId=None, body=None):
@@ -249,3 +255,94 @@ def test_fr_c9_неразобранный_текст_не_угадывается
     assert done["problems"] and done["problems"][0]["reason"] == "текст не разобран"
     assert done["accepted"] == []
     assert _occupancy(793001, monday)[18] == "busy"      # база не изменилась
+
+
+def _week_month_pages(monday: dt.date) -> list[str]:
+    """Страницы месяцев, которые задевает неделя: в листе «Занятость» своя на месяц."""
+    pages: list[str] = []
+    for offset in range(7):
+        key = f"Зан. {monday + dt.timedelta(days=offset):%m.%Y}"
+        if key not in pages:
+            pages.append(key)
+    return pages
+
+
+def _setup_month_pages(monkeypatch, client, chat_id: int = 793001,
+                       with_page: bool = True, titles: list[str] | None = None):
+    """Лист занятости со страницами месяцев: имя страницы берётся из шаблона привязки."""
+    from app import core
+
+    monday = service_today()
+    monday -= dt.timedelta(days=monday.weekday())
+    pages = _week_month_pages(monday)
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, chat_id, "Дарья Смирнова")
+        # так привязку засевает scripts/google_seed_bindings.py без SCHEDULE_SHEET_TITLE
+        conn.execute("update sheet_binding set sheet_title = %s where key = 'schedule.workload'",
+                     ("Зан. {month}",))
+        conn.commit()
+    fake = FakeSheets(_grid(monday),
+                      titles=titles if titles is not None
+                      else ["Занятость"] + (pages if with_page else []))
+    monkeypatch.setattr(core, "_sheets", lambda: fake)
+    monkeypatch.setattr(core, "_sheets_read", lambda: fake)
+    monkeypatch.setattr(core, "SCHEDULE_SPREADSHEET_ID", "fake")
+    monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", "")
+    headers = {**HEADERS, "X-Actor-Chat-Id": str(chat_id)}
+    client.post("/tools/availability/week", headers=headers,
+                json={"start": monday.isoformat(),
+                      "days": [{"day": monday.isoformat(), "status": "busy",
+                                "to_time": "18:30"},
+                               {"day": (monday + dt.timedelta(days=1)).isoformat(),
+                                "status": "free", "from_time": "19:00"}]})
+    return fake, monday, headers, pages
+
+
+def test_д4_сверка_находит_страницу_месяца_и_без_apply_ничего_не_пишет(monkeypatch, client):
+    """Д-4: привязка без имени листа + неделя месяца → страница `Зан. MM.YYYY`, 200 с items.
+
+    Сверка без `apply` — только расхождения: лист в этом прогоне не меняется.
+    """
+    fake, monday, headers, pages = _setup_month_pages(monkeypatch, client)
+    written = client.post("/tools/availability/sheet", headers=headers,
+                          json={"start": monday.isoformat(), "apply": True}).json()
+    assert written["applied"] is True and written["verified"] is True, written
+    assert written["sheet"] == pages[0]                  # страница месяца, а не «Занятость»
+    writes_after_sheet = fake.writes
+    fake._set(cell_a1(3, 4), "свободна с 20:00")         # человек поправил день
+
+    preview = client.post("/tools/availability/reconcile", headers=headers,
+                          json={"start": monday.isoformat()}).json()
+    assert preview["ok"] is True and preview["applied"] is False
+    assert preview["sheet"] == pages[0]
+    assert preview["items"] and preview["items"][0]["action"] == "принять"
+    assert preview["items"][0]["sheet"] == pages[0]
+    assert fake.writes == writes_after_sheet             # без apply лист не пишется
+
+
+def test_д4_нет_страницы_месяца_это_409_sheet_month_missing(monkeypatch, client):
+    """Д-4: нет страницы месяца — 409 `sheet_month_missing` с её именем, а не `sheet_ambiguous`."""
+    _, monday, headers, pages = _setup_month_pages(monkeypatch, client, with_page=False)
+
+    response = client.post("/tools/availability/reconcile", headers=headers,
+                           json={"start": monday.isoformat()})
+
+    assert response.status_code == 409, response.text
+    assert "sheet_month_missing" in response.text
+    assert "страницы месяца нет в листе" in response.text
+    assert pages[0] in response.text
+
+
+def test_д4_явное_имя_листа_сильнее_шаблона(monkeypatch, client):
+    """Д-4: `SCHEDULE_SHEET_TITLE`, заданный явно, сильнее шаблона (обратная совместимость)."""
+    from app import core
+
+    fake, monday, headers, pages = _setup_month_pages(monkeypatch, client)
+    fake.titles.append(TITLE)
+    monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", TITLE)
+
+    preview = client.post("/tools/availability/reconcile", headers=headers,
+                          json={"start": monday.isoformat()}).json()
+
+    assert preview["sheet"] == TITLE
+    assert pages and pages[0] != preview["sheet"]

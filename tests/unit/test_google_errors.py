@@ -53,7 +53,7 @@ def test_текст_отказа_человеческий_и_без_англий
 def test_коды_спецификации_совпадают_с_конвертом():
     """Коды из §9 — машинные и стабильные: их читает Mini App, а не человек."""
     expected = {"write_target_refused", "write_target_unset", "binding_missing",
-                "sheet_ambiguous", "header_mismatch", "sheet_changed_since_read",
-                "sheet_verify_failed", "no_access", "not_bot_event",
-                "mode_backup_required", "unknown_source"}
+                "sheet_ambiguous", "sheet_month_missing", "header_mismatch",
+                "sheet_changed_since_read", "sheet_verify_failed", "no_access",
+                "not_bot_event", "mode_backup_required", "unknown_source"}
     assert all(isinstance(code, str) and code == code.lower() for code in expected)

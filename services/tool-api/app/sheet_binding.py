@@ -22,7 +22,7 @@ import hashlib
 import json
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime, timedelta
 from typing import Any
 
 from app import core, google_targets
@@ -37,6 +37,15 @@ HEADER_SEP = "\x1f"
 #: скрипт отказывали бы `sheet_ambiguous` на каждом вызове при пустой настройке.
 #: Константа живёт здесь, а не в `schedule_test_sheet`: тот импортирует этот модуль.
 DEFAULT_TEST_PAGE_PATTERN = "{month} · {nick}"
+
+#: Шаблон страницы листа занятости: в файле «Занятость» страница на каждый месяц своя
+#: (`Зан. 07.2026` … `Зан. 11.2026`), а строка `sheet_binding` на ключ одна. Поэтому в
+#: привязке хранится шаблон, а месяц подставляет вызывающий; явное имя (`SCHEDULE_SHEET_TITLE`,
+#: имя без `{month}`) сильнее шаблона — обратная совместимость (186 §4.3).
+DEFAULT_WORKLOAD_PAGE_PATTERN = "Зан. {month}"
+
+#: Подстановка месяца в шаблоне страницы: `MM.YYYY`.
+MONTH_PLACEHOLDER = "{month}"
 
 #: Поля метаданных листа. `properties.modifiedTime` в Sheets API не существует (это
 #: свойство файла Drive): запрос с ним отвечает 400 «invalid argument», поэтому время
@@ -162,6 +171,85 @@ def pick_sheet(properties: Iterable[dict], title: str) -> tuple[int, str]:
     return int(matches[0]["sheetId"]), str(matches[0]["title"])
 
 
+def pick_month_sheet(properties: Iterable[dict], title: str,
+                     month: Any = "") -> tuple[int, str]:
+    """Лист по имени с раскрытым месяцем: `Зан. {month}` + `11.2026` → `Зан. 11.2026`.
+
+    Шаблон без месяца не раскрывается: имя страницы неизвестно, и подставлять «первую»
+    страницу файла нельзя (186 §4.3 шаг 4).
+
+    Нет страницы месяца — `sheet_month_missing` (409) с её именем: это не «лист
+    неоднозначен» и не «лист не привязан», а честный ответ «в файле нет страницы этого
+    месяца». Повторяющееся имя — по-прежнему `sheet_ambiguous`, явное имя без шаблона —
+    `pick_sheet` (`sheet_ambiguous`, обратная совместимость).
+    """
+    wanted = month_page_title(title, month)
+    if not wanted:
+        raise ApiError(409, "sheet_ambiguous: лист не определён однозначно: нужен месяц",
+                       code="sheet_ambiguous")
+    if not is_month_template(title):
+        return pick_sheet(properties, wanted)
+    found = [(item.get("properties") or {}) for item in properties]
+    matches = [props for props in found if str(props.get("title") or "").strip() == wanted]
+    if not matches:
+        raise ApiError(409, f"sheet_month_missing: страницы месяца нет в листе «{wanted}»",
+                       code="sheet_month_missing")
+    if len(matches) > 1:
+        raise ApiError(409, f"sheet_ambiguous: лист «{wanted}» найден {len(matches)} раз",
+                       code="sheet_ambiguous")
+    return int(matches[0]["sheetId"]), str(matches[0]["title"])
+
+
+def month_key(value: Any) -> str:
+    """Месяц страницы как `MM.YYYY`: `date`/`datetime`/`'YYYY-MM'`/`'MM.YYYY'`.
+
+    Неразборчивое значение — пустая строка: месяц неизвестен, и угадывать его нельзя.
+    """
+    if isinstance(value, datetime):
+        return value.strftime("%m.%Y")
+    if isinstance(value, date):
+        return value.strftime("%m.%Y")
+    text = str(value or "").strip()
+    for fmt in ("%m.%Y", "%Y-%m"):
+        try:
+            return datetime.strptime(text, fmt).strftime("%m.%Y")
+        except ValueError:
+            continue
+    return ""
+
+
+def is_month_template(title: Any) -> bool:
+    """Имя листа — шаблон страницы месяца (`{month}` внутри), а не готовое имя."""
+    return MONTH_PLACEHOLDER in str(title or "")
+
+
+def month_page_title(title: Any, month: Any = "") -> str:
+    """Имя страницы месяца: шаблон `Зан. {month}` и месяц → `Зан. 11.2026`.
+
+    У имени без шаблона месяц ничего не меняет — явное имя сильнее шаблона.
+    """
+    text = str(title or "").strip()
+    if not is_month_template(text):
+        return text
+    key = month_key(month)
+    return text.replace(MONTH_PLACEHOLDER, key) if key else ""
+
+
+def month_pages(first: date, days: int = 7) -> list[str]:
+    """Месяцы, которые задевает неделя, по порядку: 26.10–01.11 → `['10.2026', '11.2026']`.
+
+    Нужен там, где лист занятости читается целиком: у страницы месяца своё имя, и неделя
+    на границе месяцев лежит в двух страницах. Молча прочитать одну значило бы соврать
+    «расхождений нет» про дни, которых не смотрели.
+    """
+    out: list[str] = []
+    for offset in range(max(int(days), 1)):
+        key = month_key(first + timedelta(days=offset))
+        if key and key not in out:
+            out.append(key)
+    return out
+
+
 def stale_reason(modified_time: datetime | None, last_edit_time: datetime | None) -> bool:
     """Файл новее последнего чтения? Тогда записывать нельзя до перечитывания.
 
@@ -221,16 +309,25 @@ def _service(key: str, write: bool):
     return core._sheets() if write else core._sheets_read()
 
 
-def _resolve_title(key: str, binding: Binding) -> str:
-    """Имя листа: привязка, иначе настройка (`SCHEDULE_SHEET_TITLE`, шаблон теста)."""
-    title = binding.title
-    if title:
-        return title
+def resolve_title(key: str, binding: Binding | None, month: Any = "") -> str:
+    """Имя листа: явная настройка → привязка → шаблон страницы месяца.
+
+    Для занятости порядок именно такой: `SCHEDULE_SHEET_TITLE`, заданный явно, сильнее
+    шаблона (обратная совместимость и возможность пришпилить одну страницу), а шаблон
+    `Зан. {month}` подставляется последним — когда ни настройки, ни имени в привязке нет.
+    Если же шаблон **лежит** в привязке (его пишет засев), он раскрывается месяцем
+    вызывающего (`month_page_title`).
+    """
+    title = ""
     if key == "schedule.workload":
-        return str(core.SCHEDULE_SHEET_TITLE or "").strip()
-    if key == "schedule.test":
-        return str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip() or DEFAULT_TEST_PAGE_PATTERN
-    return ""
+        title = str(core.SCHEDULE_SHEET_TITLE or "").strip()
+    if not title and binding is not None:
+        title = binding.title
+    if not title and key == "schedule.workload":
+        title = DEFAULT_WORKLOAD_PAGE_PATTERN
+    if not title and key == "schedule.test":
+        title = str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip() or DEFAULT_TEST_PAGE_PATTERN
+    return title
 
 
 def _header_values(service, spreadsheet_id: str, title: str, header_row: int) -> list[list]:
@@ -240,12 +337,17 @@ def _header_values(service, spreadsheet_id: str, title: str, header_row: int) ->
 
 
 def open_sheet(key: str, *, conn, write: bool = True, service: Any = None,
-               drive: Any = None, title: str | None = None) -> SheetSession:
+               drive: Any = None, title: str | None = None,
+               month: Any = "") -> SheetSession:
     """Шаги 1–6 протокола: ключ, режим, привязка, лист по имени, шапка, свежесть.
 
     `title` — явное имя листа для объектов, у которых страниц много (`schedule.test`:
     «MM.YYYY · Ник»). Оно сильнее привязки, но не отменяет её: без строки `sheet_binding`
     запись всё равно отказывает `binding_missing`.
+
+    `month` — месяц страницы (`date`/`'YYYY-MM'`/`'MM.YYYY'`). Нужен там, где привязка
+    хранит шаблон `Зан. {month}` (лист занятости: страница на каждый месяц). Нет страницы
+    месяца — `sheet_month_missing` (409), а не выбор «похожей» страницы.
 
     Возвращает открытый лист. Любой шаг может отказать кодом из 186 §9 — и это
     правильный исход: писать наугад бот не умеет.
@@ -267,7 +369,7 @@ def open_sheet(key: str, *, conn, write: bool = True, service: Any = None,
 
     binding = require_binding(conn, key)
     service = service if service is not None else _service(key, write)
-    title = (title or "").strip() or _resolve_title(key, binding)
+    title = (title or "").strip() or resolve_title(key, binding, month)
     if not title:
         raise ApiError(409, "sheet_ambiguous: лист не определён однозначно",
                        code="sheet_ambiguous")
@@ -278,7 +380,7 @@ def open_sheet(key: str, *, conn, write: bool = True, service: Any = None,
     except core.GOOGLE_API_ERRORS as exc:
         raise _google_error(exc, "sheet_unavailable") from None
 
-    sheet_id, sheet_title = pick_sheet(meta.get("sheets") or [], title)
+    sheet_id, sheet_title = pick_month_sheet(meta.get("sheets") or [], title, month)
     modified = parse_time((meta.get("properties") or {}).get("modifiedTime"))
     if modified is None:
         modified = file_modified_time(spreadsheet_id, drive)

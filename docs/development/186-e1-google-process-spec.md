@@ -179,7 +179,7 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 | 1 | `google_targets.resolve(key)` — получить id | `write_target_refused` / `write_target_unset` |
 | 2 | `google_mode()` — режим известен и допустим для ключа | `write_target_refused` |
 | 3 | Чтение `sheet_binding` по ключу | `binding_missing` |
-| 4 | `spreadsheets.get(fields="properties.modifiedTime,sheets(properties(sheetId,title))")`, выбор листа **по имени**; несколько совпадений или пустое имя → отказ | `sheet_ambiguous` (409) |
+| 4 | `spreadsheets.get(fields="properties.modifiedTime,sheets(properties(sheetId,title))")`, выбор листа **по имени**; несколько совпадений или пустое имя → отказ. Имя может быть шаблоном страницы месяца (`Зан. {month}`): месяц подставляет вызывающий, отсутствующая страница месяца → `sheet_month_missing` | `sheet_ambiguous` (409) / `sheet_month_missing` (409) |
 | 5 | `values.get` шапки, сверка `header_checksum` | `header_mismatch` |
 | 6 | `modifiedTime` ≤ `last_edit_time`; иначе перечитать и пересчитать план | `sheet_changed_since_read` (409) |
 | 7 | План записи: адреса из раскладки, `row_map` для дедупа | `plan_problems` (409, как сейчас в `schedule.py`) |
@@ -330,6 +330,7 @@ header_checksum = sha256(payload.encode("utf-8")).hexdigest()
 | `header_mismatch` | 409 | сумма заголовка не совпала | «Заголовки листа изменились — запись остановлена.» |
 | `binding_missing` | 409 | нет строки в `sheet_binding` | «Лист не привязан к боту.» |
 | `sheet_ambiguous` | 409 | пустой/повторяющийся `sheet_title` | «Лист не определён однозначно.» |
+| `sheet_month_missing` | 409 | в файле нет страницы месяца (`Зан. 11.2026`) | «Страницы месяца нет в листе.» |
 | `calendar_unavailable` | 502 | сбой Calendar API | «Календарь недоступен.» |
 | `not_bot_event` | 409 | событие не найдено в черновом календаре | «Это событие ведётся в Google — правьте там.» |
 | `write_target_refused` | 403 | ключ не в реестре или режим запрещает | «Объект не разрешён для записи.» |

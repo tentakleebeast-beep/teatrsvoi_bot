@@ -137,8 +137,10 @@ class _Call:
 class _Values:
     def __init__(self, header: list) -> None:
         self.header = header
+        self.ranges: list[str] = []
 
     def get(self, spreadsheetId, range, majorDimension=None):  # noqa: A002
+        self.ranges.append(range)
         return _Call({"values": [self.header]})
 
 
@@ -220,3 +222,47 @@ def test_применение_идемпотентно(monkeypatch):
     assert seed.main(["--apply", "--only", "schedule.test"]) == 0
     second = _upserts(conn)[-1]
     assert first == second
+
+
+def test_засев_занятости_без_настройки_пишет_шаблон_месяца(monkeypatch):
+    """Д-4: `--apply` без `SCHEDULE_SHEET_TITLE` засевает шаблон `Зан. {month}`.
+
+    Одно статичное имя листа сломало бы сверку в следующем месяце (186 §4.3), поэтому
+    в привязке живёт шаблон, а сумма шапки снимается с живой страницы месяца.
+    """
+    monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", "")
+    props = [{"properties": {"title": "Занятость"}}, {"properties": {"title": "Зан. 10.2026"}}]
+
+    title, problem = seed._sheet_title("schedule.workload", props, "", page="")
+    assert (title, problem) == (seed.sheet_binding.DEFAULT_WORKLOAD_PAGE_PATTERN, "")
+
+    page, problem = seed._workload_page(props, title)
+    assert problem == "" and page == "Зан. 10.2026"
+
+    _ids(monkeypatch)
+    sheets = _Sheets(("Занятость", "Зан. 10.2026"), ["Дата", "День", "08", "09"])
+    monkeypatch.setattr(core, "_sheets_read", lambda: sheets)
+    conn = FakeConn({})
+
+    outcome = seed._seed_one(conn, "schedule.workload", dry_run=False)
+
+    assert outcome.startswith("ok"), outcome
+    record = _upserts(conn)[-1]
+    assert record[0] == "schedule.workload"
+    assert record[2] == seed.sheet_binding.DEFAULT_WORKLOAD_PAGE_PATTERN
+    assert record[7]                                   # сумма шапки не пустая
+    assert sheets.spreadsheets_api.values_api.ranges == ["'Зан. 10.2026'!A1:AZ1"]
+
+
+def test_засев_занятости_с_явным_именем_не_подменяется_шаблоном(monkeypatch):
+    """Д-4: заданное `SCHEDULE_SHEET_TITLE` сильнее шаблона — обратная совместимость."""
+    monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", "Зан. 10.2026")
+    assert seed._sheet_title("schedule.workload", [], "", page="") == ("Зан. 10.2026", "")
+
+
+def test_засев_занятости_без_страниц_месяца_называет_причину(monkeypatch):
+    """Нет ни одной страницы по шаблону — честная причина, а не «засеяно наугад»."""
+    monkeypatch.setattr(core, "SCHEDULE_SHEET_TITLE", "")
+    page, problem = seed._workload_page([{"properties": {"title": "Занятость"}}],
+                                        seed.sheet_binding.DEFAULT_WORKLOAD_PAGE_PATTERN)
+    assert page == "" and "по шаблону" in problem

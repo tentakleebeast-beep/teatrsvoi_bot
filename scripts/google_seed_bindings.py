@@ -23,6 +23,11 @@ upsert в `sheet_binding`.
 шаблон — стандартный `MM.YYYY · Ник`), а при нескольких честно просит `--page`, а не
 засевает наугад.
 
+Лист занятости тоже многостраничный (`Зан. 07.2026` … `Зан. 11.2026`), но страница у него
+на каждый месяц. Поэтому без `SCHEDULE_SHEET_TITLE` в привязку пишется шаблон
+`Зан. {month}`, а сумма шапки снимается с живой страницы месяца (шапка у месячных страниц
+одна и та же). Одно статичное имя листа сломало бы сверку в следующем месяце (карта Д-4).
+
 Что НЕ делает: не пишет в Google (только `values.get` и метаданные), не угадывает имя
 листа («первый лист файла» запрещён), не засевает календари (`calendar.draft` — не
 таблица) и Drive-корень.
@@ -43,6 +48,7 @@ import json
 import pathlib
 import re
 import sys
+from datetime import datetime
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
 # Корень проекта — раньше tool-api: `app.settings` импортирует `services.shared.settings`,
@@ -121,6 +127,25 @@ def _test_page(titles: list[str], pattern: str, page: str) -> tuple[str, str]:
     return "", f"страниц по шаблону «{template}»: {len(matches)} ({listed}) — укажите --page"
 
 
+def _workload_page(props: list[dict], template: str) -> tuple[str, str]:
+    """Страница, с которой берётся сумма шапки: текущий месяц, иначе ближайший.
+
+    В привязке хранится шаблон (`Зан. {month}`), а сумма шапки снимается с живой страницы.
+    У месячных страниц «Занятости» шапка одна и та же (замер 24.11.2026: `Дата`, `День`,
+    часы 08–23 и легенда — у `Зан. 07.2026`…`Зан. 10.2026` сумма совпадает), поэтому
+    сумма любой страницы годится для всех. Если страницы текущего месяца ещё нет, берём
+    ближайшую существующую, а не отказываем: привязка нужна и до первого дня месяца.
+    """
+    titles = [str((item.get("properties") or {}).get("title") or "").strip() for item in props]
+    current = sheet_binding.month_page_title(template, datetime.now(core.TZ))
+    if current in titles:
+        return current, ""
+    matches = [title for title in titles if _page_regex(template).match(title)]
+    if not matches:
+        return "", f"нет ни одной страницы по шаблону «{template}»"
+    return matches[-1], ""
+
+
 def _sheet_title(key: str, props: list[dict], pattern: str,
                  page: str = "") -> tuple[str | None, str]:
     """Имя листа по привязке/настройке. Возвращает (имя, причина отказа)."""
@@ -128,8 +153,10 @@ def _sheet_title(key: str, props: list[dict], pattern: str,
     if key == "budget.transactions":
         return binding_title or "Транзакции", ""
     if key == "schedule.workload":
+        # явное имя сильнее шаблона; без настройки засеваем шаблон месяца — одно статичное
+        # имя сломало бы сверку в следующем месяце (186 §4.3, карта Д-4)
         title = str(core.SCHEDULE_SHEET_TITLE or "").strip() or binding_title
-        return (title, "") if title else ("", "SCHEDULE_SHEET_TITLE не задан")
+        return (title, "") if title else (sheet_binding.DEFAULT_WORKLOAD_PAGE_PATTERN, "")
     if key == "schedule.human":
         title = str(core.SCHEDULE_HUMAN_SHEET_TITLE or "").strip()
         return (title, "") if title else ("", "SCHEDULE_HUMAN_SHEET_TITLE не задан")
@@ -165,13 +192,20 @@ def _seed_one(conn, key: str, *, dry_run: bool, page: str = "") -> str:
                                   page=page)
     if not title:
         return problem or "имя листа не определено"
+    # у шаблона (`Зан. {month}`) в привязку идёт само имя-шаблон, а шапка читается
+    # с живой страницы месяца: суммы шапки месячных страниц совпадают (см. `_workload_page`)
+    sheet_title = title
+    if sheet_binding.is_month_template(title):
+        sheet_title, problem = _workload_page(props, title)
+        if not sheet_title:
+            return problem
     try:
-        sheet_binding.pick_sheet(props, title)
+        sheet_binding.pick_sheet(props, sheet_title)
     except Exception as exc:  # noqa: BLE001
         return f"лист не найден однозначно: {getattr(exc, 'code', exc)}"
     header_row = int(meta_extra.get("header_row") or 1)
     values = service.spreadsheets().values().get(
-        spreadsheetId=object_id, range=f"'{title}'!A{header_row}:AZ{header_row}",
+        spreadsheetId=object_id, range=f"'{sheet_title}'!A{header_row}:AZ{header_row}",
         majorDimension="ROWS").execute().get("values", [])
     checksum = sheet_binding.header_checksum(values[0] if values else [],
                                              int(meta_extra.get("first_col") or 1),
