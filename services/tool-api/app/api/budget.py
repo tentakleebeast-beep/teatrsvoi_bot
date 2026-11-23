@@ -8,7 +8,7 @@ from datetime import datetime
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import Field, field_validator
 
-from .. import core, google_targets, sheet_binding
+from .. import category_alias, core, google_targets, sheet_binding
 from ..errors import ApiError
 from ..external import DB_ERRORS, GOOGLE_API_ERRORS
 from ..participant_names import category_hints
@@ -16,10 +16,24 @@ from ..rules import parse_budget_text
 
 router = APIRouter()
 
+
+def block_for(tx_type: str | None, category: str | None) -> str:
+    """Блок операции по типу и статье — одно правило для базы и листа (196 §7.3).
+
+    Раньше блок считался только от `tx_type` (`income → show_income`), и доход со
+    статьёй «Аренда (доход)» попадал в колонку «Показы»: два ответа на вопрос
+    «сколько мы получили за зал».
+    """
+    if tx_type == "income" and category_alias.is_lease_income(category or ""):
+        return "sublease"
+    return {"expense": "expense", "income": "show_income"}.get(tx_type or "", "expense")
+
+
 class BudgetCommitIn(core.ApiIn):
     is_plan: bool = False      # план: входит в бюджет, но не в баланс (миграция 045)
     chat_id: int = 0           # в Mini App берём из сессии, а не из формы
     idempotency_key: str | None = None
+    tx_id: int | None = None   # правка существующей операции; производную править нельзя
     tx_type: str = "expense"
     amount: float
 
@@ -72,6 +86,9 @@ def _ensure_category(conn, name: str, tx_type: str) -> int:
     для дохода, и бюджет получал доход в расходной статье (нашёл UX-прогон 30.10.2026).
     """
     want = "income" if tx_type == "income" else "expense"
+    # «Субаренда» — прежнее имя статьи «Аренда (доход)»: без алиаса вставилась бы
+    # вторая категория, и доход разъехался бы по двум статьям (196 §9).
+    name = category_alias.canonical(name)
     row = conn.execute("select id, direction from category where name = %s", (name,)).fetchone()
     if row:
         if row["direction"] != want:
@@ -87,13 +104,23 @@ def _ensure_category(conn, name: str, tx_type: str) -> int:
 
 
 def _ensure_project(conn, name: str | None) -> int | None:
+    """Проект только ищется: неизвестное имя — `422 unknown_project` (§4.5, R-9).
+
+    Раньше функция заводила проект по имени из операции, и так появился спектакль
+    «Валерий» из арендного дохода. Молчаливое создание сущности из свободного
+    текста — не удобство, а угадывание.
+    """
     if not name:
         return None
     row = conn.execute("select id from project where name = %s", (name,)).fetchone()
     if row:
         return row["id"]
-    return conn.execute("insert into project (name) values (%s) returning id",
-                        (name,)).fetchone()["id"]
+    active = [r["name"] for r in conn.execute(
+        "select name from project where status <> 'archive' order by name").fetchall()]
+    raise ApiError(
+        status.HTTP_422_UNPROCESSABLE_ENTITY,
+        "Такого проекта нет. Выберите из списка: " + (", ".join(active) or "проектов нет"),
+        code="unknown_project")
 
 
 
@@ -104,7 +131,7 @@ def _write_tx(conn, body: BudgetCommitIn, who: dict, key: str | None) -> dict | 
     tx_date = (datetime.strptime(body.tx_date, "%Y-%m-%d").date()
                if body.tx_date else datetime.now(core.TZ).date())
     period = tx_date.strftime("%Y-%m")
-    block = {"expense": "expense", "income": "show_income"}.get(body.tx_type, "expense")
+    block = block_for(body.tx_type, body.category)
 
     cat_id = _ensure_category(conn, body.category, body.tx_type)
     proj_id = _ensure_project(conn, body.project)
@@ -162,12 +189,12 @@ def _sheet_row(tx: dict) -> list:
     tx_date = tx["tx_date"]
     if isinstance(tx_date, str):
         tx_date = datetime.strptime(tx_date, "%Y-%m-%d").date()
-    block = tx.get("block") or {"expense": "expense", "income": "show_income"}.get(
-        tx.get("tx_type"), "expense")
+    block = tx.get("block") or block_for(tx.get("tx_type"), tx.get("category"))
     return [
         str(tx["id"]), tx_date.strftime("%d.%m.%Y"),
         "доход" if tx.get("tx_type") == "income" else "расход",
-        {"expense": "Расходы студии", "show_income": "Показы — доход"}.get(block, block),
+        {"expense": "Расходы студии", "show_income": "Показы — доход",
+         "sublease": "Субаренда"}.get(block, block),
         float(tx["amount"]), tx.get("category") or "", tx.get("project") or "",
         tx.get("counterparty") or "", tx.get("purpose") or tx.get("source_text") or "",
         "", "бот", f"telegram · chat {tx.get('chat_id')}", 1, "подтверждено",
@@ -249,7 +276,7 @@ def _append_tx_sheet(body: BudgetCommitIn, created: dict) -> str | None:
         return core.DEV_SHEET_ERROR
     tx_date = (datetime.strptime(body.tx_date, "%Y-%m-%d").date()
                if body.tx_date else datetime.now(core.TZ).date())
-    block = {"expense": "expense", "income": "show_income"}.get(body.tx_type, "expense")
+    block = block_for(body.tx_type, body.category)
     row = _sheet_row({
         "id": created["id"], "tx_date": tx_date, "tx_type": body.tx_type, "block": block,
         "amount": body.amount, "category": body.category, "project": body.project,
@@ -268,6 +295,17 @@ def budget_commit(body: BudgetCommitIn, who: dict = Depends(core.require("budget
     Запись операции. Крупная операция пишется сразу: подтверждение из проекта убрано
     решением 30.10.2026 (см. комментарий ниже), след остаётся в аудите.
     """
+    # Производную операцию править руками нельзя (196 §7.4): доход аренды меняется
+    # через событие. Клиент `tx_id` для обычной записи не передаёт.
+    if body.tx_id is not None:
+        with core.pool.connection() as conn:
+            target = conn.execute("select event_id from budget_tx where id = %s",
+                                  (body.tx_id,)).fetchone()
+        if target is not None and target["event_id"] is not None:
+            raise ApiError(status.HTTP_409_CONFLICT,
+                           "Доход аренды меняется через событие, а не в операции",
+                           code="event_operation")
+
     if body.amount <= 0:
         raise ApiError(status.HTTP_400_BAD_REQUEST, "Сумма должна быть больше нуля",
                        code="amount_not_positive")

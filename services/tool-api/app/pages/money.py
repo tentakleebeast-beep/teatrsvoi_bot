@@ -76,8 +76,14 @@ _BODY_MONEY = """
     <span class="ui-small ui-muted" id="budget-meta"></span>
   </div>
   <div class="ui-list" id="budget-list"></div>
+  <a class="ui-row" href="/webapp/projects" data-svoi-cap="budget.read">
+    <span class="ui-row__main">
+      <span class="ui-row__title">Проекты</span>
+      <span class="ui-row__meta">время, деньги, люди</span>
+    </span>
+  </a>
   <p class="ui-small ui-muted money-note" id="budget-note" hidden>
-    План и весь месяц — в разделе «Управление», пункт «Бюджет».
+    Бюджет проекта — в карточке проекта, раздел «Проекты».
   </p>
 </section>
 

@@ -84,6 +84,9 @@ PAGE_ROUTES = {
     "/webapp/polls/mine": polls_mine_pages.POLLS_MINE_PAGE,
     "/webapp/polls/answer": polls_answer_pages.POLLS_ANSWER_PAGE,
     "/webapp/more": home_pages.MORE_PAGE,
+    # E6-2: проекты — список и карточка (docs/development/196 §6).
+    "/webapp/projects": pages.PROJECTS_PAGE,
+    "/webapp/project": pages.PROJECT_CARD_PAGE,
 }
 
 DAYS = [
@@ -105,7 +108,7 @@ DAYS = [
 
 CATEGORIES = {
     "income": ["Взносы студийцев", "Возвраты", "Донат", "Курсы", "Подарок",
-               "Продажа билетов", "Прочее (доход)", "Субаренда"],
+               "Продажа билетов", "Прочее (доход)", "Аренда (доход)"],
     "expense": ["Аренда помещения", "Гонорары и доли", "Закупки к спектаклям",
                 "Коммунальные платежи", "Прочее", "Расходники и хозтовары",
                 "Реквизит и костюмы", "Реклама и полиграфия", "Ремонт и содержание",

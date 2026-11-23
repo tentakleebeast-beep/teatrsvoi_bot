@@ -28,6 +28,7 @@ from .api import (
     notes,
     people,
     polls,
+    projects,
     quota,
     route,
     schedule,
@@ -281,6 +282,7 @@ app.include_router(notes.router)
 app.include_router(quota.router)
 app.include_router(polls.router)
 app.include_router(webapp_api.router)
+app.include_router(projects.router)
 
 
 # --- прежний вход для тестов и скриптов ---------------------------------------

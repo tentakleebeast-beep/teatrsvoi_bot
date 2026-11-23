@@ -34,6 +34,7 @@ MANAGEMENT_URLS = [
     "/webapp/broadcast",
     "/webapp/polls",
     "/webapp/reconcile",
+    "/webapp/projects",
     "/webapp/services",
     "/webapp/admin/t/agent",
     "/webapp/admin/t/notifications",
@@ -94,7 +95,9 @@ def test_человек_без_возможности_не_видит_разде
     assert "/webapp/admin/t/feedback" not in {row["url"] for row in rows}
 
     # Без управленческих разделов вкладка личная, и «Управление» пустое.
-    actor = ["budget.read", "budget.approve", "schedule.availability.self"]
+    # `budget.read` в этом наборе больше не годится: с E6-2 он открывает «Проекты»
+    # (docs/development/196 §5), и человек с ним законно видит управленческий раздел.
+    actor = ["budget.approve", "schedule.availability.self"]
     assert layout.is_staff(actor) is False
     assert layout.tab_label("more", actor) == "Ещё"
     assert webapp_api.management_rows(actor, {}) == []

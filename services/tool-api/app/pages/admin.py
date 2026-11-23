@@ -22,6 +22,7 @@ from app.pages.admin_notifications import NOTIFICATION_DEFAULTS_PAGE
 from app.pages.admin_people import PEOPLE_PAGE
 from app.pages.admin_rights import RIGHTS_PAGE
 from app.pages.polls import POLLS_PAGE
+from app.pages.projects import PROJECT_CARD_PAGE, PROJECTS_PAGE
 
 __all__ = [
     "PEOPLE_PAGE",
@@ -34,4 +35,6 @@ __all__ = [
     "DUES_ADMIN_PAGE",
     "NOTIFICATION_DEFAULTS_PAGE",
     "POLLS_PAGE",
+    "PROJECTS_PAGE",
+    "PROJECT_CARD_PAGE",
 ]

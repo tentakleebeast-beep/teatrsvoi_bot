@@ -101,6 +101,9 @@ def triage_missing(db_rows: list[dict], file_ids: set[int]) -> tuple[list[dict],
     """
     rejected, unconfirmed = [], []
     for db in db_rows:
+        # производную от события строку лист не «удалял»: её статус держит событие
+        if db.get("event_id") is not None:
+            continue
         if db["id"] in file_ids or db["origin"] not in ("import", "file", "bot"):
             continue
         if db.get("sheet_written_at") is None and db.get("sheet_error"):
@@ -122,11 +125,12 @@ def reconcile_budget(sheets, apply: bool) -> dict:
     with psycopg.connect(DB, row_factory=dict_row) as conn:
         db_rows = conn.execute("""
             select t.id, t.tx_date, t.amount, t.tx_type, t.status, t.origin,
-                   t.category_id, t.sheet_written_at, t.sheet_error,
+                   t.category_id, t.sheet_written_at, t.sheet_error, t.event_id,
                    coalesce(c.name,'') as category
             from budget_tx t left join category c on c.id = t.category_id""").fetchall()
         db_by_id = {r["id"]: r for r in db_rows}
         added, rejected, updated, same = [], [], [], 0
+        derived = []
         for tx_id, row in file_by_id.items():
             db = db_by_id.get(tx_id)
             if db is None:
@@ -139,6 +143,13 @@ def reconcile_budget(sheets, apply: bool) -> dict:
                 diffs["tx_date"] = (str(db["tx_date"]), str(row["date"]))
             if row["category"] and row["category"] != db["category"]:
                 diffs["category"] = (db["category"], row["category"])
+            # Производная от события строка листом не правится (196 §7.4 п.2):
+            # иначе `origin='import'` уничтожил бы связь с событием и нарушил I11/I12.
+            # Расхождение показывается отдельной категорией и сверяется инвариантом.
+            if db.get("event_id") is not None:
+                if diffs:
+                    derived.append({"id": tx_id, "расхождения": diffs})
+                continue
             if diffs:
                 updated.append((tx_id, diffs))
             else:
@@ -154,6 +165,7 @@ def reconcile_budget(sheets, apply: bool) -> dict:
             "ids_нет_в_файле": [r["id"] for r in rejected],
             "ids_лист_не_подтвердил": [r["id"] for r in unconfirmed],
             "дубли_в_файле": duplicates, "добавлено": [], "отклонено": [], "изменено": [],
+            "производных": len(derived), "производные_от_события": derived,
         }
 
         if apply:

@@ -303,6 +303,11 @@ SECTIONS: tuple[WebappSection, ...] = (
                   "/webapp/polls", "конструктор, адресаты, сводка", page="POLLS_PAGE"),
     WebappSection("reconcile", ("budget.import",), "Сверка листов",
                   "/webapp/reconcile", "база против таблицы"),
+    # E6: проекты — время, деньги и люди в одной карточке. Право `budget.read`:
+    # список и карточку видят только admin и org (V-127, docs/development/196 §5).
+    WebappSection("projects", ("budget.read",), "Проекты",
+                  "/webapp/projects", "время, деньги, люди",
+                  group=MANAGEMENT, page="PROJECTS_PAGE"),
     WebappSection("services", ("admin.panel",), "Сервисы",
                   "/webapp/services", "состояние приложений"),
     WebappSection("agent", ("admin.panel",), "Разбор агента",
@@ -378,6 +383,9 @@ SCREEN_CAPS: dict[str, tuple[str, ...]] = {
     # `participant_id` в `/webapp/polls/mine/data` (docs/development/164 §12.1).
     "/webapp/polls/mine": (),
     "/webapp/polls/answer": (),
+    # E6: карточка проекта — вложенный экран (вход со списка). Запись спрашивает
+    # `budget.write` отдельно; здесь достаточно права чтения.
+    "/webapp/project": ("budget.read",),
 }
 
 #: Экраны разделов хаба добавляются из реестра: адрес и право описаны один раз.

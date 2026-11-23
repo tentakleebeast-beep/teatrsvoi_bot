@@ -221,7 +221,7 @@ def parse_block(ws, header_row: int, end_row: int, month: int, year: int):
         if money(c[13]):
             d, note = parse_date(c[12], c[11], year, month)
             out.append(dict(kind="sublease", row=r, date=d, amount=money(c[13]),
-                            article=str(c[11] or ""), category="Субаренда", note=note))
+                            article=str(c[11] or ""), category="Аренда (доход)", note=note))
     return out
 
 
@@ -256,7 +256,7 @@ def ensure_categories(conn) -> dict[str, int]:
                             ("Закупки к спектаклям", "expense"), ("Реклама и полиграфия", "expense"),
                             ("Фото/видео", "expense"), ("Расходники и хозтовары", "expense"),
                             ("Прочее", "expense"), ("Продажа билетов", "income"),
-                            ("Курсы", "income"), ("Субаренда", "income"),
+                            ("Курсы", "income"), ("Аренда (доход)", "income"),
                             ("Взносы студийцев", "income"), ("Возвраты", "income"),
                             ("Прочее (доход)", "income")]:
         row = conn.execute("""insert into category (name, direction) values (%s,%s)

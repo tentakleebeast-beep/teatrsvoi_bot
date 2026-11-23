@@ -79,4 +79,4 @@ def test_голова_alembic_после_071(test_db: str) -> None:
     """
     with psycopg.connect(test_db) as conn:
         head = conn.execute("select version_num from alembic_version").fetchone()[0]
-    assert head == "073_files_two_locations"
+    assert head == "075_projects_money"

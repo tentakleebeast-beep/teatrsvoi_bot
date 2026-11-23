@@ -68,6 +68,8 @@ RECONCILE_PAGE = _misc.RECONCILE_PAGE           # сверка листов
 SLOTS_PAGE = _misc.SLOTS_PAGE                   # поиск окон
 UI_KIT_PAGE = _kit.UI_KIT_PAGE                  # справочник компонентов
 NOTES_PAGE = _notes.NOTES_PAGE                  # заметки: личные и общие (FR-F7)
+PROJECTS_PAGE = _admin.PROJECTS_PAGE            # проекты: список (E6-2)
+PROJECT_CARD_PAGE = _admin.PROJECT_CARD_PAGE    # карточка проекта (E6-2)
 
 PEOPLE_PAGE = _admin.PEOPLE_PAGE
 RIGHTS_PAGE = _admin.RIGHTS_PAGE
