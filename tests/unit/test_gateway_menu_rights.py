@@ -30,7 +30,7 @@ ORG = ["budget.import", "budget.read", "budget.read.self", "budget.write", "cale
        "feedback.send", "files.access", "notes.write", "participants.contact",
        "participants.view", "poll.manage", "schedule.availability.self",
        "schedule.read.all", "schedule.slots", "schedule.write"]
-TROUPE = ["schedule.availability.self", "budget.read.self"]
+TROUPE = ["schedule.availability.self", "budget.read.self", "schedule.read.all"]
 STUDENT = ["schedule.availability.self"]
 
 
@@ -108,11 +108,15 @@ def test_состав_групп_по_решению_28_10(gw):
 
 
 def test_труппа_видит_свои_пункты_в_группах(gw):
-    """Ш-47: права решают не только видимость группы, но и состав её пунктов."""
+    """Ш-47: права решают не только видимость группы, но и состав её пунктов.
+
+    С V-132 у труппы есть `schedule.read.all`: пункт «Расписание» (сводное
+    расписание студии) ей положен, окна поиска (`schedule.slots`) — нет.
+    """
     assert menu_titles(gw, TROUPE) == ["Деньги", "Занятость", "Профиль", "Помощь"]
     groups = dict(gw.menu_groups(TROUPE))
     assert groups["Деньги"] == ["Мои взносы"]
-    assert groups["Занятость"] == ["Занятость"]
+    assert groups["Занятость"] == ["Занятость", "Расписание"]
 
 
 def test_пустые_группы_не_рисуются(gw):

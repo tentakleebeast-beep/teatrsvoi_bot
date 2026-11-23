@@ -34,7 +34,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | Всего маршрутов в коде (с редиректами и ресурсами) | 280 |
 | Из них с тестом (по вызову пути в `tests/`) | 267 |
 | Действий без права (ни возможности, ни сессии) | 58 |
-| Действий с правом, проверенным в теле через `core._webapp_require(…)` | 70 |
+| Действий с правом, проверенным в теле через `core._webapp_require(…)` | 72 |
 | Действий с правом, проверенным в теле через «*» в caps | 4 |
 | Маршрутов с сервисным Bearer-токеном на входе | 3 |
 | Эндпоинтов, которые не зовёт ни один интерфейс | 34 |
@@ -96,7 +96,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/tools/availability/commit` | `services/tool-api/app/api/schedule.py:549` | чат: av_save | schedule.availability.self | test_availability_summary.py, test_availability_week.py, test_cm02_availability.py (+4) | — |
 | POST `/tools/availability/parse` | `services/tool-api/app/api/schedule.py:516` | чат: busy_card | любой активный | test_cm02_availability.py, test_gateway_avail_text.py | — |
 | POST `/tools/availability/parse-interval` | `services/tool-api/app/api/schedule.py:527` | чат: av_time_text | любой активный | test_gateway_avail_escape.py | — |
-| POST `/tools/availability/reconcile` | `services/tool-api/app/api/schedule.py:1533` | — | schedule.availability.self (в теле — schedule.read.all) | test_availability_sheet.py | проверка права в теле обработчика (через «*»); никто не зовёт |
+| POST `/tools/availability/reconcile` | `services/tool-api/app/api/schedule.py:1533` | — | schedule.availability.self (в теле — schedule.write) | test_availability_sheet.py | проверка права в теле обработчика (через «*»); никто не зовёт |
 | POST `/tools/availability/sheet` | `services/tool-api/app/api/schedule.py:1279` | — | schedule.availability.self | test_availability_sheet.py | никто не зовёт |
 | GET `/tools/availability/sheet/mismatches` | `services/tool-api/app/api/schedule.py:1490` | — | schedule.availability.self | test_availability_sheet.py | никто не зовёт |
 | GET `/tools/availability/summary` | `services/tool-api/app/api/schedule.py:571` | чат: answer_schedule | schedule.read.all | test_availability_summary.py, test_cm02_availability.py, test_smoke_fixes.py (+1) | — |
@@ -112,18 +112,18 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/tools/budget/recent` | `services/tool-api/app/api/budget.py:441` | чат: panel_money, periods | budget.read | test_budget_idempotent.py, test_budget_recent_period.py, test_smoke_api_fixes.py | — |
 | POST `/tools/budget/sheet-retry` | `services/tool-api/app/api/budget.py:357` | чат: panel_sheet_retry | budget.write | test_sheet_retry.py, test_webapp_sheet_retry.py | — |
 | GET `/tools/budget/summary` | `services/tool-api/app/api/budget.py:541` | чат: answer_money; скрипты: tool_read_budget | budget.read | test_budget_summary.py, test_cm04_money.py, test_cm09_assistant.py (+4) | — |
-| GET `/tools/calendar/events` | `services/tool-api/app/api/events.py:1004` | чат: answer_schedule; скрипты: tool_read_schedule | schedule.read.all | test_calendar_api.py, test_cm11_degradation.py, test_events_list_window.py (+3) | — |
-| GET `/tools/calendar/health` | `services/tool-api/app/api/events.py:977` | — | любой активный | test_calendar_api.py | никто не зовёт |
+| GET `/tools/calendar/events` | `services/tool-api/app/api/events.py:1014` | чат: answer_schedule; скрипты: tool_read_schedule | schedule.read.all | test_calendar_api.py, test_cm11_degradation.py, test_events_list_window.py (+4) | — |
+| GET `/tools/calendar/health` | `services/tool-api/app/api/events.py:987` | — | любой активный | test_calendar_api.py | никто не зовёт |
 | GET `/tools/categories` | `services/tool-api/app/api/budget.py:481` | чат: form_amount | любой активный | test_ci_images.py | — |
-| GET `/tools/disciplines` | `services/tool-api/app/api/events.py:961` | чат: panel_person_master | любой активный | test_disciplines.py, test_gateway_chat_parity.py | — |
+| GET `/tools/disciplines` | `services/tool-api/app/api/events.py:971` | чат: panel_person_master | любой активный | test_disciplines.py, test_gateway_chat_parity.py | — |
 | POST `/tools/dues/accrue` | `services/tool-api/app/api/finance.py:65` | — | budget.write | test_cm04_money.py, test_dues_accrue.py | никто не зовёт |
 | GET `/tools/dues/me` | `services/tool-api/app/api/finance.py:24` | чат: answer_profile, cmd_dues, my_dues, run_menu_action, show_dues; скрипты: tool_read_dues | budget.read.self | test_cm04_money.py, test_dues_admin_ui.py, test_dues_tariff.py (+2) | — |
-| POST `/tools/events/assign` | `services/tool-api/app/api/events.py:425` | чат: _load, assign_confirm (по шаблону) | schedule.write | test_cm03_slots.py, test_event_chat_card.py, test_events_assign.py (+1) | — |
-| POST `/tools/events/cancel` | `services/tool-api/app/api/events.py:668` | чат: _cancel, _load (по шаблону) | schedule.write | test_cm03_slots.py, test_event_cancel.py, test_event_chat_card.py (+1) | — |
-| POST `/tools/events/choose` | `services/tool-api/app/api/events.py:379` | чат: _load, assign_pick (по шаблону) | schedule.write | test_events_choose.py | — |
-| POST `/tools/events/move` | `services/tool-api/app/api/events.py:778` | Mini App: events, webapp-shell.js; чат: _load, _move (по шаблону) | schedule.write | test_cm03_slots.py, test_event_move.py, test_project_events.py | — |
-| POST `/tools/events/preview` | `services/tool-api/app/api/events.py:344` | чат: _load, preview (по шаблону) | schedule.write | test_disciplines.py, test_events_assign.py, test_events_choose.py (+6) | — |
-| GET `/tools/events/{event_id}` | `services/tool-api/app/api/events.py:914` | Mini App: events, webapp-shell.js; чат: _cancel, _load, _move, assign_confirm, assign_pick, preview | schedule.write | test_cm03_slots.py, test_disciplines.py, test_event_cancel.py (+11) | — |
+| POST `/tools/events/assign` | `services/tool-api/app/api/events.py:425` | чат: _load, assign_confirm (по шаблону) | schedule.write | test_cm03_slots.py, test_event_chat_card.py, test_events_assign.py (+2) | — |
+| POST `/tools/events/cancel` | `services/tool-api/app/api/events.py:668` | чат: _cancel, _load (по шаблону) | schedule.write | test_cm03_slots.py, test_event_cancel.py, test_event_chat_card.py (+2) | — |
+| POST `/tools/events/choose` | `services/tool-api/app/api/events.py:379` | чат: _load, assign_pick (по шаблону) | schedule.write | test_events_choose.py, test_troupe_schedule.py | — |
+| POST `/tools/events/move` | `services/tool-api/app/api/events.py:778` | Mini App: events, webapp-shell.js; чат: _load, _move (по шаблону) | schedule.write | test_cm03_slots.py, test_event_move.py, test_project_events.py (+1) | — |
+| POST `/tools/events/preview` | `services/tool-api/app/api/events.py:344` | чат: _load, preview (по шаблону) | schedule.write | test_disciplines.py, test_events_assign.py, test_events_choose.py (+7) | — |
+| GET `/tools/events/{event_id}` | `services/tool-api/app/api/events.py:914` | Mini App: events, webapp-shell.js; чат: _cancel, _load, _move, assign_confirm, assign_pick, preview | schedule.write + schedule.read.all | test_cm03_slots.py, test_disciplines.py, test_event_cancel.py (+12) | — |
 | GET `/tools/feedback` | `services/tool-api/app/api/admin.py:307` | чат: feedback_triage, panel_feedback, send_feedback; скрипты: cmd_pull | feedback.triage | test_cm06_feedback.py, test_feedback.py, test_feedback_attachment.py (+2) | — |
 | POST `/tools/feedback` | `services/tool-api/app/api/admin.py:176` | чат: feedback_triage, panel_feedback, send_feedback; скрипты: cmd_pull | любой активный | test_cm06_feedback.py, test_feedback.py, test_feedback_attachment.py (+2) | — |
 | POST `/tools/feedback/decide` | `services/tool-api/app/api/admin.py:352` | чат: feedback_decide; скрипты: cmd_decide, decide | feedback.triage | test_cm06_feedback.py, test_feedback.py, test_feedback_digest.py | — |
@@ -169,7 +169,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/tools/route` | `services/tool-api/app/api/route.py:74` | чат: router_ask; скрипты: agent_eval, ask | любой активный | test_cm09_assistant.py, test_cm11_degradation.py, test_routes_contract.py (+1) | — |
 | POST `/tools/schedule/slots` | `services/tool-api/app/api/schedule.py:253` | чат: answer_slots | schedule.slots | test_agent_slots_tool.py, test_cm03_slots.py, test_gateway_slots_entry.py (+7) | — |
 | GET `/tools/ui-texts` | `services/tool-api/app/api/webapp_api.py:202` | чат: ui_texts_cached | любой активный | нет | — |
-| GET `/tools/venues` | `services/tool-api/app/api/events.py:970` | — | любой активный | test_venues_api.py | никто не зовёт |
+| GET `/tools/venues` | `services/tool-api/app/api/events.py:980` | — | любой активный | test_venues_api.py | никто не зовёт |
 | GET `/webapp` | `services/tool-api/app/pages/routes.py:114` | Mini App: home, routes; чат: profile_cmd, run_menu_action; скрипты: build, build_screen_map, chat_entries, label_of, neighbor_counts, restore_dump, ui_review, ux_audit (по шаблону) | — | server.py, test_agent_features.py, test_miniapp_master_disciplines.py (+5) | экран Mini App: HTML без данных |
 | GET `/webapp/admin` | `services/tool-api/app/pages/routes.py:253` | Mini App: routes; скрипты: ui_review | — | test_miniapp_system.py, test_static_contract.py, test_webapp_admin.py | — |
 | GET `/webapp/admin/agent` | `services/tool-api/app/api/admin.py:1354` | Mini App: admin_agent | сессия Mini App + admin.panel | server.py, test_agent_observability.py | право проверяется в теле обработчика, а не в зависимости: admin.panel |
@@ -208,10 +208,10 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/admin/t/rights` | `services/tool-api/app/pages/routes.py:260` | Mini App: routes (по шаблону); скрипты: ui_review | — | server.py, test_miniapp_hub.py, test_miniapp_rights_screen.py (+2) | раздел из реестра app/webapp.py:SECTIONS |
 | POST `/webapp/admin/tariff` | `services/tool-api/app/api/admin.py:1016` | Mini App: admin_dues, admin_people | сессия Mini App + budget.write | test_dues_admin_ui.py, test_webapp_admin_actions.py, test_webapp_admin_pages.py (+1) | право проверяется в теле обработчика, а не в зависимости: budget.write |
 | POST `/webapp/admin/unarchive` | `services/tool-api/app/api/admin.py:1446` | Mini App: admin_archive | сессия Mini App + participants.manage | test_admin_archive_chat.py, test_admin_people_actions.py, test_miniapp_archive_rights.py (+1) | право проверяется в теле обработчика, а не в зависимости: participants.manage |
-| GET `/webapp/assign` | `services/tool-api/app/pages/routes.py:301` | Mini App: misc_slots, routes; скрипты: ui_review | — | server.py, test_agent_task.py, test_gateway_agent_plan.py (+1) | — |
-| POST `/webapp/assign` | `services/tool-api/app/api/events.py:1046` | Mini App: misc_slots, routes; скрипты: ui_review | сессия Mini App | server.py, test_agent_task.py, test_gateway_agent_plan.py (+1) | — |
-| POST `/webapp/auth` | `services/tool-api/app/api/webapp_api.py:35` | Mini App: webapp-shell.js; скрипты: issue_tokens | — | polls_helpers.py, server.py, test_admin_archive_chat.py (+44) | — |
-| POST `/webapp/availability/clear` | `services/tool-api/app/api/schedule.py:1663` | Mini App: week_marks, week_sheet_load, week_template | сессия Mini App | server.py, test_webapp_availability_clear.py, test_webapp_grid.py (+1) | — |
+| GET `/webapp/assign` | `services/tool-api/app/pages/routes.py:301` | Mini App: misc_slots, routes; скрипты: ui_review | — | server.py, test_agent_task.py, test_gateway_agent_plan.py (+2) | — |
+| POST `/webapp/assign` | `services/tool-api/app/api/events.py:1060` | Mini App: misc_slots, routes; скрипты: ui_review | сессия Mini App + schedule.write | server.py, test_agent_task.py, test_gateway_agent_plan.py (+2) | право проверяется в теле обработчика, а не в зависимости: schedule.write |
+| POST `/webapp/auth` | `services/tool-api/app/api/webapp_api.py:35` | Mini App: webapp-shell.js; скрипты: issue_tokens | — | polls_helpers.py, server.py, test_admin_archive_chat.py (+45) | — |
+| POST `/webapp/availability/clear` | `services/tool-api/app/api/schedule.py:1668` | Mini App: week_marks, week_sheet_load, week_template | сессия Mini App | server.py, test_webapp_availability_clear.py, test_webapp_grid.py (+1) | — |
 | POST `/webapp/availability/sheet` | `services/tool-api/app/api/schedule.py:1287` | — | сессия Mini App | нет | никто не зовёт |
 | POST `/webapp/availability/sheet/load` | `services/tool-api/app/api/schedule.py:1477` | Mini App: week_sheet_load | сессия Mini App | server.py, test_webapp_sheet_load.py | — |
 | GET `/webapp/availability/sheet/preview` | `services/tool-api/app/api/schedule.py:1390` | Mini App: week_sheet_load | сессия Mini App | server.py, test_miniapp_sheet_load.py, test_webapp_sheet_load.py | — |
@@ -298,7 +298,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/webapp/polls/save` | `services/tool-api/app/api/polls.py:207` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | polls_helpers.py, server.py, test_miniapp_polls.py (+3) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
 | POST `/webapp/polls/start` | `services/tool-api/app/api/polls.py:498` | Mini App: polls_edit_js | сессия Mini App + no_poll_manage + poll.manage | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+10) | право проверяется в теле обработчика, а не в зависимости: no_poll_manage, poll.manage |
 | GET `/webapp/polls/step` | `services/tool-api/app/api/polls.py:998` | Mini App: polls_answer | сессия Mini App | server.py, test_polls_webapp.py | — |
-| POST `/webapp/preview` | `services/tool-api/app/api/events.py:1039` | Mini App: misc_slots | сессия Mini App | server.py, test_miniapp_master_slots.py, test_miniapp_slots.py (+1) | — |
+| POST `/webapp/preview` | `services/tool-api/app/api/events.py:1049` | Mini App: misc_slots | сессия Mini App + schedule.write | server.py, test_miniapp_master_slots.py, test_miniapp_slots.py (+2) | право проверяется в теле обработчика, а не в зависимости: schedule.write |
 | GET `/webapp/profile` | `services/tool-api/app/api/people.py:364` | Mini App: misc_profile | сессия Mini App | server.py, test_master_role.py, test_webapp_profile.py | — |
 | POST `/webapp/profile` | `services/tool-api/app/api/people.py:403` | Mini App: misc_profile | сессия Mini App | server.py, test_master_role.py, test_webapp_profile.py | — |
 | GET `/webapp/project` | `services/tool-api/app/pages/routes.py:206` | Mini App: projects, routes; скрипты: ui_review | — | server.py | экран Mini App: HTML без данных |
@@ -315,7 +315,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/services` | `services/tool-api/app/pages/routes.py:177` | Mini App: routes; скрипты: build_screen_map, ui_review, ux_audit | — | server.py, test_webapp_screen_rights.py, test_webapp_sections.py (+1) | экран Mini App: HTML без данных |
 | GET `/webapp/shell.js` | `services/tool-api/app/api/webapp_api.py:125` | Mini App: layout; скрипты: pinch_probe_file, start_stand | — | server.py, test_routes_contract.py, test_static_contract.py (+4) | — |
 | GET `/webapp/slots` | `services/tool-api/app/pages/routes.py:139` | Mini App: misc_slots_denied, misc_slots_discipline, routes, week_summary; чат: answer_slots, availability, run_menu_action; скрипты: build_screen_map, ui_review, ux_audit | — | server.py, test_agent_task.py, test_gateway_slots_entry.py (+5) | экран Mini App: HTML без данных |
-| POST `/webapp/slots` | `services/tool-api/app/api/schedule.py:1651` | Mini App: misc_slots_denied, misc_slots_discipline, routes, week_summary; чат: answer_slots, availability, run_menu_action; скрипты: build_screen_map, ui_review, ux_audit | сессия Mini App | server.py, test_agent_task.py, test_gateway_slots_entry.py (+5) | — |
+| POST `/webapp/slots` | `services/tool-api/app/api/schedule.py:1656` | Mini App: misc_slots_denied, misc_slots_discipline, routes, week_summary; чат: answer_slots, availability, run_menu_action; скрипты: build_screen_map, ui_review, ux_audit | сессия Mini App | server.py, test_agent_task.py, test_gateway_slots_entry.py (+5) | — |
 | POST `/webapp/slots/find` | `services/tool-api/app/api/schedule.py:1071` | Mini App: misc_slots | сессия Mini App + schedule.slots | server.py, test_org_miniapp_screens.py | право проверяется в теле обработчика, а не в зависимости: schedule.slots |
 | GET `/webapp/slots/people` | `services/tool-api/app/api/schedule.py:1036` | Mini App: misc_slots | сессия Mini App + schedule.slots | server.py, test_master_role.py, test_miniapp_master_slots.py (+1) | право проверяется в теле обработчика, а не в зависимости: schedule.slots |
 | GET `/webapp/tags/pending` | `services/tool-api/app/api/files.py:991` | Mini App: files_actions | сессия Mini App + files.access | server.py, test_files_actions_screen.py | право проверяется в теле обработчика, а не в зависимости: files.access |
@@ -561,8 +561,8 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/admin/t/notifications` | `services/tool-api/app/pages/routes.py:260` | Mini App: routes (по шаблону); скрипты: ui_review | — | server.py, test_miniapp_hub.py, test_ui_review.py (+1) | раздел из реестра app/webapp.py:SECTIONS |
 | GET `/webapp/admin/t/people` | `services/tool-api/app/pages/routes.py:260` | Mini App: routes (по шаблону); скрипты: ui_review, ux_audit | — | server.py, test_miniapp_hub.py, test_miniapp_js_behavior.py (+7) | раздел из реестра app/webapp.py:SECTIONS |
 | GET `/webapp/admin/t/rights` | `services/tool-api/app/pages/routes.py:260` | Mini App: routes (по шаблону); скрипты: ui_review | — | server.py, test_miniapp_hub.py, test_miniapp_rights_screen.py (+2) | раздел из реестра app/webapp.py:SECTIONS |
-| GET `/webapp/assign` | `services/tool-api/app/pages/routes.py:301` | Mini App: misc_slots, routes; скрипты: ui_review | — | server.py, test_agent_task.py, test_gateway_agent_plan.py (+1) | — |
-| POST `/webapp/auth` | `services/tool-api/app/api/webapp_api.py:35` | Mini App: webapp-shell.js; скрипты: issue_tokens | — | polls_helpers.py, server.py, test_admin_archive_chat.py (+44) | — |
+| GET `/webapp/assign` | `services/tool-api/app/pages/routes.py:301` | Mini App: misc_slots, routes; скрипты: ui_review | — | server.py, test_agent_task.py, test_gateway_agent_plan.py (+2) | — |
+| POST `/webapp/auth` | `services/tool-api/app/api/webapp_api.py:35` | Mini App: webapp-shell.js; скрипты: issue_tokens | — | polls_helpers.py, server.py, test_admin_archive_chat.py (+45) | — |
 | POST `/webapp/boot` | `services/tool-api/app/api/webapp_api.py:100` | Mini App: layout, webapp-shell.js | — | test_miniapp_net_guard.py, test_webapp_boot.py | — |
 | GET `/webapp/broadcast` | `services/tool-api/app/pages/routes.py:167` | Mini App: routes; скрипты: build_screen_map, ui_review, ux_audit | — | server.py, test_broadcast_rights.py, test_miniapp_broadcast.py (+3) | экран Mini App: HTML без данных |
 | GET `/webapp/days` | `services/tool-api/app/pages/routes.py:286` | Mini App: routes; чат: _buttons_with_week, send_menu; скрипты: ui_review | — | test_miniapp_system.py, test_static_contract.py, test_webapp_merge_deps.py (+1) | — |
@@ -638,6 +638,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/webapp/admin/sheet-retry` | `services/tool-api/app/api/admin.py:1024` | budget.write | сессия Mini App | test_webapp_sheet_retry.py |
 | POST `/webapp/admin/tariff` | `services/tool-api/app/api/admin.py:1016` | budget.write | сессия Mini App | test_dues_admin_ui.py, test_webapp_admin_actions.py, test_webapp_admin_pages.py (+1) |
 | POST `/webapp/admin/unarchive` | `services/tool-api/app/api/admin.py:1446` | participants.manage | сессия Mini App | test_admin_archive_chat.py, test_admin_people_actions.py, test_miniapp_archive_rights.py (+1) |
+| POST `/webapp/assign` | `services/tool-api/app/api/events.py:1060` | schedule.write | сессия Mini App | server.py, test_agent_task.py, test_gateway_agent_plan.py (+2) |
 | GET `/webapp/events/card` | `services/tool-api/app/api/webapp_events.py:163` | schedule.read.all, Календарь смотрит организатор и педагог. | сессия Mini App | server.py, test_event_card_api.py |
 | GET `/webapp/events/list` | `services/tool-api/app/api/webapp_events.py:267` | schedule.read.all, Календарь смотрит организатор и педагог. | сессия Mini App | server.py, test_events_list_window.py |
 | GET `/webapp/events/types` | `services/tool-api/app/api/webapp_events.py:383` | calendar.write, Типы и цвета настраивает организатор. | сессия Mini App | server.py, test_miniapp_event_types.py |
@@ -677,6 +678,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | GET `/webapp/polls/list` | `services/tool-api/app/api/polls.py:133` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_poll_interview_draft.py, test_poll_interview_drafts.py (+3) |
 | POST `/webapp/polls/save` | `services/tool-api/app/api/polls.py:207` | no_poll_manage, poll.manage | сессия Mini App | polls_helpers.py, server.py, test_miniapp_polls.py (+3) |
 | POST `/webapp/polls/start` | `services/tool-api/app/api/polls.py:498` | no_poll_manage, poll.manage | сессия Mini App | server.py, test_miniapp_polls.py, test_miniapp_polls_draft_copy.py (+10) |
+| POST `/webapp/preview` | `services/tool-api/app/api/events.py:1049` | schedule.write | сессия Mini App | server.py, test_miniapp_master_slots.py, test_miniapp_slots.py (+2) |
 | POST `/webapp/project/event` | `services/tool-api/app/api/projects.py:443` | calendar.write, no_access, schedule.write, Аренду создаёт администратор и организатор | сессия Mini App | test_project_events.py |
 | POST `/webapp/project/event/amount` | `services/tool-api/app/api/projects.py:397` | no_access, schedule.write | сессия Mini App | нет |
 | POST `/webapp/slots/find` | `services/tool-api/app/api/schedule.py:1071` | schedule.slots | сессия Mini App | server.py, test_org_miniapp_screens.py |
@@ -701,7 +703,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 
 | Действие | Точка входа | Право | В теле проверяет |
 |---|---|---|---|
-| POST `/tools/availability/reconcile` | `services/tool-api/app/api/schedule.py:1533` | schedule.availability.self | schedule.read.all |
+| POST `/tools/availability/reconcile` | `services/tool-api/app/api/schedule.py:1533` | schedule.availability.self | schedule.write |
 | GET `/tools/availability/week` | `services/tool-api/app/api/schedule.py:742` | schedule.availability.self | schedule.read.all |
 | GET `/webapp/polls/edit/data` | `services/tool-api/app/api/polls.py:292` | сессия Mini App + no_poll_manage + poll.manage | poll.results.all |
 | GET `/webapp/project/data` | `services/tool-api/app/api/projects.py:144` | сессия Mini App | budget.write, calendar.write, schedule.write |
@@ -722,7 +724,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | POST `/tools/availability/sheet` | `services/tool-api/app/api/schedule.py:1279` | schedule.availability.self | test_availability_sheet.py |
 | GET `/tools/availability/sheet/mismatches` | `services/tool-api/app/api/schedule.py:1490` | schedule.availability.self | test_availability_sheet.py |
 | POST `/tools/availability/test-sheet` | `services/tool-api/app/api/schedule.py:1306` | admin.panel | test_google_test_sheet_api.py |
-| GET `/tools/calendar/health` | `services/tool-api/app/api/events.py:977` | любой активный | test_calendar_api.py |
+| GET `/tools/calendar/health` | `services/tool-api/app/api/events.py:987` | любой активный | test_calendar_api.py |
 | POST `/tools/dues/accrue` | `services/tool-api/app/api/finance.py:65` | budget.write | test_cm04_money.py, test_dues_accrue.py |
 | GET `/tools/feedback/mine` | `services/tool-api/app/api/admin.py:290` | любой активный | test_cm06_feedback.py |
 | GET `/tools/feedback/open` | `services/tool-api/app/api/feedback.py:72` | feedback.triage | test_feedback_triage.py |
@@ -738,7 +740,7 @@ env -u PYTHONPATH .venv/bin/python scripts/audit_actions.py --write  # пере�
 | DELETE `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:288` | notes.write | test_notes_api.py |
 | POST `/tools/notes/{note_id}` | `services/tool-api/app/api/notes.py:278` | notes.write | test_notes_api.py |
 | GET `/tools/participants/find` | `services/tool-api/app/api/people.py:574` | participants.view | test_find_person.py, test_registration.py |
-| GET `/tools/venues` | `services/tool-api/app/api/events.py:970` | любой активный | test_venues_api.py |
+| GET `/tools/venues` | `services/tool-api/app/api/events.py:980` | любой активный | test_venues_api.py |
 | POST `/webapp/admin/sheet-retry` | `services/tool-api/app/api/admin.py:1024` | сессия Mini App + budget.write | test_webapp_sheet_retry.py |
 | POST `/webapp/availability/sheet` | `services/tool-api/app/api/schedule.py:1287` | сессия Mini App | нет |
 | GET `/webapp/availability/template` | `services/tool-api/app/api/schedule.py:1110` | сессия Mini App | test_gateway_quiet_parity.py |

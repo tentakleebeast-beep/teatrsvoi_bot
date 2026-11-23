@@ -1547,9 +1547,14 @@ def availability_reconcile(body: AvailabilityReconcileIn,
     target = body.participant_id or who["id"]
     if target != who["id"]:
         caps = who.get("caps") or []
-        if "*" not in caps and "schedule.read.all" not in caps:
+        # Сверка пишет карточки в базу (`apply`/`accept`), поэтому чужая неделя —
+        # это запись, а не чтение: право `schedule.write`, как у остальных сценариев
+        # записи. До V-132 здесь стоял `schedule.read.all`; выдача чтения актёру
+        # превратила бы сверку в способ править чужую занятость (граница карты V-132:
+        # «Экран „Сверка“ остаётся за schedule.write»).
+        if "*" not in caps and "schedule.write" not in caps:
             raise HTTPException(status.HTTP_403_FORBIDDEN,
-                                "capability required: schedule.read.all")
+                                "capability required: schedule.write")
     if not core.SCHEDULE_SPREADSHEET_ID:
         return {"ok": False, "error": "no_spreadsheet"}
 

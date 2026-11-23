@@ -403,6 +403,30 @@ def require(capability: str):
     return dep
 
 
+def require_any(*capabilities: str):
+    """Доступ по любому из прав: чтение и запись одного объекта.
+
+    Нужен там, где одна и та же карточка обслуживает два сценария с разными правами:
+    `GET /tools/events/{id}` читает карточку события и тот, кто её отменяет или
+    переносит (`schedule.write`), и тот, кто просто смотрит расписание студии
+    (`schedule.read.all`, решение V-132). Отказ и запись в аудит — как у `require()`,
+    в аудите перечислены все допустимые права.
+    """
+    def dep(who: dict = Depends(actor)) -> dict:
+        if who.get("status") not in ("active",):
+            raise HTTPException(status.HTTP_403_FORBIDDEN, "participant_archived")
+        caps = who.get("caps") or []
+        if "*" in caps or any(code in caps for code in capabilities):
+            return who
+        with pool.connection() as conn:
+            audit(conn, "human", who.get("id"), "access.denied", "capability",
+                  "|".join(capabilities),
+                  after={"required": list(capabilities), "roles": who.get("roles", [])})
+        raise HTTPException(status.HTTP_403_FORBIDDEN,
+                            f"capability required: {' | '.join(capabilities)}")
+    return dep
+
+
 
 def _participant_out(p: dict, roles: list[str] | None = None,
                      caps: list[str] | None = None,
