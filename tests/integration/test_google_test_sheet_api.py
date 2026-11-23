@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import psycopg
 import pytest
-from app import schedule_test_sheet
+from app import core, schedule_test_sheet
 from app.person_key import make_key
 
 from tests.conftest import _test_dsn
@@ -92,3 +92,74 @@ def test_час_вне_раскладки_отклоняется_до_запис
                                    "date": "2026-11-12", "hour": hour})
         assert answer.status_code == 422, answer.text
     assert write_calls == []
+
+
+class _Call:
+    """Ответ Google в форме `.execute()` — как у настоящего клиента."""
+
+    def __init__(self, value: dict) -> None:
+        self.value = value
+
+    def execute(self) -> dict:
+        return self.value
+
+
+class _Values:
+    def __init__(self, grid: list[list]) -> None:
+        self.grid = grid
+        self.ranges: list[str] = []
+
+    def get(self, spreadsheetId, range, majorDimension=None):  # noqa: A002 — имена полей API
+        self.ranges.append(range)
+        if range.endswith(":AZ1"):
+            return _Call({"values": [self.grid[0]]})
+        return _Call({"values": self.grid})
+
+
+class _Spreadsheets:
+    def __init__(self, titles: tuple[str, ...], grid: list[list]) -> None:
+        self.titles = titles
+        self.values_api = _Values(grid)
+
+    def values(self) -> _Values:
+        return self.values_api
+
+    def get(self, spreadsheetId, fields=None):  # noqa: A002
+        return _Call({"sheets": [{"properties": {"sheetId": 7, "title": title}}
+                                 for title in self.titles],
+                      "properties": {"modifiedTime": "2026-11-01T10:00:00Z"}})
+
+
+class _Sheets:
+    def __init__(self, titles: tuple[str, ...], grid: list[list]) -> None:
+        self.spreadsheets_api = _Spreadsheets(titles, grid)
+
+    def spreadsheets(self) -> _Spreadsheets:
+        return self.spreadsheets_api
+
+
+def test_пустая_настройка_шаблона_пишет_страницу_по_умолчанию(client, monkeypatch):
+    """Дефолт `SCHEDULE_TEST_SHEET_PATTERN=''` — страница `MM.YYYY · Ник`, а не отказ.
+
+    Владелец задаёт только id файла; маршрут обязан дойти до протокола записи на
+    стандартной странице (186 §2.2, AC-10), а не отвечать `sheet_ambiguous` всегда.
+    """
+    from tests.conftest import TOKEN
+
+    page = "11.2026 · Дарья"
+    grid = [["Час", "01.11.2026", "02.11.2026"], ["08:00", "", ""], ["09:00", "", ""]]
+    monkeypatch.setattr(core, "SCHEDULE_TEST_SPREADSHEET_ID", "test-test-sheet")
+    monkeypatch.setattr(core, "SCHEDULE_TEST_SHEET_PATTERN", "")
+    monkeypatch.setattr(core, "_sheets", lambda: _Sheets((page,), grid))
+
+    with psycopg.connect(_test_dsn()) as conn:
+        _person(conn, 556004, "Цветной Админ 3", "admin")
+
+    answer = client.post("/tools/availability/test-sheet",
+                         headers=_headers(556004, TOKEN),
+                         json={"month": "2026-11", "nick": "Дарья", "date": "2026-11-02",
+                               "hour": 9, "status": "busy", "apply": False})
+    assert answer.status_code == 200, answer.text
+    body = answer.json()
+    assert body["sheet"] == page
+    assert body["cells"] and body["cells"][0]["cell"] == "C3"

@@ -32,6 +32,12 @@ from app.errors import ApiError
 #: и не даёт склеить «a b» из двух разных колонок.
 HEADER_SEP = "\x1f"
 
+#: Шаблон страницы тестового листа по умолчанию. Пустой `SCHEDULE_TEST_SHEET_PATTERN` —
+#: это не «страницы нет», а штатное имя `MM.YYYY · Ник` (186 §2.2): иначе маршрут и
+#: скрипт отказывали бы `sheet_ambiguous` на каждом вызове при пустой настройке.
+#: Константа живёт здесь, а не в `schedule_test_sheet`: тот импортирует этот модуль.
+DEFAULT_TEST_PAGE_PATTERN = "{month} · {nick}"
+
 #: Поля метаданных листа. `properties.modifiedTime` в Sheets API не существует (это
 #: свойство файла Drive): запрос с ним отвечает 400 «invalid argument», поэтому время
 #: правки берётся у Drive отдельно (`file_modified_time`).
@@ -223,7 +229,7 @@ def _resolve_title(key: str, binding: Binding) -> str:
     if key == "schedule.workload":
         return str(core.SCHEDULE_SHEET_TITLE or "").strip()
     if key == "schedule.test":
-        return str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip()
+        return str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip() or DEFAULT_TEST_PAGE_PATTERN
     return ""
 
 

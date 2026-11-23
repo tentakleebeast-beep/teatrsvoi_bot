@@ -3,7 +3,9 @@
 Обоснование: docs/development/186 §4.3, AC-5; docs/development/190 §10.
 `--check` обязан сверять строки `sheet_binding` с реестром (а не только читать Google):
 именно этого не хватало — скрипт всегда возвращал код 1, потому что в список ключей
-попадал `calendar.draft`, у которого нет таблицы.
+попадал `calendar.draft`, у которого нет таблицы. `--apply` обязан засеять и тестовый
+лист цветов, у которого страниц много: страница берётся единственная под шаблоном или
+названная `--page`, а при нескольких скрипт отказывает вместо «первой страницы».
 """
 
 from __future__ import annotations
@@ -115,3 +117,106 @@ def test_применение_без_ключа_отвечает_кодом_2(mo
     _ids(monkeypatch)
     monkeypatch.setattr(core, "GOOGLE_SA_JSON", "")
     assert seed.main(["--apply"]) == 2
+
+
+#: Страницы тестового листа цветов: у файла их столько, сколько людей в месяце.
+PAGE = "11.2026 · Дарья"
+OTHER_PAGE = "11.2026 · Орлова"
+
+
+class _Call:
+    """Ответ Google в форме `.execute()`."""
+
+    def __init__(self, value: dict) -> None:
+        self.value = value
+
+    def execute(self) -> dict:
+        return self.value
+
+
+class _Values:
+    def __init__(self, header: list) -> None:
+        self.header = header
+
+    def get(self, spreadsheetId, range, majorDimension=None):  # noqa: A002
+        return _Call({"values": [self.header]})
+
+
+class _Spreadsheets:
+    def __init__(self, titles: tuple[str, ...], header: list) -> None:
+        self.titles = titles
+        self.values_api = _Values(header)
+
+    def values(self) -> _Values:
+        return self.values_api
+
+    def get(self, spreadsheetId, fields=None):  # noqa: A002
+        return _Call({"sheets": [{"properties": {"sheetId": index, "title": title}}
+                                 for index, title in enumerate(self.titles)]})
+
+
+class _Sheets:
+    def __init__(self, titles: tuple[str, ...], header: list) -> None:
+        self.spreadsheets_api = _Spreadsheets(titles, header)
+
+    def spreadsheets(self) -> _Spreadsheets:
+        return self.spreadsheets_api
+
+
+def _google(monkeypatch, titles: tuple[str, ...], pattern: str = "{month} · {nick}") -> FakeConn:
+    """Живой контур подменён: страницы тестового листа и шапка «Час»."""
+    conn = FakeConn({})
+    monkeypatch.setattr(core, "pool", FakePool(conn))
+    monkeypatch.setattr(core, "GOOGLE_SA_JSON", "/tmp/sa.json")
+    monkeypatch.setattr(core, "SCHEDULE_TEST_SHEET_PATTERN", pattern)
+    monkeypatch.setattr(core, "_sheets_read", lambda: _Sheets(titles, ["Час"]))
+    return conn
+
+
+def _upserts(conn: FakeConn) -> list[tuple]:
+    """Параметры записей в `sheet_binding` — их и сверяем на идемпотентность."""
+    return [params for sql, params in conn.calls if sql.strip().startswith("insert into sheet_binding")]
+
+
+def test_применение_засевает_единственную_страницу_по_шаблону(monkeypatch, capsys):
+    """Шаблон `{month} · {nick}` и одна страница — засев идёт в неё, код 0 (AC-5)."""
+    _ids(monkeypatch)
+    conn = _google(monkeypatch, (PAGE,))
+
+    assert seed.main(["--apply", "--only", "schedule.test"]) == 0
+    assert f"ok: лист «{PAGE}»" in capsys.readouterr().out
+    upserts = _upserts(conn)
+    assert upserts and upserts[0][0] == "schedule.test" and upserts[0][2] == PAGE
+
+
+def test_применение_при_двух_страницах_просит_page(monkeypatch, capsys):
+    """Две страницы под шаблон — отказ и просьба назвать `--page`, а не «первая»."""
+    _ids(monkeypatch)
+    conn = _google(monkeypatch, (PAGE, OTHER_PAGE))
+
+    assert seed.main(["--apply", "--only", "schedule.test"]) == 1
+    output = capsys.readouterr().out
+    assert "укажите --page" in output
+    assert _upserts(conn) == []
+
+
+def test_применение_с_page_засевает_названную_страницу(monkeypatch, capsys):
+    """`--page` сильнее шаблона: привязка ведёт на названную страницу."""
+    _ids(monkeypatch)
+    conn = _google(monkeypatch, (PAGE, OTHER_PAGE))
+
+    assert seed.main(["--apply", "--only", "schedule.test", "--page", OTHER_PAGE]) == 0
+    assert f"лист «{OTHER_PAGE}»" in capsys.readouterr().out
+    assert _upserts(conn)[0][2] == OTHER_PAGE
+
+
+def test_применение_идемпотентно(monkeypatch):
+    """Второй прогон не меняет ни `spreadsheet_id`, ни `header_checksum` (AC-5)."""
+    _ids(monkeypatch)
+    conn = _google(monkeypatch, (PAGE,))
+
+    assert seed.main(["--apply", "--only", "schedule.test"]) == 0
+    first = _upserts(conn)[-1]
+    assert seed.main(["--apply", "--only", "schedule.test"]) == 0
+    second = _upserts(conn)[-1]
+    assert first == second

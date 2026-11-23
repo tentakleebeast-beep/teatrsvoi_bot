@@ -17,6 +17,12 @@ upsert в `sheet_binding`.
   `header_checksum`/`spreadsheet_id`, если лист не менялся);
 * `--dry-run` — как `--apply`, но без записи в базу: показывает, что было бы записано.
 
+Тестовый лист цветов живёт страницами `MM.YYYY · Ник` (186 §3), и у `sheet_binding`
+одна строка на ключ. Поэтому страницу выбирает `--page "<имя>"`; без него скрипт берёт
+единственную страницу, подходящую под шаблон `SCHEDULE_TEST_SHEET_PATTERN` (пустой
+шаблон — стандартный `MM.YYYY · Ник`), а при нескольких честно просит `--page`, а не
+засевает наугад.
+
 Что НЕ делает: не пишет в Google (только `values.get` и метаданные), не угадывает имя
 листа («первый лист файла» запрещён), не засевает календари (`calendar.draft` — не
 таблица) и Drive-корень.
@@ -35,6 +41,7 @@ from __future__ import annotations
 import argparse
 import json
 import pathlib
+import re
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parents[1]
@@ -50,9 +57,6 @@ if __name__ == "__main__":   # запуск файлом: `.env` проекта 
     apply_env()
 
 from app import core, google_targets, sheet_binding  # noqa: E402
-
-#: Заголовки страниц для тестового листа цветов (186 §3): страница — «MM.YYYY · Ник».
-TEST_PAGE_HINT = "страница по шаблону SCHEDULE_TEST_SHEET_PATTERN"
 
 #: Листы бота (объекты записи). Календарь в этот список не входит по природе объекта.
 WRITE_SHEET_KEYS = tuple(sorted(key for key, target in google_targets.WRITE_TARGETS.items()
@@ -87,7 +91,38 @@ def _object_id(key: str) -> str:
     return google_targets.read_id(key)
 
 
-def _sheet_title(key: str, props: list[dict], pattern: str) -> tuple[str | None, str]:
+def _page_regex(template: str) -> re.Pattern[str]:
+    """Шаблон страницы → образец имени: `{month}`/`{nick}` заменяются на свои формы."""
+    sample = re.escape(template)
+    sample = sample.replace(re.escape("{month}"), r"\d{2}\.\d{4}")
+    sample = sample.replace(re.escape("{nick}"), r".+")
+    return re.compile(f"^{sample}$")
+
+
+def _test_page(titles: list[str], pattern: str, page: str) -> tuple[str, str]:
+    """Страница тестового листа: явная `--page` или единственная под шаблоном.
+
+    Файл цветов многостраничный (`MM.YYYY · Ник`), а привязка одна. Поэтому явное имя
+    сильнее шаблона, а несколько подходящих страниц — отказ с просьбой назвать `--page`:
+    засеять «первую» значило бы повторить ошибку «первого листа файла» (186 §4.3).
+    """
+    wanted = str(page or "").strip()
+    if wanted:
+        matches = [title for title in titles if title.strip() == wanted]
+        return (matches[0], "") if len(matches) == 1 else ("", f"страниц «{wanted}»: {len(matches)}")
+    template = str(pattern or "").strip() or sheet_binding.DEFAULT_TEST_PAGE_PATTERN
+    regex = _page_regex(template)
+    matches = [title for title in titles if regex.match(title.strip())]
+    if len(matches) == 1:
+        return matches[0], ""
+    if not matches:
+        return "", f"нет страницы по шаблону «{template}»"
+    listed = ", ".join(matches[:3]) + ("…" if len(matches) > 3 else "")
+    return "", f"страниц по шаблону «{template}»: {len(matches)} ({listed}) — укажите --page"
+
+
+def _sheet_title(key: str, props: list[dict], pattern: str,
+                 page: str = "") -> tuple[str | None, str]:
     """Имя листа по привязке/настройке. Возвращает (имя, причина отказа)."""
     binding_title = google_targets.target(key).meta.get("sheet_title", "")
     if key == "budget.transactions":
@@ -102,17 +137,17 @@ def _sheet_title(key: str, props: list[dict], pattern: str) -> tuple[str | None,
         title = _finance_title()
         return (title, "") if title else ("", "не задан лист финансов в sheet-mapping.yaml")
     if key == "schedule.test":
-        wanted = str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip() or pattern
-        if not wanted:
-            return "", f"не задан {TEST_PAGE_HINT}"
         titles = [str((item.get("properties") or {}).get("title") or "") for item in props]
-        matches = [title for title in titles if title.strip() == wanted.strip()]
-        return (matches[0], "") if len(matches) == 1 else ("", f"страниц «{wanted}»: {len(matches)}")
+        template = str(core.SCHEDULE_TEST_SHEET_PATTERN or "").strip() or pattern
+        return _test_page(titles, template, page)
     return binding_title, ""
 
 
-def _seed_one(conn, key: str, *, dry_run: bool) -> str:
-    """Одна привязка: id, лист по имени, шапка, upsert. Возвращает исход."""
+def _seed_one(conn, key: str, *, dry_run: bool, page: str = "") -> str:
+    """Одна привязка: id, лист по имени, шапка, upsert. Возвращает исход.
+
+    `page` — явное имя страницы для многостраничного тестового листа (`--page`).
+    """
     try:
         object_id = _object_id(key)
     except Exception as exc:  # noqa: BLE001 — исход отчёта, а не падение
@@ -126,7 +161,8 @@ def _seed_one(conn, key: str, *, dry_run: bool) -> str:
     except Exception as exc:  # noqa: BLE001
         return f"лист недоступен: {str(exc)[:120]}"
     props = meta.get("sheets") or []
-    title, problem = _sheet_title(key, props, str(meta_extra.get("sheet_title") or ""))
+    title, problem = _sheet_title(key, props, str(meta_extra.get("sheet_title") or ""),
+                                  page=page)
     if not title:
         return problem or "имя листа не определено"
     try:
@@ -205,6 +241,9 @@ def main(argv: list[str] | None = None) -> int:
                         help="включая привязки живых листов (чтение)")
     parser.add_argument("--only", action="append", default=[],
                         help="ключ реестра (можно несколько раз)")
+    parser.add_argument("--page", default="",
+                        help="имя страницы тестового листа цветов (например «11.2026 · Дарья»); "
+                             "без него берётся единственная страница под шаблоном")
     args = parser.parse_args(argv)
 
     allowed = WRITE_SHEET_KEYS + READ_SHEET_KEYS
@@ -237,7 +276,7 @@ def main(argv: list[str] | None = None) -> int:
     try:
         with core.pool.connection() as conn:
             for key in keys:
-                outcome = _seed_one(conn, key, dry_run=args.dry_run)
+                outcome = _seed_one(conn, key, dry_run=args.dry_run, page=args.page)
                 print(f"{key}: {outcome}")
                 if not outcome.startswith("ok"):
                     problems += 1

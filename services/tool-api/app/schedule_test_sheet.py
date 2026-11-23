@@ -62,12 +62,11 @@ def page_title(pattern: str, month: str, nick: str) -> str:
 
     Шаблон с подстановками (`{month}`, `{nick}`) разворачивается; шаблон без них
     считается готовым именем страницы — так администратор может закрепить одну
-    страницу для репетиции. Пустой шаблон — пустое имя, и его отклонит `pick_sheet`
-    (`sheet_ambiguous`), а не «первая страница файла».
+    страницу для репетиции. Пустой шаблон — штатный дефолт `MM.YYYY · Ник`
+    (`sheet_binding.DEFAULT_TEST_PAGE_PATTERN`, 186 §2.2), а не «первая страница
+    файла» и не отказ: в `.env` настройка обычно не задана.
     """
-    template = str(pattern or "").strip()
-    if not template:
-        return ""
+    template = str(pattern or "").strip() or sheet_binding.DEFAULT_TEST_PAGE_PATTERN
     if "{" not in template:
         return template
     try:

@@ -57,6 +57,9 @@ class Settings(BaseSettings):
     # Тестовый лист цветов (docs/development/186 §2.2): раньше идентификатор жил только
     # в .env и скриптах, поэтому сервис не мог писать в свой же объект записи.
     schedule_test_spreadsheet_id: str = ""
+    # Пустое значение — не «страницы нет», а штатный шаблон `MM.YYYY · Ник`
+    # (`sheet_binding.DEFAULT_TEST_PAGE_PATTERN`): иначе пустая настройка останавливала
+    # бы каждую пробу цветов.
     schedule_test_sheet_pattern: str = ""
     # Живой источник бюджета «СВОИ 2025» и корень Drive: только чтение (186 §3).
     finance_source_id: str = ""

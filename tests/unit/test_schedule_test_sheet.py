@@ -175,7 +175,31 @@ def test_шаблон_страницы_разворачивает_месяц_и_
     assert (schedule_test_sheet.page_title("{month} · {nick}", "11.2026", "Дарья")
             == PAGE)
     assert schedule_test_sheet.page_title("11.2026 · Ник", "11.2026", "Дарья") == "11.2026 · Ник"
-    assert schedule_test_sheet.page_title("", "11.2026", "Дарья") == ""
+
+
+def test_пустой_шаблон_даёт_штатную_страницу():
+    """Пустая настройка (дефолт `.env`) — это «MM.YYYY · Ник», а не пустое имя (186 §2.2).
+
+    Раньше пустое значение давало `sheet_ambiguous` на каждом вызове: владелец задал бы
+    только id файла, а маршрут и `fill_test_schedule.py` отказывали бы всегда.
+    """
+    assert schedule_test_sheet.page_title("", "11.2026", "Дарья") == PAGE
+    assert schedule_test_sheet.page_title("   ", "11.2026", "Дарья") == PAGE
+    assert schedule_test_sheet.page_title(None, "11.2026", "Дарья") == PAGE
+
+
+def test_пустая_настройка_пишет_страницу_по_умолчанию(monkeypatch):
+    """Маршрут при пустом `SCHEDULE_TEST_SHEET_PATTERN` доходит до записи, а не отказывает."""
+    monkeypatch.setattr(core, "SCHEDULE_TEST_SPREADSHEET_ID", SPREADSHEET)
+    monkeypatch.setattr(core, "SCHEDULE_TEST_SHEET_PATTERN", "")
+    conn = FakeConn()
+    service = FakeService()
+    report = schedule_test_sheet.write_probes(conn, month="11.2026", nick="Дарья",
+                                              probes=[_probe()], service=service,
+                                              drive=FakeDrive())
+    assert report["sheet"] == PAGE
+    assert report["written"] == 1
+    assert service.text == {"B3": "занят"}
 
 
 def test_месяц_принимается_в_двух_видах():
