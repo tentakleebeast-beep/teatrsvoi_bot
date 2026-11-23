@@ -44,3 +44,4 @@ tests/webapp/baseline/
 uv.lock
 
 result.log
+cache/
