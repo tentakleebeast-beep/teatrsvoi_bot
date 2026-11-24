@@ -19,6 +19,15 @@ WORKFLOW_REPO="${WORKFLOW_REPO:-tentakleebeast-beep/teatrsvoi_bot}"
 export GH_REPO="$WORKFLOW_REPO"
 REPORT="docs/reports/78-release-state.md"
 CHANGELOG="CHANGELOG.md"
+# Факт после выката берётся из процесса, а не из лога run: лог говорит, что workflow
+# дошёл до конца, /api/health — что в памяти именно этот коммит.
+PROD_HEALTH_URL="${PROD_HEALTH_URL:-https://svoi-theater-samara.online/api/health}"
+
+# GitHub регистрирует новый run не мгновенно, и `gh run list --limit 1` в эти секунды
+# отдаёт предыдущий, уже успешный прогон — так v0.13.2 и v0.13.4 «подтвердились» без
+# выката (docs/reports/78). Поэтому ждём run со своим headSha, созданный не раньше запуска.
+RUN_POLL_ATTEMPTS="${RELEASE_RUN_POLL_ATTEMPTS:-60}"
+RUN_POLL_SECONDS="${RELEASE_RUN_POLL_SECONDS:-5}"
 
 TAG=""
 MODE="prepare"
@@ -64,6 +73,37 @@ python_bin() {
     else
         printf '%s' "python3"
     fi
+}
+
+find_run_id() {
+    local sha since attempt id
+    sha="$1"
+    since="$2"
+    for ((attempt = 1; attempt <= RUN_POLL_ATTEMPTS; attempt++)); do
+        if [ "$attempt" -gt 1 ]; then
+            sleep "$RUN_POLL_SECONDS"
+        fi
+        id="$(gh run list --workflow="$WORKFLOW" --limit 50 \
+            --json databaseId,headSha,createdAt \
+            --jq "[.[] | select(.headSha == \"$sha\" and .createdAt >= \"$since\")] | .[0].databaseId // empty" \
+            2>/dev/null || true)"
+        if [ -n "$id" ]; then
+            printf '%s' "$id"
+            return 0
+        fi
+    done
+    return 1
+}
+
+health_sha() {
+    local body sha
+    body="$(curl -fsS --max-time 25 "$PROD_HEALTH_URL" 2>/dev/null || true)"
+    [ -n "$body" ] || return 1
+    printf '%s' "$body" | grep -q '"ok":true' || return 1
+    sha="$(printf '%s' "$body" \
+        | sed -nE 's/.*"git_sha"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p')"
+    [ -n "$sha" ] || return 1
+    printf '%s' "$sha"
 }
 
 normalize_version() {
@@ -184,7 +224,7 @@ prepare() {
 }
 
 apply() {
-    local top sha prev tag_sha run_id message rc units
+    local top sha prev tag_sha run_id message rc units since health
     top="$(root)"
     cd "$top"
 
@@ -201,27 +241,26 @@ apply() {
     git push origin "$TAG" || die "не удалось запушить тег $TAG"
 
     say "  2/3 gh workflow run $WORKFLOW -f tag=$TAG -f dry_run=false"
+    # Метка времени до запуска: run, созданный раньше неё, — не наш (Д-5).
+    since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     gh workflow run "$WORKFLOW" -f "tag=$TAG" -f "dry_run=false" \
         || die "не удалось запустить workflow $WORKFLOW"
 
-    run_id="$(gh run list --workflow="$WORKFLOW" --limit 1 --json databaseId \
-        --jq '.[0].databaseId' 2>/dev/null || true)"
-
-    say "  3/3 ожидание run ${run_id:-<последний>}"
-    if [ -n "$run_id" ]; then
-        rc=0
-        gh run watch "$run_id" --exit-status || rc=$?
-    else
-        rc=0
-        gh run watch --exit-status || rc=$?
+    say "  3/3 ожидание run для коммита $sha, созданного не раньше $since"
+    if ! run_id="$(find_run_id "$sha" "$since")"; then
+        die "run для коммита $sha после $since не появился в gh run list за $RUN_POLL_ATTEMPTS проверок: выкат $TAG не подтверждён, в $REPORT ничего не записано"
     fi
 
+    say "  3/3 ожидание run $run_id"
+    rc=0
+    gh run watch "$run_id" --exit-status || rc=$?
+
     if [ "$rc" -ne 0 ]; then
-        message="Выкат $TAG на прод не прошёл (код $rc). Проверяю откат в логе $WORKFLOW; если откат не виден — выкатываю предыдущий тег ${prev:-нет}."
+        message="Выкат $TAG на прод не прошёл (run $run_id, код $rc). Проверяю откат в логе $WORKFLOW; если откат не виден — выкатываю предыдущий тег ${prev:-нет}."
         "$(python_bin)" scripts/notify_admin.py "$message" \
             || warn "сообщение админу не отправлено (scripts/notify_admin.py)"
 
-        units="$(if [ -n "$run_id" ]; then gh run view "$run_id" --log 2>/dev/null; else gh run view --log 2>/dev/null; fi \
+        units="$(gh run view "$run_id" --log 2>/dev/null \
             | grep -iE "откат|rollback" || true)"
         if [ -z "$units" ]; then
             if [ -n "$prev" ]; then
@@ -235,17 +274,28 @@ apply() {
             say "в логе виден откат:"
             printf '%s\n' "$units" | sed 's/^/  /'
         fi
+        warn "выкат $TAG не прошёл: run $run_id, код $rc — в $REPORT ничего не записано"
         exit 1
     fi
 
-    say "Run успешен: прод подтвердил $TAG"
-    record_state "$TAG" "$tag_sha"
+    health="$(health_sha || true)"
+    [ -n "$health" ] \
+        || die "прод не подтвердил себя: $PROD_HEALTH_URL не вернул ok:true с git_sha (run $run_id успешен) — в $REPORT ничего не записано"
+    case "$tag_sha" in
+        "$health"*) ;;
+        *) die "прод работает на $health, тег $TAG указывает на $tag_sha — состояние в $REPORT не записано" ;;
+    esac
+
+    say "Run $run_id успешен: /api/health подтвердил $TAG (git_sha $health)"
+    record_state "$TAG" "$tag_sha" "$health" "$run_id"
 }
 
 record_state() {
-    local tag sha date block
+    local tag sha health run_id date block
     tag="$1"
     sha="$2"
+    health="$3"
+    run_id="$4"
     date="$(date '+%d.%m.%Y %H:%M %z')"
     mkdir -p "$(dirname "$REPORT")"
     block="$(printf '%s\n' \
@@ -253,9 +303,9 @@ record_state() {
         "" \
         "- версия: \`$tag\`" \
         "- тег: \`$tag\`" \
-        "- git_sha: \`$sha\`" \
+        "- git_sha: \`$health\` (совпадает с коммитом тега \`${sha:0:12}\`)" \
         "- env=prod" \
-        "- источник: лог \`$WORKFLOW\` (run после \`--apply\`, проверка \`/api/health\`)" \
+        "- источник: \`/api/health\` после run $run_id (dry_run=false)" \
         "- состав: см. \`CHANGELOG.md\`, раздел \`$tag\`" \
         "")"
     printf '\n%s\n' "$block" >> "$REPORT"
@@ -267,7 +317,7 @@ record_state() {
 }
 
 status() {
-    local top tag run_id rc log
+    local top tag run_id rc log sha since
     top="$(root)"
     cd "$top"
     command -v gh >/dev/null 2>&1 || die "gh не найден: состояние прода смотрится через GitHub Actions"
@@ -276,19 +326,18 @@ status() {
     [ -n "$tag" ] || die "в репозитории нет тегов — нечего проверять"
 
     say "Проверка прода без изменений: gh workflow run $WORKFLOW -f tag=$tag -f dry_run=true"
+    sha="$(git rev-parse HEAD)"
+    since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
     gh workflow run "$WORKFLOW" -f "tag=$tag" -f "dry_run=true" \
         || die "не удалось запустить проверочный run"
 
-    run_id="$(gh run list --workflow="$WORKFLOW" --limit 1 --json databaseId \
-        --jq '.[0].databaseId' 2>/dev/null || true)"
-    rc=0
-    if [ -n "$run_id" ]; then
-        gh run watch "$run_id" --exit-status || rc=$?
-    else
-        gh run watch --exit-status || rc=$?
+    if ! run_id="$(find_run_id "$sha" "$since")"; then
+        die "проверочный run для коммита $sha после $since не появился в gh run list"
     fi
+    rc=0
+    gh run watch "$run_id" --exit-status || rc=$?
 
-    log="$(if [ -n "$run_id" ]; then gh run view "$run_id" --log 2>/dev/null; else gh run view --log 2>/dev/null; fi || true)"
+    log="$(gh run view "$run_id" --log 2>/dev/null || true)"
     say "Версия в проде (по логу $WORKFLOW, dry_run=true):"
     printf '%s\n' "$log" \
         | grep -E "сейчас:|цель:|коммитов:|миграций:|systemctl is-active|на диске" \
