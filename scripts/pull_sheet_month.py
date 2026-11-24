@@ -67,6 +67,24 @@ def actor_id() -> int:
     return row["id"]
 
 
+def cache_sheet() -> None:
+    """Читать лист один раз за прогон: Google даёт 60 чтений в минуту на проект.
+
+    Предпросмотр и загрузка сами читают лист на каждый вызов, и на 12 людях × 5 неделях
+    это упирается в 429 (замер 24.11.2026: перенеслось 87 дней, семь человек получили
+    `sheet_unavailable`). Значения за прогон не меняются, поэтому кэшируем источник.
+    """
+    original = schedule._sheet_load_values
+    cached: dict[str, tuple[list[list] | None, str]] = {}
+
+    def once() -> tuple[list[list] | None, str]:
+        if "values" not in cached:
+            cached["values"] = original()
+        return cached["values"]
+
+    schedule._sheet_load_values = once
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("--month", required=True, help="месяц как 2026-12")
@@ -75,6 +93,7 @@ def main() -> int:
     args = ap.parse_args()
 
     first, last = month_bounds(args.month)
+    cache_sheet()
     core.pool.open()
     try:
         who = args.actor or actor_id()
