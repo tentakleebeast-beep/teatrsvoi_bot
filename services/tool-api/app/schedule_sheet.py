@@ -145,17 +145,24 @@ def find_person_columns(values: list[list], names_row: int, display_name: str,
     """
     if names_row is None or not 1 <= names_row <= len(values):
         return []
-    names = [_name_words(display_name)] + [_name_words(alias) for alias in aliases]
-    names = [wanted for wanted in names if wanted]
-    if not names:
-        return []
     row = values[names_row - 1]
+    # Полное имя решает раньше псевдонимов: «Виктор» как псевдоним совпадает и с
+    # «Мамлютов Виктор», и с «Таюкин Виктор» — лист объявлялся неоднозначным, хотя
+    # фамилия в подписи называет человека. Псевдонимы смотрим, только если по
+    # полному имени не нашлось ничего (149 D9).
+    full = _name_words(display_name)
+    found = _columns_matching(row, [full] if full else [])
+    if found or not full:
+        return found
+    return _columns_matching(row, [_name_words(alias) for alias in aliases])
+
+
+def _columns_matching(row: list, names: Iterable[set[str]]) -> list[int]:
+    names = [wanted for wanted in names if wanted]
     found = []
     for column, cell in enumerate(row, start=1):
         words = _name_words(cell)
-        if not words:
-            continue
-        if any(_same_name(words, wanted) for wanted in names):
+        if words and any(_same_name(words, wanted) for wanted in names):
             found.append(column)
     return found
 
