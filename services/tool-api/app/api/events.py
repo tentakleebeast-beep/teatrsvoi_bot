@@ -1054,6 +1054,13 @@ def events_move(body: EventMoveIn,
         busy_people = _busy_people(conn, list(plan["participant_ids"] or []),
                                    day, from_hour, to_hour)
 
+        # Границы нового интервала в минутах от полуночи — в тех же единицах, в
+        # которых считают `_windows_outside` и проверка непокрытых окон ниже.
+        # Часы (`from_hour`/`to_hour`) округлены до целого часа и годятся только
+        # для занятости людей и уведомления.
+        start_min = start.hour * 60 + start.minute
+        end_min = end.hour * 60 + end.minute
+
         # Личные окна участия (V-134): перенос их **не сдвигает**. Новые окна
         # принимаются только явно присланные; иначе считаем, кого новый интервал
         # перестал покрывать, и говорим об этом словами, а не правим молча.
@@ -1063,7 +1070,10 @@ def events_move(body: EventMoveIn,
             raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
                            "Время участия указано для человека вне состава события.",
                            code="participation_unknown_person")
-        if _windows_outside(new_windows, from_hour, to_hour):
+        # Минуты, а не часы: `_windows_outside` ждёт «минуты от полуночи», иначе
+        # событие 18–22 проверялось бы как интервал 18–22 минуты и любое явное
+        # окно объявлялось бы внешним (V-134-баг, 422 всегда).
+        if _windows_outside(new_windows, start_min, end_min):
             raise ApiError(status.HTTP_422_UNPROCESSABLE_ENTITY,
                            "Личное время участия выходит за интервал события.",
                            code="participation_outside_event")
@@ -1072,8 +1082,6 @@ def events_move(body: EventMoveIn,
         # `null` в строке значит «край следует за событием», а не «край старого
         # интервала»: сравниваем только явно заданные границы, иначе человек без
         # личного времени выглядел бы вышедшим за событие на каждом переносе.
-        start_min = start.hour * 60 + start.minute
-        end_min = end.hour * 60 + end.minute
         uncovered = [row["participant_id"] for row in saved
                      if row["participant_id"] not in new_windows
                      and ((row["from_at"] is not None

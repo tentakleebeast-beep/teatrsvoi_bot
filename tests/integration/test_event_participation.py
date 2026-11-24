@@ -323,3 +323,79 @@ def test_перенос_на_другой_день_двигает_дату_ок�
                 empty.astimezone(api.TZ).strftime("%H:%M")) == ("19:30", "21:00")
         assert empty_window == (None, None), \
             f"«весь интервал» превратился в личное время: {empty_window}"
+
+
+def test_перенос_с_явным_окном_внутри_интервала(client, monkeypatch):
+    """Перенос с явными окнами: окно 20:00–21:00 внутри 18–22 принимается (V-134).
+
+    Регресс: проверка окон звалась в часах, поэтому любое явное окно объявлялось
+    внешним (422 `participation_outside_event`) — ветка `_upsert_windows` при
+    переносе была недостижима. Окно пишется на новый день теми же часами.
+    """
+    _allow(client)
+    _prepare(monkeypatch)
+    with psycopg.connect(_test_dsn()) as conn:
+        vitya = _person(conn, 785013, "Перенос Окно Внутри Виктор")
+        luda = _person(conn, 785014, "Перенос Окно Внутри Людмила")
+
+    assigned = _assign(client, "2027-02-10", 18, 22, [vitya, luda],
+                       windows=[{"participant_id": vitya,
+                                 "time_from": "19:30", "time_to": "21:00"},
+                                {"participant_id": luda,
+                                 "time_from": "19:30", "time_to": "21:00"}])
+    assert assigned["ok"] is True, assigned
+    event_id = assigned["event_id"]
+
+    answer = client.post("/tools/events/move", headers=HEADERS, json={
+        "event_id": event_id, "date": "2027-02-12", "from_hour": 18, "to_hour": 22,
+        "windows": [{"participant_id": vitya,
+                     "time_from": "20:00", "time_to": "21:00"}]})
+    assert answer.status_code == 200, f"{answer.status_code}: {answer.text}"
+    moved = answer.json()
+    assert moved["ok"] is True, moved
+
+    from app import core as api
+
+    with psycopg.connect(_test_dsn()) as conn:
+        window = conn.execute(
+            "select from_at, to_at from event_participant "
+            "where event_id = %s and participant_id = %s", (event_id, vitya)).fetchone()
+        untouched = conn.execute(
+            "select from_at, to_at from event_participant "
+            "where event_id = %s and participant_id = %s", (event_id, luda)).fetchone()
+    local = [value.astimezone(api.TZ) if value is not None else None for value in window]
+    assert (local[0].date().isoformat(), local[0].strftime("%H:%M")) == ("2027-02-12", "20:00"), \
+        f"явное окно не записано на новый день: {window}"
+    assert local[1].strftime("%H:%M") == "21:00", f"часы окна сдвинулись: {window}"
+    # Человек без явного окна сохраняет свои часы, но переезжает датой (V-134-доп).
+    assert (untouched[0].astimezone(api.TZ).date().isoformat(),
+            untouched[0].astimezone(api.TZ).strftime("%H:%M")) == ("2027-02-12", "19:30"), \
+        f"окно второго участника не переехало датой: {untouched}"
+    assert untouched[1].astimezone(api.TZ).strftime("%H:%M") == "21:00"
+
+
+def test_перенос_с_явным_окном_вне_интервала_это_422(client, monkeypatch):
+    """Перенос с окном шире нового интервала — по-прежнему 422, а не запись."""
+    _allow(client)
+    _prepare(monkeypatch)
+    with psycopg.connect(_test_dsn()) as conn:
+        vitya = _person(conn, 785015, "Перенос Окно Вне Виктор")
+
+    assigned = _assign(client, "2027-02-16", 18, 22, [vitya])
+    assert assigned["ok"] is True, assigned
+    event_id = assigned["event_id"]
+
+    answer = client.post("/tools/events/move", headers=HEADERS, json={
+        "event_id": event_id, "date": "2027-02-17", "from_hour": 18, "to_hour": 22,
+        "windows": [{"participant_id": vitya,
+                     "time_from": "20:00", "time_to": "23:00"}]})
+    assert answer.status_code == 422, answer.text
+    assert answer.json()["code"] == "participation_outside_event", answer.text
+
+    with psycopg.connect(_test_dsn()) as conn:
+        row = conn.execute("select starts_at from event_plan where id = %s",
+                           (event_id,)).fetchone()
+    from app import core as api
+
+    assert row[0].astimezone(api.TZ).date().isoformat() == "2027-02-16", \
+        "отказ 422 не должен переносить событие"
