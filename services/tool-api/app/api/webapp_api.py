@@ -249,7 +249,8 @@ def _calendar_blocks() -> tuple[dict, dict | None]:
     конца завтрашнего дня и делится по дате.
 
     Возвращает `(today, tomorrow)`:
-    * `today` — как раньше: `{}` без события, иначе подпись дня и `event`;
+    * `today` — `{}` без событий, иначе подпись дня и `events` списком, как «Завтра»:
+      день не сводится к первому событию (жалоба 25.11 — в календаре три, на Главной одно);
     * `tomorrow` — `None`, если календарь не прочитан; иначе подпись даты словами
       и `events` списком (`[]` — день пуст, и экран говорит об этом словами).
     """
@@ -262,7 +263,7 @@ def _calendar_blocks() -> tuple[dict, dict | None]:
     today_events = [event for event in found if event["day"] == now.date().isoformat()]
     tomorrow_events = [event for event in found if event["day"] == next_day.isoformat()]
     today = ({"label": "сегодня, " + page_layout.WEEKDAYS_FULL[now.weekday()],
-              "event": _event_out(today_events[0])} if today_events else {})
+              "events": [_event_out(event) for event in today_events]} if today_events else {})
     tomorrow = {"label": "завтра, " + page_layout.human_date(next_day),
                 "events": [_event_out(event) for event in tomorrow_events]}
     return today, tomorrow

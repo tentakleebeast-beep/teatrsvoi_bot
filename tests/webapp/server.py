@@ -571,7 +571,8 @@ HOME_DATA = ({
     "ok": True, "name": "Тестовый Админ", "role": "admin", "role_label": "администратор",
     "staff": True, "can_record": True,
     "today": {"label": "сегодня, суббота",
-              "event": {"time": "19:00", "title": "Репетиция", "place": "Зал на Обороны"}},
+              "events": [{"time": "19:00", "title": "Репетиция", "place": "Зал на Обороны"},
+                         {"time": "21:00", "title": "Разбор сцены", "place": "Малый зал"}]},
     "week": {"title": "26 октября — 1 ноября", "marked": 4, "days": 7},
     "debt": {"period": "октябрь 2026", "rest": 3000, "due": 5000},
 })

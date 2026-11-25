@@ -53,8 +53,11 @@ TROUPE_EMPTY_DAY = dict(TROUPE, tomorrow={"label": "завтра, 24 ноябр�
 TROUPE_SUMMARY = dict(TROUPE_TOMORROW, calendar_url="/webapp/week/summary")
 # «Завтра» стоит сразу под «Сегодня»: порядок блоков проверяется на данных с обоими.
 TROUPE_TODAY = dict(TROUPE_TOMORROW, today={"label": "сегодня, 23 ноября",
-                                           "event": {"time": "19:00",
-                                                     "title": "Репетиция", "place": "Зал"}})
+                                           "events": [{"time": "19:00",
+                                                       "title": "Репетиция", "place": "Зал"},
+                                                      {"time": "21:00",
+                                                       "title": "Разбор сцены",
+                                                       "place": "Малый зал"}]})
 
 # Задержка ответа данных — в браузере, а не в обработчике маршрута: синхронный
 # `time.sleep` заблокировал бы сам тест и первый кадр было бы нечем измерить.
@@ -817,6 +820,48 @@ def test_завтра_идёт_сразу_под_сегодня(app_page):
       document.querySelectorAll("main .ui-home > *")).map(function (node) {
         return node.id || node.className; })""")
     assert order.index("today") < order.index("tomorrow") < order.index("week"), order
+
+
+TODAY_JS = """
+() => {
+  const section = document.getElementById("today");
+  const titled = section ? section.querySelector(".ui-section__title") : null;
+  const meta = section ? section.querySelector(".ui-section__meta") : null;
+  const rows = Array.from(document.querySelectorAll("#today-list .ui-row")).map(function (row) {
+    const title = row.querySelector(".ui-row__title");
+    const place = row.querySelector(".ui-row__meta");
+    return {"title": title ? title.textContent : null, "meta": place ? place.textContent : null};
+  });
+  return {
+    section: !!section,
+    card: !!document.getElementById("today-card"),
+    title: titled ? titled.textContent : null,
+    meta: meta ? meta.textContent : null,
+    rows: rows,
+  };
+}
+"""
+
+
+def test_сегодня_показывает_все_события_дня(app_page):
+    """Жалоба 25.11: на Главной печаталось одно событие, в календаре — все.
+
+    «Сегодня» берёт все события дня тем же списком `ui-row`, что «Завтра»: разметка
+    блоков одна, поэтому и проверка формы (заголовок, подпись дня, строки) одна.
+    """
+    page = app_page("/webapp/home")
+    page.route(DATA_URL, _json(TROUPE_TODAY))
+    _reload(page)
+    _wait_ready(page)
+
+    state = page.evaluate(TODAY_JS)
+    assert state["section"] and state["card"], state
+    assert state["title"] == "Сегодня", state["title"]
+    assert state["meta"] == TROUPE_TODAY["today"]["label"], state["meta"]
+    assert state["rows"] == [
+        {"title": "19:00 — Репетиция", "meta": "Зал"},
+        {"title": "21:00 — Разбор сцены", "meta": "Малый зал"},
+    ], state["rows"]
 
 
 def test_пустой_завтра_не_исчезает(app_page):

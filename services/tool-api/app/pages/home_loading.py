@@ -147,15 +147,23 @@ SCRIPT = """
     return section;
   }
 
-  function todayCard(today) {
-    var event = today.event || {};
+  // «Сегодня» — та же разметка, что «Завтра» (ui-section + ui-card + ui-row): блоки
+  // дня должны читаться одинаково. Все события дня, а не первое (жалоба 25.11).
+  function todaySection(today) {
+    var section = el("section", "ui-section");
+    section.id = "today";
+    var head = el("div", "ui-section__head");
+    head.appendChild(el("h2", "ui-section__title", "Сегодня"));
+    head.appendChild(el("span", "ui-section__meta", today.label || "сегодня"));
+    section.appendChild(head);
     var card = el("div", "ui-card");
-    card.id = "today";
-    card.appendChild(el("span", "ui-card__label", today.label || "сегодня"));
-    card.appendChild(el("h2", "ui-h2",
-      (event.time ? event.time + " — " : "") + (event.title || "Событие")));
-    card.appendChild(el("span", "ui-small ui-muted", event.place || ""));
-    return card;
+    card.id = "today-card";
+    var list = el("div", "ui-list");
+    list.id = "today-list";
+    (today.events || []).forEach(function (event) { list.appendChild(eventRow(event)); });
+    card.appendChild(list);
+    section.appendChild(card);
+    return section;
   }
 
   function weekCard(week) {
@@ -265,7 +273,9 @@ SCRIPT = """
     if (data.polls) { node.appendChild(pollsEntry(data.polls)); }
     var attention = data.attention || [];
     if (attention.length) { node.appendChild(attentionBlock(attention)); }
-    if (data.today && data.today.event) { node.appendChild(todayCard(data.today)); }
+    if (data.today && (data.today.events || []).length) {
+      node.appendChild(todaySection(data.today));
+    }
     // «Завтра» сразу под «Сегодня» и вход в календарь студии (V-131). Блок стоит
     // и при пустом дне, и без календаря: молча пропавший блок человек читает как
     // «завтра свободно», а это неправда.
