@@ -240,12 +240,13 @@ def test_черновик_из_двух_вопросов_возвращаетс�
     # Уходим в список и возвращаемся: строка черновика одна, она ведёт в конструктор.
     page.click("a.ui-appbar__back")
     page.wait_for_url("**/webapp/polls", timeout=10_000)
-    page.wait_for_selector("#polls .ui-row", timeout=10_000)
-    assert page.locator("#polls .ui-row").count() == 2, "в списке появился второй опрос"
+    page.wait_for_selector("#polls .ui-acc", timeout=10_000)
+    assert page.locator("#polls .ui-list .ui-row").count() == 2, "в списке появился второй опрос"
     draft = page.locator(f"#polls a.ui-row[href='/webapp/polls/edit?poll_id={DRAFT_ID}']")
     assert draft.count() == 1, "строки сохранённого черновика нет в списке"
     text = draft.inner_text()
-    assert DRAFT_TITLE in text and "2 вопроса" in text and "черновик" in text, text
+    assert DRAFT_TITLE in text and "2 вопроса" in text, text
+    assert "Черновики" in page.inner_text("#polls-draft > summary"), "черновик вне своей группы"
     assert page.locator("#polls a.ui-row").count() == 2
 
     draft.click()
@@ -394,7 +395,9 @@ def test_копия_идущего_опроса_не_запускает_исто
     listing.wait_for_selector("#polls .ui-row", timeout=10_000)
     row = listing.locator(f"#polls a.ui-row[href='/webapp/polls/edit?poll_id={copy_id}']")
     assert row.count() == 1, "копии нет в списке как черновика"
-    assert "черновик" in row.inner_text() and "идёт" not in row.inner_text()
+    # Статус строкой не пишется: копия стоит в группе «Черновики», а не «Активные».
+    assert "Черновики" in listing.inner_text("#polls-draft > summary"), "копия вне группы черновиков"
+    assert "идёт" not in row.inner_text()
 
     # Число ответивших у источника не изменилось.
     after = app_page("/webapp/polls/results?poll_id=7")

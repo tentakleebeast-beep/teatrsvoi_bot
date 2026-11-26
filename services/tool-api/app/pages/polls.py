@@ -47,7 +47,15 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
   var $ = function (id) { return document.getElementById(id); };
   tgBoot();
 
-  var STATUS = { draft: "черновик", running: "идёт", closed: "закрыт" };
+  /* Три группы вместо одного списка: активные важны сейчас, черновики — работа,
+     архив — история. Заголовок группы и есть статус, поэтому подпись в строке
+     убрана: «идёт» рядом с «Активные» ничего не добавляет. Архив свёрнут: это
+     история, и именно она растягивала список. */
+  var GROUPS = [
+    { status: "running", title: "Активные", open: true },
+    { status: "draft", title: "Черновики", open: true },
+    { status: "closed", title: "Архив", open: false }
+  ];
 
   function showError(text) {
     var box = $("error");
@@ -75,9 +83,25 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     }
     main.appendChild(make("span", "ui-row__meta", meta));
     row.appendChild(main);
-    row.appendChild(make("span", "ui-row__value", STATUS[item.status] || item.status));
     row.appendChild(make("span", "ui-row__chevron", "\u203a"));
     return row;
+  }
+
+  function pollGroup(group, items) {
+    var block = make("details", "ui-acc");
+    block.id = "polls-" + group.status;
+    block.open = group.open;
+    var summary = make("summary", "ui-row ui-row--compact");
+    var main = make("span", "ui-row__main");
+    main.appendChild(make("span", "ui-row__title", group.title));
+    main.appendChild(make("span", "ui-row__meta",
+      items.length + " " + plural(items.length, "опрос", "опроса", "опросов")));
+    summary.appendChild(main);
+    block.appendChild(summary);
+    var list = make("div", "ui-list");
+    items.forEach(function (item) { list.appendChild(pollRow(item)); });
+    block.appendChild(list);
+    return block;
   }
 
   async function load() {
@@ -90,7 +114,10 @@ _SCRIPT = "<script>\n(function () {\n  \"use strict\";\n" + _JS_COMMON + r"""
     var host = $("polls");
     host.textContent = "";
     var items = result.body.polls || [];
-    items.forEach(function (item) { host.appendChild(pollRow(item)); });
+    GROUPS.forEach(function (group) {
+      var part = items.filter(function (item) { return item.status === group.status; });
+      if (part.length) { host.appendChild(pollGroup(group, part)); }
+    });
     $("empty").hidden = items.length > 0;
   }
 

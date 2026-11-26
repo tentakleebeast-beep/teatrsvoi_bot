@@ -2332,6 +2332,8 @@ def polls_list_stand(request: Request):
          "questions": 11, "invited": 14, "answered": 6, "created_at": "2026-11-15T09:00:00"},
         {"id": 8, "title": "Что улучшить в расписании", "status": "draft",
          "questions": 3, "invited": 0, "answered": 0, "created_at": "2026-11-14T09:00:00"},
+        {"id": 9, "title": "Анкета после фестиваля", "status": "closed",
+         "questions": 5, "invited": 12, "answered": 12, "created_at": "2026-10-02T09:00:00"},
     ]})
 
 

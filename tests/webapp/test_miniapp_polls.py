@@ -65,17 +65,17 @@ def _height(page) -> int:
 def test_список_опросов_и_отказ_по_праву(app_page) -> None:
     """Админ и организатор видят список; роль без `poll.manage` — слова отказа, а не сбой."""
     page = app_page("/webapp/polls")
-    page.wait_for_selector("#polls .ui-row", timeout=10_000)
-    assert page.locator("#polls .ui-row").count() == 2
+    page.wait_for_selector("#polls .ui-acc", timeout=10_000)
+    assert page.locator("#polls .ui-list .ui-row").count() == 3
     text = page.inner_text("#polls")
-    assert "Анкета организаторам" in text and "идёт" in text
+    assert "Анкета организаторам" in text and "Активные" in text
     assert page.locator("#denied").is_hidden()
     _no_overflow(page)
     assert not page.svoi_errors, page.svoi_errors
 
     # V-088 (б): организатор ведёт опросы сам — отказа на его роли быть не должно.
     organizer = app_page("/webapp/polls", headers={"X-SVOI-Role": "org"})
-    organizer.wait_for_selector("#polls .ui-row", timeout=10_000)
+    organizer.wait_for_selector("#polls .ui-acc", timeout=10_000)
     assert organizer.locator("#denied").is_hidden()
     assert not organizer.svoi_errors, organizer.svoi_errors
 
@@ -85,6 +85,35 @@ def test_список_опросов_и_отказ_по_праву(app_page) -> 
     assert "Опросы ведут администратор и организатор" in body, body
     assert "Не удалось загрузить опросы" not in body, "403 подан как сбой сети"
     assert denied.locator("#form").is_hidden()
+
+
+def test_список_разбит_на_три_группы(app_page) -> None:
+    """Активные, черновики и архив — три раскрывающихся блока, а не один список.
+
+    Активные и черновики раскрыты (это текущая работа), архив свёрнут: история и
+    растягивала список. Раскрытие нативное — нажатие на заголовок группы.
+    """
+    page = app_page("/webapp/polls")
+    page.wait_for_selector("#polls .ui-acc", timeout=10_000)
+
+    titles = page.eval_on_selector_all(
+        "#polls .ui-acc > summary .ui-row__title",
+        "nodes => nodes.map(node => node.textContent.trim())")
+    assert titles == ["Активные", "Черновики", "Архив"], titles
+
+    opened = page.eval_on_selector_all("#polls .ui-acc", "nodes => nodes.map(n => n.open)")
+    assert opened == [True, True, False], opened
+
+    assert "Анкета организаторам" in page.inner_text("#polls-running")
+    assert "Что улучшить в расписании" in page.inner_text("#polls-draft")
+    # Свёрнутый архив отдаёт только заголовок: строки появляются после раскрытия.
+    assert "Анкета после фестиваля" not in page.inner_text("#polls-closed")
+
+    page.click("#polls-closed > summary")
+    assert page.eval_on_selector("#polls-closed", "node => node.open") is True
+    assert page.locator("#polls-closed .ui-list .ui-row").count() == 1
+    assert "Анкета после фестиваля" in page.inner_text("#polls-closed")
+    assert not page.svoi_errors, page.svoi_errors
 
 
 def test_конструктор_без_poll_id_отказ_без_no_poll_manage(app_page) -> None:
@@ -434,14 +463,18 @@ def test_подпись_под_темой_больше_не_обещает_ав�
 
 
 def test_строка_черновика_в_списке_не_имеет_своих_действий(app_page) -> None:
-    """AC-11: «3 вопроса» и «черновик», ссылка в конструктор, внутри строки — ноль кнопок."""
+    """AC-11: «3 вопроса», ссылка в конструктор, внутри строки — ноль кнопок.
+
+    Статус строкой больше не пишется: он и есть заголовок группы («Черновики»).
+    """
     page = app_page("/webapp/polls")
     page.wait_for_selector("#polls .ui-row", timeout=10_000)
 
     row = page.locator("#polls a.ui-row[href='/webapp/polls/edit?poll_id=8']")
     assert row.count() == 1, "строка черновика не ведёт в конструктор"
     text = row.inner_text()
-    assert "3 вопроса" in text and "черновик" in text, text
+    assert "3 вопроса" in text, text
+    assert "Черновики" in page.inner_text("#polls-draft > summary"), "строка вне группы"
     assert page.locator("#polls .ui-row button").count() == 0
     assert page.locator("#polls .ui-row a a").count() == 0
 
