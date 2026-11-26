@@ -154,6 +154,10 @@ run_gates() {
     fi
 
     say "Гейты: ruff, test_audit --strict, pytest"
+    # Чужой PYTHONPATH (Hermes, IDE, оболочка) подсовывает venv-пакеты другой версии
+    # Python: pydantic_core падает на импорте и pytest не собирает тесты. Гейт должен
+    # видеть ровно .venv проекта.
+    unset PYTHONPATH
     if [ -x "$top/.venv/bin/ruff" ]; then
         "$top/.venv/bin/ruff" check . || die "ruff check . не прошёл"
     elif command -v ruff >/dev/null 2>&1; then
